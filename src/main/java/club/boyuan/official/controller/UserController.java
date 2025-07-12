@@ -62,35 +62,45 @@ public class UserController {
     }
 
     /**
-     * 更新用户信息
+     * 更新当前用户信息（从token获取ID，支持部分字段更新）
      */
     @PutMapping("/me")
-    public ResponseEntity<ResponseMessage> updateCurrentUser(@RequestBody Map<String, String> userInfo) {
-        System.out.println("请求体: " + userInfo.toString());
-        // 从认证信息中获取用户ID（实际项目中实现）
+    public ResponseEntity<ResponseMessage> updateCurrentUser(@RequestBody Map<String, Object> userInfo) {
+        // 从JWT令牌获取用户ID
         Integer userId = getAuthenticatedUserId();
-        User user = userService.getUserById(userId);
+        User existingUser = userService.getUserById(userId);
 
+        // 仅更新传入的非空字段
+        if (userInfo.containsKey("username")) {
+            existingUser.setUsername((String) userInfo.get("username"));
+        }
         if (userInfo.containsKey("password")) {
-            user.setName(userInfo.get("password"));
+            existingUser.setPassword((String) userInfo.get("password"));
+        }
+        if (userInfo.containsKey("email")) {
+            existingUser.setEmail((String) userInfo.get("email"));
         }
         if (userInfo.containsKey("name")) {
-            user.setName(userInfo.get("name"));
+            existingUser.setName((String) userInfo.get("name"));
         }
         if (userInfo.containsKey("phone")) {
-            user.setPhone(userInfo.get("phone"));
+            existingUser.setPhone((String) userInfo.get("phone"));
         }
         if (userInfo.containsKey("dept")) {
-            user.setDept(userInfo.get("dept"));
-            System.out.println("更新后的部门: " + user.getDept());
+            existingUser.setDept((String) userInfo.get("dept"));
+        }
+        if (userInfo.containsKey("status")) {
+            existingUser.setStatus((Boolean) userInfo.get("status"));
+        }
+        if (userInfo.containsKey("isMember")) {
+            existingUser.setIsMember((Boolean) userInfo.get("isMember"));
         }
 
         UserDTO userDTO = new UserDTO();
-        BeanUtils.copyProperties(user, userDTO);
-        System.out.println("userDTO: " + userDTO.toString());
-        User updatedUser = userService.edit(userDTO);
+        BeanUtils.copyProperties(existingUser, userDTO);
+        userService.edit(userDTO);
 
-        return ResponseEntity.ok(new ResponseMessage(200, "用户信息更新成功", updatedUser));
+        return ResponseEntity.ok(new ResponseMessage(200, "信息已更新", null));
     }
 
     /**
@@ -173,16 +183,70 @@ public class UserController {
         return ResponseEntity.ok(ResponseMessage.success());
     }
 
-    //修改
+    /**
+     * 更新指定用户信息（需传入ID，支持部分字段更新）
+     */
     @PutMapping
-    public ResponseEntity<ResponseMessage<User>> edit(@Validated @RequestBody UserDTO user) {
-        // 从请求属性中获取JWT解析的用户名
-        String username = (String) request.getAttribute("username");
-        // 设置用户名到UserDTO
-        user.setUsername(username);
-        System.out.println(user.toString());
-        User userNew = userService.edit(user);
-        return ResponseEntity.ok(ResponseMessage.success(userNew));
+    public ResponseEntity<ResponseMessage> edit(@RequestBody Map<String, Object> userInfo) {
+        User currentUser = getCurrentUserEntity();
+        
+        // 从请求体获取userId
+        Integer targetUserId = (Integer) userInfo.get("userId");
+        if (targetUserId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请求体中必须包含userId");
+        }
+
+        // 管理员可以更新所有用户，普通用户只能更新自己
+        if (!User.ROLE_ADMIN.equals(currentUser.getRole()) && !currentUser.getUserId().equals(targetUserId)) {
+            throw new IllegalArgumentException("权限不足，无法更新其他用户信息");
+        }
+
+        User existingUser = userService.getUserById(targetUserId);
+        // 移除userId，避免更新用户ID
+        userInfo.remove("userId");
+        if (existingUser == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在");
+        }
+
+        // 仅更新传入的非空字段
+        if (userInfo.containsKey("username")) {
+            existingUser.setUsername((String) userInfo.get("username"));
+        }
+        if (userInfo.containsKey("password")) {
+            existingUser.setPassword((String) userInfo.get("password"));
+        }
+        if (userInfo.containsKey("email")) {
+            existingUser.setEmail((String) userInfo.get("email"));
+        }
+        if (userInfo.containsKey("role")) {
+            // 只有管理员可以修改角色
+            if (User.ROLE_ADMIN.equals(currentUser.getRole())) {
+                existingUser.setRole((String) userInfo.get("role"));
+            } else {
+                throw new IllegalArgumentException("权限不足，无法修改用户角色");
+            }
+        }
+        if (userInfo.containsKey("name")) {
+            existingUser.setName((String) userInfo.get("name"));
+        }
+        if (userInfo.containsKey("phone")) {
+            existingUser.setPhone((String) userInfo.get("phone"));
+        }
+        if (userInfo.containsKey("dept")) {
+            existingUser.setDept((String) userInfo.get("dept"));
+        }
+        if (userInfo.containsKey("status")) {
+            existingUser.setStatus((Boolean) userInfo.get("status"));
+        }
+        if (userInfo.containsKey("isMember")) {
+            existingUser.setIsMember((Boolean) userInfo.get("isMember"));
+        }
+
+        UserDTO userDTO = new UserDTO();
+        BeanUtils.copyProperties(existingUser, userDTO);
+        userService.edit(userDTO);
+
+        return ResponseEntity.ok(new ResponseMessage(200, "信息已更新", null));
     }
 
     @GetMapping("/all")

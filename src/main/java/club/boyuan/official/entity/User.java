@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import com.fasterxml.jackson.annotation.JsonFormat;
 
 @Entity
 @Table(name = "user")
@@ -38,12 +39,13 @@ public class User {
     private String dept;
 
     @Column(name = "create_time", columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createTime;
 
     @Column(name = "status", columnDefinition = "BOOLEAN DEFAULT FALSE")
     private Boolean status;
 
-    @Column(name = "is_member")
+    @Column(name = "is_member", columnDefinition = "BOOLEAN DEFAULT FALSE")
     private Boolean isMember;
 
 

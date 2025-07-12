@@ -6,6 +6,7 @@ import club.boyuan.official.dto.UserDTO;
 import club.boyuan.official.entity.User;
 import club.boyuan.official.service.ILoginService;
 import club.boyuan.official.service.IUserService;
+import club.boyuan.official.service.impl.LoginServiceImpl;
 import club.boyuan.official.utils.JwtTokenUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -36,7 +37,7 @@ public class AuthController {
     private JwtTokenUtil jwtTokenUtil;
 
     @PostMapping("/register")
-    public ResponseEntity<ResponseMessage<User>> register(@Valid @RequestBody RegisterDTO registerDTO) {
+    public ResponseEntity<ResponseMessage<?>> register(@Valid @RequestBody RegisterDTO registerDTO) {
         // 检查用户名是否已存在
         if (userService.getUserByUsername(registerDTO.getUsername()) != null) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -60,17 +61,34 @@ public class AuthController {
         userDTO.setStatus(true); // 默认激活状态
 
         User newUser = userService.register(userDTO);
+        Map<String, Object> data = new HashMap<>();
+        data.put("user_id", newUser.getUserId());
+        data.put("username", newUser.getUsername());
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(new ResponseMessage<>(201, "注册成功", newUser));
+                .body(new ResponseMessage<>(201, "注册成功", data));
     }
 
     @PostMapping("/login")
     public ResponseEntity<ResponseMessage<?>> login(@RequestBody LoginDTO loginDTO) {
+        // 获取用户信息
+        User user = userService.getUserByUsername(loginDTO.getUsername());
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new ResponseMessage<>(401, "用户名或密码错误", null));
+        }
+
         ResponseMessage<?> response = loginService.login(loginDTO);
         if (response.getCode() != 200) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(response);
+                    .body(new ResponseMessage<>(401, "用户名或密码错误", null));
         }
-        return ResponseEntity.ok(response);
+
+        // 构建返回数据
+        Map<String, Object> data = new HashMap<>();
+        data.put("user_id", user.getUserId());
+        data.put("role", user.getRole());
+        data.put("token", ((LoginServiceImpl.TokenVO) response.getData()).getToken());
+
+        return ResponseEntity.ok(new ResponseMessage<>(200, "登录成功", data));
     }
 }
