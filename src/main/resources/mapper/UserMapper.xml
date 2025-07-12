@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="club.boyuan.official.mapper.UserMapper">
+
+    <insert id="insert" parameterType="club.boyuan.official.entity.User" useGeneratedKeys="true" keyProperty="userId">
+        INSERT INTO user
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="username != null">username,</if>
+            <if test="password != null">password,</if>
+            <if test="email != null">email,</if>
+            <if test="role != null">role,</if>
+            <if test="name != null">name,</if>
+            <if test="phone != null">phone,</if>
+            <if test="dept != null">dept,</if>
+            create_time,
+            <if test="status != null">status,</if>
+            <if test="isMember != null">is_member,</if>
+        </trim>
+        VALUES
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="username != null">#{username},</if>
+            <if test="password != null">#{password},</if>
+            <if test="email != null">#{email},</if>
+            <if test="role != null">#{role},</if>
+            <if test="name != null">#{name},</if>
+            <if test="phone != null">#{phone},</if>
+            <if test="dept != null">#{dept},</if>
+            NOW(),
+            <if test="status != null">#{status},</if>
+            <if test="isMember != null">#{isMember},</if>
+        </trim>
+    </insert>
+
+    <select id="selectById" parameterType="java.lang.Integer" resultType="club.boyuan.official.entity.User">
+        SELECT user_id,
+               username,
+               password,
+               email,
+               role,
+               name,
+               phone,
+               dept,
+               create_time,
+               status,
+               is_member
+        FROM user
+        WHERE user_id = #{userId}
+    </select>
+
+    <select id="selectByUsername" parameterType="java.lang.String" resultType="club.boyuan.official.entity.User">
+        SELECT user_id,
+               username,
+               password,
+               email,
+               role,
+               name,
+               phone,
+               dept,
+               create_time,
+               status,
+               is_member
+        FROM user
+        WHERE username = #{username}
+    </select>
+
+    <select id="selectByEmail" parameterType="java.lang.String" resultType="club.boyuan.official.entity.User">
+        SELECT user_id,
+               username,
+               password,
+               email,
+               role,
+               name,
+               phone,
+               dept,
+               create_time,
+               status,
+               is_member
+        FROM user
+        WHERE email = #{email}
+    </select>
+
+    <update id="updateById" parameterType="club.boyuan.official.entity.User">
+        UPDATE user
+        <set>
+            <if test="username != null">username = #{username},</if>
+            <if test="password != null">password = #{password},</if>
+            <if test="email != null">email = #{email},</if>
+            <if test="role != null">role = #{role},</if>
+            <if test="name != null">name = #{name},</if>
+            <if test="phone != null">phone = #{phone},</if>
+            <if test="dept != null">dept = #{dept},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="isMember != null">is_member = #{isMember},</if>
+        </set>
+        WHERE user_id = #{userId}
+    </update>
+
+    <delete id="deleteById" parameterType="java.lang.Integer">
+        DELETE
+        FROM user
+        WHERE user_id = #{userId}
+    </delete>
+
+    <select id="selectAll" resultType="club.boyuan.official.entity.User">
+        SELECT user_id,
+               username,
+               password,
+               email,
+               role,
+               name,
+               phone,
+               dept,
+               create_time,
+               status,
+               is_member
+        FROM user
+    </select>
+
+    <select id="findByRoleAndDeptAndStatus" resultType="club.boyuan.official.entity.User">
+        SELECT user_id, username, password, email, role, name, phone, dept, create_time, status, is_member FROM user
+        <where>
+            <if test="role != null and role != ''">
+                AND role = #{role}
+            </if>
+            <if test="dept != null and dept != ''">
+                AND dept = #{dept}
+            </if>
+            <if test="status != null">
+                AND status = #{status, jdbcType=BOOLEAN}
+            </if>
+        </where>
+        LIMIT #{pageable.pageNumber}, #{pageable.pageSize}
+    </select>
+
+    <select id="countByRoleAndDeptAndStatus" resultType="java.lang.Long">
+        SELECT COUNT(*)
+        FROM user
+        <where>
+            <if test="role != null and role != ''">
+                AND role = #{role}
+            </if>
+            <if test="dept != null and dept != ''">
+                AND dept = #{dept}
+            </if>
+            <if test="status != null">
+                AND status = #{status, jdbcType=BOOLEAN}
+            </if>
+        </where>
+    </select>
+
+</mapper>
