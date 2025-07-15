@@ -21,6 +21,8 @@ public interface UserMapper {
 
     User selectByEmail(String email);
 
+    User selectByPhone(String phone);
+
     /**
      * 根据角色、部门和状态分页查询用户
      *

@@ -63,6 +63,14 @@ public class UserServiceImpl implements IUserService {
     }
 
     @Override
+    public User getUserByPhone(String phone) {
+        if (phone == null || phone.isEmpty()) {
+            throw new IllegalArgumentException("手机号不能为空");
+        }
+        return userMapper.selectByPhone(phone);
+    }
+
+    @Override
     public User getUserByEmail(String email) {
         if (email == null || email.isEmpty()) {
             throw new IllegalArgumentException("邮箱不能为空");

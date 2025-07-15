@@ -79,6 +79,22 @@
         WHERE email = #{email}
     </select>
 
+    <select id="selectByPhone" parameterType="java.lang.String" resultType="club.boyuan.official.entity.User">
+        SELECT user_id,
+               username,
+               password,
+               email,
+               role,
+               name,
+               phone,
+               dept,
+               create_time,
+               status,
+               is_member
+        FROM user
+        WHERE phone = #{phone}
+    </select>
+
     <update id="updateById" parameterType="club.boyuan.official.entity.User">
         UPDATE user
         <set>

@@ -14,7 +14,7 @@ public class UserDTO {
     @Length(min=6, max=16, message="密码长度必须在6-16之间")
     private String password;
     @Email(message = "邮箱格式不正确")
-    @Pattern(regexp = ".+@stu\\.ecnu\\.edu$" , message = "邮箱必须以@stu.ecnu.edu结尾")
+    @Pattern(regexp = ".+@stu\\.ecnu\\.edu\\.cn$" , message = "邮箱必须以@stu.ecnu.edu.cn结尾")
     private String email;
     @NotBlank(message = "姓名不能为空")
     private String name;
