@@ -30,7 +30,7 @@ public class JwtAuthenticationFilter implements Filter {
 
         // 排除登录和注册接口
         String requestURI = httpRequest.getRequestURI();
-        if ("/api/auth/login".equals(requestURI) || "/api/auth/register".equals(requestURI)) {
+        if ("/api/auth/login".equals(requestURI) || "/api/auth/register".equals(requestURI) || "/api/auth/send-email-code".equals(requestURI) || "/api/auth/send-sms-code".equals(requestURI)) {
             System.out.println("JWT过滤器: 排除登录/注册接口，请求URI: " + requestURI);
             chain.doFilter(request, response);
             return;

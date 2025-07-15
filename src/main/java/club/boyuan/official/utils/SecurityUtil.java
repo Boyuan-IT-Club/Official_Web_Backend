@@ -1,4 +1,4 @@
-//package club.boyuan.official.util;
+//package club.boyuan.official.utils;
 //
 //import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 //

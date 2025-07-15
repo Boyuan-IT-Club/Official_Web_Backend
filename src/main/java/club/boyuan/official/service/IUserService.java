@@ -16,6 +16,7 @@ public interface IUserService {
     List<User> getAllUsers(User currentUser);
     User getUserByUsername(String username);
     User getUserByEmail(String email);
+    User getUserByPhone(String phone);
     User register(UserDTO userDTO);
     User updateUserStatus(Integer userId, String status);
 
