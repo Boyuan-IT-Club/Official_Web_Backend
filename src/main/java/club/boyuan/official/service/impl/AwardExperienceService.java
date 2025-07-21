@@ -3,16 +3,16 @@ package club.boyuan.official.service.impl;
 import club.boyuan.official.entity.AwardExperience;
 import club.boyuan.official.mapper.AwardExperienceMapper;
 import club.boyuan.official.service.IAwardExperienceService;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 
 @Service
+@AllArgsConstructor
 public class AwardExperienceService implements IAwardExperienceService {
 
-    @Autowired
-    private AwardExperienceMapper awardExperienceMapper;
+    private final AwardExperienceMapper awardExperienceMapper;
 
     @Override
     public AwardExperience create(AwardExperience awardExperience) {

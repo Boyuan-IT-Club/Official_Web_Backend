@@ -4,7 +4,7 @@ import club.boyuan.official.dto.ResponseMessage;
 import club.boyuan.official.dto.UserDTO;
 import club.boyuan.official.entity.User;
 import club.boyuan.official.service.IUserService;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.AllArgsConstructor;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,16 +23,14 @@ import club.boyuan.official.utils.JwtTokenUtil;
 
 @RestController
 @RequestMapping("/api/admin")
+@AllArgsConstructor
 public class AdminController {
 
-    @Autowired
-    private IUserService userService;
+    private final IUserService userService;
 
-    @Autowired
-    private JwtTokenUtil jwtTokenUtil;
+    private final JwtTokenUtil jwtTokenUtil;
 
-    @Autowired
-    private HttpServletRequest request;
+    private final HttpServletRequest request;
 
     /**
      * 从请求头获取JWT令牌

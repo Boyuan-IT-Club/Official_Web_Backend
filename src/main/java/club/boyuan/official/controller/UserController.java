@@ -6,6 +6,7 @@ import club.boyuan.official.entity.User;
 import club.boyuan.official.service.IAwardExperienceService;
 import club.boyuan.official.service.IUserService;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.AllArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -23,19 +24,16 @@ import java.util.stream.Collectors;
 
 @RestController //接口方法返回对象转换成Json文本
 @RequestMapping("api/user")
+@AllArgsConstructor
 public class UserController {
 
-    @Autowired
-    private IUserService userService;
+    private final IUserService userService;
 
-    @Autowired
-    private HttpServletRequest request;
+    private final HttpServletRequest request;
 
-    @Autowired
-    private JwtTokenUtil jwtTokenUtil;
+    private final JwtTokenUtil jwtTokenUtil;
 
-    @Autowired
-    private IAwardExperienceService awardExperienceService;
+    private final IAwardExperienceService awardExperienceService;
 
     /**
      * 获取当前用户信息，返回响应实体

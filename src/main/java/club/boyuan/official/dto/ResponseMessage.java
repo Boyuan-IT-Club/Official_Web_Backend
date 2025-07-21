@@ -1,7 +1,11 @@
 package club.boyuan.official.dto;
 
 import org.springframework.http.HttpStatus;
+import lombok.Getter;
+import lombok.Setter;
 
+@Getter
+@Setter
 public class ResponseMessage<T> {
     private Integer code;
     private String message;
@@ -23,18 +27,6 @@ public class ResponseMessage<T> {
 
     public static <T> ResponseMessage error(int code, String message) {
         return new ResponseMessage<>(code, message, null);
-    }
-
-    public Integer getCode() {
-        return code;
-    }
-
-    public String getMessage() {
-        return message;
-    }
-
-    public T getData() {
-        return data;
     }
 
     public String toString() {
