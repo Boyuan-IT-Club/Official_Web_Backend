@@ -6,7 +6,6 @@ import org.springframework.data.redis.core.RedisTemplate;
 
 import jakarta.annotation.Resource;
 import java.util.Random;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 短信服务类
@@ -63,17 +62,19 @@ public class SmsService {
     }
 
     /**
-     * 验证手机验证码是否正确
-     * 验证成功后会从Redis删除验证码防止重复使用
-     * @param phoneNumber 手机号码
-     * @param inputCode 用户输入的验证码
-     * @return 验证结果：true-验证成功，false-验证失败
+     * 发送短信验证码（兼容旧API）
+     * @param phoneNumber 目标手机号码
      */
+    public void sendSms(String phoneNumber) {
+        sendVerificationCode(phoneNumber);
+    }
+
     public boolean verifyCode(String phoneNumber, String inputCode) {
         if (phoneNumber == null || inputCode == null) {
             return false;
         }
-        String storedCode = (String) redisTemplate.opsForValue().get("sms:code:" + phoneNumber);
+        Object storedValue = redisTemplate.opsForValue().get("sms:code:" + phoneNumber);
+        String storedCode = storedValue != null ? storedValue.toString() : null;
         if (storedCode == null) {
             return false;
         }

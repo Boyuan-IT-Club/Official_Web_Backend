@@ -5,6 +5,7 @@ import club.boyuan.official.entity.User;
 import club.boyuan.official.mapper.AwardExperienceMapper;
 import club.boyuan.official.mapper.UserMapper;
 import club.boyuan.official.service.IUserService;
+import lombok.AllArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -17,13 +18,12 @@ import java.security.NoSuchAlgorithmException;
 import java.util.List;
 
 @Service
+@AllArgsConstructor
 public class UserServiceImpl implements IUserService {
 
-    @Autowired
-    private UserMapper userMapper;
+    private final UserMapper userMapper;
 
-    @Autowired
-    private AwardExperienceMapper awardExperienceMapper;
+    private final AwardExperienceMapper awardExperienceMapper;
 
     @Override
     public Page<User> getUsersByConditions(String role, String dept, String status, Pageable pageable, User currentUser) {

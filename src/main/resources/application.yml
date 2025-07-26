@@ -1,0 +1,57 @@
+spring:
+  application:
+    name: Official
+  datasource:
+    url: jdbc:mysql://localhost:3306/official?serverTimezone=UTC
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  mail:
+    host: smtp.feishu.cn
+    port: 465
+    username: notify@boyuan.club
+    password: 12bGmEWjvyRDjzxE
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          socketFactory:
+            class: javax.net.ssl.SSLSocketFactory
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: 
+      database: 0
+
+server:
+  port: 8080
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: club.boyuan.official.entity
+  configuration:
+    map-underscore-to-camel-case: true
+
+jwt:
+  secret: bbe0ac1a5b8a113b4568d55c76fe887a1cd99b01acfad7957156945688e03e20
+  expiration: 86400000
+
+sms:
+  access-key: your-sms-access-key     # SMS service access key
+  secret-key: your-sms-secret-key     # SMS service secret key
+
+logging:
+  level:
+    club.boyuan.official.mapper: DEBUG

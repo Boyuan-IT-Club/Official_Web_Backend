@@ -3,16 +3,18 @@ package club.boyuan.official.service.impl;
 import club.boyuan.official.entity.AwardExperience;
 import club.boyuan.official.mapper.AwardExperienceMapper;
 import club.boyuan.official.service.IAwardExperienceService;
-import org.springframework.beans.factory.annotation.Autowired;
+import club.boyuan.official.exception.BusinessException;
+import club.boyuan.official.exception.BusinessExceptionEnum;
+import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 
 @Service
+@AllArgsConstructor
 public class AwardExperienceService implements IAwardExperienceService {
 
-    @Autowired
-    private AwardExperienceMapper awardExperienceMapper;
+    private final AwardExperienceMapper awardExperienceMapper;
 
     @Override
     public AwardExperience create(AwardExperience awardExperience) {
@@ -23,7 +25,7 @@ public class AwardExperienceService implements IAwardExperienceService {
     @Override
     public AwardExperience getById(Integer id) {
         return awardExperienceMapper.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("获奖经历不存在"));
+                .orElseThrow(() -> new BusinessException(BusinessExceptionEnum.AWARD_EXPERIENCE_NOT_FOUND));
     }
 
     @Override
@@ -35,11 +37,11 @@ public class AwardExperienceService implements IAwardExperienceService {
     public AwardExperience update(AwardExperience awardExperience) {
         // 检查获奖经历是否存在
         if (!awardExperienceMapper.existsById(awardExperience.getAwardId())) {
-            throw new IllegalArgumentException("获奖经历不存在");
+            throw new BusinessException(BusinessExceptionEnum.AWARD_EXPERIENCE_NOT_FOUND);
         }
         int rowsAffected = awardExperienceMapper.update(awardExperience);
         if (rowsAffected <= 0) {
-            throw new RuntimeException("更新获奖经历失败");
+            throw new BusinessException(BusinessExceptionEnum.AWARD_EXPERIENCE_UPDATE_FAILED);
         }
         return awardExperience;
     }
@@ -47,7 +49,7 @@ public class AwardExperienceService implements IAwardExperienceService {
     @Override
     public void deleteById(Integer id) {
         if (!awardExperienceMapper.existsById(id)) {
-            throw new IllegalArgumentException("获奖经历不存在");
+            throw new BusinessException(BusinessExceptionEnum.AWARD_EXPERIENCE_NOT_FOUND);
         }
         awardExperienceMapper.deleteById(id);
     }
