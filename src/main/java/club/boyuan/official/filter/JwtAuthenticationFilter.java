@@ -1,12 +1,17 @@
 package club.boyuan.official.filter;
 
+import club.boyuan.official.dto.ResponseMessage;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import club.boyuan.official.exception.BusinessException;
+import club.boyuan.official.exception.BusinessExceptionEnum;
 
 import java.io.IOException;
 import java.security.Key;
@@ -40,20 +45,39 @@ public class JwtAuthenticationFilter implements Filter {
         System.out.println("JWT过滤器: 提取到token: " + (token != null ? token : "不存在"));
         if (token != null) {
             try {
-                if (validateToken(token)) {
-                    System.out.println("JWT过滤器: token验证通过，继续处理请求");
-                    // 验证通过，继续处理请求
-                    chain.doFilter(request, response);
+                if (!validateToken(token)) {
+                    System.out.println("JWT过滤器: token验证失败");
+                    httpResponse.setStatus(HttpStatus.UNAUTHORIZED.value());
+                    httpResponse.setContentType("application/json;charset=UTF-8");
+                    ResponseMessage<?> errorResponse = new ResponseMessage<>(BusinessExceptionEnum.JWT_VERIFICATION_FAILED.getCode(), BusinessExceptionEnum.JWT_VERIFICATION_FAILED.getMessage(), null);
+                    new ObjectMapper().writeValue(httpResponse.getWriter(), errorResponse);
                     return;
                 }
+                System.out.println("JWT过滤器: token验证通过，继续处理请求");
+                chain.doFilter(request, response);
+                return;
             } catch (JwtException e) {
                 System.out.println("JWT过滤器: token验证失败: " + e.getMessage());
-                httpResponse.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                httpResponse.setStatus(HttpStatus.UNAUTHORIZED.value());
+                httpResponse.setContentType("application/json;charset=UTF-8");
+                ResponseMessage<?> errorResponse = new ResponseMessage<>(BusinessExceptionEnum.JWT_VERIFICATION_FAILED.getCode(), BusinessExceptionEnum.JWT_VERIFICATION_FAILED.getMessage(), null);
+                try {
+                    new ObjectMapper().writeValue(httpResponse.getWriter(), errorResponse);
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                }
                 return;
             }
         }
         System.out.println("JWT过滤器: 请求未携带token，返回401");
-        httpResponse.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        httpResponse.setStatus(HttpStatus.UNAUTHORIZED.value());
+        httpResponse.setContentType("application/json;charset=UTF-8");
+        ResponseMessage<?> errorResponse = new ResponseMessage<>(BusinessExceptionEnum.JWT_VERIFICATION_FAILED.getCode(), BusinessExceptionEnum.JWT_VERIFICATION_FAILED.getMessage(), null);
+        try {
+            new ObjectMapper().writeValue(httpResponse.getWriter(), errorResponse);
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
     }
 
     private String extractToken(HttpServletRequest request) {

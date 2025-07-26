@@ -15,10 +15,10 @@ spring:
       ddl-auto: update
     open-in-view: false
   mail:
-    host: smtp.163.com
+    host: smtp.feishu.cn
     port: 465
-    username: hucongyu05@163.com
-    password: MXcCL3BXRmnHdaLH
+    username: notify@boyuan.club
+    password: 12bGmEWjvyRDjzxE
     properties:
       mail:
         smtp:

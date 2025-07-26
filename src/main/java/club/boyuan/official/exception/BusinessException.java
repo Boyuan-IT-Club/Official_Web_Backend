@@ -19,4 +19,14 @@ public class BusinessException extends RuntimeException {
         this.code = exceptionEnum.getCode();
         this.message = exceptionEnum.getMessage();
     }
+
+    /**
+     * 根据业务异常枚举和自定义消息创建异常实例
+     * @param exceptionEnum 业务异常枚举
+     * @param message 自定义异常消息
+     */
+    public BusinessException(BusinessExceptionEnum exceptionEnum, String message) {
+        this.code = exceptionEnum.getCode();
+        this.message = message;
+    }
 }

@@ -136,7 +136,7 @@ public class LoginServiceImpl implements ILoginService {
         if (!user.getStatus()) {
             return ResponseMessage.error(403, "账号已被冻结，无法登录");
         }
-        String token = jwtTokenUtil.generateToken(user.getUsername(), user.getUserId().longValue(), Collections.singletonList(user.getRole()));
+        String token = jwtTokenUtil.generateToken(user.getUsername(), user.getUserId(), Collections.singletonList(user.getRole()));
         return ResponseMessage.success(new TokenVO(token));
     }
 
