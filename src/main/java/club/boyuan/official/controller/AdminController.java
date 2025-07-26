@@ -3,6 +3,8 @@ package club.boyuan.official.controller;
 import club.boyuan.official.dto.ResponseMessage;
 import club.boyuan.official.dto.UserDTO;
 import club.boyuan.official.entity.User;
+import club.boyuan.official.exception.BusinessException;
+import club.boyuan.official.exception.BusinessExceptionEnum;
 import club.boyuan.official.service.IUserService;
 import lombok.AllArgsConstructor;
 
@@ -49,23 +51,23 @@ public class AdminController {
     private void checkAdminRole() {
         String token = getTokenFromHeader();
         if (token == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "未提供认证令牌");
+            throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
         }
 
         try {
-            // 验证令牌并获取用户名
-            String username = jwtTokenUtil.extractUsername(token);
-            if (!jwtTokenUtil.validateToken(token, username)) {
-                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "令牌无效或已过期");
+            // 验证令牌并获取用户ID
+            Integer userId = jwtTokenUtil.extractUserId(token);
+            if (userId == null) {
+                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
             }
 
             // 检查用户是否为管理员
-            User user = userService.getUserByUsername(username);
+            User user = userService.getUserById(userId);
             if (user == null || !User.ROLE_ADMIN.equals(user.getRole())) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "没有管理员权限");
+                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
             }
         } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "认证失败: " + e.getMessage());
+            throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED, e.getMessage());
         }
     }
 
@@ -74,24 +76,32 @@ public class AdminController {
      */
     @PostMapping("/users")
     public ResponseEntity<ResponseMessage> addUser(@RequestBody UserDTO userDTO) {
-        checkAdminRole();
-        // 检查用户名是否已存在
-        User existingUser = userService.getUserByUsername(userDTO.getUsername());
-        if (existingUser != null) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(new ResponseMessage(409, "用户名已存在", null));
+        try {
+            checkAdminRole();
+            // 检查用户名是否已存在
+            User existingUser = userService.getUserByUsername(userDTO.getUsername());
+            if (existingUser != null) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(new ResponseMessage(409, "用户名已存在", null));
+            }
+
+            // 保存新用户
+            User newUser = userService.add(userDTO);
+
+            // 构建响应数据
+            Map<String, Object> data = new HashMap<>();
+            data.put("userId", newUser.getUserId());
+            data.put("username", newUser.getUsername());
+
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(new ResponseMessage(201, "注册成功", data));
+        } catch (BusinessException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ResponseMessage(e.getCode(), e.getMessage(), null));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ResponseMessage(500, "服务器内部错误: " + e.getMessage(), null));
         }
-
-        // 保存新用户
-        User newUser = userService.add(userDTO);
-
-        // 构建响应数据
-        Map<String, Object> data = new HashMap<>();
-        data.put("userId", newUser.getUserId());
-        data.put("username", newUser.getUsername());
-
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(new ResponseMessage(201, "注册成功", data));
     }
 
     /**
@@ -104,33 +114,41 @@ public class AdminController {
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "20") Integer pageSize) {
-        checkAdminRole();
-        
-        // 获取当前登录用户（实际项目中应从安全上下文获取）
-        User currentUser = new User();
-        currentUser.setRole(User.ROLE_ADMIN);
-        
-        // 创建分页对象
-        Pageable pageable = PageRequest.of(page - 1, pageSize);
-        // 输出请求
-        System.out.println("Controller层");
-        System.out.println("role: " + role);
-        System.out.println("dept: " + dept);
-        System.out.println("status: " + status);
-        System.out.println("pageable: " + pageable);
-        System.out.println("currentUser: " + currentUser);
+        try {
+            checkAdminRole();
+            
+            // 获取当前登录用户（实际项目中应从安全上下文获取）
+            User currentUser = new User();
+            currentUser.setRole(User.ROLE_ADMIN);
+            
+            // 创建分页对象
+            Pageable pageable = PageRequest.of(page - 1, pageSize);
+            // 输出请求
+            System.out.println("Controller层");
+            System.out.println("role: " + role);
+            System.out.println("dept: " + dept);
+            System.out.println("status: " + status);
+            System.out.println("pageable: " + pageable);
+            System.out.println("currentUser: " + currentUser);
 
-        Page<User> userPage = userService.getUsersByConditions(role, dept, status, pageable, currentUser);
+            Page<User> userPage = userService.getUsersByConditions(role, dept, status, pageable, currentUser);
 
-        Map<String, Object> data = new HashMap<>();
-        data.put("total", userPage.getTotalElements());
-        data.put("users", userPage.getContent());
-        data.put("page", page);
-        data.put("pageSize", pageSize);
-        data.put("totalPages", userPage.getTotalPages());
-        // 输出data
-        System.out.println("data: " + data);
-        return ResponseEntity.ok(new ResponseMessage(200, "success", data));
+            Map<String, Object> data = new HashMap<>();
+            data.put("total", userPage.getTotalElements());
+            data.put("users", userPage.getContent());
+            data.put("page", page);
+            data.put("pageSize", pageSize);
+            data.put("totalPages", userPage.getTotalPages());
+            // 输出data
+            System.out.println("data: " + data);
+            return ResponseEntity.ok(new ResponseMessage(200, "success", data));
+        } catch (BusinessException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ResponseMessage(e.getCode(), e.getMessage(), null));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ResponseMessage(500, "服务器内部错误: " + e.getMessage(), null));
+        }
     }
 
     /**
@@ -140,18 +158,24 @@ public class AdminController {
     public ResponseEntity<ResponseMessage> updateUserStatus(
             @PathVariable Integer userId,
             @RequestBody Map<String, String> statusRequest) {
-        String status = statusRequest.get("status");
-        if (status == null || (!"active".equals(status) && !"frozen".equals(status))) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ResponseMessage(400, "无效的状态值", null));
-        }
-
         try {
+            String status = statusRequest.get("status");
+            if (status == null || (!"active".equals(status) && !"frozen".equals(status))) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(new ResponseMessage(400, "无效的状态值", null));
+            }
+
             User updatedUser = userService.updateUserStatus(userId, status);
             return ResponseEntity.ok(new ResponseMessage(200, "状态更新成功", updatedUser));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(new ResponseMessage(404, e.getMessage(), null));
+        } catch (BusinessException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ResponseMessage(e.getCode(), e.getMessage(), null));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ResponseMessage(500, "服务器内部错误: " + e.getMessage(), null));
         }
     }
 }

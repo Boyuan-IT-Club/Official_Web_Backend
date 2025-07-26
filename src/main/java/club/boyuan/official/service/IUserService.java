@@ -20,4 +20,5 @@ public interface IUserService {
     User register(UserDTO userDTO);
     User updateUserStatus(Integer userId, String status);
     Page<User> getUsersByConditions(String role, String dept, String status, Pageable pageable, User currentUser);
+    User updatePassword(Integer userId, String newPassword);
 }

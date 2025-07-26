@@ -5,6 +5,7 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 
 import java.security.Key;
@@ -12,6 +13,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 @Component
@@ -23,12 +25,28 @@ public class JwtTokenUtil {
     @Value("${jwt.secret}")
     private String secretKey;
 
+   private final RedisTemplate<String, Object> redisTemplate;
+
+   public JwtTokenUtil(RedisTemplate<String, Object> redisTemplate) {
+       this.redisTemplate = redisTemplate;
+   }
+
     private Key getSigningKey() {
         return Keys.hmacShaKeyFor(secretKey.getBytes());
     }
     // 从令牌中提取用户名
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);
+    }
+
+    // 从令牌中提取用户ID
+    public Integer extractUserId(String token) {
+        return extractClaim(token, claims -> claims.get("userId", Integer.class));
+    }
+
+    // 从令牌中提取角色
+    public List<String> extractRoles(String token) {
+        return extractClaim(token, claims -> claims.get("roles", List.class));
     }
 
     // 从令牌中提取过期时间
@@ -61,7 +79,7 @@ public class JwtTokenUtil {
         return generateToken(username, null, null);
     }
 
-    public String generateToken(String username, Long userId, List<String> roles) {
+    public String generateToken(String username, Integer userId, List<String> roles) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);
         claims.put("roles", roles);
@@ -82,6 +100,17 @@ public class JwtTokenUtil {
     // 验证令牌
     public Boolean validateToken(String token, String username) {
         final String extractedUsername = extractUsername(token);
-        return (extractedUsername.equals(username) && !isTokenExpired(token));
+        return (extractedUsername.equals(username) && !isTokenExpired(token) && !isTokenRevoked(token));
+    }
+
+    // 吊销令牌
+    public void revokeToken(String token) {
+        long timeToLive = extractExpiration(token).getTime() - System.currentTimeMillis();
+        redisTemplate.opsForValue().set("blacklist:" + token, "revoked", timeToLive, TimeUnit.MILLISECONDS);
+    }
+
+    // 检查令牌是否已吊销
+    public boolean isTokenRevoked(String token) {
+        return redisTemplate.hasKey("blacklist:" + token);
     }
 }
