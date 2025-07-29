@@ -175,10 +175,12 @@ public class AuthController {
                         throw new BusinessException(BusinessExceptionEnum.INVALID_EMAIL_FORMAT);
                     }
                     user = userService.getUserByEmail(authLoginDTO.getAuth_id());
+
                     // 验证验证
                     if (!loginService.verifyVerificationCode(authLoginDTO.getAuth_id(), authLoginDTO.getVerify())) {
                         throw new BusinessException(BusinessExceptionEnum.INVALID_VERIFICATION_CODE);
                     }
+
                     response = loginService.loginByEmailCode(authLoginDTO.getAuth_id(), authLoginDTO.getVerify());
                     break;
                 case "phone-password":
@@ -191,6 +193,7 @@ public class AuthController {
                     // 验证手机号格式
                     messageUtils.validatePhone(authLoginDTO.getAuth_id());
                     user = userService.getUserByPhone(authLoginDTO.getAuth_id());
+
                     // 验证验证码
                     if (!loginService.verifyVerificationCode(authLoginDTO.getAuth_id(), authLoginDTO.getVerify())) {
                         throw new BusinessException(BusinessExceptionEnum.INVALID_VERIFICATION_CODE);
