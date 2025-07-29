@@ -24,4 +24,12 @@ public interface ILoginService {
      * @param expireSeconds 过期时间（秒）
      */
     void saveVerificationCode(String identifier, String code, long expireSeconds);
+
+    /**
+     * 验证验证码
+     * @param identifier 标识符（手机号或邮箱）
+     * @param code 待验证的验证码
+     * @return 如果验证码有效则返回true，否则返回false
+     */
+    boolean verifyVerificationCode(String identifier, String code);
 }

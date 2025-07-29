@@ -5,6 +5,7 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 
 import java.security.Key;
@@ -12,6 +13,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 @Component
@@ -22,6 +24,12 @@ public class JwtTokenUtil {
 
     @Value("${jwt.secret}")
     private String secretKey;
+
+   private final RedisTemplate<String, Object> redisTemplate;
+
+   public JwtTokenUtil(RedisTemplate<String, Object> redisTemplate) {
+       this.redisTemplate = redisTemplate;
+   }
 
     private Key getSigningKey() {
         return Keys.hmacShaKeyFor(secretKey.getBytes());
@@ -92,6 +100,17 @@ public class JwtTokenUtil {
     // 验证令牌
     public Boolean validateToken(String token, String username) {
         final String extractedUsername = extractUsername(token);
-        return (extractedUsername.equals(username) && !isTokenExpired(token));
+        return (extractedUsername.equals(username) && !isTokenExpired(token) && !isTokenRevoked(token));
+    }
+
+    // 吊销令牌
+    public void revokeToken(String token) {
+        long timeToLive = extractExpiration(token).getTime() - System.currentTimeMillis();
+        redisTemplate.opsForValue().set("blacklist:" + token, "revoked", timeToLive, TimeUnit.MILLISECONDS);
+    }
+
+    // 检查令牌是否已吊销
+    public boolean isTokenRevoked(String token) {
+        return redisTemplate.hasKey("blacklist:" + token);
     }
 }

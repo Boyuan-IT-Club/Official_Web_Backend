@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import java.util.Collections;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 /**
  * 登录服务实现类
@@ -45,6 +46,8 @@ public class LoginServiceImpl implements ILoginService {
      */
     private final RedisTemplate<String, String> redisTemplate;
 
+    private final BCryptPasswordEncoder passwordEncoder;
+
     /**
      * 通过邮箱和密码登录
      * @param email 用户邮箱
@@ -54,7 +57,7 @@ public class LoginServiceImpl implements ILoginService {
     @Override
     public ResponseMessage<?> loginByEmailPassword(String email, String password) {
         User user = userService.getUserByEmail(email);
-        if (user == null || !password.equals(user.getPassword())) {
+        if (user == null || !passwordEncoder.matches(password, user.getPassword())) {
             return ResponseMessage.error(401, "邮箱或密码错误");
         }
         return generateLoginSuccessResponse(user);
@@ -87,7 +90,7 @@ public class LoginServiceImpl implements ILoginService {
     @Override
     public ResponseMessage<?> loginByPhonePassword(String phone, String password) {
         User user = userService.getUserByPhone(phone);
-        if (user == null || !password.equals(user.getPassword())) {
+        if (user == null || !passwordEncoder.matches(password, user.getPassword())) {
             return ResponseMessage.error(401, "手机号或密码错误");
         }
         return generateLoginSuccessResponse(user);
@@ -120,7 +123,7 @@ public class LoginServiceImpl implements ILoginService {
     @Override
     public ResponseMessage<?> loginByUsernamePassword(String username, String password) {
         User user = userService.getUserByUsername(username);
-        if (user == null || !password.equals(user.getPassword())) {
+        if (user == null || !passwordEncoder.matches(password, user.getPassword())) {
             return ResponseMessage.error(401, "用户名或密码错误");
         }
         return generateLoginSuccessResponse(user);
@@ -156,6 +159,24 @@ public class LoginServiceImpl implements ILoginService {
     public void saveVerificationCode(String identifier, String code, long expireSeconds) {
         // 使用标识符作为Redis键，验证码作为值，设置过期时间
         redisTemplate.opsForValue().set("verification_code:" + identifier, code, expireSeconds, TimeUnit.SECONDS);
+    }
+
+    /**
+     * 验证验证码
+     * @param identifier 标识符（手机号或邮箱）
+     * @param code 待验证的验证码
+     * @return 如果验证码有效则返回true，否则返回false
+     */
+    @Override
+    public boolean verifyVerificationCode(String identifier, String code) {
+        String key = "verification_code:" + identifier;
+        String storedCode = redisTemplate.opsForValue().get(key);
+        if (storedCode == null || !storedCode.equals(code)) {
+            return false;
+        }
+        // 验证成功后删除验证码，防止重复使用
+        redisTemplate.delete(key);
+        return true;
     }
 
     @Setter

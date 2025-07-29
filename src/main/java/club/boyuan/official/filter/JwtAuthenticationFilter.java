@@ -2,10 +2,14 @@ package club.boyuan.official.filter;
 
 import club.boyuan.official.dto.ResponseMessage;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
-import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import io.jsonwebtoken.*;
@@ -15,13 +19,22 @@ import club.boyuan.official.exception.BusinessExceptionEnum;
 
 import java.io.IOException;
 import java.security.Key;
-import java.util.Date;
+import java.util.*;
+
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @Component
 public class JwtAuthenticationFilter implements Filter {
 
     @Value("${jwt.secret}")
     private String secretKey;
+
+    private final RedisTemplate<String, Object> redisTemplate;
+
+    public JwtAuthenticationFilter(RedisTemplate<String, Object> redisTemplate) {
+        this.redisTemplate = redisTemplate;
+    }
 
     private Key getSigningKey() {
         return Keys.hmacShaKeyFor(secretKey.getBytes());
@@ -35,7 +48,9 @@ public class JwtAuthenticationFilter implements Filter {
 
         // 排除登录和注册接口
         String requestURI = httpRequest.getRequestURI();
-        if ("/api/auth/login".equals(requestURI) || "/api/auth/register".equals(requestURI) || "/api/auth/send-email-code".equals(requestURI) || "/api/auth/send-sms-code".equals(requestURI)) {
+        System.out.println(requestURI);
+        //排除api/auth开头的所有接口
+        if (requestURI.startsWith("/api/auth")) {
             System.out.println("JWT过滤器: 排除登录/注册接口，请求URI: " + requestURI);
             chain.doFilter(request, response);
             return;
@@ -53,7 +68,33 @@ public class JwtAuthenticationFilter implements Filter {
                     new ObjectMapper().writeValue(httpResponse.getWriter(), errorResponse);
                     return;
                 }
-                System.out.println("JWT过滤器: token验证通过，继续处理请求");
+                System.out.println("JWT过滤器: token验证通过，设置认证信息");
+                Claims claims = Jwts.parserBuilder()
+                        .setSigningKey(getSigningKey())
+                        .build()
+                        .parseClaimsJws(token)
+                        .getBody();
+                
+                // 从claims中获取角色信息
+                List<String> roles = (List<String>) claims.get("roles");
+                if (roles == null) {
+                    roles = new ArrayList<>();
+                }
+
+                // 转换角色为Spring Security权限
+                Collection<GrantedAuthority> authorities = new ArrayList<>();
+                for (String role : roles) {
+                    authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
+                }
+
+                // 创建认证对象并设置权限
+                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                        claims.getSubject(), null, authorities);
+                
+                // 设置认证信息到上下文
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+                
+                System.out.println("JWT过滤器: 认证信息设置完成，继续处理请求");
                 chain.doFilter(request, response);
                 return;
             } catch (JwtException e) {
@@ -89,6 +130,11 @@ public class JwtAuthenticationFilter implements Filter {
     }
 
     private boolean validateToken(String token) {
+        // 检查令牌是否在黑名单中
+        if (Boolean.TRUE.equals(redisTemplate.hasKey("jwt:blacklist:" + token))) {
+            System.out.println("JWT过滤器: token已被注销");
+            throw new BusinessException(BusinessExceptionEnum.JWT_HAS_BEEN_LOGGED_OUT);
+        }
         Claims claims = Jwts.parserBuilder()
                 .setSigningKey(getSigningKey())
                 .build()

@@ -32,7 +32,8 @@ public enum BusinessExceptionEnum {
     JWT_INVALID(1024, "JWT令牌无效"),
     AUTHENTICATION_FAILED(1025, "认证失败"),
     JWT_VERIFICATION_FAILED(1022, "JWT验证失败"),
-    SYSTEM_ERROR(500, "系统错误");
+    SYSTEM_ERROR(500, "系统错误"),
+    INVALID_VERIFICATION_CODE(1026, "验证码无效"), JWT_HAS_BEEN_LOGGED_OUT(1027, "JWT已注销");
 
     private final int code;
     private final String message;
