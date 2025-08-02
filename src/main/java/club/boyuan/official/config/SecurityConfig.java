@@ -54,15 +54,5 @@ public class SecurityConfig {
     public BCryptPasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
-    
-    @Bean
-    public UserDetailsService userDetailsService() {
-        // 内存用户详情用于演示
-        UserDetails user = User.withUsername("user")
-                .password(passwordEncoder().encode("password"))
-                .roles("USER")
-                .build();
-                
-        return new InMemoryUserDetailsManager(user);
-    }
+
 }

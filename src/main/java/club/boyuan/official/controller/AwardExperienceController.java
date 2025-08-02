@@ -9,7 +9,7 @@ import club.boyuan.official.service.IAwardExperienceService;
 import club.boyuan.official.service.IUserService;
 import club.boyuan.official.utils.JwtTokenUtil;
 import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -18,18 +18,14 @@ import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
 
+@AllArgsConstructor
 @RestController
 @RequestMapping("/api/awards")
 public class AwardExperienceController {
 
-    @Autowired
-    private IAwardExperienceService awardExperienceService;
-
-       @Autowired
-    private IUserService userService;
-
-    @Autowired
-    private JwtTokenUtil jwtTokenUtil;
+    private  final IAwardExperienceService awardExperienceService;
+    private final IUserService userService;
+    private final JwtTokenUtil jwtTokenUtil;
 
     /**
      * 创建获奖经历
