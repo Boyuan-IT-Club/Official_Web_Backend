@@ -23,9 +23,13 @@ import java.util.*;
 
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Component
 public class JwtAuthenticationFilter implements Filter {
+    
+    private static final Logger logger = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
 
     @Value("${jwt.secret}")
     private String secretKey;
@@ -48,27 +52,27 @@ public class JwtAuthenticationFilter implements Filter {
 
         // 排除登录和注册接口
         String requestURI = httpRequest.getRequestURI();
-        System.out.println(requestURI);
+        logger.debug("处理请求URI: {}", requestURI);
         //排除api/auth开头的所有接口
         if (requestURI.startsWith("/api/auth")) {
-            System.out.println("JWT过滤器: 排除登录/注册接口，请求URI: " + requestURI);
+            logger.debug("排除登录/注册接口，请求URI: {}", requestURI);
             chain.doFilter(request, response);
             return;
         }
 
         String token = extractToken(httpRequest);
-        System.out.println("JWT过滤器: 提取到token: " + (token != null ? token : "不存在"));
+        logger.debug("提取到token: {}", (token != null ? "存在" : "不存在"));
         if (token != null) {
             try {
                 if (!validateToken(token)) {
-                    System.out.println("JWT过滤器: token验证失败");
+                    logger.warn("token验证失败");
                     httpResponse.setStatus(HttpStatus.UNAUTHORIZED.value());
                     httpResponse.setContentType("application/json;charset=UTF-8");
                     ResponseMessage<?> errorResponse = new ResponseMessage<>(BusinessExceptionEnum.JWT_VERIFICATION_FAILED.getCode(), BusinessExceptionEnum.JWT_VERIFICATION_FAILED.getMessage(), null);
                     new ObjectMapper().writeValue(httpResponse.getWriter(), errorResponse);
                     return;
                 }
-                System.out.println("JWT过滤器: token验证通过，设置认证信息");
+                logger.debug("token验证通过，设置认证信息");
                 Claims claims = Jwts.parserBuilder()
                         .setSigningKey(getSigningKey())
                         .build()
@@ -94,30 +98,30 @@ public class JwtAuthenticationFilter implements Filter {
                 // 设置认证信息到上下文
                 SecurityContextHolder.getContext().setAuthentication(authentication);
                 
-                System.out.println("JWT过滤器: 认证信息设置完成，继续处理请求");
+                logger.debug("认证信息设置完成，继续处理请求");
                 chain.doFilter(request, response);
                 return;
             } catch (JwtException e) {
-                System.out.println("JWT过滤器: token验证失败: " + e.getMessage());
+                logger.warn("token验证失败: {}", e.getMessage());
                 httpResponse.setStatus(HttpStatus.UNAUTHORIZED.value());
                 httpResponse.setContentType("application/json;charset=UTF-8");
                 ResponseMessage<?> errorResponse = new ResponseMessage<>(BusinessExceptionEnum.JWT_VERIFICATION_FAILED.getCode(), BusinessExceptionEnum.JWT_VERIFICATION_FAILED.getMessage(), null);
                 try {
                     new ObjectMapper().writeValue(httpResponse.getWriter(), errorResponse);
                 } catch (IOException ex) {
-                    ex.printStackTrace();
+                    logger.error("写入响应时发生错误", ex);
                 }
                 return;
             }
         }
-        System.out.println("JWT过滤器: 请求未携带token，返回401");
+        logger.warn("请求未携带token，返回401");
         httpResponse.setStatus(HttpStatus.UNAUTHORIZED.value());
         httpResponse.setContentType("application/json;charset=UTF-8");
         ResponseMessage<?> errorResponse = new ResponseMessage<>(BusinessExceptionEnum.JWT_VERIFICATION_FAILED.getCode(), BusinessExceptionEnum.JWT_VERIFICATION_FAILED.getMessage(), null);
         try {
             new ObjectMapper().writeValue(httpResponse.getWriter(), errorResponse);
         } catch (IOException ex) {
-            ex.printStackTrace();
+            logger.error("写入响应时发生错误", ex);
         }
     }
 
@@ -132,7 +136,7 @@ public class JwtAuthenticationFilter implements Filter {
     private boolean validateToken(String token) {
         // 检查令牌是否在黑名单中
         if (Boolean.TRUE.equals(redisTemplate.hasKey("jwt:blacklist:" + token))) {
-            System.out.println("JWT过滤器: token已被注销");
+            logger.warn("token已被注销");
             throw new BusinessException(BusinessExceptionEnum.JWT_HAS_BEEN_LOGGED_OUT);
         }
         Claims claims = Jwts.parserBuilder()
@@ -142,12 +146,12 @@ public class JwtAuthenticationFilter implements Filter {
                 .getBody();
 
           // 输出解析到的token信息
-        System.out.println("JWT过滤器: 解析到用户ID: " + claims.get("userId"));
-        System.out.println("JWT过滤器: 解析到用户名: " + claims.getSubject());
-        System.out.println("JWT过滤器: 解析到角色: " + claims.get("roles"));
+        logger.debug("解析到用户ID: {}", claims.get("userId"));
+        logger.debug("解析到用户名: {}", claims.getSubject());
+        logger.debug("解析到角色: {}", claims.get("roles"));
 
         Date expiration = claims.getExpiration();
-        System.out.println("JWT过滤器: 过期时间: " + expiration);
+        logger.debug("过期时间: {}", expiration);
 
         return expiration != null && expiration.after(new Date());
     }

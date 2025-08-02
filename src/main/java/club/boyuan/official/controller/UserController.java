@@ -23,11 +23,15 @@ import club.boyuan.official.utils.JwtTokenUtil;
 
 import java.util.List;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestController //接口方法返回对象转换成Json文本
 @RequestMapping("api/user")
 @AllArgsConstructor
 public class UserController {
+
+    private static final Logger logger = LoggerFactory.getLogger(UserController.class);
 
     private final IUserService userService;
 
@@ -171,7 +175,7 @@ public class UserController {
     @PostMapping
       public ResponseEntity<ResponseMessage<User>> add(@Validated @RequestBody UserDTO user){
         try {
-            System.out.println("请求体: " + user.toString());
+            logger.debug("收到添加用户请求: {}", user.toString());
             User userNew = userService.add(user);
             return ResponseEntity.ok(ResponseMessage.success(userNew));
         } catch (BusinessException e) {
@@ -200,7 +204,7 @@ public class UserController {
             Map<String, Object> responseData = new HashMap<>();
             responseData.put("user", userNew);
             responseData.put("awardExperiences", awardExperiences);
-            System.out.println("已经插入award"+awardExperiences.toString());
+            logger.debug("成功获取用户ID为{}的奖项经验信息", userId);
             return ResponseEntity.ok(new ResponseMessage(200, "success", responseData));
         } catch (BusinessException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -299,32 +303,4 @@ public class UserController {
                     .body(new ResponseMessage(500, "服务器内部错误: " + e.getMessage(), null));
         }
     }
-
-    @GetMapping("/all")
-    public ResponseEntity<ResponseMessage<List<User>>> getAllUsers() {
-        try {
-            User currentUser = getCurrentUserEntity();
-            checkAdminPermission(currentUser);
-            List<User> users = userService.getAllUsers(currentUser);
-            // 只保留用户基础信息
-            List<User> basicUsers = users.stream().map(user -> {
-                User basicUser = new User();
-                basicUser.setUserId(user.getUserId());
-                basicUser.setUsername(user.getUsername());
-                basicUser.setName(user.getName());
-                basicUser.setPhone(user.getPhone());
-                basicUser.setDept(user.getDept());
-                basicUser.setRole(user.getRole());
-                return basicUser;
-            }).collect(Collectors.toList());
-            return ResponseEntity.ok(ResponseMessage.success(basicUsers));
-        } catch (BusinessException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage<>(500, "服务器内部错误: " + e.getMessage(), null));
-        }
-    }
-
 }
