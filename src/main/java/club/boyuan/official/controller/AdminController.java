@@ -55,7 +55,6 @@ public class AdminController {
      * 验证JWT令牌并检查管理员权限
      */
     private void checkAdminRole() {
-        logger.debug("开始验证管理员权限");
         String token = getTokenFromHeader();
         if (token == null) {
             throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
@@ -83,8 +82,6 @@ public class AdminController {
      */
     @PostMapping("/users")
     public ResponseEntity<ResponseMessage> addUser(@RequestBody UserDTO userDTO) {
-        logger.debug("收到添加用户请求: {}", userDTO);
-        
         try {
             checkAdminRole();
             
@@ -135,13 +132,8 @@ public class AdminController {
             String token = getTokenFromHeader();
             String username = jwtTokenUtil.extractUsername(token);
             User currentUser = userService.getUserByUsername(username);
-            logger.debug("查询用户列表，操作用户: {}", username);
-            
-            // 输出请求
-            logger.debug("查询参数: role={}, dept={}, status={}, pageable={}", role, dept, status, pageable);
 
             Page<User> userPage = userService.getUsersByConditions(role, dept, status, pageable, currentUser);
-            logger.debug("成功获取用户列表，共 {} 条记录", userPage.getTotalElements());
 
             Map<String, Object> data = new HashMap<>();
             data.put("users", userPage.getContent());
@@ -169,8 +161,6 @@ public class AdminController {
     public ResponseEntity<ResponseMessage> updateUserStatus(
             @PathVariable Integer userId,
             @RequestBody Map<String, String> statusRequest) {
-        logger.debug("收到更新用户状态请求: userId={}, status={}", userId, statusRequest.get("status"));
-        
         try {
             String status = statusRequest.get("status");
             if (status == null || (!"active".equals(status) && !"frozen".equals(status))) {

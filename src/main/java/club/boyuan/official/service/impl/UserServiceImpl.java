@@ -112,10 +112,7 @@ public class UserServiceImpl implements IUserService {
         if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
             throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
         }
-        logger.debug("成功抵达Service层");
-        //输出所有参数
-        logger.debug("查询参数: role={}, dept={}, status={}, pageable={}, currentUser={}", role, dept, status, pageable, currentUser);
-
+        
         List<User> userList = userMapper.findByRoleAndDeptAndStatus(role, dept, status, pageable);
 
         // 这里需要查询总记录数，假设 UserMapper 有对应的方法
@@ -229,10 +226,10 @@ public class UserServiceImpl implements IUserService {
         }
         // 管理员可以查看所有用户，普通用户只能查看自己
         if (User.ROLE_ADMIN.equals(currentUser.getRole())) {
-            logger.debug("管理员用户查询所有用户");
+            // 移除过多的 debug 日志
             return userMapper.selectAll();
         } else {
-            logger.debug("普通用户查询自己的信息，用户ID: {}", currentUser.getUserId());
+            // 移除过多的 debug 日志
             return List.of(getUserById(currentUser.getUserId()));
         }
     }
@@ -272,6 +269,6 @@ public class UserServiceImpl implements IUserService {
                 "密码必须包含大小写字母、数字和特殊字符中的至少三种");
         }
         
-        logger.debug("密码复杂度验证通过");
+        // 移除过多的 debug 日志
     }
 }
