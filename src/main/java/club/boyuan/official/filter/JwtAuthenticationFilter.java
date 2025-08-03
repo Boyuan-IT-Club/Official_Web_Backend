@@ -52,16 +52,13 @@ public class JwtAuthenticationFilter implements Filter {
 
         // 排除登录和注册接口
         String requestURI = httpRequest.getRequestURI();
-        logger.debug("处理请求URI: {}", requestURI);
         //排除api/auth开头的所有接口
         if (requestURI.startsWith("/api/auth")) {
-            logger.debug("排除登录/注册接口，请求URI: {}", requestURI);
             chain.doFilter(request, response);
             return;
         }
 
         String token = extractToken(httpRequest);
-        logger.debug("提取到token: {}", (token != null ? "存在" : "不存在"));
         if (token != null) {
             try {
                 if (!validateToken(token)) {
@@ -72,7 +69,6 @@ public class JwtAuthenticationFilter implements Filter {
                     new ObjectMapper().writeValue(httpResponse.getWriter(), errorResponse);
                     return;
                 }
-                logger.debug("token验证通过，设置认证信息");
                 Claims claims = Jwts.parserBuilder()
                         .setSigningKey(getSigningKey())
                         .build()
@@ -98,7 +94,6 @@ public class JwtAuthenticationFilter implements Filter {
                 // 设置认证信息到上下文
                 SecurityContextHolder.getContext().setAuthentication(authentication);
                 
-                logger.debug("认证信息设置完成，继续处理请求");
                 chain.doFilter(request, response);
                 return;
             } catch (JwtException e) {
@@ -145,13 +140,7 @@ public class JwtAuthenticationFilter implements Filter {
                 .parseClaimsJws(token)
                 .getBody();
 
-          // 输出解析到的token信息
-        logger.debug("解析到用户ID: {}", claims.get("userId"));
-        logger.debug("解析到用户名: {}", claims.getSubject());
-        logger.debug("解析到角色: {}", claims.get("roles"));
-
         Date expiration = claims.getExpiration();
-        logger.debug("过期时间: {}", expiration);
 
         return expiration != null && expiration.after(new Date());
     }

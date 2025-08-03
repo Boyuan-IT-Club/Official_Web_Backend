@@ -43,7 +43,6 @@ public class SmsService {
     public String generateVerificationCode() {
         Random random = new Random();
         int code = 100000 + random.nextInt(900000); // 生成100000-999999之间的随机数
-        logger.debug("生成验证码: {}", code);
         return String.valueOf(code);
     }
 
@@ -54,8 +53,6 @@ public class SmsService {
      */
     public void sendVerificationCode(String phoneNumber) {
         String code = generateVerificationCode();
-        // 实际项目中应调用短信服务商API发送短信
-        // 这里仅做模拟，并将验证码存入缓存
         // 存储验证码到Redis，并设置5分钟过期时间
         redisTemplate.opsForValue().set("sms:code:" + phoneNumber, code, 5, TimeUnit.MINUTES);
         logger.info("向手机{}发送验证码: {}，有效期5分钟", phoneNumber, code);
@@ -66,7 +63,6 @@ public class SmsService {
      * @param phoneNumber 目标手机号码
      */
     public void sendSms(String phoneNumber) {
-        logger.debug("调用兼容方法发送短信验证码，手机号: {}", phoneNumber);
         sendVerificationCode(phoneNumber);
     }
 
