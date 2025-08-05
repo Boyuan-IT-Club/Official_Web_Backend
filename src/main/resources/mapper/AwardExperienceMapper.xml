@@ -6,9 +6,17 @@
         FROM award_experience
         WHERE award_id = #{id}
     </select>
+    
+    <select id="selectById" resultType="club.boyuan.official.entity.AwardExperience">
+        SELECT *
+        FROM award_experience
+        WHERE award_id = #{awardId}
+    </select>
+    
     <select id="existsById" resultType="boolean">
         SELECT EXISTS(SELECT 1 FROM award_experience WHERE award_id = #{id})
     </select>
+    
     <insert id="save" parameterType="club.boyuan.official.entity.AwardExperience" useGeneratedKeys="true"
             keyProperty="awardId">
         INSERT INTO award_experience (user_id, award_name, award_time, description)
@@ -29,6 +37,13 @@
         FROM award_experience
         WHERE user_id = #{userId}
     </select>
+    
+    <select id="selectByUserId" resultType="club.boyuan.official.entity.AwardExperience">
+        SELECT *
+        FROM award_experience
+        WHERE user_id = #{userId}
+    </select>
+    
     <delete id="deleteById">
         DELETE
         FROM award_experience
@@ -40,4 +55,12 @@
         FROM award_experience
         WHERE user_id = #{userId}
     </delete>
+    
+    <select id="searchAwards" resultType="club.boyuan.official.entity.AwardExperience">
+        SELECT *
+        FROM award_experience
+        WHERE award_name LIKE CONCAT('%', #{keyword}, '%')
+           OR description LIKE CONCAT('%', #{keyword}, '%')
+        LIMIT 20
+    </select>
 </mapper>

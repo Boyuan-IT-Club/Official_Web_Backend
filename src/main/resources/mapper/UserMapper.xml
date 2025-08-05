@@ -111,6 +111,12 @@
         WHERE user_id = #{userId}
     </update>
 
+    <update id="updatePasswordById" parameterType="map">
+        UPDATE user
+        SET password = #{password}
+        WHERE user_id = #{userId}
+    </update>
+
     <delete id="deleteById" parameterType="java.lang.Integer">
         DELETE
         FROM user
@@ -162,6 +168,27 @@
                 AND status = #{status, jdbcType=BOOLEAN}
             </if>
         </where>
+    </select>
+    
+    <select id="searchUsers" parameterType="string" resultType="club.boyuan.official.entity.User">
+        SELECT user_id,
+               username,
+               password,
+               email,
+               role,
+               name,
+               phone,
+               dept,
+               create_time,
+               status,
+               is_member
+        FROM user 
+        WHERE username LIKE CONCAT('%', #{keyword}, '%') 
+           OR name LIKE CONCAT('%', #{keyword}, '%') 
+           OR email LIKE CONCAT('%', #{keyword}, '%') 
+           OR phone LIKE CONCAT('%', #{keyword}, '%') 
+           OR dept LIKE CONCAT('%', #{keyword}, '%') 
+        LIMIT 20
     </select>
 
 </mapper>

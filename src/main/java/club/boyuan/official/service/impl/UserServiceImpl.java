@@ -9,6 +9,7 @@ import club.boyuan.official.mapper.AwardExperienceMapper;
 import club.boyuan.official.mapper.UserMapper;
 import club.boyuan.official.service.IUserService;
 import jakarta.transaction.Transactional;
+import club.boyuan.official.utils.PasswordValidator;
 import lombok.AllArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,7 +51,7 @@ public class UserServiceImpl implements IUserService {
         }
 
         // 验证密码复杂度
-        validatePasswordComplexity(userDTO.getPassword());
+        PasswordValidator.validate(userDTO.getPassword());
 
         User user = new User();
         BeanUtils.copyProperties(userDTO, user);
@@ -71,7 +72,7 @@ public class UserServiceImpl implements IUserService {
 
         // 如果密码有更新，需要验证密码复杂度并加密
         if (userDTO.getPassword() != null && !userDTO.getPassword().isEmpty()) {
-            validatePasswordComplexity(userDTO.getPassword());
+            PasswordValidator.validate(userDTO.getPassword());
             String encodedPassword = passwordEncoder.encode(userDTO.getPassword());
             user.setPassword(encodedPassword);
         }
@@ -97,7 +98,7 @@ public class UserServiceImpl implements IUserService {
             throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
         }
         // 验证密码复杂度
-        validatePasswordComplexity(newPassword);
+        PasswordValidator.validate(newPassword);
         // 使用BCrypt加密密码
         String encodedPassword = passwordEncoder.encode(newPassword);
         user.setPassword(encodedPassword);
@@ -242,33 +243,6 @@ public class UserServiceImpl implements IUserService {
      * @throws BusinessException 密码不符合复杂度要求时抛出异常
      */
     private void validatePasswordComplexity(String password) {
-        if (password == null || password.length() < 8) {
-            throw new BusinessException(BusinessExceptionEnum.PASSWORD_TOO_SIMPLE, "密码长度至少8位");
-        }
-
-        int complexity = 0;
-        // 检查是否包含小写字母
-        if (password.matches(".*[a-z].*")) {
-            complexity++;
-        }
-        // 检查是否包含大写字母
-        if (password.matches(".*[A-Z].*")) {
-            complexity++;
-        }
-        // 检查是否包含数字
-        if (password.matches(".*\\d.*")) {
-            complexity++;
-        }
-        // 检查是否包含特殊字符
-        if (password.matches(".*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>\\/?].*")) {
-            complexity++;
-        }
-
-        if (complexity < 3) {
-            throw new BusinessException(BusinessExceptionEnum.PASSWORD_TOO_SIMPLE, 
-                "密码必须包含大小写字母、数字和特殊字符中的至少三种");
-        }
-        
-        // 移除过多的 debug 日志
+        PasswordValidator.validate(password);
     }
 }
