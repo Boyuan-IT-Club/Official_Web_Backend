@@ -32,7 +32,6 @@ public class AwardExperienceService implements IAwardExperienceService {
     public List<AwardExperience> getByUserId(Integer userId) {
         return awardExperienceMapper.findByUserId(userId);
     }
-
     @Override
     public AwardExperience update(AwardExperience awardExperience) {
         // 检查获奖经历是否存在
@@ -45,7 +44,6 @@ public class AwardExperienceService implements IAwardExperienceService {
         }
         return awardExperience;
     }
-
     @Override
     public void deleteById(Integer id) {
         if (!awardExperienceMapper.existsById(id)) {
