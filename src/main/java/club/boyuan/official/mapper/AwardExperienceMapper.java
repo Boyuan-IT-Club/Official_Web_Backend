@@ -11,15 +11,21 @@ import java.util.Optional;
 public interface AwardExperienceMapper {
     Optional<AwardExperience> findById(@Param("id") Integer id);
 
+    AwardExperience selectById(Integer awardId);
+
     boolean existsById(@Param("id") Integer id);
 
-    int save(AwardExperience awardExperience);
-
-    int update(AwardExperience awardExperience);
-
     List<AwardExperience> findByUserId(@Param("userId") Integer userId);
+
+    List<AwardExperience> selectByUserId(Integer userId);
+
+    int save(AwardExperience awardExperience);
+    
+    int update(AwardExperience awardExperience);
 
     void deleteById(@Param("id") Integer id);
 
     void deleteAwardsByUserId(@Param("userId") Integer userId);
+
+    List<AwardExperience> searchAwards(@Param("keyword") String keyword);
 }

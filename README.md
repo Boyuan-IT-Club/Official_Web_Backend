@@ -10,6 +10,7 @@
 - 奖项经验管理：管理员可管理用户的奖项经验信息
 - 邮件服务：用于发送验证码或通知
 - Redis 缓存：用于验证码、Token 等缓存管理
+- 全局搜索：支持用户和奖项信息的全局搜索和高级筛选
 
 ## 技术架构
 
@@ -74,6 +75,21 @@ src/
 2. 安装 Maven 3.x
 3. 安装 MySQL 8.0+
 4. 安装 Redis
+
+### 开发环境运行
+使用 Maven Wrapper 运行项目：
+```bash
+# Windows系统
+.\mvnw spring-boot:run
+
+# 或者先构建再运行
+.\mvnw clean package
+java -jar target/Official-0.0.1-SNAPSHOT.jar
+```
+
+### 在 IDE 中运行
+
+直接运行 OfficialApplication.java 文件中的 main 方法
 
 
 ## 安全说明
