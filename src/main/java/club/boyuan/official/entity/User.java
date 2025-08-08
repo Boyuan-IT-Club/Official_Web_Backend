@@ -48,7 +48,8 @@ public class User {
     @Column(name = "is_member", columnDefinition = "BOOLEAN DEFAULT FALSE")
     private Boolean isMember;
 
-
+    @Column(name = "avatar")
+    private String avatar;
 
     public User() {
     }
@@ -149,7 +150,13 @@ public class User {
         this.isMember = isMember;
     }
 
+    public String getAvatar() {
+        return avatar;
+    }
 
+    public void setAvatar(String avatar) {
+        this.avatar = avatar;
+    }
 
     public String toString() {
         return "User{ROLE_ADMIN = " + ROLE_ADMIN + ", ROLE_USER = " + ROLE_USER + ", userId = " + userId + ", username = " + username + ", password = " + password + ", role = " + role + ", name = " + name + ", email = " + email + ", phone = " + phone + ", dept = " + dept + ", createTime = " + createTime + ", status = " + status + ", isMember = " + isMember + "}";

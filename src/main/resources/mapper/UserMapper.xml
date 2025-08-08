@@ -12,6 +12,7 @@
             <if test="name != null">name,</if>
             <if test="phone != null">phone,</if>
             <if test="dept != null">dept,</if>
+            <if test="avatar != null">avatar,</if>
             create_time,
             <if test="status != null">status,</if>
             <if test="isMember != null">is_member,</if>
@@ -25,6 +26,7 @@
             <if test="name != null">#{name},</if>
             <if test="phone != null">#{phone},</if>
             <if test="dept != null">#{dept},</if>
+            <if test="avatar != null">#{avatar},</if>
             NOW(),
             <if test="status != null">#{status},</if>
             <if test="isMember != null">#{isMember},</if>
@@ -40,6 +42,7 @@
                name,
                phone,
                dept,
+               avatar,
                create_time,
                status,
                is_member
@@ -56,6 +59,7 @@
                name,
                phone,
                dept,
+               avatar,
                create_time,
                status,
                is_member
@@ -72,6 +76,7 @@
                name,
                phone,
                dept,
+               avatar,
                create_time,
                status,
                is_member
@@ -88,6 +93,7 @@
                name,
                phone,
                dept,
+               avatar,
                create_time,
                status,
                is_member
@@ -105,6 +111,7 @@
             <if test="name != null">name = #{name},</if>
             <if test="phone != null">phone = #{phone},</if>
             <if test="dept != null">dept = #{dept},</if>
+            <if test="avatar != null">avatar = #{avatar},</if>
             <if test="status != null">status = #{status},</if>
             <if test="isMember != null">is_member = #{isMember},</if>
         </set>
@@ -132,6 +139,7 @@
                name,
                phone,
                dept,
+               avatar,
                create_time,
                status,
                is_member
@@ -139,7 +147,7 @@
     </select>
 
     <select id="findByRoleAndDeptAndStatus" resultType="club.boyuan.official.entity.User">
-        SELECT user_id, username, password, email, role, name, phone, dept, create_time, status, is_member FROM user
+        SELECT user_id, username, password, email, role, name, phone, dept, avatar, create_time, status, is_member FROM user
         <where>
             <if test="role != null and role != ''">
                 AND role = #{role}
@@ -179,6 +187,7 @@
                name,
                phone,
                dept,
+               avatar,
                create_time,
                status,
                is_member

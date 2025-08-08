@@ -85,6 +85,7 @@ public class UserServiceImpl implements IUserService {
         user.setRole(userDTO.getRole());
         user.setStatus(userDTO.getStatus());
         user.setDept(userDTO.getDept());
+        user.setAvatar(userDTO.getAvatar());
 
         userMapper.updateById(user);
         logger.info("成功更新用户信息，用户ID: {}", user.getUserId());
