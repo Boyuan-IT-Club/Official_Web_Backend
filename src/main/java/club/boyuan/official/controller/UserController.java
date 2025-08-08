@@ -20,6 +20,17 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.HashMap;
 import java.util.Map;
 import club.boyuan.official.utils.JwtTokenUtil;
+import club.boyuan.official.utils.FileUploadUtil;
+
+import java.util.List;
+import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.HashMap;
+import java.util.Map;
+import club.boyuan.official.utils.JwtTokenUtil;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -41,6 +52,37 @@ public class UserController {
 
     private final IAwardExperienceService awardExperienceService;
 
+    /**
+     * 上传用户头像
+     */
+    @PostMapping("/avatar")
+    public ResponseEntity<ResponseMessage> uploadAvatar(@RequestParam("avatar") MultipartFile file) {
+        try {
+            // 获取当前用户
+            Integer userId = getAuthenticatedUserId();
+            User user = userService.getUserById(userId);
+            
+            // 上传文件并获取路径
+            String avatarPath = FileUploadUtil.uploadAvatar(file);
+            
+            // 更新用户头像信息
+            user.setAvatar(avatarPath);
+            UserDTO userDTO = new UserDTO();
+            BeanUtils.copyProperties(user, userDTO);
+            userService.edit(userDTO);
+            
+            Map<String, String> responseData = new HashMap<>();
+            responseData.put("avatar", avatarPath);
+            
+            logger.info("用户ID为{}的用户成功上传头像，路径为{}", userId, avatarPath);
+            return ResponseEntity.ok(new ResponseMessage(200, "头像上传成功", responseData));
+        } catch (Exception e) {
+            logger.error("头像上传失败", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ResponseMessage(500, "头像上传失败: " + e.getMessage(), null));
+        }
+    }
+    
     /**
      * 获取当前用户信息，返回响应实体
      */

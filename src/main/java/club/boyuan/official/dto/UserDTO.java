@@ -27,15 +27,20 @@ public class UserDTO {
     private String role;
     private boolean status;
     private String dept;
+    private String avatar;
 
     public boolean getStatus() {
         return status;
+    }
+
+    public void setStatus(boolean status) {
+        this.status = status;
     }
 
     public UserDTO() {
     }
 
     public String toString() {
-        return "UserDTO{userId = " + userId + ", username = " + username + ", password = " + password + ", email = " + email + ", name = " + name + ", phone = " + phone + ", role = " + role + ", status = " + status + ", dept = " + dept + "}";
+        return "UserDTO{userId = " + userId + ", username = " + username + ", password = " + password + ", email = " + email + ", name = " + name + ", phone = " + phone + ", role = " + role + ", status = " + status + ", dept = " + dept + ", avatar = " + avatar + "}";
     }
 }
