@@ -71,7 +71,7 @@ public class LoginServiceImpl implements ILoginService {
      */
     @Override
     public ResponseMessage<?> loginByEmailCode(String email, String code) {
-        if (!IVerificationCodeService.verifyEmailCode(email, code)) {
+        if (!verifyVerificationCode(email, code)) {
             return ResponseMessage.error(401, "邮箱验证码错误或已过期");
         }
         User user = userService.getUserByEmail(email);
@@ -104,7 +104,7 @@ public class LoginServiceImpl implements ILoginService {
      */
     @Override
     public ResponseMessage<?> loginByPhoneCode(String phone, String code) {
-        if (!IVerificationCodeService.verifyPhoneCode(phone, code)) {
+        if (!verifyVerificationCode(phone, code)) {
             return ResponseMessage.error(401, "手机验证码错误或已过期");
         }
         User user = userService.getUserByPhone(phone);

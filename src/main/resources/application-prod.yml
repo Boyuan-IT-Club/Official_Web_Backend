@@ -1,0 +1,64 @@
+spring:
+  application:
+    name: Official
+  datasource:
+    url: jdbc:mysql://mysql:3306/official?serverTimezone=UTC
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:123}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  mail:
+    host: ${MAIL_HOST:smtp.feishu.cn}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:notify@boyuan.club}
+    password: ${MAIL_PASSWORD:12bGmEWjvyRDjzxE}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          socketFactory:
+            class: javax.net.ssl.SSLSocketFactory
+  data:
+    redis:
+      host: redis
+      port: 6379
+      password: ${REDIS_PASSWORD:}
+      database: 0
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+server:
+  port: 8080
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: club.boyuan.official.entity
+  configuration:
+    map-underscore-to-camel-case: true
+
+jwt:
+  secret: ${JWT_SECRET:bbe0ac1a5b8a113b4568d55c76fe887a1cd99b01acfad7957156945688e03e20}
+  expiration: ${JWT_EXPIRATION:86400000}
+
+sms:
+  access-key: ${SMS_ACCESS_KEY:your-sms-access-key}
+  secret-key: ${SMS_SECRET_KEY:your-sms-secret-key}
+  verification-code:
+    length: 6
+    expiration-minutes: 5
+
+logging:
+  level:
+    club.boyuan.official.mapper: DEBUG

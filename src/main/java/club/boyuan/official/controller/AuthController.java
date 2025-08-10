@@ -176,11 +176,7 @@ public class AuthController {
                     }
                     user = userService.getUserByEmail(authLoginDTO.getAuth_id());
 
-                    // 验证验证
-                    if (!loginService.verifyVerificationCode(authLoginDTO.getAuth_id(), authLoginDTO.getVerify())) {
-                        throw new BusinessException(BusinessExceptionEnum.INVALID_VERIFICATION_CODE);
-                    }
-
+                    // 直接调用登录服务进行验证，避免重复验证验证码
                     response = loginService.loginByEmailCode(authLoginDTO.getAuth_id(), authLoginDTO.getVerify());
                     break;
                 case "phone-password":
@@ -194,10 +190,7 @@ public class AuthController {
                     messageUtils.validatePhone(authLoginDTO.getAuth_id());
                     user = userService.getUserByPhone(authLoginDTO.getAuth_id());
 
-                    // 验证验证码
-                    if (!loginService.verifyVerificationCode(authLoginDTO.getAuth_id(), authLoginDTO.getVerify())) {
-                        throw new BusinessException(BusinessExceptionEnum.INVALID_VERIFICATION_CODE);
-                    }
+                    // 直接调用登录服务进行验证，避免重复验证验证码
                     response = loginService.loginByPhoneCode(authLoginDTO.getAuth_id(), authLoginDTO.getVerify());
                     break;
                 case "username-password":
