@@ -34,22 +34,8 @@ public class VerificationCodeServiceImpl implements IVerificationCodeService {
      */
     @Override
     public boolean verifyEmailCode(String email, String code) {
-        return verifyCode("verification_code:" + email, code);
-    }
-
-    /**
-     * 验证手机验证码
-     * @param phone 手机号码
-     * @param code 用户输入的验证码
-     * @return 验证结果：true-验证成功，false-验证失败
-     */
-    @Override
-    public boolean verifyPhoneCode(String phone, String code) {
-        return smsService.verifyCode(phone, code);
-    }
-
-
-    private boolean verifyCode(String key, String code) {
+        // 统一使用LoginServiceImpl中的键格式
+        String key = "verification_code:" + email;
         Object storedValue = redisTemplate.opsForValue().get(key);
         String storedCode = storedValue != null ? storedValue.toString() : null;
         if (storedCode == null) {
@@ -63,5 +49,16 @@ public class VerificationCodeServiceImpl implements IVerificationCodeService {
         }
 
         return false;
+    }
+
+    /**
+     * 验证手机验证码
+     * @param phone 手机号码
+     * @param code 用户输入的验证码
+     * @return 验证结果：true-验证成功，false-验证失败
+     */
+    @Override
+    public boolean verifyPhoneCode(String phone, String code) {
+        return smsService.verifyCode(phone, code);
     }
 }
