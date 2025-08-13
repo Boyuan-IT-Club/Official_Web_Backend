@@ -35,6 +35,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // 允许公开访问的接口
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/health/**").permitAll()
                         .requestMatchers("/api/public/**").permitAll()
                         // 允许静态资源访问
                         .requestMatchers("/static/**", "/public/**").permitAll()
