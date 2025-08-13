@@ -52,8 +52,8 @@ public class JwtAuthenticationFilter implements Filter {
 
         // 排除登录和注册接口
         String requestURI = httpRequest.getRequestURI();
-        //排除api/auth开头的所有接口
-        if (requestURI.startsWith("/api/auth")) {
+        //排除api/auth开头的所有接口以及健康检查接口
+        if (requestURI.startsWith("/api/auth") || requestURI.startsWith("/api/health")) {
             chain.doFilter(request, response);
             return;
         }
