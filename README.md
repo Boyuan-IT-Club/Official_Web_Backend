@@ -7,7 +7,7 @@ Official 是一个基于 Spring Boot 的后端服务系统，第一阶段目标�
 主要功能包括：
 - 用户管理：注册、登录、修改信息、重置密码
 - 认证与权限：基于 Spring Security 的 JWT 认证机制
-- 简历投递：支持 ECNU 学生使用 @stu.ecnu.edu 邮箱验证并投递简历
+- 简历投递：支持学生使用特定邮箱验证并投递简历
 - 面试安排：自动或手动分配面试时间
 - 奖项经验管理：管理员可管理用户的奖项经验信息
 - 全局搜索：支持用户和奖项信息的全局搜索
@@ -16,7 +16,7 @@ Official 是一个基于 Spring Boot 的后端服务系统，第一阶段目标�
 
 ### 后端技术栈
 - Spring Boot 3.5.3
-- MyBatis 3.5.15 + MySQL 8.0.33
+- MyBatis 3.5.15 + MySQL 8.0+
 - Spring Security + JWT (jjwt 0.11.5)
 - Redis
 - Java 17
@@ -31,10 +31,10 @@ Official 是一个基于 Spring Boot 的后端服务系统，第一阶段目标�
 ### 开发环境运行
 ```bash
 # 构建项目
-.\mvnw clean package
+./mvnw clean package
 
 # 运行项目
-.\mvnw spring-boot:run
+./mvnw spring-boot:run
 ```
 
 或者直接运行 OfficialApplication.java 文件中的 main 方法
@@ -48,7 +48,7 @@ Official 是一个基于 Spring Boot 的后端服务系统，第一阶段目标�
 ### Docker 部署（推荐）
 ```bash
 # 构建项目
-.\mvnw clean package -DskipTests
+./mvnw clean package -DskipTests
 
 # 启动服务
 docker-compose up -d
@@ -57,14 +57,14 @@ docker-compose up -d
 ### 传统部署
 1. 安装 JDK 17、MySQL 8.0+、Redis 6.0+
 2. 创建数据库：CREATE DATABASE official CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-3. 修改配置文件 [application-prod.yml](file:///C:/Users/35183/IdeaProjects/Official/src/main/resources/application-prod.yml)
-4. 构建项目：.\mvnw clean package -DskipTests
+3. 修改配置文件 application-prod.yml
+4. 构建项目：./mvnw clean package -DskipTests
 5. 运行应用：java -jar target/Official-0.0.1-SNAPSHOT.jar --spring.profiles.active=prod
 
 ## 第一阶段功能说明
 
 ### 简历投递功能
-- 仅支持 @stu.ecnu.edu 邮箱验证
+- 仅支持特定邮箱验证
 - 简历包含个人简介、获奖情况等板块
 - 支持自动分配面试时间或手动调度
 
@@ -72,4 +72,3 @@ docker-compose up -d
 - 系统可根据规则自动分配面试时间
 - 支持管理员手动调整面试时间
 - 面试时间确认后通知相关人员
-
