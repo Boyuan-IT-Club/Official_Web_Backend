@@ -21,14 +21,65 @@ import java.nio.file.AccessDeniedException;
 public class GlobalExceptionHandler {
 
     private HttpStatus mapBusinessCodeToHttpStatus(int businessCode) {
+        // JWT相关异常 (1000-1099)
         if (businessCode == 1001 || businessCode == 1002) {
-            return HttpStatus.CONFLICT; // 原409状态码
-        } else if ((businessCode >= 1003 && businessCode <= 1005) || businessCode == 1008 || (businessCode >= 1009 && businessCode <= 1018) || businessCode == 1021) {
-            return HttpStatus.BAD_REQUEST; // 原400状态码
-        } else if ((businessCode >= 1006 && businessCode <= 1007) || (businessCode >= 1019 && businessCode <= 1020) || (businessCode >= 1022 && businessCode <= 1025)) {
-            return HttpStatus.UNAUTHORIZED; // 原401状态码
+            return HttpStatus.CONFLICT; // 409状态码
+        } else if (businessCode == 1003) {
+            return HttpStatus.BAD_REQUEST; // 400状态码
+        } else if (businessCode == 1008) {
+            return HttpStatus.UNAUTHORIZED; // 401状态码
+        } else if (businessCode >= 1009 && businessCode <= 1018) {
+            return HttpStatus.BAD_REQUEST; // 400状态码
+        } else if (businessCode >= 1019 && businessCode <= 1020) {
+            return HttpStatus.UNAUTHORIZED; // 401状态码
+        } else if (businessCode >= 1021 && businessCode <= 1025) {
+            return HttpStatus.BAD_REQUEST; // 400状态码
         } else if (businessCode == 1026) {
             return HttpStatus.FORBIDDEN; // 403状态码
+        }
+        // 用户相关异常 (2000-2099)
+        else if (businessCode >= 2001 && businessCode <= 2002) {
+            return HttpStatus.CONFLICT; // 409状态码
+        } else if ((businessCode >= 2003 && businessCode <= 2005) || businessCode == 2010) {
+            return HttpStatus.BAD_REQUEST; // 400状态码
+        } else if (businessCode >= 2006 && businessCode <= 2007) {
+            return HttpStatus.UNAUTHORIZED; // 401状态码
+        } else if (businessCode >= 2008 && businessCode <= 2012) {
+            return HttpStatus.BAD_REQUEST; // 400状态码
+        }
+        // 认证相关异常 (2100-2199)
+        else if (businessCode == 2100) {
+            return HttpStatus.BAD_REQUEST; // 400状态码
+        } else if (businessCode == 2101) {
+            return HttpStatus.FORBIDDEN; // 403状态码
+        }
+        // 验证码相关异常 (2200-2299)
+        else if (businessCode >= 2201 && businessCode <= 2202) {
+            return HttpStatus.BAD_REQUEST; // 400状态码
+        }
+        // 奖项经验相关异常 (2300-2399)
+        else if (businessCode >= 2301 && businessCode <= 2305) {
+            return HttpStatus.BAD_REQUEST; // 400状态码
+        }
+        // 密码相关异常 (2400-2499)
+        else if (businessCode == 2401) {
+            return HttpStatus.BAD_REQUEST; // 400状态码
+        }
+        // 简历相关异常 (3000-3099)
+        else if (businessCode >= 3001 && businessCode <= 3009) {
+            return HttpStatus.BAD_REQUEST; // 400状态码
+        }
+        // 简历字段定义相关异常 (3100-3199)
+        else if (businessCode >= 3101 && businessCode <= 3104) {
+            return HttpStatus.BAD_REQUEST; // 400状态码
+        }
+        // 数据库相关异常 (4000-4099)
+        else if (businessCode >= 4001 && businessCode <= 4006) {
+            return HttpStatus.INTERNAL_SERVER_ERROR; // 500状态码
+        }
+        // 系统异常 (5000-5099)
+        else if (businessCode >= 5001 && businessCode <= 5005) {
+            return HttpStatus.INTERNAL_SERVER_ERROR; // 500状态码
         } else {
             return HttpStatus.BAD_REQUEST; // 默认400
         }

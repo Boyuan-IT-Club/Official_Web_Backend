@@ -39,6 +39,13 @@ public interface ResumeFieldValueMapper {
     int update(ResumeFieldValue fieldValue);
     
     /**
+     * 批量更新字段值
+     * @param fieldValues 字段值列表
+     * @return 影响行数
+     */
+    int batchUpdate(@Param("fieldValues") List<ResumeFieldValue> fieldValues);
+    
+    /**
      * 根据简历ID删除字段值
      * @param resumeId 简历ID
      * @return 影响行数

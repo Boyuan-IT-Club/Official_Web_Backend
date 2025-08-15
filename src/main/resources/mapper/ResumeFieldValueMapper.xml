@@ -1,55 +1,62 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="club.boyuan.official.mapper.ResumeFieldValueMapper">
-    
-    <resultMap id="ResumeFieldValueMap" type="club.boyuan.official.entity.ResumeFieldValue">
-        <id column="value_id" property="valueId"/>
-        <result column="resume_id" property="resumeId"/>
-        <result column="field_id" property="fieldId"/>
-        <result column="field_value" property="fieldValue"/>
-        <result column="created_at" property="createdAt"/>
-        <result column="updated_at" property="updatedAt"/>
+
+    <resultMap id="ResumeFieldValueResultMap" type="club.boyuan.official.entity.ResumeFieldValue">
+        <id property="valueId" column="value_id"/>
+        <result property="resumeId" column="resume_id"/>
+        <result property="fieldId" column="field_id"/>
+        <result property="fieldValue" column="field_value"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
     </resultMap>
-    
-    <!-- 根据简历ID查询字段值列表 -->
-    <select id="findByResumeId" resultMap="ResumeFieldValueMap">
-        SELECT * FROM resume_field_value WHERE resume_id = #{resumeId}
+
+    <select id="findByResumeIdAndFieldId" resultMap="ResumeFieldValueResultMap">
+        SELECT * FROM resume_field_value
+        WHERE resume_id = #{resumeId} AND field_id = #{fieldId}
     </select>
-    
-    <!-- 根据简历ID和字段ID查询字段值 -->
-    <select id="findByResumeIdAndFieldId" resultMap="ResumeFieldValueMap">
-        SELECT * FROM resume_field_value WHERE resume_id = #{resumeId} AND field_id = #{fieldId}
+
+    <select id="findByResumeId" resultMap="ResumeFieldValueResultMap">
+        SELECT * FROM resume_field_value
+        WHERE resume_id = #{resumeId}
+        ORDER BY value_id
     </select>
-    
-    <!-- 批量插入字段值 -->
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="valueId">
+        INSERT INTO resume_field_value (resume_id, field_id, field_value, created_at, updated_at)
+        VALUES (#{resumeId}, #{fieldId}, #{fieldValue}, NOW(), NOW())
+    </insert>
+
     <insert id="batchInsert">
-        INSERT INTO resume_field_value(resume_id, field_id, field_value) VALUES
-        <foreach collection="fieldValues" item="fieldValue" separator=",">
-            (#{fieldValue.resumeId}, #{fieldValue.fieldId}, #{fieldValue.fieldValue})
+        INSERT INTO resume_field_value (resume_id, field_id, field_value, created_at, updated_at)
+        VALUES
+        <foreach collection="list" item="fieldValue" separator=",">
+            (#{fieldValue.resumeId}, #{fieldValue.fieldId}, #{fieldValue.fieldValue}, NOW(), NOW())
         </foreach>
     </insert>
-    
-    <!-- 插入字段值 -->
-    <insert id="insert" parameterType="club.boyuan.official.entity.ResumeFieldValue" useGeneratedKeys="true" keyProperty="valueId">
-        INSERT INTO resume_field_value(resume_id, field_id, field_value)
-        VALUES(#{resumeId}, #{fieldId}, #{fieldValue})
-    </insert>
-    
-    <!-- 更新字段值 -->
-    <update id="update" parameterType="club.boyuan.official.entity.ResumeFieldValue">
-        UPDATE resume_field_value 
+
+    <update id="batchUpdate">
+        <foreach collection="list" item="fieldValue" separator=";">
+            UPDATE resume_field_value
+            SET field_value = #{fieldValue.fieldValue}, updated_at = NOW()
+            WHERE value_id = #{fieldValue.valueId}
+        </foreach>
+    </update>
+
+    <update id="update">
+        UPDATE resume_field_value
         SET field_value = #{fieldValue}, updated_at = NOW()
         WHERE value_id = #{valueId}
     </update>
-    
-    <!-- 根据简历ID删除字段值 -->
+
     <delete id="deleteByResumeId">
-        DELETE FROM resume_field_value WHERE resume_id = #{resumeId}
+        DELETE FROM resume_field_value
+        WHERE resume_id = #{resumeId}
     </delete>
-    
-    <!-- 根据字段值ID删除字段值 -->
+
     <delete id="deleteById">
-        DELETE FROM resume_field_value WHERE value_id = #{valueId}
+        DELETE FROM resume_field_value
+        WHERE value_id = #{valueId}
     </delete>
-    
+
 </mapper>

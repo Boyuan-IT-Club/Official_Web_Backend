@@ -221,8 +221,15 @@ public class ResumeController {
             @RequestBody List<ResumeFieldValue> fieldValues,
             HttpServletRequest request) {
         try {
-            String token = request.getHeader("Authorization").substring(7);
-            String username = jwtTokenUtil.extractUsername(token);
+            String username = "unknown";
+            if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
+                try {
+                    username = jwtTokenUtil.extractUsername(request.getHeader("Authorization").substring(7));
+                } catch (Exception ex) {
+                    logger.warn("无法从token中提取用户名");
+                }
+            }
+            
             User currentUser = userService.getUserByUsername(username);
             
             logger.info("用户{}保存{}年份简历字段值，字段数量: {}", username, cycleId, fieldValues.size());
@@ -248,10 +255,16 @@ public class ResumeController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
         } catch (Exception e) {
-            logger.error("保存字段值系统异常，用户ID: {}，年份: {}", 
-                    request.getHeader("Authorization") != null ? 
-                            jwtTokenUtil.extractUsername(request.getHeader("Authorization").substring(7)) : "unknown", 
-                    cycleId, e);
+            String username = "unknown";
+            if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
+                try {
+                    username = jwtTokenUtil.extractUsername(request.getHeader("Authorization").substring(7));
+                } catch (Exception ex) {
+                    logger.warn("无法从token中提取用户名");
+                }
+            }
+            
+            logger.error("保存字段值系统异常，用户: {}，年份: {}", username, cycleId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
                             "保存失败: " + e.getMessage(), null));
@@ -262,8 +275,15 @@ public class ResumeController {
     public ResponseEntity<ResponseMessage<List<ResumeFieldValueDTO>>> getFieldValues(
             @PathVariable Integer cycleId, HttpServletRequest request) {
         try {
-            String token = request.getHeader("Authorization").substring(7);
-            String username = jwtTokenUtil.extractUsername(token);
+            String username = "unknown";
+            if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
+                try {
+                    username = jwtTokenUtil.extractUsername(request.getHeader("Authorization").substring(7));
+                } catch (Exception ex) {
+                    logger.warn("无法从token中提取用户名");
+                }
+            }
+            
             User currentUser = userService.getUserByUsername(username);
             
             logger.info("用户{}获取{}年份简历字段值", username, cycleId);
@@ -277,16 +297,35 @@ public class ResumeController {
             
             return ResponseEntity.ok(new ResponseMessage<>(200, "获取字段值成功", fieldValues));
         } catch (BusinessException e) {
-            logger.warn("获取字段值业务异常，年份: {}，错误码: {}，错误信息: {}", cycleId, e.getCode(), e.getMessage());
-            HttpStatus status = e.getCode() == BusinessExceptionEnum.RESUME_NOT_FOUND.getCode() ? 
-                    HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+            String username = "unknown";
+            if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
+                try {
+                    username = jwtTokenUtil.extractUsername(request.getHeader("Authorization").substring(7));
+                } catch (Exception ex) {
+                    logger.warn("无法从token中提取用户名");
+                }
+            }
+            
+            logger.warn("获取字段值业务异常，用户: {}，年份: {}，错误码: {}，错误信息: {}", username, cycleId, e.getCode(), e.getMessage());
+            HttpStatus status;
+            if (e.getCode() == BusinessExceptionEnum.RESUME_NOT_FOUND.getCode()) {
+                status = HttpStatus.NOT_FOUND;
+            } else {
+                status = HttpStatus.BAD_REQUEST;
+            }
             return ResponseEntity.status(status)
                     .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
         } catch (Exception e) {
-            logger.error("获取字段值系统异常，用户ID: {}，年份: {}", 
-                    request.getHeader("Authorization") != null ? 
-                            jwtTokenUtil.extractUsername(request.getHeader("Authorization").substring(7)) : "unknown", 
-                    cycleId, e);
+            String username = "unknown";
+            if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
+                try {
+                    username = jwtTokenUtil.extractUsername(request.getHeader("Authorization").substring(7));
+                } catch (Exception ex) {
+                    logger.warn("无法从token中提取用户名");
+                }
+            }
+            
+            logger.error("获取字段值系统异常，用户: {}，年份: {}", username, cycleId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
                             "获取字段值失败: " + e.getMessage(), null));
@@ -297,8 +336,15 @@ public class ResumeController {
     public ResponseEntity<ResponseMessage<Resume>> submitResume(
             @PathVariable Integer cycleId, HttpServletRequest request) {
         try {
-            String token = request.getHeader("Authorization").substring(7);
-            String username = jwtTokenUtil.extractUsername(token);
+            String username = "unknown";
+            if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
+                try {
+                    username = jwtTokenUtil.extractUsername(request.getHeader("Authorization").substring(7));
+                } catch (Exception ex) {
+                    logger.warn("无法从token中提取用户名");
+                }
+            }
+            
             User currentUser = userService.getUserByUsername(username);
             
             logger.info("用户{}提交{}年份简历", username, cycleId);
@@ -318,17 +364,35 @@ public class ResumeController {
             
             return ResponseEntity.ok(new ResponseMessage<>(200, "简历提交成功", submittedResume));
         } catch (BusinessException e) {
-            logger.warn("提交简历业务异常，年份: {}，错误码: {}，错误信息: {}", cycleId, e.getCode(), e.getMessage());
-            HttpStatus status = e.getCode() == BusinessExceptionEnum.RESUME_NOT_FOUND.getCode() || 
-                               e.getCode() == BusinessExceptionEnum.RESUME_ALREADY_SUBMITTED.getCode() ? 
-                    HttpStatus.BAD_REQUEST : HttpStatus.BAD_REQUEST;
+            String username = "unknown";
+            if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
+                try {
+                    username = jwtTokenUtil.extractUsername(request.getHeader("Authorization").substring(7));
+                } catch (Exception ex) {
+                    logger.warn("无法从token中提取用户名");
+                }
+            }
+            
+            logger.warn("提交简历业务异常，用户: {}，年份: {}，错误码: {}，错误信息: {}", username, cycleId, e.getCode(), e.getMessage());
+            HttpStatus status;
+            if (e.getCode() == BusinessExceptionEnum.RESUME_NOT_FOUND.getCode()) {
+                status = HttpStatus.NOT_FOUND;
+            } else {
+                status = HttpStatus.BAD_REQUEST;
+            }
             return ResponseEntity.status(status)
                     .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
         } catch (Exception e) {
-            logger.error("提交简历系统异常，用户ID: {}，年份: {}", 
-                    request.getHeader("Authorization") != null ? 
-                            jwtTokenUtil.extractUsername(request.getHeader("Authorization").substring(7)) : "unknown", 
-                    cycleId, e);
+            String username = "unknown";
+            if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
+                try {
+                    username = jwtTokenUtil.extractUsername(request.getHeader("Authorization").substring(7));
+                } catch (Exception ex) {
+                    logger.warn("无法从token中提取用户名");
+                }
+            }
+            
+            logger.error("提交简历系统异常，用户: {}，年份: {}", username, cycleId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
                             "简历提交失败: " + e.getMessage(), null));
@@ -339,8 +403,15 @@ public class ResumeController {
     public ResponseEntity<ResponseMessage<Resume>> updateResumeStatus(
             @PathVariable Integer resumeId, @PathVariable Integer status, HttpServletRequest request) {
         try {
-            String token = request.getHeader("Authorization").substring(7);
-            String username = jwtTokenUtil.extractUsername(token);
+            String username = "unknown";
+            if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
+                try {
+                    username = jwtTokenUtil.extractUsername(request.getHeader("Authorization").substring(7));
+                } catch (Exception ex) {
+                    logger.warn("无法从token中提取用户名");
+                }
+            }
+            
             User currentUser = userService.getUserByUsername(username);
             
             if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
@@ -360,14 +431,36 @@ public class ResumeController {
             
             return ResponseEntity.ok(new ResponseMessage<>(200, "简历状态更新成功", updatedResume));
         } catch (BusinessException e) {
-            logger.warn("更新简历状态业务异常，简历ID: {}，状态: {}，错误码: {}，错误信息: {}", 
-                    resumeId, status, e.getCode(), e.getMessage());
-            HttpStatus statusHttp = e.getCode() == BusinessExceptionEnum.RESUME_NOT_FOUND.getCode() ? 
-                    HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+            String username = "unknown";
+            if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
+                try {
+                    username = jwtTokenUtil.extractUsername(request.getHeader("Authorization").substring(7));
+                } catch (Exception ex) {
+                    logger.warn("无法从token中提取用户名");
+                }
+            }
+            
+            logger.warn("更新简历状态业务异常，用户: {}，简历ID: {}，状态: {}，错误码: {}，错误信息: {}", 
+                    username, resumeId, status, e.getCode(), e.getMessage());
+            HttpStatus statusHttp;
+            if (e.getCode() == BusinessExceptionEnum.RESUME_NOT_FOUND.getCode()) {
+                statusHttp = HttpStatus.NOT_FOUND;
+            } else {
+                statusHttp = HttpStatus.BAD_REQUEST;
+            }
             return ResponseEntity.status(statusHttp)
                     .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
         } catch (Exception e) {
-            logger.error("更新简历状态系统异常，简历ID: {}，状态: {}", resumeId, status, e);
+            String username = "unknown";
+            if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
+                try {
+                    username = jwtTokenUtil.extractUsername(request.getHeader("Authorization").substring(7));
+                } catch (Exception ex) {
+                    logger.warn("无法从token中提取用户名");
+                }
+            }
+            
+            logger.error("更新简历状态系统异常，用户: {}，简历ID: {}，状态: {}", username, resumeId, status, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
                             "简历状态更新失败: " + e.getMessage(), null));
