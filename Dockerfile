@@ -1,14 +1,27 @@
-# 使用官方OpenJDK 17作为基础镜像
-FROM openjdk:17-jdk-slim
+FROM ubuntu:20.04
 
-# 设置工作目录
-WORKDIR /app
+# 安装必要的工具
+RUN apt-get update && apt-get install -y \
+    wget \
+    tar \
+    && rm -rf /var/lib/apt/lists/*
 
-# 复制jar文件到容器中
-COPY target/Official-0.0.1-SNAPSHOT.jar app.jar
+# 创建目录
+RUN mkdir -p /official
+WORKDIR /official
 
-# 暴露端口
+# 复制JDK安装包并解压
+COPY jdk-17.0.12_linux-x64_bin.tar.gz /tmp/
+RUN tar -xzf /tmp/jdk-17.0.12_linux-x64_bin.tar.gz -C /opt/ \
+    && rm /tmp/jdk-17.0.12_linux-x64_bin.tar.gz
+
+# 设置环境变量
+ENV JAVA_HOME=/opt/jdk-17.0.12
+ENV PATH=$PATH:$JAVA_HOME/bin
+
+# 复制应用JAR包
+COPY Official-0.0.1-SNAPSHOT.jar official.jar
+
 EXPOSE 8080
 
-# 运行应用
-ENTRYPOINT ["java", "-jar", "app.jar", "--spring.profiles.active=prod"]
+ENTRYPOINT ["java", "-jar", "/official/official.jar", "--spring.profiles.active=prod"]

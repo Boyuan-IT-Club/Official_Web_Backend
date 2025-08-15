@@ -69,14 +69,11 @@ public class UserController {
             Integer userId = getAuthenticatedUserId();
             User user = userService.getUserById(userId);
             
-            // 上传文件并获取路径
-            String avatarPath = FileUploadUtil.uploadAvatar(file);
+            // 上传文件并获取路径（使用新的通用方法）
+            String avatarPath = FileUploadUtil.uploadFile(file, "avatars/", "image/");
             
-            // 更新用户头像信息
-            user.setAvatar(avatarPath);
-            UserDTO userDTO = new UserDTO();
-            BeanUtils.copyProperties(user, userDTO);
-            userService.edit(userDTO);
+            // 更新用户头像信息，使用新的专门方法避免密码被修改
+            User updatedUser = userService.updateAvatar(userId, avatarPath);
             
             Map<String, String> responseData = new HashMap<>();
             responseData.put("avatar", avatarPath);

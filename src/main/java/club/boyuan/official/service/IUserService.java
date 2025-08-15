@@ -2,6 +2,7 @@ package club.boyuan.official.service;
 
 import club.boyuan.official.dto.UserDTO;
 import club.boyuan.official.entity.User;
+import club.boyuan.official.exception.BusinessException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -20,5 +21,13 @@ public interface IUserService {
     User register(UserDTO userDTO);
     User updateUserStatus(Integer userId, String status);
     Page<User> getUsersByConditions(String role, String dept, String status, Pageable pageable, User currentUser);
+    /**
+     * 更新用户头像
+     * @param userId 用户ID
+     * @param avatarPath 头像路径
+     * @return 更新后的用户实体
+     */
+    User updateAvatar(Integer userId, String avatarPath) throws BusinessException;
+
     User updatePassword(Integer userId, String newPassword);
 }

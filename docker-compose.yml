@@ -1,43 +1,42 @@
 services:
-  # MySQL数据库服务
   mysql:
     image: mysql:8
-    container_name: official-mysql
+    container_name: ${PROJECT_NAME:-official}-mysql
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-123}
-      MYSQL_DATABASE: official
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${DB_NAME:-official}
     ports:
-      - "3307:3306"
+      - "${MYSQL_PORT:-3306}"
     volumes:
-      - "/usr/local/mysql/data:/var/lib/mysql"
-      - "/usr/local/mysql/conf:/etc/mysql/conf.d"
-      - "/usr/local/mysql/init:/docker-entrypoint-initdb.d"
+      - mysql_data:/var/lib/mysql
+      - ./mysql/conf:/etc/mysql/conf.d
     restart: always
     networks:
       - official-network
 
-  # Redis服务
   redis:
     image: redis:7-alpine
-    container_name: official-redis
+    container_name: ${PROJECT_NAME:-official}-redis
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}"
     volumes:
-      - "/usr/local/redis/data:/data"
+      - redis_data:/data
     restart: always
     networks:
       - official-network
 
-  # 应用服务
   official:
     build: .
-    container_name: official-app
+    container_name: ${PROJECT_NAME:-official}-app
     ports:
-      - "8080:8080"
+      - "${APP_PORT:-8080}:8080"
     environment:
       - DB_USERNAME=root
       - DB_PASSWORD=${DB_ROOT_PASSWORD:-root}
-      - JWT_SECRET=${JWT_SECRET:-bbe0ac1a5b8a113b4568d55c76fe887a1cd99b01acfad7957156945688e03e20}
+      - DB_NAME=${DB_NAME:-official}
+      - MYSQL_PORT=${MYSQL_PORT:-3306}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - JWT_SECRET=${JWT_SECRET:-30b264511df560046ae9907e50cd6e69a3cb94ce987538fb2c90b98c70ce684a}
       - MAIL_HOST=${MAIL_HOST:-smtp.feishu.cn}
       - MAIL_PORT=${MAIL_PORT:-465}
       - MAIL_USERNAME=${MAIL_USERNAME:-notify@boyuan.club}
@@ -49,7 +48,10 @@ services:
     networks:
       - official-network
 
-# 网络定义
+volumes:
+  mysql_data:
+  redis_data:
+
 networks:
   official-network:
     driver: bridge
