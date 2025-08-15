@@ -40,16 +40,17 @@ public class FileUploadUtil {
             throw new IOException("上传文件为空");
         }
         
-        // 标准化路径，防止路径穿越
-        String normalizedPath = Paths.get(uploadPath).normalize().toString();
-        if (normalizedPath.startsWith("..") || normalizedPath.startsWith("/")) {
+        // 更安全的路径验证方式，防止路径穿越
+        Path basePath = Paths.get(DEFAULT_UPLOAD_DIR).toAbsolutePath().normalize();
+        Path targetPath = basePath.resolve(uploadPath).normalize();
+        if (!targetPath.startsWith(basePath)) {
             throw new IOException("非法的上传路径");
         }
         
         // 创建完整上传目录路径
-        String fullUploadPath = DEFAULT_UPLOAD_DIR + normalizedPath;
-        if (!fullUploadPath.endsWith("/")) {
-            fullUploadPath += "/";
+        String fullUploadPath = targetPath.toString();
+        if (!fullUploadPath.endsWith(File.separator)) {
+            fullUploadPath += File.separator;
         }
         
         // 创建上传目录
@@ -70,8 +71,12 @@ public class FileUploadUtil {
         Path filePath = Paths.get(fullUploadPath, uniqueFilename);
         Files.write(filePath, file.getBytes());
         
-        // 返回相对路径
-        return "/" + fullUploadPath + uniqueFilename;
+        // 返回相对路径，使用正斜杠以确保跨平台兼容性
+        String relativePath = DEFAULT_UPLOAD_DIR + uploadPath;
+        if (!relativePath.endsWith("/")) {
+            relativePath += "/";
+        }
+        return "/" + relativePath + uniqueFilename;
     }
     
     /**

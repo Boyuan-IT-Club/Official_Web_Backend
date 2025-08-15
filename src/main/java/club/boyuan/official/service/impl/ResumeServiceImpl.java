@@ -120,7 +120,7 @@ public class ResumeServiceImpl implements IResumeService {
             return resume;
         } catch (Exception e) {
             logger.error("提交简历失败，简历ID: {}", resumeId, e);
-            throw new BusinessException(BusinessExceptionEnum.RESUME_SUBMIT_FAILED);
+            throw new BusinessException(BusinessExceptionEnum.RESUME_SUBMIT_FAILED, e.getMessage() != null ? e.getMessage() : "提交简历失败");
         }
     }
     
@@ -151,14 +151,14 @@ public class ResumeServiceImpl implements IResumeService {
                 resumeFieldValueMapper.batchInsert(toInsert);
             }
             
-            // 逐个更新已存在的字段值
-            for (ResumeFieldValue fieldValue : toUpdate) {
-                logger.debug("更新字段值，值ID: {}", fieldValue.getValueId());
-                resumeFieldValueMapper.update(fieldValue);
+            // 批量更新已存在的字段值
+            if (!toUpdate.isEmpty()) {
+                logger.debug("批量更新{}个字段值", toUpdate.size());
+                resumeFieldValueMapper.batchUpdate(toUpdate);
             }
         } catch (Exception e) {
             logger.error("保存简历字段值失败，字段值数量: {}", fieldValues.size(), e);
-            throw new BusinessException(BusinessExceptionEnum.RESUME_FIELD_VALUE_SAVE_FAILED);
+            throw new BusinessException(BusinessExceptionEnum.RESUME_FIELD_VALUE_SAVE_FAILED, e.getMessage() != null ? e.getMessage() : "保存简历字段值失败");
         }
     }
     

@@ -107,11 +107,21 @@ public class UserController {
     @PostMapping("/upload")
     public ResponseEntity<ResponseMessage> uploadFile(
             @RequestParam("file") MultipartFile file,
-            @RequestParam("uploadPath") String uploadPath) {
+            @RequestParam("uploadPath") String uploadPath,
+            HttpServletRequest request) {
         try {
             // 获取当前用户
+            String username = "unknown";
+            if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
+                try {
+                    username = jwtTokenUtil.extractUsername(request.getHeader("Authorization").substring(7));
+                } catch (Exception ex) {
+                    logger.warn("无法从token中提取用户名");
+                }
+            }
+            
             Integer userId = getAuthenticatedUserId();
-            logger.info("用户ID为{}的用户尝试上传文件到路径{}", userId, uploadPath);
+            logger.info("用户{}尝试上传文件到路径{}", username, uploadPath);
             
             // 上传文件并获取路径
             String filePath = FileUploadUtil.uploadFile(file, uploadPath);
@@ -119,10 +129,19 @@ public class UserController {
             Map<String, String> responseData = new HashMap<>();
             responseData.put("filePath", filePath);
             
-            logger.info("用户ID为{}的用户成功上传文件，路径为{}", userId, filePath);
+            logger.info("用户{}成功上传文件，路径为{}", username, filePath);
             return ResponseEntity.ok(new ResponseMessage(200, "文件上传成功", responseData));
         } catch (Exception e) {
-            logger.error("文件上传失败", e);
+            String username = "unknown";
+            if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
+                try {
+                    username = jwtTokenUtil.extractUsername(request.getHeader("Authorization").substring(7));
+                } catch (Exception ex) {
+                    logger.warn("无法从token中提取用户名");
+                }
+            }
+            
+            logger.error("文件上传失败，用户: {}", username, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new ResponseMessage(500, "文件上传失败: " + e.getMessage(), null));
         }
@@ -139,11 +158,21 @@ public class UserController {
     public ResponseEntity<ResponseMessage> uploadTypedFile(
             @RequestParam("file") MultipartFile file,
             @RequestParam("uploadPath") String uploadPath,
-            @RequestParam("fileType") String fileType) {
+            @RequestParam("fileType") String fileType,
+            HttpServletRequest request) {
         try {
             // 获取当前用户
+            String username = "unknown";
+            if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
+                try {
+                    username = jwtTokenUtil.extractUsername(request.getHeader("Authorization").substring(7));
+                } catch (Exception ex) {
+                    logger.warn("无法从token中提取用户名");
+                }
+            }
+            
             Integer userId = getAuthenticatedUserId();
-            logger.info("用户ID为{}的用户尝试上传{}类型的文件到路径{}", userId, fileType, uploadPath);
+            logger.info("用户{}尝试上传{}类型的文件到路径{}", username, fileType, uploadPath);
             
             // 上传文件并获取路径
             String filePath = FileUploadUtil.uploadFile(file, uploadPath, fileType);
@@ -151,10 +180,19 @@ public class UserController {
             Map<String, String> responseData = new HashMap<>();
             responseData.put("filePath", filePath);
             
-            logger.info("用户ID为{}的用户成功上传{}类型的文件，路径为{}", userId, fileType, filePath);
+            logger.info("用户{}成功上传{}类型的文件，路径为{}", username, fileType, filePath);
             return ResponseEntity.ok(new ResponseMessage(200, "文件上传成功", responseData));
         } catch (Exception e) {
-            logger.error("文件上传失败", e);
+            String username = "unknown";
+            if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
+                try {
+                    username = jwtTokenUtil.extractUsername(request.getHeader("Authorization").substring(7));
+                } catch (Exception ex) {
+                    logger.warn("无法从token中提取用户名");
+                }
+            }
+            
+            logger.error("文件上传失败，用户: {}", username, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new ResponseMessage(500, "文件上传失败: " + e.getMessage(), null));
         }
