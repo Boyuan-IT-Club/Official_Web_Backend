@@ -1,0 +1,95 @@
+package club.boyuan.official.service;
+
+import club.boyuan.official.dto.ResumeDTO;
+import club.boyuan.official.dto.ResumeFieldValueDTO;
+import club.boyuan.official.entity.Resume;
+import club.boyuan.official.entity.ResumeFieldValue;
+
+import java.util.List;
+
+public interface IResumeService {
+    
+    /**
+     * 根据用户ID和招聘年份ID获取简历
+     * @param userId 用户ID
+     * @param cycleId 招聘年份ID
+     * @return 简历
+     */
+    Resume getResumeByUserIdAndCycleId(Integer userId, Integer cycleId);
+    
+    /**
+     * 根据简历ID获取简历
+     * @param resumeId 简历ID
+     * @return 简历
+     */
+    Resume getResumeById(Integer resumeId);
+    
+    /**
+     * 根据用户ID获取简历列表
+     * @param userId 用户ID
+     * @return 简历列表
+     */
+    List<Resume> getResumesByUserId(Integer userId);
+    
+    /**
+     * 创建简历
+     * @param resume 简历实体
+     * @return 创建后的简历
+     */
+    Resume createResume(Resume resume);
+    
+    /**
+     * 更新简历
+     * @param resume 简历实体
+     * @return 更新后的简历
+     */
+    Resume updateResume(Resume resume);
+    
+    /**
+     * 删除简历
+     * @param resumeId 简历ID
+     */
+    void deleteResume(Integer resumeId);
+    
+    /**
+     * 提交简历
+     * @param resumeId 简历ID
+     * @return 提交后的简历
+     */
+    Resume submitResume(Integer resumeId);
+    
+    /**
+     * 保存简历字段值
+     * @param fieldValues 字段值列表
+     */
+    void saveFieldValues(List<ResumeFieldValue> fieldValues);
+    
+    /**
+     * 根据简历ID获取字段值列表
+     * @param resumeId 简历ID
+     * @return 字段值列表
+     */
+    List<ResumeFieldValue> getFieldValuesByResumeId(Integer resumeId);
+    
+    /**
+     * 根据简历ID获取字段值列表（包含字段定义信息）
+     * @param resumeId 简历ID
+     * @return 字段值DTO列表
+     */
+    List<ResumeFieldValueDTO> getFieldValuesWithDefinitionsByResumeId(Integer resumeId);
+    
+    /**
+     * 根据用户ID和招聘年份ID获取简历及字段值信息
+     * @param userId 用户ID
+     * @param cycleId 招聘年份ID
+     * @return 简历DTO（包含字段值及字段定义信息）
+     */
+    ResumeDTO getResumeWithFieldValues(Integer userId, Integer cycleId);
+    
+    /**
+     * 根据简历ID获取简历及字段值信息
+     * @param resumeId 简历ID
+     * @return 简历DTO（包含字段值及字段定义信息）
+     */
+    ResumeDTO getResumeWithFieldValuesById(Integer resumeId);
+}

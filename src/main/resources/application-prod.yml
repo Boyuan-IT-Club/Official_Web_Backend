@@ -4,7 +4,7 @@ spring:
   datasource:
     url: jdbc:mysql://mysql:3306/official?serverTimezone=UTC
     username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:123}
+    password: ${DB_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     show-sql: true
@@ -13,6 +13,7 @@ spring:
         format_sql: true
     hibernate:
       ddl-auto: update
+    # 明确关闭open-in-view以消除警告
     open-in-view: false
   mail:
     host: ${MAIL_HOST:smtp.feishu.cn}
@@ -34,8 +35,15 @@ spring:
       port: 6379
       password: ${REDIS_PASSWORD:}
       database: 0
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 2
+          max-wait: 2000ms
   servlet:
     multipart:
+      file-size-threshold: 10MB
       max-file-size: 10MB
       max-request-size: 10MB
 
@@ -46,19 +54,18 @@ mybatis:
   mapper-locations: classpath:mapper/*.xml
   type-aliases-package: club.boyuan.official.entity
   configuration:
-    map-underscore-to-camel-case: true
+    mapUnderscoreToCamelCase: true
 
 jwt:
-  secret: ${JWT_SECRET:bbe0ac1a5b8a113b4568d55c76fe887a1cd99b01acfad7957156945688e03e20}
+  secret: ${JWT_SECRET:30b264511df560046ae9907e50cd6e69a3cb94ce987538fb2c90b98c70ce684a}
   expiration: ${JWT_EXPIRATION:86400000}
 
 sms:
   access-key: ${SMS_ACCESS_KEY:your-sms-access-key}
   secret-key: ${SMS_SECRET_KEY:your-sms-secret-key}
+  template-id:
+    verification-code: ${SMS_TEMPLATE_ID_VERIFICATION:your-sms-template-id}
+  region-id: ${SMS_REGION_ID:your-sms-region-id}
   verification-code:
     length: 6
     expiration-minutes: 5
-
-logging:
-  level:
-    club.boyuan.official.mapper: DEBUG

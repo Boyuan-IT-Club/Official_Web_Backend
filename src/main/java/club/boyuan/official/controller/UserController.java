@@ -17,6 +17,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import club.boyuan.official.utils.JwtTokenUtil;
@@ -56,8 +57,14 @@ public class UserController {
      * 上传用户头像
      */
     @PostMapping("/avatar")
-    public ResponseEntity<ResponseMessage> uploadAvatar(@RequestParam("avatar") MultipartFile file) {
+    public ResponseEntity<ResponseMessage> uploadAvatar(@RequestParam("file") MultipartFile file) {
         try {
+            // 检查文件是否为空
+            if (file == null || file.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(new ResponseMessage(400, "上传文件为空", null));
+            }
+            
             // 获取当前用户
             Integer userId = getAuthenticatedUserId();
             User user = userService.getUserById(userId);
@@ -76,10 +83,80 @@ public class UserController {
             
             logger.info("用户ID为{}的用户成功上传头像，路径为{}", userId, avatarPath);
             return ResponseEntity.ok(new ResponseMessage(200, "头像上传成功", responseData));
-        } catch (Exception e) {
-            logger.error("头像上传失败", e);
+        } catch (IOException e) {
+            logger.error("头像上传失败: 文件操作异常", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new ResponseMessage(500, "头像上传失败: " + e.getMessage(), null));
+        } catch (BusinessException e) {
+            logger.error("头像上传失败: 业务异常", e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ResponseMessage(e.getCode(), e.getMessage(), null));
+        } catch (Exception e) {
+            logger.error("头像上传失败: 未知错误", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ResponseMessage(500, "头像上传失败: " + e.getMessage(), null));
+        }
+    }
+    
+    /**
+     * 通用文件上传接口
+     * @param file 上传的文件
+     * @param uploadPath 上传路径
+     * @return 文件存储路径
+     */
+    @PostMapping("/upload")
+    public ResponseEntity<ResponseMessage> uploadFile(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("uploadPath") String uploadPath) {
+        try {
+            // 获取当前用户
+            Integer userId = getAuthenticatedUserId();
+            logger.info("用户ID为{}的用户尝试上传文件到路径{}", userId, uploadPath);
+            
+            // 上传文件并获取路径
+            String filePath = FileUploadUtil.uploadFile(file, uploadPath);
+            
+            Map<String, String> responseData = new HashMap<>();
+            responseData.put("filePath", filePath);
+            
+            logger.info("用户ID为{}的用户成功上传文件，路径为{}", userId, filePath);
+            return ResponseEntity.ok(new ResponseMessage(200, "文件上传成功", responseData));
+        } catch (Exception e) {
+            logger.error("文件上传失败", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ResponseMessage(500, "文件上传失败: " + e.getMessage(), null));
+        }
+    }
+    
+    /**
+     * 带文件类型验证的文件上传接口
+     * @param file 上传的文件
+     * @param uploadPath 上传路径
+     * @param fileType 文件类型（如"image/"、"application/pdf"等）
+     * @return 文件存储路径
+     */
+    @PostMapping("/upload/typed")
+    public ResponseEntity<ResponseMessage> uploadTypedFile(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("uploadPath") String uploadPath,
+            @RequestParam("fileType") String fileType) {
+        try {
+            // 获取当前用户
+            Integer userId = getAuthenticatedUserId();
+            logger.info("用户ID为{}的用户尝试上传{}类型的文件到路径{}", userId, fileType, uploadPath);
+            
+            // 上传文件并获取路径
+            String filePath = FileUploadUtil.uploadFile(file, uploadPath, fileType);
+            
+            Map<String, String> responseData = new HashMap<>();
+            responseData.put("filePath", filePath);
+            
+            logger.info("用户ID为{}的用户成功上传{}类型的文件，路径为{}", userId, fileType, filePath);
+            return ResponseEntity.ok(new ResponseMessage(200, "文件上传成功", responseData));
+        } catch (Exception e) {
+            logger.error("文件上传失败", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ResponseMessage(500, "文件上传失败: " + e.getMessage(), null));
         }
     }
     
@@ -236,7 +313,7 @@ public class UserController {
             User currentUser = getCurrentUserEntity();
             // 管理员可以查看所有用户，普通用户只能查看自己
             if (!User.ROLE_ADMIN.equals(currentUser.getRole()) && !currentUser.getUserId().equals(userId)) {
-                throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
+                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
             }
             User userNew = userService.getUserById(userId);
             if (userNew == null) {
@@ -288,7 +365,7 @@ public class UserController {
 
             // 管理员可以更新所有用户，普通用户只能更新自己
             if (!User.ROLE_ADMIN.equals(currentUser.getRole()) && !currentUser.getUserId().equals(targetUserId)) {
-                throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
+                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
             }
 
             User existingUser = userService.getUserById(targetUserId);
@@ -313,7 +390,7 @@ public class UserController {
                 if (User.ROLE_ADMIN.equals(currentUser.getRole())) {
                     existingUser.setRole((String) userInfo.get("role"));
                 } else {
-                    throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
+                    throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
                 }
             }
             if (userInfo.containsKey("name")) {

@@ -1,127 +1,74 @@
 # Official 项目
 
-### 目标用户
-- 管理员
-- 普通用户
+## 项目简介
 
-### 核心功能
+Official 是一个基于 Spring Boot 的后端服务系统，第一阶段目标是实现社团介绍和简历投递的基本功能。
+
+主要功能包括：
 - 用户管理：注册、登录、修改信息、重置密码
 - 认证与权限：基于 Spring Security 的 JWT 认证机制
+- 简历投递：支持学生使用特定邮箱验证并投递简历
+- 面试安排：自动或手动分配面试时间
 - 奖项经验管理：管理员可管理用户的奖项经验信息
-- 邮件服务：用于发送验证码或通知
-- Redis 缓存：用于验证码、Token 等缓存管理
-- 全局搜索：支持用户和奖项信息的全局搜索和高级筛选
+- 全局搜索：支持用户和奖项信息的全局搜索
 
 ## 技术架构
 
 ### 后端技术栈
 - Spring Boot 3.5.3
-- MyBatis 3.5.15 + MySQL 8.0.33
+- MyBatis 3.5.15 + MySQL 8.0+
 - Spring Security + JWT (jjwt 0.11.5)
 - Redis
-- Lombok, Validation, Mail, Configuration Processor
 - Java 17
 
-### 架构模式
-- MVC 模式：Spring Boot 默认使用 MVC 架构
-- 模板方法模式：在全局异常处理中使用
-- 工厂模式：Spring IOC 容器管理 Bean 创建
-- 过滤器模式：JWT 认证通过自定义过滤器实现
-
-### 主要组件交互
-- Controller 接收请求，调用 Service 层处理业务逻辑
-- Service 层调用 Mapper 层访问数据库
-- Redis 用于缓存 Token 和验证码
-- SecurityConfig 配置安全策略，JwtAuthenticationFilter 实现 Token 校验
-
-## 开发环境
-
-### 必需工具
+### 开发环境
 - JDK 17
 - Maven 3.x
 - IDE（如 IntelliJ IDEA）
 
-### 可选工具
-- Postman（接口测试）
-- Redis Desktop Manager（缓存调试）
-
-### 项目目录结构
-```
-src/
-├── main/
-│   ├── java/
-│   │   └── club/
-│   │       └── boyuan/
-│   │           └── official/
-│   │               ├── config/          # 配置类
-│   │               ├── controller/      # REST API 接口
-│   │               ├── dto/             # 数据传输对象
-│   │               ├── entity/          # 实体类
-│   │               ├── exception/       # 异常处理
-│   │               ├── filter/          # 自定义过滤器
-│   │               ├── mapper/          # MyBatis Mapper
-│   │               ├── service/         # 业务逻辑接口及实现
-│   │               └── utils/           # 工具类
-│   └── resources/
-│       ├── mapper/                      # MyBatis XML 映射文件
-│       └── application.yml              # 主配置文件
-└── test/                                # 测试代码
-```
-
 ## 安装与运行
 
-### 环境准备
-1. 安装 JDK 17
-2. 安装 Maven 3.x
-3. 安装 MySQL 8.0+
-4. 安装 Redis
-
 ### 开发环境运行
-使用 Maven Wrapper 运行项目：
 ```bash
-# Windows系统
-.\mvnw spring-boot:run
+# 构建项目
+./mvnw clean package
 
-# 或者先构建再运行
-.\mvnw clean package
-java -jar target/Official-0.0.1-SNAPSHOT.jar
+# 运行项目
+./mvnw spring-boot:run
 ```
 
-### 在 IDE 中运行
+或者直接运行 OfficialApplication.java 文件中的 main 方法
 
-直接运行 OfficialApplication.java 文件中的 main 方法
+## API 接口文档
 
+本项目使用 Apifox 管理 API 接口文档，不再通过依赖方式生成文档。
 
-## 安全说明
+## 部署说明
 
-### 认证机制
-项目使用 JWT (JSON Web Token) 实现无状态认证，用户登录成功后会获得一个 token，后续请求需要在 Header 中携带该 token。
+### Docker 部署（推荐）
+```bash
+# 构建项目
+./mvnw clean package -DskipTests
 
-### 权限控制
-- 普通用户只能操作自己的数据
-- 管理员用户可以操作所有用户的数据
-- 敏感操作（如角色修改）需要管理员权限
+# 启动服务
+docker-compose up -d
+```
 
-### 密码策略
-- 密码长度必须在8-20个字符之间
-- 密码必须包含大小写字母、数字和特殊字符中的至少三种
-- 密码在数据库中使用 BCrypt 加密存储
-- 注册时需要确认密码
-- 重置密码时需要验证码验证
+### 传统部署
+1. 安装 JDK 17、MySQL 8.0+、Redis 6.0+
+2. 创建数据库：CREATE DATABASE official CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+3. 修改配置文件 application-prod.yml
+4. 构建项目：./mvnw clean package -DskipTests
+5. 运行应用：java -jar target/Official-0.0.1-SNAPSHOT.jar --spring.profiles.active=prod
 
-示例强密码：
-- `MyPassword123!`
-- `SecurePass@2023`
-- `P@ssw0rd2023#`
+## 第一阶段功能说明
 
-不符合要求的密码示例：
-- `password` (缺少大写字母、数字和特殊字符)
-- `PASSWORD123` (缺少小写字母和特殊字符)
-- `Password` (缺少数字和特殊字符)
-- `Pass123` (长度不足且缺少特殊字符)
+### 简历投递功能
+- 仅支持特定邮箱验证
+- 简历包含个人简介、获奖情况等板块
+- 支持自动分配面试时间或手动调度
 
-### 其他安全措施
-- 敏感操作需要通过验证码验证身份
-- 所有密码都经过加密存储
-- 通过日志记录关键操作，便于审计
-
+### 面试安排
+- 系统可根据规则自动分配面试时间
+- 支持管理员手动调整面试时间
+- 面试时间确认后通知相关人员
