@@ -47,7 +47,7 @@ public class MessageUtils {
      */
     public void validatePhone(String phone) {
         if (phone == null || phone.isEmpty() || !PHONE_PATTERN.matcher(phone).matches()) {
-            throw new BusinessException(BusinessExceptionEnum.INVALID_PHONE_FORMAT);
+            throw new BusinessException(BusinessExceptionEnum.PHONE_FORMAT_ERROR);
         }
     }
 

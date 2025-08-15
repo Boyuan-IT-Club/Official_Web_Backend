@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="club.boyuan.official.mapper.ResumeMapper">
+    
+    <resultMap id="ResumeMap" type="club.boyuan.official.entity.Resume">
+        <id column="resume_id" property="resumeId"/>
+        <result column="user_id" property="userId"/>
+        <result column="cycle_id" property="cycleId"/>
+        <result column="status" property="status"/>
+        <result column="submitted_at" property="submittedAt"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+    
+    <!-- 根据用户ID和招聘年份ID查询简历 -->
+    <select id="findByUserIdAndCycleId" resultMap="ResumeMap">
+        SELECT * FROM resume WHERE user_id = #{userId} AND cycle_id = #{cycleId}
+    </select>
+    
+    <!-- 根据简历ID查询简历 -->
+    <select id="findById" resultMap="ResumeMap">
+        SELECT * FROM resume WHERE resume_id = #{resumeId}
+    </select>
+    
+    <!-- 根据用户ID查询简历列表 -->
+    <select id="findByUserId" resultMap="ResumeMap">
+        SELECT * FROM resume WHERE user_id = #{userId}
+    </select>
+    
+    <!-- 插入简历 -->
+    <insert id="insert" parameterType="club.boyuan.official.entity.Resume" useGeneratedKeys="true" keyProperty="resumeId">
+        INSERT INTO resume(user_id, cycle_id, status)
+        VALUES(#{userId}, #{cycleId}, #{status})
+    </insert>
+    
+    <!-- 更新简历 -->
+    <update id="update" parameterType="club.boyuan.official.entity.Resume">
+        UPDATE resume 
+        SET status = #{status}, submitted_at = #{submittedAt}, updated_at = NOW()
+        WHERE resume_id = #{resumeId}
+    </update>
+    
+    <!-- 删除简历 -->
+    <delete id="deleteById">
+        DELETE FROM resume WHERE resume_id = #{resumeId}
+    </delete>
+    
+</mapper>

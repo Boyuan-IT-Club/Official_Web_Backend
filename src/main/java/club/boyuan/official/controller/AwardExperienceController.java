@@ -51,7 +51,7 @@ public class AwardExperienceController {
             // 权限控制：
             if (targetUserId == null) {
                 // 未指定用户ID - 拒绝访问
-                throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
+                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
             } else if (User.ROLE_ADMIN.equals(currentUser.getRole())) {
                 // 管理员：验证目标用户是否存在
                 User targetUser = userService.getUserById(targetUserId);
@@ -61,7 +61,7 @@ public class AwardExperienceController {
             } else {
                 // 普通用户：只能为自己创建获奖经历
                 if (!targetUserId.equals(currentUser.getUserId())) {
-                    throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
+                    throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
                 }
             }
 
