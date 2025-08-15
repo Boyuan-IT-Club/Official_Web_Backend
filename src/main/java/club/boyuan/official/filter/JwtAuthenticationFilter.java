@@ -52,8 +52,15 @@ public class JwtAuthenticationFilter implements Filter {
 
         // 排除登录和注册接口
         String requestURI = httpRequest.getRequestURI();
-        //排除api/auth开头的所有接口以及健康检查接口
-        if (requestURI.startsWith("/api/auth") || requestURI.startsWith("/api/health")) {
+        
+        // 明确排除健康检查端点
+        if ("/api/health".equals(requestURI) || "/health".equals(requestURI)) {
+            chain.doFilter(request, response);
+            return;
+        }
+        
+        // 排除以/api/auth开头的所有接口
+        if (requestURI.startsWith("/api/auth")) {
             chain.doFilter(request, response);
             return;
         }
@@ -109,15 +116,10 @@ public class JwtAuthenticationFilter implements Filter {
                 return;
             }
         }
-        logger.warn("请求未携带token，返回401");
-        httpResponse.setStatus(HttpStatus.UNAUTHORIZED.value());
-        httpResponse.setContentType("application/json;charset=UTF-8");
-        ResponseMessage<?> errorResponse = new ResponseMessage<>(BusinessExceptionEnum.JWT_VERIFICATION_FAILED.getCode(), BusinessExceptionEnum.JWT_VERIFICATION_FAILED.getMessage(), null);
-        try {
-            new ObjectMapper().writeValue(httpResponse.getWriter(), errorResponse);
-        } catch (IOException ex) {
-            logger.error("写入响应时发生错误", ex);
-        }
+        
+        // 如果没有token，让Spring Security根据配置决定是否允许访问
+        // 不再记录警告日志，因为有些端点可能确实不需要token
+        chain.doFilter(request, response);
     }
 
     private String extractToken(HttpServletRequest request) {

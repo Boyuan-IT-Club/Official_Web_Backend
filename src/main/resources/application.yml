@@ -35,10 +35,10 @@ spring:
           max-idle: 8
           min-idle: 0
   mail:
-    host: smtp.mxhichina.com
+    host: smtp.feishu.cn
     port: 465
-    username: noreply@boyuan.club
-    password: 
+    username: notify@boyuan.club
+    password: 12bGmEWjvyRDjzxE
     properties:
       mail:
         smtp:

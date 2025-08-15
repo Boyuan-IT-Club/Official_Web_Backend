@@ -192,6 +192,20 @@ public class UserServiceImpl implements IUserService {
     }
 
     @Override
+    public User updateAvatar(Integer userId, String avatarPath) {
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
+        }
+
+        // 只更新头像字段，不涉及密码
+        user.setAvatar(avatarPath);
+        userMapper.updateById(user);
+        logger.info("成功更新用户头像，用户ID: {}", user.getUserId());
+        return user;
+    }
+
+    @Override
     public User register(UserDTO userDTO) {
         // 检查用户名是否已存在
         if (userMapper.selectByUsername(userDTO.getUsername()) != null) {

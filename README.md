@@ -29,6 +29,23 @@ Official 是一个基于 Spring Boot 的后端服务系统，第一阶段目标�
 ## 安装与运行
 
 ### 开发环境运行
+
+#### 使用Makefile (推荐，特别适用于前端开发人员)
+
+```bash
+# 启动依赖服务 (MySQL和Redis)
+make dev-up
+
+# 查看服务状态
+make status
+
+# 停止服务
+make dev-down
+```
+
+然后在IDE中运行 [OfficialApplication.java](file:///C:/Users/35183/IdeaProjects/Official/src/main/java/club/boyuan/official/OfficialApplication.java) 文件中的 main 方法启动应用。
+
+#### 传统方式
 ```bash
 # 构建项目
 ./mvnw clean package
@@ -37,7 +54,7 @@ Official 是一个基于 Spring Boot 的后端服务系统，第一阶段目标�
 ./mvnw spring-boot:run
 ```
 
-或者直接运行 OfficialApplication.java 文件中的 main 方法
+或者直接运行 [OfficialApplication.java](file:///C:/Users/35183/IdeaProjects/Official/src/main/java/club/boyuan/official/OfficialApplication.java) 文件中的 main 方法
 
 ## API 接口文档
 
