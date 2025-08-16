@@ -45,4 +45,9 @@
         DELETE FROM resume WHERE resume_id = #{resumeId}
     </delete>
     
+    <!-- 根据用户ID删除简历 -->
+    <delete id="deleteByUserId">
+        DELETE FROM resume WHERE user_id = #{userId}
+    </delete>
+    
 </mapper>

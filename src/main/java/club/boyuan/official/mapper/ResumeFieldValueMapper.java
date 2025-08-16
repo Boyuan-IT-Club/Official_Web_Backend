@@ -53,6 +53,13 @@ public interface ResumeFieldValueMapper {
     int deleteByResumeId(Integer resumeId);
     
     /**
+     * 根据字段ID删除字段值
+     * @param fieldId 字段ID
+     * @return 影响行数
+     */
+    int deleteByFieldId(Integer fieldId);
+    
+    /**
      * 根据字段值ID删除字段值
      * @param valueId 字段值ID
      * @return 影响行数

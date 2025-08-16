@@ -54,6 +54,11 @@
         WHERE resume_id = #{resumeId}
     </delete>
 
+    <delete id="deleteByFieldId">
+        DELETE FROM resume_field_value
+        WHERE field_id = #{fieldId}
+    </delete>
+
     <delete id="deleteById">
         DELETE FROM resume_field_value
         WHERE value_id = #{valueId}

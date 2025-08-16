@@ -51,4 +51,11 @@ public interface ResumeMapper {
      * @return 影响行数
      */
     int deleteById(Integer resumeId);
+    
+    /**
+     * 根据用户ID删除简历
+     * @param userId 用户ID
+     * @return 影响行数
+     */
+    int deleteByUserId(Integer userId);
 }

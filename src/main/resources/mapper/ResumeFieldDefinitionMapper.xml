@@ -35,8 +35,24 @@
     <!-- 更新字段定义 -->
     <update id="update" parameterType="club.boyuan.official.entity.ResumeFieldDefinition">
         UPDATE resume_field_definition 
-        SET field_key = #{fieldKey}, field_label = #{fieldLabel}, is_required = #{isRequired}, 
-            sort_order = #{sortOrder}, is_active = #{isActive}, updated_at = NOW()
+        <set>
+            <if test="fieldKey != null and fieldKey != ''">
+                field_key = #{fieldKey},
+            </if>
+            <if test="fieldLabel != null and fieldLabel != ''">
+                field_label = #{fieldLabel},
+            </if>
+            <if test="isRequired != null">
+                is_required = #{isRequired},
+            </if>
+            <if test="sortOrder != null">
+                sort_order = #{sortOrder},
+            </if>
+            <if test="isActive != null">
+                is_active = #{isActive},
+            </if>
+            updated_at = NOW()
+        </set>
         WHERE field_id = #{fieldId}
     </update>
     

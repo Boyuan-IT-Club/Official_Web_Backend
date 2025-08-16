@@ -1,38 +1,44 @@
 package club.boyuan.official.service.impl;
 
-import java.util.List;
 import club.boyuan.official.dto.UserDTO;
+import club.boyuan.official.entity.AwardExperience;
+import club.boyuan.official.entity.Resume;
 import club.boyuan.official.entity.User;
 import club.boyuan.official.exception.BusinessException;
 import club.boyuan.official.exception.BusinessExceptionEnum;
 import club.boyuan.official.mapper.AwardExperienceMapper;
+import club.boyuan.official.mapper.ResumeFieldValueMapper;
+import club.boyuan.official.mapper.ResumeMapper;
 import club.boyuan.official.mapper.UserMapper;
 import club.boyuan.official.service.IUserService;
-import jakarta.transaction.Transactional;
+import club.boyuan.official.utils.JwtTokenUtil;
 import club.boyuan.official.utils.PasswordValidator;
 import lombok.AllArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 @Service
 @AllArgsConstructor
 public class UserServiceImpl implements IUserService {
-    
+
     private static final Logger logger = LoggerFactory.getLogger(UserServiceImpl.class);
-    
+
     private final UserMapper userMapper;
-
     private final AwardExperienceMapper awardExperienceMapper;
-
+    private final ResumeMapper resumeMapper;
+    private final ResumeFieldValueMapper resumeFieldValueMapper;
     private final BCryptPasswordEncoder passwordEncoder;
-    
+    private final JwtTokenUtil jwtTokenUtil;
+
     @Override
     public User add(UserDTO userDTO) {
         // 检查用户名是否已存在
@@ -138,7 +144,16 @@ public class UserServiceImpl implements IUserService {
             throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
         }
 
-        // 先删除用户的所有获奖经历
+        // 先删除用户的所有简历相关的字段值
+        List<Resume> resumes = resumeMapper.findByUserId(userId);
+        for (Resume resume : resumes) {
+            resumeFieldValueMapper.deleteByResumeId(resume.getResumeId());
+        }
+
+        // 删除用户的所有简历
+        resumeMapper.deleteByUserId(userId);
+
+        // 删除用户的所有获奖经历
         awardExperienceMapper.deleteAwardsByUserId(userId);
 
         int rows = userMapper.deleteById(userId);
