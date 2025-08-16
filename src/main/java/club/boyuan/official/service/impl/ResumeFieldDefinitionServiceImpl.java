@@ -4,6 +4,7 @@ import club.boyuan.official.entity.ResumeFieldDefinition;
 import club.boyuan.official.exception.BusinessException;
 import club.boyuan.official.exception.BusinessExceptionEnum;
 import club.boyuan.official.mapper.ResumeFieldDefinitionMapper;
+import club.boyuan.official.mapper.ResumeFieldValueMapper;
 import club.boyuan.official.service.IResumeFieldDefinitionService;
 import lombok.AllArgsConstructor;
 import org.slf4j.Logger;
@@ -20,6 +21,7 @@ public class ResumeFieldDefinitionServiceImpl implements IResumeFieldDefinitionS
     private static final Logger logger = LoggerFactory.getLogger(ResumeFieldDefinitionServiceImpl.class);
     
     private final ResumeFieldDefinitionMapper resumeFieldDefinitionMapper;
+    private final ResumeFieldValueMapper resumeFieldValueMapper;
     
     @Override
     public List<ResumeFieldDefinition> getFieldDefinitionsByCycleId(Integer cycleId) {
@@ -76,6 +78,9 @@ public class ResumeFieldDefinitionServiceImpl implements IResumeFieldDefinitionS
     public void deleteFieldDefinition(Integer fieldId) {
         logger.info("删除简历字段定义，字段ID: {}", fieldId);
         try {
+            // 先删除与该字段定义关联的所有字段值
+            resumeFieldValueMapper.deleteByFieldId(fieldId);
+            // 再删除字段定义本身
             resumeFieldDefinitionMapper.deleteById(fieldId);
         } catch (Exception e) {
             logger.error("删除简历字段定义失败，字段ID: {}", fieldId, e);
