@@ -35,12 +35,12 @@ CREATE TABLE `award_experience`  (
 -- ----------------------------
 -- Records of award_experience
 -- ----------------------------
-INSERT INTO `award_experience` VALUES (1, 2, 'ACM程序设计竞赛银奖', '2023-05-20 00:00:00', '在省级ACM程序设计竞赛中获得银奖');
-INSERT INTO `award_experience` VALUES (2, 2, '校级优秀学生奖学金', '2023-12-01 00:00:00', '因学业成绩优异获得校级一等奖学金');
-INSERT INTO `award_experience` VALUES (3, 2, '数学建模竞赛二等奖', '2023-09-15 00:00:00', '在全国大学生数学建模竞赛中获得二等奖');
-INSERT INTO `award_experience` VALUES (4, 3, '大学生创新创业大赛一等奖', '2023-08-10 00:00:00', '带领团队在校级创新创业大赛中获得一等奖');
-INSERT INTO `award_experience` VALUES (5, 3, '英语演讲比赛三等奖', '2023-11-25 00:00:00', '在外语学院举办的英语演讲比赛中获得三等奖');
-INSERT INTO `award_experience` VALUES (6, 3, '优秀学生干部', '2023-12-01 00:00:00', '因担任学生会干部期间表现优秀获得此荣誉');
+INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (1, 2, 'ACM程序设计竞赛银奖', '2023-05-20 00:00:00', '在省级ACM程序设计竞赛中获得银奖');
+INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (2, 2, '校级优秀学生奖学金', '2023-12-01 00:00:00', '因学业成绩优异获得校级一等奖学金');
+INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (3, 2, '数学建模竞赛二等奖', '2023-09-15 00:00:00', '在全国大学生数学建模竞赛中获得二等奖');
+INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (4, 3, '大学生创新创业大赛一等奖', '2023-08-10 00:00:00', '带领团队在校级创新创业大赛中获得一等奖');
+INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (5, 3, '英语演讲比赛三等奖', '2023-11-25 00:00:00', '在外语学院举办的英语演讲比赛中获得三等奖');
+INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (6, 3, '优秀学生干部', '2023-12-01 00:00:00', '因担任学生会干部期间表现优秀获得此荣誉');
 
 -- ----------------------------
 -- Table structure for resume
@@ -62,7 +62,7 @@ CREATE TABLE `resume`  (
 -- ----------------------------
 -- Records of resume
 -- ----------------------------
-INSERT INTO `resume` VALUES (1, 2, 2024, 3, '2025-08-15 14:03:27', '2025-08-15 13:58:51', '2025-08-15 14:05:36');
+INSERT INTO `resume` (`resume_id`, `user_id`, `cycle_id`, `status`, `submitted_at`, `created_at`, `updated_at`) VALUES (1, 2, 2024, 3, '2025-08-15 14:03:27', '2025-08-15 13:58:51', '2025-08-15 14:05:36');
 
 -- ----------------------------
 -- Table structure for resume_field_definition
@@ -84,9 +84,9 @@ CREATE TABLE `resume_field_definition`  (
 -- ----------------------------
 -- Records of resume_field_definition
 -- ----------------------------
-INSERT INTO `resume_field_definition` VALUES (1, 2024, 'personal_statement', '个人陈述（必填）', 1, 1, 1, '2025-08-15 13:52:46', '2025-08-15 14:24:24');
-INSERT INTO `resume_field_definition` VALUES (2, 2024, 'project_experience', '项目经历', 1, 2, 1, '2025-08-15 13:52:58', '2025-08-15 13:52:58');
-INSERT INTO `resume_field_definition` VALUES (3, 2024, 'skills', '技能', 0, 3, 1, '2025-08-15 13:53:02', '2025-08-15 13:53:02');
+INSERT INTO `resume_field_definition` (`field_id`, `cycle_id`, `field_key`, `field_label`, `is_required`, `sort_order`, `is_active`, `created_at`, `updated_at`) VALUES (1, 2024, 'personal_statement', '个人陈述（必填）', 1, 1, 1, '2025-08-15 13:52:46', '2025-08-15 14:24:24');
+INSERT INTO `resume_field_definition` (`field_id`, `cycle_id`, `field_key`, `field_label`, `is_required`, `sort_order`, `is_active`, `created_at`, `updated_at`) VALUES (2, 2024, 'project_experience', '项目经历', 1, 2, 1, '2025-08-15 13:52:58', '2025-08-15 13:52:58');
+INSERT INTO `resume_field_definition` (`field_id`, `cycle_id`, `field_key`, `field_label`, `is_required`, `sort_order`, `is_active`, `created_at`, `updated_at`) VALUES (3, 2024, 'skills', '技能', 0, 3, 1, '2025-08-15 13:53:02', '2025-08-15 13:53:02');
 
 -- ----------------------------
 -- Table structure for resume_field_value
@@ -109,9 +109,9 @@ CREATE TABLE `resume_field_value`  (
 -- ----------------------------
 -- Records of resume_field_value
 -- ----------------------------
-INSERT INTO `resume_field_value` VALUES (1, 1, 1, '我是一个热爱技术的学生，希望能在技术部门发挥自己的才能。', '2025-08-15 14:00:04', '2025-08-15 14:00:04');
-INSERT INTO `resume_field_value` VALUES (2, 1, 2, '参与开发了学校图书馆管理系统，使用Java和MySQL。', '2025-08-15 14:00:04', '2025-08-15 14:00:04');
-INSERT INTO `resume_field_value` VALUES (3, 1, 3, '熟悉Java、Python和前端技术。', '2025-08-15 14:00:04', '2025-08-15 14:00:04');
+INSERT INTO `resume_field_value` (`value_id`, `resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`) VALUES (1, 1, 1, '我是一个热爱技术的学生，希望能在技术部门发挥自己的才能。', '2025-08-15 14:00:04', '2025-08-15 14:00:04');
+INSERT INTO `resume_field_value` (`value_id`, `resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`) VALUES (2, 1, 2, '参与开发了学校图书馆管理系统，使用Java和MySQL。', '2025-08-15 14:00:04', '2025-08-15 14:00:04');
+INSERT INTO `resume_field_value` (`value_id`, `resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`) VALUES (3, 1, 3, '熟悉Java、Python和前端技术。', '2025-08-15 14:00:04', '2025-08-15 14:00:04');
 
 -- ----------------------------
 -- Table structure for user
@@ -138,8 +138,8 @@ CREATE TABLE `user`  (
 -- ----------------------------
 -- Records of user
 -- ----------------------------
-INSERT INTO `user` VALUES (1, 'admin', '$2a$10$UO3ZwFXZIkGeG8nqQZRR7.iHL7QtapfHoOuqHc8CRhPxMwxKuJbry', 'ADMIN', '管理员', 'admin@boyuan.club', '13800000000', '技术部', '2025-08-15 13:13:58', 1, 1, NULL);
-INSERT INTO `user` VALUES (2, 'student1', '$2a$10$UO3ZwFXZIkGeG8nqQZRR7.iHL7QtapfHoOuqHc8CRhPxMwxKuJbry', 'USER', '学生1', '1234567890@stu.ecnu.edu.cn', '13800000001', '媒体部', '2025-08-15 13:13:58', 1, 1, '/uploads/avatars/107194c0-f53f-4aac-9671-fadd281f9669.png');
-INSERT INTO `user` VALUES (3, 'student2', '$2a$10$UO3ZwFXZIkGeG8nqQZRR7.iHL7QtapfHoOuqHc8CRhPxMwxKuJbry', 'USER', '学生2', '0987654321@stu.ecnu.edu.cn', '13800000002', '综合部', '2025-08-15 13:13:58', 1, 1, NULL);
+INSERT INTO `user` (`user_id`, `username`, `password`, `role`, `name`, `email`, `phone`, `dept`, `create_time`, `status`, `is_member`, `avatar`) VALUES (1, 'admin', '$2a$10$UO3ZwFXZIkGeG8nqQZRR7.iHL7QtapfHoOuqHc8CRhPxMwxKuJbry', 'ADMIN', '管理员', 'admin@boyuan.club', '13800000000', '技术部', '2025-08-15 13:13:58', 1, 1, NULL);
+INSERT INTO `user` (`user_id`, `username`, `password`, `role`, `name`, `email`, `phone`, `dept`, `create_time`, `status`, `is_member`, `avatar`) VALUES (2, 'student1', '$2a$10$UO3ZwFXZIkGeG8nqQZRR7.iHL7QtapfHoOuqHc8CRhPxMwxKuJbry', 'USER', '学生1', '1234567890@stu.ecnu.edu.cn', '13800000001', '媒体部', '2025-08-15 13:13:58', 1, 1, '/uploads/avatars/107194c0-f53f-4aac-9671-fadd281f9669.png');
+INSERT INTO `user` (`user_id`, `username`, `password`, `role`, `name`, `email`, `phone`, `dept`, `create_time`, `status`, `is_member`, `avatar`) VALUES (3, 'student2', '$2a$10$UO3ZwFXZIkGeG8nqQZRR7.iHL7QtapfHoOuqHc8CRhPxMwxKuJbry', 'USER', '学生2', '0987654321@stu.ecnu.edu.cn', '13800000002', '综合部', '2025-08-15 13:13:58', 1, 1, NULL);
 
 SET FOREIGN_KEY_CHECKS = 1;
