@@ -6,10 +6,11 @@ services:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root}
       MYSQL_DATABASE: ${DB_NAME:-official}
     ports:
-      - "${MYSQL_PORT:-3306}"
+      - "${MYSQL_PORT:-3306}:${MYSQL_PORT:-3306}"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - /home/boyuan-official/official/volumes/mysql_data:/var/lib/mysql
       - ./mysql/conf:/etc/mysql/conf.d
+      - /home/boyuan-official/official/db:/docker-entrypoint-initdb.d:ro
     restart: always
     networks:
       - official-network
@@ -18,9 +19,9 @@ services:
     image: redis:7-alpine
     container_name: ${PROJECT_NAME:-official}-redis
     ports:
-      - "${REDIS_PORT:-6379}"
+      - "${REDIS_PORT:-6379}:${REDIS_PORT:-6379}"
     volumes:
-      - redis_data:/data
+      - /home/boyuan-official/official/volumes/redis_data:/data
     restart: always
     networks:
       - official-network
@@ -30,6 +31,10 @@ services:
     container_name: ${PROJECT_NAME:-official}-app
     ports:
       - "${APP_PORT:-8080}:8080"
+    volumes:
+      - ./Official-0.0.1-SNAPSHOT.jar:/official/official.jar
+      - /home/boyuan-official/official/volumes/uploads:/official/uploads
+      - /home/boyuan-official/official/logs:/official/logs
     environment:
       - DB_USERNAME=root
       - DB_PASSWORD=${DB_ROOT_PASSWORD:-root}
@@ -41,6 +46,8 @@ services:
       - MAIL_PORT=${MAIL_PORT:-465}
       - MAIL_USERNAME=${MAIL_USERNAME:-notify@boyuan.club}
       - MAIL_PASSWORD=${MAIL_PASSWORD:-12bGmEWjvyRDjzxE}
+      - SERVER_PORT=8080
+    command: ["java", "-jar", "/app/official.jar", "--spring.profiles.active=prod"]
     depends_on:
       - mysql
       - redis
