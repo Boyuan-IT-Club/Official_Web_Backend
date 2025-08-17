@@ -24,6 +24,10 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * 简历控制器
+ * 处理简历相关操作，包括字段定义管理、简历管理等
+ */
 @RestController
 @RequestMapping("/api/resumes")
 @AllArgsConstructor
@@ -36,27 +40,38 @@ public class ResumeController {
     private final IUserService userService;
     private final JwtTokenUtil jwtTokenUtil;
     
+    /**
+     * 获取字段定义列表
+     * @param cycleId 年份ID
+     * @return 字段定义列表
+     */
     @GetMapping("/fields/{cycleId}")
-    public ResponseEntity<ResponseMessage<List<ResumeFieldDefinition>>> getFieldDefinitions(
+    public ResponseEntity<ResponseMessage<?>> getFieldDefinitions(
             @PathVariable Integer cycleId) {
         try {
             logger.info("获取{}年份的简历字段定义", cycleId);
             List<ResumeFieldDefinition> fieldDefinitions = fieldDefinitionService.getFieldDefinitionsByCycleId(cycleId);
-            return ResponseEntity.ok(new ResponseMessage<>(200, "获取字段定义成功", fieldDefinitions));
+            return ResponseEntity.ok(ResponseMessage.success(fieldDefinitions));
         } catch (BusinessException e) {
             logger.warn("获取字段定义业务异常，年份: {}，错误码: {}，错误信息: {}", cycleId, e.getCode(), e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             logger.error("获取字段定义系统异常，年份: {}", cycleId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
-                            "获取字段定义失败: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
+                            "获取字段定义失败: " + e.getMessage()));
         }
     }
     
+    /**
+     * 创建字段定义
+     * @param fieldDefinition 字段定义
+     * @param request HTTP请求
+     * @return 创建的字段定义
+     */
     @PostMapping("/fields")
-    public ResponseEntity<ResponseMessage<ResumeFieldDefinition>> createFieldDefinition(
+    public ResponseEntity<ResponseMessage<?>> createFieldDefinition(
             @RequestBody ResumeFieldDefinition fieldDefinition, HttpServletRequest request) {
         try {
             String token = request.getHeader("Authorization").substring(7);
@@ -70,21 +85,27 @@ public class ResumeController {
             
             logger.info("管理员{}创建字段定义", username);
             ResumeFieldDefinition createdField = fieldDefinitionService.createFieldDefinition(fieldDefinition);
-            return ResponseEntity.ok(new ResponseMessage<>(200, "字段定义创建成功", createdField));
+            return ResponseEntity.ok(ResponseMessage.success(createdField));
         } catch (BusinessException e) {
             logger.warn("创建字段定义业务异常，错误码: {}，错误信息: {}", e.getCode(), e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             logger.error("创建字段定义系统异常", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
-                            "字段定义创建失败: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
+                            "字段定义创建失败: " + e.getMessage()));
         }
     }
     
+    /**
+     * 更新字段定义
+     * @param fieldDefinition 字段定义
+     * @param request HTTP请求
+     * @return 更新的字段定义
+     */
     @PutMapping("/fields")
-    public ResponseEntity<ResponseMessage<ResumeFieldDefinition>> updateFieldDefinition(
+    public ResponseEntity<ResponseMessage<?>> updateFieldDefinition(
             @RequestBody ResumeFieldDefinition fieldDefinition, HttpServletRequest request) {
         try {
             String token = request.getHeader("Authorization").substring(7);
@@ -98,22 +119,28 @@ public class ResumeController {
             
             logger.info("管理员{}更新字段定义，字段ID: {}", username, fieldDefinition.getFieldId());
             ResumeFieldDefinition updatedField = fieldDefinitionService.updateFieldDefinition(fieldDefinition);
-            return ResponseEntity.ok(new ResponseMessage<>(200, "字段定义更新成功", updatedField));
+            return ResponseEntity.ok(ResponseMessage.success(updatedField));
         } catch (BusinessException e) {
             logger.warn("更新字段定义业务异常，字段ID: {}，错误码: {}，错误信息: {}", 
                     fieldDefinition.getFieldId(), e.getCode(), e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             logger.error("更新字段定义系统异常，字段ID: {}", fieldDefinition.getFieldId(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
-                            "字段定义更新失败: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
+                            "字段定义更新失败: " + e.getMessage()));
         }
     }
     
+    /**
+     * 删除字段定义
+     * @param fieldId 字段ID
+     * @param request HTTP请求
+     * @return 删除结果
+     */
     @DeleteMapping("/fields/{fieldId}")
-    public ResponseEntity<ResponseMessage<String>> deleteFieldDefinition(
+    public ResponseEntity<ResponseMessage<?>> deleteFieldDefinition(
             @PathVariable Integer fieldId, HttpServletRequest request) {
         try {
             String token = request.getHeader("Authorization").substring(7);
@@ -127,21 +154,27 @@ public class ResumeController {
             
             logger.info("管理员{}删除字段定义，字段ID: {}", username, fieldId);
             fieldDefinitionService.deleteFieldDefinition(fieldId);
-            return ResponseEntity.ok(new ResponseMessage<>(200, "字段定义删除成功", "字段定义删除成功"));
+            return ResponseEntity.ok(ResponseMessage.success("字段定义删除成功"));
         } catch (BusinessException e) {
             logger.warn("删除字段定义业务异常，字段ID: {}，错误码: {}，错误信息: {}", fieldId, e.getCode(), e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             logger.error("删除字段定义系统异常，字段ID: {}", fieldId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
-                            "字段定义删除失败: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
+                            "字段定义删除失败: " + e.getMessage()));
         }
     }
     
+    /**
+     * 根据年份获取简历
+     * @param cycleId 年份ID
+     * @param request HTTP请求
+     * @return 简历信息
+     */
     @GetMapping("/cycle/{cycleId}")
-    public ResponseEntity<ResponseMessage<ResumeDTO>> getResumeByCycleId(
+    public ResponseEntity<ResponseMessage<?>> getResumeByCycleId(
             @PathVariable Integer cycleId, HttpServletRequest request) {
         try {
             String token = request.getHeader("Authorization").substring(7);
@@ -162,24 +195,31 @@ public class ResumeController {
                 resumeDTO = resumeService.getResumeWithFieldValues(currentUser.getUserId(), cycleId);
             }
             
-            return ResponseEntity.ok(new ResponseMessage<>(200, "获取简历成功", resumeDTO));
+            return ResponseEntity.ok(ResponseMessage.success(resumeDTO));
         } catch (BusinessException e) {
             logger.warn("获取简历业务异常，年份: {}，错误码: {}，错误信息: {}", cycleId, e.getCode(), e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             logger.error("获取简历系统异常，用户ID: {}，年份: {}", 
                     request.getHeader("Authorization") != null ? 
                             jwtTokenUtil.extractUsername(request.getHeader("Authorization").substring(7)) : "unknown", 
                     cycleId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
-                            "获取简历失败: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
+                            "获取简历失败: " + e.getMessage()));
         }
     }
     
+    /**
+     * 管理员查看指定用户的简历
+     * @param userId 用户ID
+     * @param cycleId 年份ID
+     * @param request HTTP请求
+     * @return 简历信息
+     */
     @GetMapping("/admin/{userId}/{cycleId}")
-    public ResponseEntity<ResponseMessage<ResumeDTO>> getResumeByUserIdAndCycleId(
+    public ResponseEntity<ResponseMessage<?>> getResumeByUserIdAndCycleId(
             @PathVariable Integer userId, @PathVariable Integer cycleId, HttpServletRequest request) {
         try {
             String token = request.getHeader("Authorization").substring(7);
@@ -199,24 +239,31 @@ public class ResumeController {
                 throw new BusinessException(BusinessExceptionEnum.RESUME_NOT_FOUND);
             }
             
-            return ResponseEntity.ok(new ResponseMessage<>(200, "获取简历成功", resumeDTO));
+            return ResponseEntity.ok(ResponseMessage.success(resumeDTO));
         } catch (BusinessException e) {
             logger.warn("获取简历业务异常，用户ID: {}，年份: {}，错误码: {}，错误信息: {}", 
                     userId, cycleId, e.getCode(), e.getMessage());
             HttpStatus status = e.getCode() == BusinessExceptionEnum.RESUME_NOT_FOUND.getCode() ? 
                     HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
             return ResponseEntity.status(status)
-                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             logger.error("获取简历系统异常，用户ID: {}，年份: {}", userId, cycleId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
-                            "获取简历失败: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
+                            "获取简历失败: " + e.getMessage()));
         }
     }
     
+    /**
+     * 保存字段值
+     * @param cycleId 年份ID
+     * @param fieldValues 字段值列表
+     * @param request HTTP请求
+     * @return 保存结果
+     */
     @PostMapping("/cycle/{cycleId}/field-values")
-    public ResponseEntity<ResponseMessage<String>> saveFieldValues(
+    public ResponseEntity<ResponseMessage<?>> saveFieldValues(
             @PathVariable Integer cycleId,
             @RequestBody List<ResumeFieldValue> fieldValues,
             HttpServletRequest request) {
@@ -249,11 +296,11 @@ public class ResumeController {
             
             resumeService.saveFieldValues(fieldValues);
             
-            return ResponseEntity.ok(new ResponseMessage<>(200, "保存成功", "字段值保存成功"));
+            return ResponseEntity.ok(ResponseMessage.success("字段值保存成功"));
         } catch (BusinessException e) {
             logger.warn("保存字段值业务异常，年份: {}，错误码: {}，错误信息: {}", cycleId, e.getCode(), e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             String username = "unknown";
             if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
@@ -266,13 +313,19 @@ public class ResumeController {
             
             logger.error("保存字段值系统异常，用户: {}，年份: {}", username, cycleId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
-                            "保存失败: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
+                            "保存失败: " + e.getMessage()));
         }
     }
     
+    /**
+     * 获取字段值
+     * @param cycleId 年份ID
+     * @param request HTTP请求
+     * @return 字段值列表
+     */
     @GetMapping("/cycle/{cycleId}/field-values")
-    public ResponseEntity<ResponseMessage<List<ResumeFieldValueDTO>>> getFieldValues(
+    public ResponseEntity<ResponseMessage<?>> getFieldValues(
             @PathVariable Integer cycleId, HttpServletRequest request) {
         try {
             String username = "unknown";
@@ -295,7 +348,7 @@ public class ResumeController {
             
             List<ResumeFieldValueDTO> fieldValues = resumeService.getFieldValuesWithDefinitionsByResumeId(resume.getResumeId());
             
-            return ResponseEntity.ok(new ResponseMessage<>(200, "获取字段值成功", fieldValues));
+            return ResponseEntity.ok(ResponseMessage.success(fieldValues));
         } catch (BusinessException e) {
             String username = "unknown";
             if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
@@ -314,7 +367,7 @@ public class ResumeController {
                 status = HttpStatus.BAD_REQUEST;
             }
             return ResponseEntity.status(status)
-                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             String username = "unknown";
             if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
@@ -327,13 +380,19 @@ public class ResumeController {
             
             logger.error("获取字段值系统异常，用户: {}，年份: {}", username, cycleId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
-                            "获取字段值失败: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
+                            "获取字段值失败: " + e.getMessage()));
         }
     }
     
+    /**
+     * 提交简历
+     * @param cycleId 年份ID
+     * @param request HTTP请求
+     * @return 提交的简历
+     */
     @PostMapping("/cycle/{cycleId}/submit")
-    public ResponseEntity<ResponseMessage<Resume>> submitResume(
+    public ResponseEntity<ResponseMessage<?>> submitResume(
             @PathVariable Integer cycleId, HttpServletRequest request) {
         try {
             String username = "unknown";
@@ -362,7 +421,7 @@ public class ResumeController {
             
             Resume submittedResume = resumeService.submitResume(resume.getResumeId());
             
-            return ResponseEntity.ok(new ResponseMessage<>(200, "简历提交成功", submittedResume));
+            return ResponseEntity.ok(ResponseMessage.success(submittedResume));
         } catch (BusinessException e) {
             String username = "unknown";
             if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
@@ -381,7 +440,7 @@ public class ResumeController {
                 status = HttpStatus.BAD_REQUEST;
             }
             return ResponseEntity.status(status)
-                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             String username = "unknown";
             if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
@@ -394,13 +453,20 @@ public class ResumeController {
             
             logger.error("提交简历系统异常，用户: {}，年份: {}", username, cycleId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
-                            "简历提交失败: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
+                            "简历提交失败: " + e.getMessage()));
         }
     }
     
+    /**
+     * 更新简历状态
+     * @param resumeId 简历ID
+     * @param status 状态
+     * @param request HTTP请求
+     * @return 更新的简历
+     */
     @PutMapping("/{resumeId}/status/{status}")
-    public ResponseEntity<ResponseMessage<Resume>> updateResumeStatus(
+    public ResponseEntity<ResponseMessage<?>> updateResumeStatus(
             @PathVariable Integer resumeId, @PathVariable Integer status, HttpServletRequest request) {
         try {
             String username = "unknown";
@@ -429,7 +495,7 @@ public class ResumeController {
             resume.setStatus(status);
             Resume updatedResume = resumeService.updateResume(resume);
             
-            return ResponseEntity.ok(new ResponseMessage<>(200, "简历状态更新成功", updatedResume));
+            return ResponseEntity.ok(ResponseMessage.success(updatedResume));
         } catch (BusinessException e) {
             String username = "unknown";
             if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
@@ -449,7 +515,7 @@ public class ResumeController {
                 statusHttp = HttpStatus.BAD_REQUEST;
             }
             return ResponseEntity.status(statusHttp)
-                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             String username = "unknown";
             if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
@@ -462,8 +528,8 @@ public class ResumeController {
             
             logger.error("更新简历状态系统异常，用户: {}，简历ID: {}，状态: {}", username, resumeId, status, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
-                            "简历状态更新失败: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
+                            "简历状态更新失败: " + e.getMessage()));
         }
     }
 }

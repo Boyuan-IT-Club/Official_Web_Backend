@@ -121,12 +121,22 @@ public class UserServiceImpl implements IUserService {
             throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
         }
         
-        List<User> userList = userMapper.findByRoleAndDeptAndStatus(role, dept, status, pageable);
-
-        // 这里需要查询总记录数，假设 UserMapper 有对应的方法
+        // 查询总记录数
         long total = userMapper.countByRoleAndDeptAndStatus(role, dept, status);
+        
+        // 计算总页数
+        int pageSize = pageable.getPageSize();
+        int totalPage = (int) Math.ceil((double) total / pageSize);
+        
+        // 如果请求的页码超过了最大页码，则返回空列表
+        int pageNumber = pageable.getPageNumber();
+        if (totalPage > 0 && pageNumber >= totalPage) {
+            // 返回空列表而不是错误，避免前端出现异常
+            return new PageImpl<>(List.of(), pageable, total);
+        }
+        
+        List<User> userList = userMapper.findByRoleAndDeptAndStatus(role, dept, status, pageable);
         return new PageImpl<>(userList, pageable, total);
-
     }
 
     @Override

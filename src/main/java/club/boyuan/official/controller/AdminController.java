@@ -79,9 +79,11 @@ public class AdminController {
 
     /**
      * 管理员添加账号接口
+     * @param userDTO 用户信息
+     * @return 添加结果
      */
     @PostMapping("/users")
-    public ResponseEntity<ResponseMessage> addUser(@RequestBody UserDTO userDTO) {
+    public ResponseEntity<ResponseMessage<?>> addUser(@RequestBody UserDTO userDTO) {
         try {
             checkAdminRole();
             
@@ -90,7 +92,7 @@ public class AdminController {
             if (existingUser != null) {
                 logger.warn("用户名 {} 已存在", userDTO.getUsername());
                 return ResponseEntity.status(HttpStatus.CONFLICT)
-                        .body(new ResponseMessage(409, "用户名已存在", null));
+                        .body(ResponseMessage.error(409, "用户名已存在"));
             }
 
             // 保存新用户
@@ -103,21 +105,26 @@ public class AdminController {
             data.put("username", newUser.getUsername());
 
             return ResponseEntity.status(HttpStatus.CREATED)
-                    .body(new ResponseMessage(201, "注册成功", data));
+                    .body(ResponseMessage.success(data));
         } catch (BusinessException e) {
             logger.warn("添加用户失败: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ResponseMessage(e.getCode(), e.getMessage(), null));
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             logger.error("添加用户时发生服务器内部错误", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage(500, "服务器内部错误: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
         }
     }
 
     /**
      * 获取用户列表接口
      * 支持分页和条件查询
+     * @param role 角色
+     * @param dept 部门
+     * @param status 状态
+     * @param pageable 分页参数
+     * @return 用户列表
      */
     @GetMapping("/users")
     public ResponseEntity<ResponseMessage<?>> getUsers(
@@ -142,23 +149,26 @@ public class AdminController {
             data.put("totalElements", userPage.getTotalElements());
             data.put("size", userPage.getSize());
             
-            return ResponseEntity.ok(new ResponseMessage<>(200, "查询成功", data));
+            return ResponseEntity.ok(ResponseMessage.success(data));
         } catch (BusinessException e) {
             logger.warn("获取用户列表失败: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             logger.error("获取用户列表时发生服务器内部错误", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage<>(500, "服务器内部错误: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
         }
     }
 
     /**
      * 用户状态管理接口
+     * @param userId 用户ID
+     * @param statusRequest 状态请求
+     * @return 更新结果
      */
     @PutMapping("/users/{userId}/status")
-    public ResponseEntity<ResponseMessage> updateUserStatus(
+    public ResponseEntity<ResponseMessage<?>> updateUserStatus(
             @PathVariable Integer userId,
             @RequestBody Map<String, String> statusRequest) {
         try {
@@ -166,25 +176,25 @@ public class AdminController {
             if (status == null || (!"active".equals(status) && !"frozen".equals(status))) {
                 logger.warn("无效的状态值: {}", status);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ResponseMessage(400, "无效的状态值", null));
+                        .body(ResponseMessage.error(400, "无效的状态值"));
             }
 
             User updatedUser = userService.updateUserStatus(userId, status);
             logger.info("用户 {} 的状态成功更新为 {}", userId, status);
             
-            return ResponseEntity.ok(new ResponseMessage(200, "状态更新成功", updatedUser));
+            return ResponseEntity.ok(ResponseMessage.success(updatedUser));
         } catch (IllegalArgumentException e) {
             logger.warn("更新用户状态失败: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(new ResponseMessage(404, e.getMessage(), null));
+                    .body(ResponseMessage.error(404, e.getMessage()));
         } catch (BusinessException e) {
             logger.warn("更新用户状态失败: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ResponseMessage(e.getCode(), e.getMessage(), null));
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             logger.error("更新用户状态时发生服务器内部错误", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage(500, "服务器内部错误: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
         }
     }
 }

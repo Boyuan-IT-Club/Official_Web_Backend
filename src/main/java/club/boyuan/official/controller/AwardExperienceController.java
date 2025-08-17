@@ -18,20 +18,27 @@ import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * 奖项经验控制器
+ * 处理用户奖项经验的增删改查操作
+ */
 @AllArgsConstructor
 @RestController
 @RequestMapping("/api/awards")
 public class AwardExperienceController {
 
-    private  final IAwardExperienceService awardExperienceService;
+    private final IAwardExperienceService awardExperienceService;
     private final IUserService userService;
     private final JwtTokenUtil jwtTokenUtil;
 
     /**
      * 创建获奖经历
+     * @param awardExperience 奖项经验信息
+     * @param request HTTP请求
+     * @return 创建结果
      */
     @PostMapping
-    public ResponseEntity<ResponseMessage> createAward(@RequestBody AwardExperience awardExperience, HttpServletRequest request) {
+    public ResponseEntity<ResponseMessage<?>> createAward(@RequestBody AwardExperience awardExperience, HttpServletRequest request) {
         try {
             // 获取当前登录用户信息
             String authHeader = request.getHeader("Authorization");
@@ -39,7 +46,12 @@ public class AwardExperienceController {
                 throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
             }
             String token = authHeader.substring(7);
-            String username; try { username = jwtTokenUtil.extractUsername(token); } catch (Exception e) { throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED); }
+            String username; 
+            try { 
+                username = jwtTokenUtil.extractUsername(token); 
+            } catch (Exception e) { 
+                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED); 
+            }
             User currentUser = userService.getUserByUsername(username);
             if (currentUser == null) {
                 throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
@@ -72,31 +84,39 @@ public class AwardExperienceController {
             Map<String, Integer> data = new HashMap<>();
             data.put("award_id", createdAward.getAwardId());
             return ResponseEntity.status(HttpStatus.CREATED)
-                    .body(new ResponseMessage(200, "记录已添加", data));
+                    .body(ResponseMessage.success(data));
         } catch (BusinessException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ResponseMessage(e.getCode(), e.getMessage(), null));
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage(500, "服务器内部错误: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
         }
     }
 
     /**
      * 根据ID获取获奖经历
+     * @param id 奖项ID
+     * @param request HTTP请求
+     * @return 奖项信息
      */
     @GetMapping("/{id}")
-    public ResponseEntity<ResponseMessage> getAwardById(@PathVariable Integer id, HttpServletRequest request) {
+    public ResponseEntity<ResponseMessage<?>> getAwardById(@PathVariable Integer id, HttpServletRequest request) {
         try {
             // 获取当前登录用户信息
             String token = request.getHeader("Authorization").substring(7);
-            String username; try { username = jwtTokenUtil.extractUsername(token); } catch (Exception e) { throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED); }
+            String username; 
+            try { 
+                username = jwtTokenUtil.extractUsername(token); 
+            } catch (Exception e) { 
+                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED); 
+            }
             User currentUser = userService.getUserByUsername(username);
             
             AwardExperience award = awardExperienceService.getById(id);
             if (award == null) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(new ResponseMessage(BusinessExceptionEnum.AWARD_EXPERIENCE_NOT_FOUND.getCode(), BusinessExceptionEnum.AWARD_EXPERIENCE_NOT_FOUND.getMessage(), null));
+                        .body(ResponseMessage.error(BusinessExceptionEnum.AWARD_EXPERIENCE_NOT_FOUND.getCode(), BusinessExceptionEnum.AWARD_EXPERIENCE_NOT_FOUND.getMessage()));
             }
             
             // 权限检查：管理员可以查看所有，普通用户只能查看自己的
@@ -106,25 +126,33 @@ public class AwardExperienceController {
                 }
             }
             
-            return ResponseEntity.ok(new ResponseMessage(200, "success", award));
+            return ResponseEntity.ok(ResponseMessage.success(award));
         } catch (BusinessException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ResponseMessage(e.getCode(), e.getMessage(), null));
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage(500, "服务器内部错误: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
         }
     }
 
     /**
      * 根据用户ID获取所有获奖经历
+     * @param userId 用户ID
+     * @param request HTTP请求
+     * @return 奖项列表
      */
     @GetMapping("/user/{userId}")
-    public ResponseEntity<ResponseMessage> getAwardsByUserId(@PathVariable Integer userId, HttpServletRequest request) {
+    public ResponseEntity<ResponseMessage<?>> getAwardsByUserId(@PathVariable Integer userId, HttpServletRequest request) {
         try {
             // 获取当前登录用户信息
             String token = request.getHeader("Authorization").substring(7);
-            String username; try { username = jwtTokenUtil.extractUsername(token); } catch (Exception e) { throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED); }
+            String username; 
+            try { 
+                username = jwtTokenUtil.extractUsername(token); 
+            } catch (Exception e) { 
+                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED); 
+            }
             User currentUser = userService.getUserByUsername(username);
             
             // 权限检查：管理员可以查看所有，普通用户只能查看自己的
@@ -135,25 +163,33 @@ public class AwardExperienceController {
             }
             
             List<AwardExperience> awards = awardExperienceService.getByUserId(userId);
-            return ResponseEntity.ok(new ResponseMessage(200, "success", awards));
+            return ResponseEntity.ok(ResponseMessage.success(awards));
         } catch (BusinessException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ResponseMessage(e.getCode(), e.getMessage(), null));
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage(500, "服务器内部错误: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
         }
     }
 
     /**
      * 更新获奖经历
+     * @param awardExperience 奖项经验信息
+     * @param request HTTP请求
+     * @return 更新结果
      */
     @PutMapping
-    public ResponseEntity<ResponseMessage> updateAward(@RequestBody AwardExperience awardExperience, HttpServletRequest request) {
+    public ResponseEntity<ResponseMessage<?>> updateAward(@RequestBody AwardExperience awardExperience, HttpServletRequest request) {
         try {
             // 从JWT令牌获取当前登录用户ID
             String token = request.getHeader("Authorization").substring(7);
-            String username; try { username = jwtTokenUtil.extractUsername(token); } catch (Exception e) { throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED); }
+            String username; 
+            try { 
+                username = jwtTokenUtil.extractUsername(token); 
+            } catch (Exception e) { 
+                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED); 
+            }
             User user = userService.getUserByUsername(username);
             Integer currentUserId = user.getUserId();
             User currentUser = userService.getUserByUsername(username);
@@ -162,35 +198,38 @@ public class AwardExperienceController {
             AwardExperience originalAward = awardExperienceService.getById(awardExperience.getAwardId());
             if (originalAward == null) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(new ResponseMessage(BusinessExceptionEnum.AWARD_EXPERIENCE_NOT_FOUND.getCode(), BusinessExceptionEnum.AWARD_EXPERIENCE_NOT_FOUND.getMessage(), null));
+                        .body(ResponseMessage.error(BusinessExceptionEnum.AWARD_EXPERIENCE_NOT_FOUND.getCode(), BusinessExceptionEnum.AWARD_EXPERIENCE_NOT_FOUND.getMessage()));
             }
             
             // 权限检查：管理员可以修改所有人的，普通用户只能修改自己的
             if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
                 if (!originalAward.getUserId().equals(currentUserId)) {
                     return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                            .body(new ResponseMessage(BusinessExceptionEnum.PERMISSION_DENIED.getCode(), BusinessExceptionEnum.PERMISSION_DENIED.getMessage(), null));
+                            .body(ResponseMessage.error(BusinessExceptionEnum.PERMISSION_DENIED.getCode(), BusinessExceptionEnum.PERMISSION_DENIED.getMessage()));
                 }
             }
             
             // 设置用户ID为当前登录用户ID，防止篡改
             awardExperience.setUserId(currentUserId);
             AwardExperience updatedAward = awardExperienceService.update(awardExperience);
-            return ResponseEntity.ok(new ResponseMessage(200, "记录已更新", null));
+            return ResponseEntity.ok(ResponseMessage.success());
         } catch (BusinessException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ResponseMessage(e.getCode(), e.getMessage(), null));
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage(500, "服务器内部错误: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
         }
     }
 
     /**
      * 删除获奖经历
+     * @param id 奖项ID
+     * @param request HTTP请求
+     * @return 删除结果
      */
     @DeleteMapping("/{id}")
-    public ResponseEntity<ResponseMessage> deleteAward(@PathVariable Integer id, HttpServletRequest request) {
+    public ResponseEntity<ResponseMessage<?>> deleteAward(@PathVariable Integer id, HttpServletRequest request) {
         try {
             // 获取当前登录用户信息
             String authHeader = request.getHeader("Authorization");
@@ -216,13 +255,13 @@ public class AwardExperienceController {
             }
 
             awardExperienceService.deleteById(id);
-            return ResponseEntity.ok(new ResponseMessage(200, "获奖经历删除成功", null));
+            return ResponseEntity.ok(ResponseMessage.success());
         } catch (BusinessException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ResponseMessage(e.getCode(), e.getMessage(), null));
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage(500, "服务器内部错误: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
         }
     }
 }

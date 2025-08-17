@@ -18,7 +18,8 @@ public class Resume {
     @Column(name = "cycle_id", nullable = false)
     private Integer cycleId;
 
-    @Column(name = "status", columnDefinition = "TINYINT DEFAULT 1")
+    // 修复字段定义，使其与数据库结构匹配
+    @Column(name = "status", columnDefinition = "tinyint")
     private Integer status;
 
     @Column(name = "submitted_at")
