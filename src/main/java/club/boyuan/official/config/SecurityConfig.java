@@ -9,8 +9,13 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import club.boyuan.official.filter.JwtAuthenticationFilter;
+
+import java.util.Arrays;
 
 /**
  * Spring Security核心配置类
@@ -36,6 +41,8 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
+            // 配置CORS
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             // 禁用 CSRF 保护
             .csrf(csrf -> csrf.disable())
             // 禁用默认的表单登录
@@ -58,6 +65,40 @@ public class SecurityConfig {
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    /**
+     * 配置CORS跨域资源共享
+     * @return CorsConfigurationSource实例
+     */
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        
+        // 允许的域名
+        configuration.addAllowedOriginPattern("http://localhost:8080");
+        configuration.addAllowedOriginPattern("http://43.143.27.198:8080");
+        configuration.addAllowedOriginPattern("http://localhost:3000");
+        configuration.addAllowedOriginPattern("https://localhost:8080");
+        configuration.addAllowedOriginPattern("https://localhost:3000");
+        configuration.addAllowedOriginPattern("http://127.0.0.1:8080");
+        configuration.addAllowedOriginPattern("http://127.0.0.1:3000");
+        
+        // 允许的请求头
+        configuration.addAllowedHeader("*");
+        
+        // 允许的请求方法
+        configuration.addAllowedMethod("*");
+        
+        // 允许携带凭证
+        configuration.setAllowCredentials(true);
+        
+        // 最大预检响应时间
+        configuration.setMaxAge(3600L);
+        
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
     }
 
     /**
