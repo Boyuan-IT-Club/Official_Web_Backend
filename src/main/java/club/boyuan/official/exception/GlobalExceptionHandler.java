@@ -14,12 +14,19 @@ import java.nio.file.AccessDeniedException;
 
 /**
  * 全局异常处理器
- * 统一处理应用中的业务异常
+ * 统一处理应用中的业务异常和其他异常
  */
 @ControllerAdvice
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    /**
+     * 映射业务异常码到HTTP状态码
+     * @param businessCode 业务异常码
+     * @return 对应的HTTP状态码
+     */
     private HttpStatus mapBusinessCodeToHttpStatus(int businessCode) {
         // JWT相关异常 (1000-1099)
         if (businessCode == 1001 || businessCode == 1002) {
@@ -85,17 +92,30 @@ public class GlobalExceptionHandler {
         }
     }
 
+    /**
+     * 处理业务异常
+     * @param ex 业务异常
+     * @return 统一响应格式
+     */
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ResponseMessage<?>> handleBusinessException(BusinessException ex) {
+        logger.warn("业务异常: code={}, message={}", ex.getCode(), ex.getMessage());
         ResponseMessage<?> response = new ResponseMessage<>(ex.getCode(), ex.getMessage(), null);
         return ResponseEntity.status(mapBusinessCodeToHttpStatus(ex.getCode())).body(response);
     }
 
+    /**
+     * 处理通用异常
+     * @param e 通用异常
+     * @return 统一响应格式
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ResponseMessage<?>> handleGenericException(Exception e) {
-        Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
-        log.error("统一异常: {}", e.toString(), e);
-        ResponseMessage<?> response = new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), BusinessExceptionEnum.SYSTEM_ERROR.getMessage(), null);
+        logger.error("系统异常: {}", e.getMessage(), e);
+        ResponseMessage<?> response = new ResponseMessage<>(
+                BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
+                BusinessExceptionEnum.SYSTEM_ERROR.getMessage(), 
+                null);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }
 }

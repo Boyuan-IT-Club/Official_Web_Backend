@@ -20,6 +20,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 认证控制器
+ * 处理用户注册、登录、登出等认证相关操作
+ */
 @RestController
 @RequestMapping("/api/auth")
 @AllArgsConstructor
@@ -74,13 +78,13 @@ public class AuthController {
             data.put("user_id", newUser.getUserId());
             data.put("username", newUser.getUsername());
             return ResponseEntity.status(HttpStatus.CREATED)
-                    .body(new ResponseMessage<>(201, "注册成功", data));
+                    .body(ResponseMessage.success(data));
         } catch (BusinessException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage<>(500, "服务器内部错误: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
         }
     }
 
@@ -96,7 +100,7 @@ public class AuthController {
             String email = request.get("email");
             if (email == null || email.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ResponseMessage<>(400, "邮箱不能为空", null));
+                        .body(ResponseMessage.error(400, "邮箱不能为空"));
             }
             messageUtils.validateEmail(email);
             if (!email.endsWith("@stu.ecnu.edu.cn")) {
@@ -107,13 +111,13 @@ public class AuthController {
             loginService.saveVerificationCode(email, code, 300);
             String content = "您的验证码是：" + code + "，有效期5分钟";
             messageUtils.sendEmail(email, "邮箱验证码", content);
-            return ResponseEntity.ok(new ResponseMessage<>(200, "验证码发送成功", null));
+            return ResponseEntity.ok(ResponseMessage.success());
         } catch (BusinessException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage<>(500, "服务器内部错误: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
         }
     }
 
@@ -129,19 +133,19 @@ public class AuthController {
             String phone = request.get("phone");
             if (phone == null || phone.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ResponseMessage<>(400, "手机号不能为空", null));
+                        .body(ResponseMessage.error(400, "手机号不能为空"));
             }
             messageUtils.validatePhone(phone);
             String code = loginService.generateVerificationCode("sms");
             loginService.saveVerificationCode(phone, code, 300);
             messageUtils.sendSms(phone);
-            return ResponseEntity.ok(new ResponseMessage<>(200, "验证码发送成功", null));
+            return ResponseEntity.ok(ResponseMessage.success());
         } catch (BusinessException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage<>(500, "服务器内部错误: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
         }
     }
 
@@ -199,17 +203,17 @@ public class AuthController {
                     break;
                 default:
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                            .body(new ResponseMessage<>(400, "不支持的认证方式", null));
+                            .body(ResponseMessage.error(400, "不支持的认证方式"));
             }
 
             if (user == null) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(new ResponseMessage<>(401, "用户不存在", null));
+                        .body(ResponseMessage.error(401, "用户不存在"));
             }
 
             if (response == null || response.getCode() != 200) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(new ResponseMessage<>(401, response != null ? response.getMessage() : "登录失败", null));
+                        .body(ResponseMessage.error(401, response != null ? response.getMessage() : "登录失败"));
             }
 
             // 构建返回数据
@@ -220,13 +224,13 @@ public class AuthController {
             List<String> roles = Collections.singletonList(user.getRole());
             data.put("token", jwtTokenUtil.generateToken(user.getUsername(), user.getUserId(), roles));
 
-            return ResponseEntity.ok(new ResponseMessage<>(200, "登录成功", data));
+            return ResponseEntity.ok(ResponseMessage.success(data));
         } catch (BusinessException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage<>(500, "服务器内部错误: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
         }
     }
 
@@ -235,8 +239,6 @@ public class AuthController {
      *
      * @param token 请求头中的JWT令牌
      * @return 登出结果
-     * @apiNote 该接口用于用户登出系统，会将当前JWT令牌加入黑名单使其失效
-     * @since 1.0.0
      */
     @PostMapping("/logout")
     public ResponseEntity<ResponseMessage<?>> logout(@RequestHeader("Authorization") String token) {
@@ -247,10 +249,10 @@ public class AuthController {
             }
             // 吊销令牌
             jwtTokenUtil.revokeToken(token);
-            return ResponseEntity.ok(new ResponseMessage<>(200, "登出成功", null));
+            return ResponseEntity.ok(ResponseMessage.success());
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage<>(500, "登出失败: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(500, "登出失败: " + e.getMessage()));
         }
     }
 
@@ -259,8 +261,6 @@ public class AuthController {
      *
      * @param request 包含邮箱/手机号、验证码和新密码的请求体
      * @return 密码重置结果
-     * @apiNote 该接口用于用户忘记密码时重置密码，需要通过邮箱或手机验证码验证身份
-     * @since 1.0.0
      */
     @PostMapping("/reset-password")
     public ResponseEntity<ResponseMessage<?>> resetPassword(@Valid @RequestBody Map<String, String> request) {
@@ -287,13 +287,13 @@ public class AuthController {
 
             // 更新密码
             userService.updatePassword(user.getUserId(), newPassword);
-            return ResponseEntity.ok(new ResponseMessage<>(200, "密码重置成功", null));
+            return ResponseEntity.ok(ResponseMessage.success());
         } catch (BusinessException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage<>(500, "密码重置失败: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(500, "密码重置失败: " + e.getMessage()));
         }
     }
 }

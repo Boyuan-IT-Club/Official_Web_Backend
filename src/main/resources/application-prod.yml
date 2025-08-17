@@ -13,6 +13,8 @@ spring:
         format_sql: true
     hibernate:
       ddl-auto: update
+    # 移除database-platform配置以消除警告
+    # database-platform: org.hibernate.dialect.MySQLDialect
     # 明确关闭open-in-view以消除警告
     open-in-view: false
   mail:

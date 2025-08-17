@@ -79,19 +79,19 @@ public class UserController {
             responseData.put("avatar", avatarPath);
             
             logger.info("用户ID为{}的用户成功上传头像，路径为{}", userId, avatarPath);
-            return ResponseEntity.ok(new ResponseMessage(200, "头像上传成功", responseData));
+            return ResponseEntity.ok(ResponseMessage.success(responseData));
         } catch (IOException e) {
             logger.error("头像上传失败: 文件操作异常", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage(500, "头像上传失败: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(500, "头像上传失败: " + e.getMessage()));
         } catch (BusinessException e) {
             logger.error("头像上传失败: 业务异常", e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ResponseMessage(e.getCode(), e.getMessage(), null));
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             logger.error("头像上传失败: 未知错误", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage(500, "头像上传失败: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(500, "头像上传失败: " + e.getMessage()));
         }
     }
     
@@ -127,7 +127,7 @@ public class UserController {
             responseData.put("filePath", filePath);
             
             logger.info("用户{}成功上传文件，路径为{}", username, filePath);
-            return ResponseEntity.ok(new ResponseMessage(200, "文件上传成功", responseData));
+            return ResponseEntity.ok(ResponseMessage.success(responseData));
         } catch (Exception e) {
             String username = "unknown";
             if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
@@ -140,7 +140,7 @@ public class UserController {
             
             logger.error("文件上传失败，用户: {}", username, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage(500, "文件上传失败: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(500, "文件上传失败: " + e.getMessage()));
         }
     }
     
@@ -178,7 +178,7 @@ public class UserController {
             responseData.put("filePath", filePath);
             
             logger.info("用户{}成功上传{}类型的文件，路径为{}", username, fileType, filePath);
-            return ResponseEntity.ok(new ResponseMessage(200, "文件上传成功", responseData));
+            return ResponseEntity.ok(ResponseMessage.success(responseData));
         } catch (Exception e) {
             String username = "unknown";
             if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
@@ -191,7 +191,7 @@ public class UserController {
             
             logger.error("文件上传失败，用户: {}", username, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage(500, "文件上传失败: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(500, "文件上传失败: " + e.getMessage()));
         }
     }
     
@@ -209,13 +209,13 @@ public class UserController {
             Map<String, Object> responseData = new HashMap<>();
             responseData.put("user", user);
             responseData.put("awardExperiences", awardExperiences);
-            return ResponseEntity.ok(new ResponseMessage(200, "success", responseData));
+            return ResponseEntity.ok(ResponseMessage.success(responseData));
         } catch (BusinessException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ResponseMessage(e.getCode(), e.getMessage(), null));
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage(500, "服务器内部错误: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
         }
     }
 
@@ -267,13 +267,13 @@ public class UserController {
             BeanUtils.copyProperties(existingUser, userDTO);
             userService.edit(userDTO);
 
-            return ResponseEntity.ok(new ResponseMessage(200, "信息已更新", null));
+            return ResponseEntity.ok(ResponseMessage.success());
         } catch (BusinessException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ResponseMessage(e.getCode(), e.getMessage(), null));
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage(500, "服务器内部错误: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
         }
     }
 
@@ -448,13 +448,13 @@ public class UserController {
             BeanUtils.copyProperties(existingUser, userDTO);
             userService.edit(userDTO);
 
-            return ResponseEntity.ok(new ResponseMessage(200, "信息已更新", null));
+            return ResponseEntity.ok(ResponseMessage.success());
         } catch (BusinessException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ResponseMessage(e.getCode(), e.getMessage(), null));
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage(500, "服务器内部错误: " + e.getMessage(), null));
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
         }
     }
 }
