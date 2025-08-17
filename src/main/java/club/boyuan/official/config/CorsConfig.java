@@ -6,10 +6,19 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
 
+/**
+ * CORS配置已整合到SecurityConfig中，此类已废弃
+ * @deprecated 请使用SecurityConfig中的corsConfigurationSource()方法
+ */
+@Deprecated
 @Configuration
 public class CorsConfig {
 
+    /**
+     * @deprecated 请使用SecurityConfig中的corsConfigurationSource()方法
+     */
     @Bean
+    @Deprecated
     public CorsFilter corsFilter() {
         CorsConfiguration config = new CorsConfiguration();
         
