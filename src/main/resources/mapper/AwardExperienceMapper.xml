@@ -1,49 +1,48 @@
-<?xml version="1.0" encoding="UTF-8" ?>
+<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="club.boyuan.official.mapper.AwardExperienceMapper">
+
     <select id="findById" resultType="club.boyuan.official.entity.AwardExperience">
-        SELECT *
-        FROM award_experience
-        WHERE award_id = #{id}
+        SELECT * FROM award_experience WHERE award_id = #{id}
     </select>
-    
+
     <select id="selectById" resultType="club.boyuan.official.entity.AwardExperience">
-        SELECT *
-        FROM award_experience
-        WHERE award_id = #{awardId}
+        SELECT * FROM award_experience WHERE award_id = #{awardId}
     </select>
-    
+
     <select id="existsById" resultType="boolean">
         SELECT EXISTS(SELECT 1 FROM award_experience WHERE award_id = #{id})
     </select>
-    
-    <insert id="save" parameterType="club.boyuan.official.entity.AwardExperience" useGeneratedKeys="true"
-            keyProperty="awardId">
-        INSERT INTO award_experience (user_id, award_name, award_time, description)
-        VALUES (#{userId}, #{awardName}, #{awardTime}, #{description})
+
+    <select id="findByUserId" resultType="club.boyuan.official.entity.AwardExperience">
+        SELECT * FROM award_experience WHERE user_id = #{userId}
+    </select>
+
+    <select id="selectByUserId" resultType="club.boyuan.official.entity.AwardExperience">
+        SELECT * FROM award_experience WHERE user_id = #{userId}
+    </select>
+
+    <insert id="save" parameterType="club.boyuan.official.entity.AwardExperience" useGeneratedKeys="true" keyProperty="awardId">
+        INSERT INTO award_experience(user_id, award_name, award_time, description)
+        VALUES(#{userId}, #{awardName}, #{awardTime}, #{description})
     </insert>
 
     <update id="update" parameterType="club.boyuan.official.entity.AwardExperience">
         UPDATE award_experience
-        SET user_id = #{userId},
-            award_name = #{awardName},
-            award_time = #{awardTime},
-            description = #{description}
+        <set>
+            <if test="awardName != null and awardName != ''">
+                award_name = #{awardName},
+            </if>
+            <if test="awardTime != null">
+                award_time = #{awardTime},
+            </if>
+            <if test="description != null">
+                description = #{description},
+            </if>
+        </set>
         WHERE award_id = #{awardId}
     </update>
 
-    <select id="findByUserId" resultType="club.boyuan.official.entity.AwardExperience">
-        SELECT *
-        FROM award_experience
-        WHERE user_id = #{userId}
-    </select>
-    
-    <select id="selectByUserId" resultType="club.boyuan.official.entity.AwardExperience">
-        SELECT *
-        FROM award_experience
-        WHERE user_id = #{userId}
-    </select>
-    
     <delete id="deleteById">
         DELETE
         FROM award_experience
@@ -55,12 +54,11 @@
         FROM award_experience
         WHERE user_id = #{userId}
     </delete>
-    
+
     <select id="searchAwards" resultType="club.boyuan.official.entity.AwardExperience">
-        SELECT *
-        FROM award_experience
-        WHERE award_name LIKE CONCAT('%', #{keyword}, '%')
-           OR description LIKE CONCAT('%', #{keyword}, '%')
+        SELECT * FROM award_experience WHERE award_name LIKE CONCAT('%', #{keyword}, '%')
+        OR description LIKE CONCAT('%', #{keyword}, '%')
         LIMIT 20
     </select>
+
 </mapper>

@@ -14,7 +14,13 @@ public class CorsConfig {
         CorsConfiguration config = new CorsConfiguration();
         
         // 允许的域名
-        config.addAllowedOriginPattern("*");
+        config.addAllowedOriginPattern("http://localhost:8080");
+        config.addAllowedOriginPattern("http://43.143.27.198:8080");
+        config.addAllowedOriginPattern("http://localhost:3000");
+        config.addAllowedOriginPattern("https://localhost:8080");
+        config.addAllowedOriginPattern("https://localhost:3000");
+        config.addAllowedOriginPattern("http://127.0.0.1:8080");
+        config.addAllowedOriginPattern("http://127.0.0.1:3000");
         
         // 允许的请求头
         config.addAllowedHeader("*");

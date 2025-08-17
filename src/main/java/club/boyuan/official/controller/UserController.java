@@ -237,31 +237,32 @@ public class UserController {
             Integer userId = getAuthenticatedUserId();
             User existingUser = userService.getUserById(userId);
 
-            // 仅更新传入的非空字段
-            if (userInfo.containsKey("username")) {
+            // 仅更新传入的非空字段，防止修改敏感字段
+            if (userInfo.containsKey("username") && userInfo.get("username") != null) {
                 existingUser.setUsername((String) userInfo.get("username"));
             }
-            if (userInfo.containsKey("password")) {
+            if (userInfo.containsKey("password") && userInfo.get("password") != null) {
                 existingUser.setPassword((String) userInfo.get("password"));
             }
-            if (userInfo.containsKey("email")) {
+            if (userInfo.containsKey("email") && userInfo.get("email") != null) {
                 existingUser.setEmail((String) userInfo.get("email"));
             }
-            if (userInfo.containsKey("name")) {
+            if (userInfo.containsKey("name") && userInfo.get("name") != null) {
                 existingUser.setName((String) userInfo.get("name"));
             }
-            if (userInfo.containsKey("phone")) {
+            if (userInfo.containsKey("phone") && userInfo.get("phone") != null) {
                 existingUser.setPhone((String) userInfo.get("phone"));
             }
-            if (userInfo.containsKey("dept")) {
+            if (userInfo.containsKey("dept") && userInfo.get("dept") != null) {
                 existingUser.setDept((String) userInfo.get("dept"));
             }
-            if (userInfo.containsKey("status")) {
-                existingUser.setStatus((Boolean) userInfo.get("status"));
-            }
-            if (userInfo.containsKey("isMember")) {
-                existingUser.setIsMember((Boolean) userInfo.get("isMember"));
-            }
+            // 不允许通过此接口更新status和isMember字段
+            // if (userInfo.containsKey("status")) {
+            //     existingUser.setStatus((Boolean) userInfo.get("status"));
+            // }
+            // if (userInfo.containsKey("isMember")) {
+            //     existingUser.setIsMember((Boolean) userInfo.get("isMember"));
+            // }
 
             UserDTO userDTO = new UserDTO();
             BeanUtils.copyProperties(existingUser, userDTO);
@@ -411,16 +412,16 @@ public class UserController {
             }
 
             // 仅更新传入的非空字段
-            if (userInfo.containsKey("username")) {
+            if (userInfo.containsKey("username") && userInfo.get("username") != null) {
                 existingUser.setUsername((String) userInfo.get("username"));
             }
-            if (userInfo.containsKey("password")) {
+            if (userInfo.containsKey("password") && userInfo.get("password") != null) {
                 existingUser.setPassword((String) userInfo.get("password"));
             }
-            if (userInfo.containsKey("email")) {
+            if (userInfo.containsKey("email") && userInfo.get("email") != null) {
                 existingUser.setEmail((String) userInfo.get("email"));
             }
-            if (userInfo.containsKey("role")) {
+            if (userInfo.containsKey("role") && userInfo.get("role") != null) {
                 // 只有管理员可以修改角色
                 if (User.ROLE_ADMIN.equals(currentUser.getRole())) {
                     existingUser.setRole((String) userInfo.get("role"));
@@ -428,19 +429,19 @@ public class UserController {
                     throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
                 }
             }
-            if (userInfo.containsKey("name")) {
+            if (userInfo.containsKey("name") && userInfo.get("name") != null) {
                 existingUser.setName((String) userInfo.get("name"));
             }
-            if (userInfo.containsKey("phone")) {
+            if (userInfo.containsKey("phone") && userInfo.get("phone") != null) {
                 existingUser.setPhone((String) userInfo.get("phone"));
             }
-            if (userInfo.containsKey("dept")) {
+            if (userInfo.containsKey("dept") && userInfo.get("dept") != null) {
                 existingUser.setDept((String) userInfo.get("dept"));
             }
-            if (userInfo.containsKey("status")) {
+            if (userInfo.containsKey("status") && userInfo.get("status") != null) {
                 existingUser.setStatus((Boolean) userInfo.get("status"));
             }
-            if (userInfo.containsKey("isMember")) {
+            if (userInfo.containsKey("isMember") && userInfo.get("isMember") != null) {
                 existingUser.setIsMember((Boolean) userInfo.get("isMember"));
             }
 
