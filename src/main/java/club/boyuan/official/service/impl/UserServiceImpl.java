@@ -83,15 +83,16 @@ public class UserServiceImpl implements IUserService {
             user.setPassword(encodedPassword);
         }
 
-        // 更新其他字段
+        // 更新其他字段，但不更新角色和状态等敏感字段
         user.setUsername(userDTO.getUsername());
         user.setEmail(userDTO.getEmail());
         user.setName(userDTO.getName());
         user.setPhone(userDTO.getPhone());
-        user.setRole(userDTO.getRole());
-        user.setStatus(userDTO.getStatus());
         user.setDept(userDTO.getDept());
         user.setAvatar(userDTO.getAvatar());
+        // 不允许通过edit方法修改用户角色和状态
+        // user.setRole(userDTO.getRole());
+        // user.setStatus(userDTO.getStatus());
 
         userMapper.updateById(user);
         logger.info("成功更新用户信息，用户ID: {}", user.getUserId());

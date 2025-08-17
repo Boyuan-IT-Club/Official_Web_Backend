@@ -38,6 +38,12 @@ public class AwardExperienceService implements IAwardExperienceService {
         if (!awardExperienceMapper.existsById(awardExperience.getAwardId())) {
             throw new BusinessException(BusinessExceptionEnum.AWARD_EXPERIENCE_NOT_FOUND);
         }
+        
+        // 检查用户ID是否为空
+        if (awardExperience.getUserId() == null) {
+            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
+        }
+        
         int rowsAffected = awardExperienceMapper.update(awardExperience);
         if (rowsAffected <= 0) {
             throw new BusinessException(BusinessExceptionEnum.AWARD_EXPERIENCE_UPDATE_FAILED);
