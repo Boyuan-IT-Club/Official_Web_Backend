@@ -57,23 +57,38 @@ public class AdminController {
     private void checkAdminRole() {
         String token = getTokenFromHeader();
         if (token == null) {
-            throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
+            logger.warn("权限验证失败：未提供token");
+            throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED, "未提供访问令牌");
         }
 
         try {
             // 验证令牌并获取用户ID
             Integer userId = jwtTokenUtil.extractUserId(token);
             if (userId == null) {
-                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
+                logger.warn("权限验证失败：无法从token中提取用户ID");
+                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED, "无法从令牌中提取用户信息");
             }
 
             // 检查用户是否为管理员
             User user = userService.getUserById(userId);
-            if (user == null || !User.ROLE_ADMIN.equals(user.getRole())) {
-                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
+            if (user == null) {
+                logger.warn("权限验证失败：找不到用户ID为{}的用户", userId);
+                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED, "用户不存在");
             }
+            
+            if (!User.ROLE_ADMIN.equals(user.getRole())) {
+                logger.warn("权限验证失败：用户ID为{}的用户角色为{}，不是管理员", userId, user.getRole());
+                throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED, "需要管理员权限才能执行此操作");
+            }
+            
+            logger.debug("权限验证成功：用户ID为{}的管理员用户{}", userId, user.getUsername());
+        } catch (BusinessException e) {
+            // 如果已经是BusinessException，直接重新抛出
+            logger.warn("权限验证失败：{}", e.getMessage());
+            throw e;
         } catch (Exception e) {
-            throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED, e.getMessage());
+            logger.error("权限验证过程中发生系统错误", e);
+            throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED, "权限验证过程中发生错误：" + e.getMessage());
         }
     }
 
@@ -193,6 +208,84 @@ public class AdminController {
                     .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             logger.error("更新用户状态时发生服务器内部错误", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
+    }
+    
+    /**
+     * 冻结/解冻用户接口
+     * @param userId 用户ID
+     * @param statusRequest 状态请求 (frozen 或 active)
+     * @return 更新结果
+     */
+    @PutMapping("/users/{userId}/freeze")
+    public ResponseEntity<ResponseMessage<?>> freezeUser(
+            @PathVariable Integer userId,
+            @RequestBody Map<String, String> statusRequest) {
+        try {
+            logger.info("开始处理用户冻结/解冻请求，目标用户ID: {}", userId);
+            
+            // 验证管理员权限
+            checkAdminRole();
+            
+            String status = statusRequest.get("status");
+            if (status == null || (!"frozen".equals(status) && !"active".equals(status))) {
+                logger.warn("无效的冻结状态值: {}", status);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(ResponseMessage.error(400, "状态值必须为 'frozen' 或 'active'"));
+            }
+
+            User updatedUser = userService.updateUserStatus(userId, status);
+            String action = "frozen".equals(status) ? "冻结" : "解冻";
+            logger.info("管理员成功{}用户，用户ID: {}", action, userId);
+            
+            return ResponseEntity.ok(ResponseMessage.success(updatedUser));
+        } catch (BusinessException e) {
+            logger.warn("冻结/解冻用户失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("冻结/解冻用户时发生服务器内部错误", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
+    }
+    
+    /**
+     * 修改用户会员状态接口（录取/取消录取）
+     * @param userId 用户ID
+     * @param membershipRequest 会员状态请求 (true 或 false)
+     * @return 更新结果
+     */
+    @PutMapping("/users/{userId}/membership")
+    public ResponseEntity<ResponseMessage<?>> updateUserMembership(
+            @PathVariable Integer userId,
+            @RequestBody Map<String, Boolean> membershipRequest) {
+        try {
+            logger.info("开始处理用户会员状态更新请求，目标用户ID: {}", userId);
+            
+            // 验证管理员权限
+            checkAdminRole();
+            
+            Boolean isMember = membershipRequest.get("isMember");
+            if (isMember == null) {
+                logger.warn("缺少必要的 isMember 字段");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(ResponseMessage.error(400, "缺少必要的 isMember 字段"));
+            }
+
+            User updatedUser = userService.updateUserMembership(userId, isMember);
+            String action = isMember ? "录取" : "取消录取";
+            logger.info("管理员成功{}用户，用户ID: {}", action, userId);
+            
+            return ResponseEntity.ok(ResponseMessage.success(updatedUser));
+        } catch (BusinessException e) {
+            logger.warn("更新用户会员状态失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("更新用户会员状态时发生服务器内部错误", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
         }

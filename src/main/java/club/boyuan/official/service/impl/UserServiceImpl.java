@@ -73,29 +73,58 @@ public class UserServiceImpl implements IUserService {
     public User edit(UserDTO userDTO) {
         User user = userMapper.selectById(userDTO.getUserId());
         if (user == null) {
+            logger.warn("尝试更新不存在的用户，用户ID: {}", userDTO.getUserId());
             throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
         }
+        
+        logger.info("开始更新用户信息，用户ID: {}", userDTO.getUserId());
+        logger.debug("更新前的用户信息: username={}, email={}, name={}, phone={}, dept={}", 
+                    user.getUsername(), user.getEmail(), user.getName(), user.getPhone(), user.getDept());
 
         // 如果密码有更新，需要验证密码复杂度并加密
         if (userDTO.getPassword() != null && !userDTO.getPassword().isEmpty()) {
+            logger.debug("检测到密码更新请求，用户ID: {}", userDTO.getUserId());
             PasswordValidator.validate(userDTO.getPassword());
             String encodedPassword = passwordEncoder.encode(userDTO.getPassword());
             user.setPassword(encodedPassword);
+            logger.info("用户密码更新成功，用户ID: {}", userDTO.getUserId());
+        } else {
+            logger.debug("未检测到密码更新请求，保持原密码不变，用户ID: {}", userDTO.getUserId());
         }
 
         // 更新其他字段，但不更新角色和状态等敏感字段
-        user.setUsername(userDTO.getUsername());
-        user.setEmail(userDTO.getEmail());
-        user.setName(userDTO.getName());
-        user.setPhone(userDTO.getPhone());
-        user.setDept(userDTO.getDept());
-        user.setAvatar(userDTO.getAvatar());
+        if (userDTO.getUsername() != null) {
+            user.setUsername(userDTO.getUsername());
+            logger.debug("用户名更新为: {}", userDTO.getUsername());
+        }
+        if (userDTO.getEmail() != null) {
+            user.setEmail(userDTO.getEmail());
+            logger.debug("邮箱更新为: {}", userDTO.getEmail());
+        }
+        if (userDTO.getName() != null) {
+            user.setName(userDTO.getName());
+            logger.debug("姓名更新为: {}", userDTO.getName());
+        }
+        if (userDTO.getPhone() != null) {
+            user.setPhone(userDTO.getPhone());
+            logger.debug("电话更新为: {}", userDTO.getPhone());
+        }
+        if (userDTO.getDept() != null) {
+            user.setDept(userDTO.getDept());
+            logger.debug("部门更新为: {}", userDTO.getDept());
+        }
+        if (userDTO.getAvatar() != null) {
+            user.setAvatar(userDTO.getAvatar());
+            logger.debug("头像更新为: {}", userDTO.getAvatar());
+        }
         // 不允许通过edit方法修改用户角色和状态
         // user.setRole(userDTO.getRole());
         // user.setStatus(userDTO.getStatus());
 
         userMapper.updateById(user);
         logger.info("成功更新用户信息，用户ID: {}", user.getUserId());
+        logger.debug("更新后的用户信息: username={}, email={}, name={}, phone={}, dept={}", 
+                    user.getUsername(), user.getEmail(), user.getName(), user.getPhone(), user.getDept());
         return user;
     }
 
@@ -194,6 +223,29 @@ public class UserServiceImpl implements IUserService {
             throw new BusinessException(BusinessExceptionEnum.USER_INFO_UPDATE_FAILED);
         }
         logger.info("用户状态更新成功，用户ID: {}", user.getUserId());
+        return user;
+    }
+
+    @Override
+    public User updateUserMembership(Integer userId, Boolean isMember) {
+        if (userId == null || isMember == null) {
+            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
+        }
+        User user = getUserById(userId);
+        if (user == null) {
+            throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
+        }
+        // 不允许修改管理员会员状态
+        if (User.ROLE_ADMIN.equals(user.getRole())) {
+            throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
+        }
+        
+        user.setIsMember(isMember);
+        int rows = userMapper.updateById(user);
+        if (rows <= 0) {
+            throw new BusinessException(BusinessExceptionEnum.USER_INFO_UPDATE_FAILED);
+        }
+        logger.info("用户会员状态更新成功，用户ID: {}，会员状态: {}", user.getUserId(), isMember);
         return user;
     }
 
