@@ -227,6 +227,29 @@ public class UserServiceImpl implements IUserService {
     }
 
     @Override
+    public User updateUserMembership(Integer userId, Boolean isMember) {
+        if (userId == null || isMember == null) {
+            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
+        }
+        User user = getUserById(userId);
+        if (user == null) {
+            throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
+        }
+        // 不允许修改管理员会员状态
+        if (User.ROLE_ADMIN.equals(user.getRole())) {
+            throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
+        }
+        
+        user.setIsMember(isMember);
+        int rows = userMapper.updateById(user);
+        if (rows <= 0) {
+            throw new BusinessException(BusinessExceptionEnum.USER_INFO_UPDATE_FAILED);
+        }
+        logger.info("用户会员状态更新成功，用户ID: {}，会员状态: {}", user.getUserId(), isMember);
+        return user;
+    }
+
+    @Override
     public User getUserById(Integer userId) {
         return userMapper.selectById(userId);
     }

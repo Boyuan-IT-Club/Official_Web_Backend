@@ -4,7 +4,16 @@ FROM ubuntu:20.04
 RUN apt-get update && apt-get install -y \
     wget \
     tar \
+    locales \
+    fonts-noto-cjk \
+    language-pack-zh-hans \
+    && locale-gen zh_CN.UTF-8 \
     && rm -rf /var/lib/apt/lists/*
+
+# 设置中文环境变量
+ENV LANG=zh_CN.UTF-8 \
+    LANGUAGE=zh_CN:zh \
+    LC_ALL=zh_CN.UTF-8
 
 # 创建目录
 RUN mkdir -p /official

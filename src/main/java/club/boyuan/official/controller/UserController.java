@@ -248,6 +248,8 @@ public class UserController {
             // 移除密码更新逻辑，防止通过此接口更新密码
             if (userInfo.containsKey("password") && userInfo.get("password") != null) {
                 logger.warn("尝试通过/me接口更新密码，操作已被阻止，用户ID: {}", userId);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(ResponseMessage.error(400, "不能通过此接口更新密码"));
             }
             if (userInfo.containsKey("email") && userInfo.get("email") != null) {
                 existingUser.setEmail((String) userInfo.get("email"));
@@ -275,6 +277,8 @@ public class UserController {
 
             UserDTO userDTO = new UserDTO();
             BeanUtils.copyProperties(existingUser, userDTO);
+            // 确保不会通过DTO更新密码
+            userDTO.setPassword(null);
             userService.edit(userDTO);
             
             logger.info("用户ID为{}的用户个人信息更新成功", userId);
