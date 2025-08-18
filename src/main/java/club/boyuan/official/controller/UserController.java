@@ -38,6 +38,8 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static club.boyuan.official.utils.FileUploadUtil.generateFullHttpPath;
+
 @RestController //接口方法返回对象转换成Json文本
 @RequestMapping("api/user")
 @AllArgsConstructor
@@ -72,11 +74,15 @@ public class UserController {
             // 上传文件并获取路径（使用新的通用方法）
             String avatarPath = FileUploadUtil.uploadFile(file, "avatars/", "image/");
             
+            // 生成完整HTTP路径
+            String fullHttpPath = generateFullHttpPath(avatarPath, request.getServerName(), request.getServerPort());
+            
             // 更新用户头像信息，使用新的专门方法避免密码被修改
             User updatedUser = userService.updateAvatar(userId, avatarPath);
             
             Map<String, String> responseData = new HashMap<>();
             responseData.put("avatar", avatarPath);
+            responseData.put("fullHttpPath", fullHttpPath);
             
             logger.info("用户ID为{}的用户成功上传头像，路径为{}", userId, avatarPath);
             return ResponseEntity.ok(ResponseMessage.success(responseData));
@@ -123,8 +129,12 @@ public class UserController {
             // 上传文件并获取路径
             String filePath = FileUploadUtil.uploadFile(file, uploadPath);
             
+            // 生成完整HTTP路径
+            String fullHttpPath = generateFullHttpPath(filePath, request.getServerName(), request.getServerPort());
+            
             Map<String, String> responseData = new HashMap<>();
             responseData.put("filePath", filePath);
+            responseData.put("fullHttpPath", fullHttpPath);
             
             logger.info("用户{}成功上传文件，路径为{}", username, filePath);
             return ResponseEntity.ok(ResponseMessage.success(responseData));
@@ -174,8 +184,12 @@ public class UserController {
             // 上传文件并获取路径
             String filePath = FileUploadUtil.uploadFile(file, uploadPath, fileType);
             
+            // 生成完整HTTP路径
+            String fullHttpPath = generateFullHttpPath(filePath, request.getServerName(), request.getServerPort());
+            
             Map<String, String> responseData = new HashMap<>();
             responseData.put("filePath", filePath);
+            responseData.put("fullHttpPath", fullHttpPath);
             
             logger.info("用户{}成功上传{}类型的文件，路径为{}", username, fileType, filePath);
             return ResponseEntity.ok(ResponseMessage.success(responseData));

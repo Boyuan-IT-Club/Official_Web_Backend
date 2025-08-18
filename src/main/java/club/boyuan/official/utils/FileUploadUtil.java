@@ -11,6 +11,7 @@ import java.util.UUID;
 
 /**
  * 文件上传工具类
+ * 提供安全的文件上传功能，防止路径穿越攻击
  */
 public class FileUploadUtil {
     
@@ -38,6 +39,11 @@ public class FileUploadUtil {
         // 检查文件是否为空
         if (file == null || file.isEmpty()) {
             throw new IOException("上传文件为空");
+        }
+        
+        // 确保uploadPath不以/结尾
+        if (uploadPath != null && uploadPath.endsWith("/")) {
+            uploadPath = uploadPath.substring(0, uploadPath.length() - 1);
         }
         
         // 更安全的路径验证方式，防止路径穿越
@@ -73,7 +79,7 @@ public class FileUploadUtil {
         
         // 返回相对路径，使用正斜杠以确保跨平台兼容性
         String relativePath = DEFAULT_UPLOAD_DIR + uploadPath;
-        if (!relativePath.endsWith("/")) {
+        if (!relativePath.isEmpty() && !relativePath.endsWith("/")) {
             relativePath += "/";
         }
         return "/" + relativePath + uniqueFilename;
@@ -95,5 +101,22 @@ public class FileUploadUtil {
         }
         
         return uploadFile(file, uploadPath);
+    }
+    
+    /**
+     * 根据请求中的信息生成完整HTTP路径
+     * @param requestPath 请求路径
+     * @param serverName 服务器名称
+     * @param serverPort 服务器端口
+     * @return 完整HTTP路径
+     */
+    public static String generateFullHttpPath(String requestPath, String serverName, int serverPort) {
+        StringBuilder url = new StringBuilder();
+        url.append("http://").append(serverName);
+        if (serverPort != 80 && serverPort != 443) {
+            url.append(":").append(serverPort);
+        }
+        url.append(requestPath);
+        return url.toString();
     }
 }

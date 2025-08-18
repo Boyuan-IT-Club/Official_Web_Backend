@@ -9,8 +9,8 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        // 映射头像文件访问路径
-        registry.addResourceHandler("/uploads/avatars/**")
-                .addResourceLocations("file:uploads/avatars/");
+        // 映射所有上传文件访问路径
+        registry.addResourceHandler("/uploads/**")
+                .addResourceLocations("file:uploads/");
     }
 }
