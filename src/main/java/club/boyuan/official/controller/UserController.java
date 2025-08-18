@@ -236,25 +236,34 @@ public class UserController {
             // 从JWT令牌获取用户ID
             Integer userId = getAuthenticatedUserId();
             User existingUser = userService.getUserById(userId);
+            
+            logger.info("用户ID为{}的用户开始更新个人信息", userId);
+            logger.debug("接收到的更新信息: {}", userInfo);
 
             // 仅更新传入的非空字段，防止修改敏感字段
             if (userInfo.containsKey("username") && userInfo.get("username") != null) {
                 existingUser.setUsername((String) userInfo.get("username"));
+                logger.debug("更新用户名为: {}", userInfo.get("username"));
             }
+            // 移除密码更新逻辑，防止通过此接口更新密码
             if (userInfo.containsKey("password") && userInfo.get("password") != null) {
-                existingUser.setPassword((String) userInfo.get("password"));
+                logger.warn("尝试通过/me接口更新密码，操作已被阻止，用户ID: {}", userId);
             }
             if (userInfo.containsKey("email") && userInfo.get("email") != null) {
                 existingUser.setEmail((String) userInfo.get("email"));
+                logger.debug("更新邮箱为: {}", userInfo.get("email"));
             }
             if (userInfo.containsKey("name") && userInfo.get("name") != null) {
                 existingUser.setName((String) userInfo.get("name"));
+                logger.debug("更新姓名为: {}", userInfo.get("name"));
             }
             if (userInfo.containsKey("phone") && userInfo.get("phone") != null) {
                 existingUser.setPhone((String) userInfo.get("phone"));
+                logger.debug("更新电话为: {}", userInfo.get("phone"));
             }
             if (userInfo.containsKey("dept") && userInfo.get("dept") != null) {
                 existingUser.setDept((String) userInfo.get("dept"));
+                logger.debug("更新部门为: {}", userInfo.get("dept"));
             }
             // 不允许通过此接口更新status和isMember字段
             // if (userInfo.containsKey("status")) {
@@ -267,12 +276,16 @@ public class UserController {
             UserDTO userDTO = new UserDTO();
             BeanUtils.copyProperties(existingUser, userDTO);
             userService.edit(userDTO);
+            
+            logger.info("用户ID为{}的用户个人信息更新成功", userId);
 
             return ResponseEntity.ok(ResponseMessage.success());
         } catch (BusinessException e) {
+            logger.error("更新用户信息时发生业务异常", e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
+            logger.error("更新用户信息时发生系统异常", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
         }
@@ -393,14 +406,19 @@ public class UserController {
         try {
             User currentUser = getCurrentUserEntity();
             
+            logger.info("用户ID为{}开始更新用户信息", currentUser.getUserId());
+            logger.debug("接收到的更新信息: {}", userInfo);
+            
             // 从请求体获取userId
             Integer targetUserId = (Integer) userInfo.get("userId");
             if (targetUserId == null) {
+                logger.warn("缺少必需的userId字段");
                 throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
             }
 
             // 管理员可以更新所有用户，普通用户只能更新自己
             if (!User.ROLE_ADMIN.equals(currentUser.getRole()) && !currentUser.getUserId().equals(targetUserId)) {
+                logger.warn("用户ID为{}的用户尝试更新其他用户信息，权限不足", currentUser.getUserId());
                 throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
             }
 
@@ -408,52 +426,72 @@ public class UserController {
             // 移除userId，避免更新用户ID
             userInfo.remove("userId");
             if (existingUser == null) {
+                logger.warn("尝试更新不存在的用户，用户ID: {}", targetUserId);
                 throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
             }
 
             // 仅更新传入的非空字段
             if (userInfo.containsKey("username") && userInfo.get("username") != null) {
                 existingUser.setUsername((String) userInfo.get("username"));
+                logger.debug("更新用户名为: {}", userInfo.get("username"));
             }
+            // 只有管理员可以通过此接口修改密码
             if (userInfo.containsKey("password") && userInfo.get("password") != null) {
-                existingUser.setPassword((String) userInfo.get("password"));
+                if (User.ROLE_ADMIN.equals(currentUser.getRole())) {
+                    existingUser.setPassword((String) userInfo.get("password"));
+                    logger.debug("管理员更新用户密码，目标用户ID: {}", targetUserId);
+                } else {
+                    logger.warn("非管理员用户尝试更新密码，用户ID: {}", currentUser.getUserId());
+                }
             }
             if (userInfo.containsKey("email") && userInfo.get("email") != null) {
                 existingUser.setEmail((String) userInfo.get("email"));
+                logger.debug("更新邮箱为: {}", userInfo.get("email"));
             }
             if (userInfo.containsKey("role") && userInfo.get("role") != null) {
                 // 只有管理员可以修改角色
                 if (User.ROLE_ADMIN.equals(currentUser.getRole())) {
                     existingUser.setRole((String) userInfo.get("role"));
+                    logger.debug("更新角色为: {}", userInfo.get("role"));
                 } else {
+                    logger.warn("非管理员用户尝试更新角色，用户ID: {}", currentUser.getUserId());
                     throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
                 }
             }
             if (userInfo.containsKey("name") && userInfo.get("name") != null) {
                 existingUser.setName((String) userInfo.get("name"));
+                logger.debug("更新姓名为: {}", userInfo.get("name"));
             }
             if (userInfo.containsKey("phone") && userInfo.get("phone") != null) {
                 existingUser.setPhone((String) userInfo.get("phone"));
+                logger.debug("更新电话为: {}", userInfo.get("phone"));
             }
             if (userInfo.containsKey("dept") && userInfo.get("dept") != null) {
                 existingUser.setDept((String) userInfo.get("dept"));
+                logger.debug("更新部门为: {}", userInfo.get("dept"));
             }
             if (userInfo.containsKey("status") && userInfo.get("status") != null) {
                 existingUser.setStatus((Boolean) userInfo.get("status"));
+                logger.debug("更新状态为: {}", userInfo.get("status"));
             }
             if (userInfo.containsKey("isMember") && userInfo.get("isMember") != null) {
                 existingUser.setIsMember((Boolean) userInfo.get("isMember"));
+                logger.debug("更新会员状态为: {}", userInfo.get("isMember"));
             }
 
             UserDTO userDTO = new UserDTO();
             BeanUtils.copyProperties(existingUser, userDTO);
             userService.edit(userDTO);
+            
+            logger.info("用户ID为{}的用户信息更新成功，操作者用户ID: {}", targetUserId, currentUser.getUserId());
 
             return ResponseEntity.ok(ResponseMessage.success());
         } catch (BusinessException e) {
+            logger.error("更新用户信息时发生业务异常", e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
+            logger.error("更新用户信息时发生系统异常", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
         }
