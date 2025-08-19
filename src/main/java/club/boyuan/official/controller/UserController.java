@@ -41,7 +41,7 @@ import org.slf4j.LoggerFactory;
 import static club.boyuan.official.utils.FileUploadUtil.generateFullHttpPath;
 
 @RestController //接口方法返回对象转换成Json文本
-@RequestMapping("api/user")
+@RequestMapping("/api/user")
 @AllArgsConstructor
 public class UserController {
 

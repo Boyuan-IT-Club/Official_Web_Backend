@@ -1,4 +1,65 @@
-# Official 项目
+# Official Project
+
+这是一个 Spring Boot 项目，使用 Maven 构建，Docker 部署。
+
+## 项目构建和部署
+
+### 在 Linux/macOS 上部署
+
+1. 确保已安装 Docker 和 docker-compose
+2. 登录 Docker Hub:
+   ```
+   docker login
+   ```
+3. 部署应用:
+   ```
+   make deploy
+   ```
+
+### 在 Windows 上部署
+
+1. 确保已安装 Docker Desktop
+2. 登录 Docker Hub:
+   ```
+   docker login
+   ```
+3. 使用 PowerShell 脚本部署:
+   ```
+   .\deploy.ps1
+   ```
+
+### 手动部署方式
+
+1. 构建项目:
+   ```
+   # Linux/macOS
+   ./mvnw clean package -DskipTests
+   
+   # Windows
+   .\mvnw.cmd clean package -DskipTests
+   ```
+
+2. 构建 Docker 镜像:
+   ```
+   docker build -t redmoon2333/official:latest .
+   ```
+
+3. 推送到 Docker Hub:
+   ```
+   docker push redmoon2333/official:latest
+   ```
+
+## 服务器更新
+
+### Linux/macOS:
+```
+make update
+```
+
+### Windows:
+```
+.\update.ps1
+```
 
 ## 项目简介
 
@@ -62,6 +123,23 @@ make dev-down
 
 ## 部署说明
 
+### 传统部署方式
+
+1. 构建项目：
+   ```bash
+   ./mvnw clean package
+   ```
+
+2. 将生成的 JAR 文件上传到服务器：
+   ```bash
+   scp target/Official-0.0.1-SNAPSHOT.jar user@server:/path/to/app/
+   ```
+
+3. 在服务器上运行：
+   ```bash
+   java -jar Official-0.0.1-SNAPSHOT.jar
+   ```
+
 ### Docker 部署（推荐）
 ```bash
 # 构建项目
@@ -71,12 +149,37 @@ make dev-down
 docker-compose up -d
 ```
 
-### 传统部署
-1. 安装 JDK 17、MySQL 8.0+、Redis 6.0+
-2. 创建数据库：CREATE DATABASE official CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-3. 修改配置文件 application-prod.yml
-4. 构建项目：./mvnw clean package -DskipTests
-5. 运行应用：java -jar target/Official-0.0.1-SNAPSHOT.jar --spring.profiles.active=prod
+### Docker Hub 部署方式（推荐）
+
+1. 登录到 Docker Hub：
+   ```bash
+   docker login
+   ```
+
+2. 构建并推送镜像到 Docker Hub：
+   ```bash
+   # 替换 your-dockerhub-username 为你的 Docker Hub 用户名
+   docker build -t your-dockerhub-username/official:latest .
+   docker push your-dockerhub-username/official:latest
+   ```
+   
+   或者使用 Make 命令：
+   ```bash
+   make deploy
+   ```
+
+3. 在服务器上更新应用：
+   ```bash
+   # 拉取最新镜像并重启服务
+   docker pull your-dockerhub-username/official:latest
+   docker-compose down
+   docker-compose up -d
+   ```
+   
+   或者使用 Make 命令：
+   ```bash
+   make update
+   ```
 
 ## 第一阶段功能说明
 
