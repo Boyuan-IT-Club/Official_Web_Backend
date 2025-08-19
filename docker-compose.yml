@@ -15,7 +15,7 @@ services:
     restart: always
     networks:
       - official-network
-    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
 
   redis:
     image: redis:7-alpine
@@ -29,12 +29,11 @@ services:
       - official-network
 
   official:
-    build: .
+    image: ${DOCKERHUB_USERNAME:-boyuanclub}/official:latest  # 使用Docker Hub镜像
     container_name: ${PROJECT_NAME:-official}-app
     ports:
       - "${APP_PORT:-8080}:8080"
     volumes:
-      - ./Official-0.0.1-SNAPSHOT.jar:/official/official.jar
       - /home/boyuan-official/official/volumes/uploads:/official/uploads
       - /home/boyuan-official/official/logs:/official/logs
     environment:
@@ -49,7 +48,7 @@ services:
       - MAIL_USERNAME=${MAIL_USERNAME:-notify@boyuan.club}
       - MAIL_PASSWORD=${MAIL_PASSWORD:-12bGmEWjvyRDjzxE}
       - SERVER_PORT=8080
-    command: ["java", "-jar", "/official/official.jar", "--spring.profiles.active=prod"]
+    # 移除了command行，因为已经在Dockerfile中定义了ENTRYPOINT
     depends_on:
       - mysql
       - redis

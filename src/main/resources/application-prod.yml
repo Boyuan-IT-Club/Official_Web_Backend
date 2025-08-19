@@ -2,7 +2,7 @@ spring:
   application:
     name: Official
   datasource:
-    url: jdbc:mysql://mysql:${MYSQL_PORT:3306}/${DB_NAME:official}?serverTimezone=UTC
+    url: jdbc:mysql://mysql:${MYSQL_PORT:3306}/${DB_NAME:official}?serverTimezone=UTC&allowPublicKeyRetrieval=true&useSSL=false
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -13,8 +13,8 @@ spring:
         format_sql: true
     hibernate:
       ddl-auto: update
-    # 移除database-platform配置以消除警告
-    # database-platform: org.hibernate.dialect.MySQLDialect
+    # 移除数据库方言配置，让Hibernate自动检测
+    # database-platform: org.hibernate.dialect.MySQL8Dialect
     # 明确关闭open-in-view以消除警告
     open-in-view: false
   mail:
