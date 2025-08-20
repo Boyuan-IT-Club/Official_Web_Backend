@@ -18,6 +18,9 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 import club.boyuan.official.utils.JwtTokenUtil;
@@ -71,6 +74,9 @@ public class UserController {
             Integer userId = getAuthenticatedUserId();
             User user = userService.getUserById(userId);
             
+            // 保存旧头像路径
+            String oldAvatarPath = user.getAvatar();
+            
             // 上传文件并获取路径（使用新的通用方法）
             String avatarPath = FileUploadUtil.uploadFile(file, "avatars/", "image/");
             
@@ -79,6 +85,17 @@ public class UserController {
             
             // 更新用户头像信息，使用新的专门方法避免密码被修改
             User updatedUser = userService.updateAvatar(userId, avatarPath);
+            
+            // 删除旧头像文件（如果有）
+            if (oldAvatarPath != null && !oldAvatarPath.isEmpty()) {
+                try {
+                    Path oldAvatarFile = Paths.get(oldAvatarPath.substring(1)); // 去掉开头的 "/"
+                    Files.deleteIfExists(oldAvatarFile);
+                    logger.info("成功删除旧头像文件: {}", oldAvatarPath);
+                } catch (IOException e) {
+                    logger.warn("删除旧头像文件失败: {}", oldAvatarPath, e);
+                }
+            }
             
             Map<String, String> responseData = new HashMap<>();
             responseData.put("avatar", avatarPath);
