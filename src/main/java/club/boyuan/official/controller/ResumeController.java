@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 简历控制器
@@ -41,26 +42,26 @@ public class ResumeController {
     private final JwtTokenUtil jwtTokenUtil;
     
     /**
-     * 获取字段定义列表
-     * @param cycleId 年份ID
+     * 获取指定年份的简历字段定义
+     * @param cycleId 招聘年份ID
      * @return 字段定义列表
      */
     @GetMapping("/fields/{cycleId}")
-    public ResponseEntity<ResponseMessage<?>> getFieldDefinitions(
+    public ResponseEntity<ResponseMessage<List<ResumeFieldDefinition>>> getFieldDefinitions(
             @PathVariable Integer cycleId) {
         try {
             logger.info("获取{}年份的简历字段定义", cycleId);
             List<ResumeFieldDefinition> fieldDefinitions = fieldDefinitionService.getFieldDefinitionsByCycleId(cycleId);
-            return ResponseEntity.ok(ResponseMessage.success(fieldDefinitions));
+            return ResponseEntity.ok(new ResponseMessage<>(200, "获取字段定义成功", fieldDefinitions));
         } catch (BusinessException e) {
             logger.warn("获取字段定义业务异常，年份: {}，错误码: {}，错误信息: {}", cycleId, e.getCode(), e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
         } catch (Exception e) {
             logger.error("获取字段定义系统异常，年份: {}", cycleId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ResponseMessage.error(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
-                            "获取字段定义失败: " + e.getMessage()));
+                    .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
+                            "获取字段定义失败: " + e.getMessage(), null));
         }
     }
     
@@ -71,7 +72,7 @@ public class ResumeController {
      * @return 创建的字段定义
      */
     @PostMapping("/fields")
-    public ResponseEntity<ResponseMessage<?>> createFieldDefinition(
+    public ResponseEntity<ResponseMessage<ResumeFieldDefinition>> createFieldDefinition(
             @RequestBody ResumeFieldDefinition fieldDefinition, HttpServletRequest request) {
         try {
             String token = request.getHeader("Authorization").substring(7);
@@ -85,16 +86,16 @@ public class ResumeController {
             
             logger.info("管理员{}创建字段定义", username);
             ResumeFieldDefinition createdField = fieldDefinitionService.createFieldDefinition(fieldDefinition);
-            return ResponseEntity.ok(ResponseMessage.success(createdField));
+            return ResponseEntity.ok(new ResponseMessage<>(200, "字段定义创建成功", createdField));
         } catch (BusinessException e) {
             logger.warn("创建字段定义业务异常，错误码: {}，错误信息: {}", e.getCode(), e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
         } catch (Exception e) {
             logger.error("创建字段定义系统异常", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ResponseMessage.error(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
-                            "字段定义创建失败: " + e.getMessage()));
+                    .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
+                            "字段定义创建失败: " + e.getMessage(), null));
         }
     }
     
@@ -105,7 +106,7 @@ public class ResumeController {
      * @return 更新的字段定义
      */
     @PutMapping("/fields")
-    public ResponseEntity<ResponseMessage<?>> updateFieldDefinition(
+    public ResponseEntity<ResponseMessage<ResumeFieldDefinition>> updateFieldDefinition(
             @RequestBody ResumeFieldDefinition fieldDefinition, HttpServletRequest request) {
         try {
             String token = request.getHeader("Authorization").substring(7);
@@ -114,22 +115,56 @@ public class ResumeController {
             
             if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
                 logger.warn("用户{}尝试更新字段定义，但权限不足", username);
-                throw new BusinessException(BusinessExceptionEnum.USER_ROLE_NOT_AUTHORIZED);
+                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
             }
             
             logger.info("管理员{}更新字段定义，字段ID: {}", username, fieldDefinition.getFieldId());
             ResumeFieldDefinition updatedField = fieldDefinitionService.updateFieldDefinition(fieldDefinition);
-            return ResponseEntity.ok(ResponseMessage.success(updatedField));
+            return ResponseEntity.ok(new ResponseMessage<>(200, "字段定义更新成功", updatedField));
         } catch (BusinessException e) {
             logger.warn("更新字段定义业务异常，字段ID: {}，错误码: {}，错误信息: {}", 
                     fieldDefinition.getFieldId(), e.getCode(), e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
         } catch (Exception e) {
             logger.error("更新字段定义系统异常，字段ID: {}", fieldDefinition.getFieldId(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ResponseMessage.error(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
-                            "字段定义更新失败: " + e.getMessage()));
+                    .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
+                            "字段定义更新失败: " + e.getMessage(), null));
+        }
+    }
+    
+    /**
+     * 批量更新字段定义
+     * @param fieldDefinitions 字段定义列表
+     * @param request HTTP请求
+     * @return 更新的字段定义列表
+     */
+    @PutMapping("/fields/batch")
+    public ResponseEntity<ResponseMessage<List<ResumeFieldDefinition>>> batchUpdateFieldDefinitions(
+            @RequestBody List<ResumeFieldDefinition> fieldDefinitions, HttpServletRequest request) {
+        try {
+            String token = request.getHeader("Authorization").substring(7);
+            String username = jwtTokenUtil.extractUsername(token);
+            User currentUser = userService.getUserByUsername(username);
+            
+            if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
+                logger.warn("用户{}尝试批量更新字段定义，但权限不足", username);
+                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
+            }
+            
+            logger.info("管理员{}批量更新字段定义，字段数量: {}", username, fieldDefinitions.size());
+            List<ResumeFieldDefinition> updatedFields = fieldDefinitionService.batchUpdateFieldDefinitions(fieldDefinitions);
+            return ResponseEntity.ok(new ResponseMessage<>(200, "字段定义批量更新成功", updatedFields));
+        } catch (BusinessException e) {
+            logger.warn("批量更新字段定义业务异常，错误码: {}，错误信息: {}", e.getCode(), e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
+        } catch (Exception e) {
+            logger.error("批量更新字段定义系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
+                            "字段定义批量更新失败: " + e.getMessage(), null));
         }
     }
     
@@ -140,7 +175,7 @@ public class ResumeController {
      * @return 删除结果
      */
     @DeleteMapping("/fields/{fieldId}")
-    public ResponseEntity<ResponseMessage<?>> deleteFieldDefinition(
+    public ResponseEntity<ResponseMessage<String>> deleteFieldDefinition(
             @PathVariable Integer fieldId, HttpServletRequest request) {
         try {
             String token = request.getHeader("Authorization").substring(7);
@@ -149,21 +184,21 @@ public class ResumeController {
             
             if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
                 logger.warn("用户{}尝试删除字段定义，但权限不足", username);
-                throw new BusinessException(BusinessExceptionEnum.USER_ROLE_NOT_AUTHORIZED);
+                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
             }
             
             logger.info("管理员{}删除字段定义，字段ID: {}", username, fieldId);
             fieldDefinitionService.deleteFieldDefinition(fieldId);
-            return ResponseEntity.ok(ResponseMessage.success("字段定义删除成功"));
+            return ResponseEntity.ok(new ResponseMessage<>(200, "字段定义删除成功", "字段定义删除成功"));
         } catch (BusinessException e) {
             logger.warn("删除字段定义业务异常，字段ID: {}，错误码: {}，错误信息: {}", fieldId, e.getCode(), e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
         } catch (Exception e) {
             logger.error("删除字段定义系统异常，字段ID: {}", fieldId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ResponseMessage.error(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
-                            "字段定义删除失败: " + e.getMessage()));
+                    .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
+                            "字段定义删除失败: " + e.getMessage(), null));
         }
     }
     

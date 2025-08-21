@@ -35,6 +35,13 @@ public interface IResumeFieldDefinitionService {
     ResumeFieldDefinition updateFieldDefinition(ResumeFieldDefinition fieldDefinition);
     
     /**
+     * 批量更新字段定义
+     * @param fieldDefinitions 字段定义实体列表
+     * @return 更新后的字段定义列表
+     */
+    List<ResumeFieldDefinition> batchUpdateFieldDefinitions(List<ResumeFieldDefinition> fieldDefinitions);
+    
+    /**
      * 删除字段定义
      * @param fieldId 字段ID
      */

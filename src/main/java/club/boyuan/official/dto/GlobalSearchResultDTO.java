@@ -3,7 +3,7 @@ package club.boyuan.official.dto;
 import club.boyuan.official.entity.User;
 import club.boyuan.official.entity.AwardExperience;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -109,7 +109,7 @@ public class GlobalSearchResultDTO {
         private Integer awardId;
         private Integer userId;
         private String awardName;
-        private LocalDateTime awardTime;
+        private LocalDate awardTime;
         private String description;
 
         public AwardSearchResult() {}
@@ -147,11 +147,11 @@ public class GlobalSearchResultDTO {
             this.awardName = awardName;
         }
 
-        public LocalDateTime getAwardTime() {
+        public LocalDate getAwardTime() {
             return awardTime;
         }
 
-        public void setAwardTime(LocalDateTime awardTime) {
+        public void setAwardTime(LocalDate awardTime) {
             this.awardTime = awardTime;
         }
 

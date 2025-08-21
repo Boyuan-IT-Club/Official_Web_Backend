@@ -25,7 +25,7 @@ CREATE TABLE `award_experience`  (
   `award_id` int NOT NULL AUTO_INCREMENT,
   `user_id` int NOT NULL,
   `award_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `award_time` timestamp NOT NULL,
+  `award_time` date NOT NULL,
   `description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
   PRIMARY KEY (`award_id`) USING BTREE,
   INDEX `user_id`(`user_id` ASC) USING BTREE,
@@ -35,20 +35,20 @@ CREATE TABLE `award_experience`  (
 -- ----------------------------
 -- Records of award_experience
 -- ----------------------------
-INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (1, 2, 'ACM程序设计竞赛银奖', '2023-05-20 00:00:00', '在省级ACM程序设计竞赛中获得银奖');
-INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (2, 2, '校级优秀学生奖学金', '2023-12-01 00:00:00', '因学业成绩优异获得校级一等奖学金');
-INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (3, 2, '数学建模竞赛二等奖', '2023-09-15 00:00:00', '在全国大学生数学建模竞赛中获得二等奖');
-INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (4, 3, '大学生创新创业大赛一等奖', '2023-08-10 00:00:00', '带领团队在校级创新创业大赛中获得一等奖');
-INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (5, 3, '英语演讲比赛三等奖', '2023-11-25 00:00:00', '在外语学院举办的英语演讲比赛中获得三等奖');
-INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (6, 3, '优秀学生干部', '2023-12-01 00:00:00', '因担任学生会干部期间表现优秀获得此荣誉');
+INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (1, 2, 'ACM程序设计竞赛银奖', '2023-05-20', '在省级ACM程序设计竞赛中获得银奖');
+INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (2, 2, '校级优秀学生奖学金', '2023-12-01', '因学业成绩优异获得校级一等奖学金');
+INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (3, 2, '数学建模竞赛二等奖', '2023-09-15', '在全国大学生数学建模竞赛中获得二等奖');
+INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (4, 3, '大学生创新创业大赛一等奖', '2023-08-10', '带领团队在校级创新创业大赛中获得一等奖');
+INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (5, 3, '英语演讲比赛三等奖', '2023-11-25', '在外语学院举办的英语演讲比赛中获得三等奖');
+INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (6, 3, '优秀学生干部', '2023-12-01', '因担任学生会干部期间表现优秀获得此荣誉');
 
 -- 添加更多测试用户的获奖经历
-INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (7, 4, '全国大学生数学竞赛一等奖', '2024-03-15 00:00:00', '在全国大学生数学竞赛中获得一等奖');
-INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (8, 4, '校级优秀学生干部', '2024-12-01 00:00:00', '担任学生会主席期间工作出色');
-INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (9, 5, 'ACM国际大学生程序设计竞赛区域赛银奖', '2024-05-20 00:00:00', '在ACM国际大学生程序设计竞赛区域赛中获得银奖');
-INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (10, 5, '蓝桥杯全国软件和信息技术专业人才大赛二等奖', '2024-04-10 00:00:00', '在蓝桥杯全国软件和信息技术专业人才大赛中获得二等奖');
-INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (11, 6, '全国大学生英语竞赛特等奖', '2024-05-15 00:00:00', '在全国大学生英语竞赛中获得特等奖');
-INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (12, 6, '校级社会实践优秀个人', '2024-12-01 00:00:00', '在暑期社会实践活动中表现突出');
+INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (7, 4, '全国大学生数学竞赛一等奖', '2024-03-15', '在全国大学生数学竞赛中获得一等奖');
+INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (8, 4, '校级优秀学生干部', '2024-12-01', '担任学生会主席期间工作出色');
+INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (9, 5, 'ACM国际大学生程序设计竞赛区域赛银奖', '2024-05-20', '在ACM国际大学生程序设计竞赛区域赛中获得银奖');
+INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (10, 5, '蓝桥杯全国软件和信息技术专业人才大赛二等奖', '2024-04-10', '在蓝桥杯全国软件和信息技术专业人才大赛中获得二等奖');
+INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (11, 6, '全国大学生英语竞赛特等奖', '2024-05-15', '在全国大学生英语竞赛中获得特等奖');
+INSERT INTO `award_experience` (`award_id`, `user_id`, `award_name`, `award_time`, `description`) VALUES (12, 6, '校级社会实践优秀个人', '2024-12-01', '在暑期社会实践活动中表现突出');
 
 -- ----------------------------
 -- Table structure for resume
@@ -110,6 +110,8 @@ INSERT INTO `resume_field_definition` (`field_id`, `cycle_id`, `field_key`, `fie
 INSERT INTO `resume_field_definition` (`field_id`, `cycle_id`, `field_key`, `field_label`, `is_required`, `sort_order`, `is_active`, `created_at`, `updated_at`) VALUES (11, 2025, 'self_introduction', '自我介绍', 1, 8, 1, '2025-08-15 18:00:00', '2025-08-15 18:00:00');
 INSERT INTO `resume_field_definition` (`field_id`, `cycle_id`, `field_key`, `field_label`, `is_required`, `sort_order`, `is_active`, `created_at`, `updated_at`) VALUES (12, 2025, 'tech_stack', '技术栈', 1, 9, 1, '2025-08-15 18:00:00', '2025-08-15 18:00:00');
 INSERT INTO `resume_field_definition` (`field_id`, `cycle_id`, `field_key`, `field_label`, `is_required`, `sort_order`, `is_active`, `created_at`, `updated_at`) VALUES (13, 2025, 'project_experience', '项目经验', 1, 10, 1, '2025-08-15 18:00:00', '2025-08-15 18:00:00');
+INSERT INTO `resume_field_definition` (`field_id`, `cycle_id`, `field_key`, `field_label`, `is_required`, `sort_order`, `is_active`, `created_at`, `updated_at`) VALUES (14, 2025, 'expected_interview_time', '期望的面试时间', 0, 11, 1, '2025-08-15 18:00:00', '2025-08-15 18:00:00');
+INSERT INTO `resume_field_definition` (`field_id`, `cycle_id`, `field_key`, `field_label`, `is_required`, `sort_order`, `is_active`, `created_at`, `updated_at`) VALUES (15, 2025, 'personal_photo', '个人照片', 0, 12, 1, '2025-08-15 18:00:00', '2025-08-15 18:00:00');
 
 -- ----------------------------
 -- Table structure for resume_field_value
@@ -147,6 +149,8 @@ INSERT INTO `resume_field_value` (`value_id`, `resume_id`, `field_id`, `field_va
 INSERT INTO `resume_field_value` (`value_id`, `resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`) VALUES (11, 2, 11, '热爱编程，有良好的团队合作精神', '2025-08-15 15:25:10', '2025-08-15 15:25:10');
 INSERT INTO `resume_field_value` (`value_id`, `resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`) VALUES (12, 2, 12, '["Java", "Spring Boot", "MySQL", "Redis"]', '2025-08-15 15:25:10', '2025-08-15 15:25:10');
 INSERT INTO `resume_field_value` (`value_id`, `resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`) VALUES (13, 2, 13, '参与开发学校图书馆管理系统，使用Java Spring Boot框架和MySQL数据库。负责后端接口开发和数据库设计。', '2025-08-15 15:25:10', '2025-08-15 15:25:10');
+INSERT INTO `resume_field_value` (`value_id`, `resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`) VALUES (34, 2, 14, '工作日下午', '2025-08-15 15:25:10', '2025-08-15 15:25:10');
+INSERT INTO `resume_field_value` (`value_id`, `resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`) VALUES (35, 2, 15, '/uploads/photos/user2.jpg', '2025-08-15 15:25:10', '2025-08-15 15:25:10');
 
 INSERT INTO `resume_field_value` (`value_id`, `resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`) VALUES (14, 3, 4, '测试用户2', '2025-08-15 16:40:20', '2025-08-15 16:40:20');
 INSERT INTO `resume_field_value` (`value_id`, `resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`) VALUES (15, 3, 5, '软件工程', '2025-08-15 16:40:20', '2025-08-15 16:40:20');
@@ -158,6 +162,8 @@ INSERT INTO `resume_field_value` (`value_id`, `resume_id`, `field_id`, `field_va
 INSERT INTO `resume_field_value` (`value_id`, `resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`) VALUES (21, 3, 11, '对UI设计有浓厚兴趣，熟练使用各类设计软件', '2025-08-15 16:40:20', '2025-08-15 16:40:20');
 INSERT INTO `resume_field_value` (`value_id`, `resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`) VALUES (22, 3, 12, '["Photoshop", "Illustrator", "Figma", "HTML", "CSS"]', '2025-08-15 16:40:20', '2025-08-15 16:40:20');
 INSERT INTO `resume_field_value` (`value_id`, `resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`) VALUES (23, 3, 13, '设计学校官方网站界面，使用Figma进行UI设计，并使用HTML/CSS实现部分页面。', '2025-08-15 16:40:20', '2025-08-15 16:40:20');
+INSERT INTO `resume_field_value` (`value_id`, `resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`) VALUES (36, 3, 14, '周末全天', '2025-08-15 16:40:20', '2025-08-15 16:40:20');
+INSERT INTO `resume_field_value` (`value_id`, `resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`) VALUES (37, 3, 15, '/uploads/photos/user3.jpg', '2025-08-15 16:40:20', '2025-08-15 16:40:20');
 
 INSERT INTO `resume_field_value` (`value_id`, `resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`) VALUES (24, 4, 4, '测试用户3', '2025-08-15 17:10:30', '2025-08-15 17:10:30');
 INSERT INTO `resume_field_value` (`value_id`, `resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`) VALUES (25, 4, 5, '数据科学与大数据技术', '2025-08-15 17:10:30', '2025-08-15 17:10:30');
@@ -169,6 +175,8 @@ INSERT INTO `resume_field_value` (`value_id`, `resume_id`, `field_id`, `field_va
 INSERT INTO `resume_field_value` (`value_id`, `resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`) VALUES (31, 4, 11, '具备良好的沟通能力和数据分析能力，希望能在市场推广方面发挥作用', '2025-08-15 17:10:30', '2025-08-15 17:10:30');
 INSERT INTO `resume_field_value` (`value_id`, `resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`) VALUES (32, 4, 12, '["Python", "数据分析", "市场分析", "Excel", "Tableau"]', '2025-08-15 17:10:30', '2025-08-15 17:10:30');
 INSERT INTO `resume_field_value` (`value_id`, `resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`) VALUES (33, 4, 13, '分析学校社团活动参与数据，使用Python进行数据清洗和分析，并用Tableau制作可视化报告。', '2025-08-15 17:10:30', '2025-08-15 17:10:30');
+INSERT INTO `resume_field_value` (`value_id`, `resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`) VALUES (38, 4, 14, '工作日晚上或周末', '2025-08-15 17:10:30', '2025-08-15 17:10:30');
+INSERT INTO `resume_field_value` (`value_id`, `resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`) VALUES (39, 4, 15, '/uploads/photos/user4.jpg', '2025-08-15 17:10:30', '2025-08-15 17:10:30');
 
 -- ----------------------------
 -- Table structure for user

@@ -2,7 +2,7 @@ package club.boyuan.official.entity;
 
 import jakarta.persistence.*;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import com.fasterxml.jackson.annotation.JsonFormat;
 
 @Entity
@@ -20,8 +20,8 @@ public class AwardExperience {
     private String awardName;
 
     @Column(name = "award_time", nullable = false)
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    private LocalDateTime awardTime;
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate awardTime;
 
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
@@ -30,7 +30,7 @@ public class AwardExperience {
     public AwardExperience() {
     }
 
-    public AwardExperience(Integer userId, String awardName, LocalDateTime awardTime, String description) {
+    public AwardExperience(Integer userId, String awardName, LocalDate awardTime, String description) {
         this.userId = userId;
         this.awardName = awardName;
         this.awardTime = awardTime;
@@ -62,11 +62,11 @@ public class AwardExperience {
         this.awardName = awardName;
     }
 
-    public LocalDateTime getAwardTime() {
+    public LocalDate getAwardTime() {
         return awardTime;
     }
 
-    public void setAwardTime(LocalDateTime awardTime) {
+    public void setAwardTime(LocalDate awardTime) {
         this.awardTime = awardTime;
     }
 

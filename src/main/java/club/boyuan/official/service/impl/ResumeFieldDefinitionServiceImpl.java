@@ -7,6 +7,9 @@ import club.boyuan.official.mapper.ResumeFieldDefinitionMapper;
 import club.boyuan.official.mapper.ResumeFieldValueMapper;
 import club.boyuan.official.service.IResumeFieldDefinitionService;
 import lombok.AllArgsConstructor;
+import org.apache.ibatis.session.ExecutorType;
+import org.apache.ibatis.session.SqlSession;
+import org.apache.ibatis.session.SqlSessionFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -22,6 +25,7 @@ public class ResumeFieldDefinitionServiceImpl implements IResumeFieldDefinitionS
     
     private final ResumeFieldDefinitionMapper resumeFieldDefinitionMapper;
     private final ResumeFieldValueMapper resumeFieldValueMapper;
+    private final SqlSessionFactory sqlSessionFactory;
     
     @Override
     public List<ResumeFieldDefinition> getFieldDefinitionsByCycleId(Integer cycleId) {
@@ -70,6 +74,28 @@ public class ResumeFieldDefinitionServiceImpl implements IResumeFieldDefinitionS
         } catch (Exception e) {
             logger.error("更新简历字段定义失败，字段ID: {}，字段键名: {}", 
                     fieldDefinition.getFieldId(), fieldDefinition.getFieldKey(), e);
+            throw new BusinessException(BusinessExceptionEnum.RESUME_FIELD_DEFINITION_UPDATE_FAILED);
+        }
+    }
+    
+    @Override
+    public List<ResumeFieldDefinition> batchUpdateFieldDefinitions(List<ResumeFieldDefinition> fieldDefinitions) {
+        logger.info("批量更新简历字段定义，字段数量: {}", fieldDefinitions.size());
+        try (SqlSession sqlSession = sqlSessionFactory.openSession(ExecutorType.BATCH)) {
+            ResumeFieldDefinitionMapper batchMapper = sqlSession.getMapper(ResumeFieldDefinitionMapper.class);
+            
+            // 批量更新字段定义
+            for (ResumeFieldDefinition fieldDefinition : fieldDefinitions) {
+                fieldDefinition.setUpdatedAt(LocalDateTime.now());
+                batchMapper.update(fieldDefinition);
+            }
+            
+            // 提交批处理
+            sqlSession.commit();
+            
+            return fieldDefinitions;
+        } catch (Exception e) {
+            logger.error("批量更新简历字段定义失败，字段数量: {}", fieldDefinitions.size(), e);
             throw new BusinessException(BusinessExceptionEnum.RESUME_FIELD_DEFINITION_UPDATE_FAILED);
         }
     }
