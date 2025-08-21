@@ -283,7 +283,7 @@ public class ResumeServiceImpl implements IResumeService {
                         fieldLabel = fieldDefinition.getFieldLabel();
                     }
                 }
-                return new SimpleResumeFieldDTO(fieldLabel, fieldValue.getFieldValue());
+                return new SimpleResumeFieldDTO(fieldValue.getFieldId(), fieldLabel, fieldValue.getFieldValue());
             }).collect(Collectors.toList());
         } catch (Exception e) {
             logger.error("获取简化版字段信息失败，简历ID: {}", resumeId, e);

@@ -532,4 +532,92 @@ public class ResumeController {
                             "简历状态更新失败: " + e.getMessage()));
         }
     }
+    
+    /**
+     * 更新简历内容
+     * @param cycleId 年份ID
+     * @param fieldValues 字段值列表
+     * @param request HTTP请求
+     * @return 更新结果
+     */
+    @PutMapping("/cycle/{cycleId}")
+    public ResponseEntity<ResponseMessage<?>> updateResume(
+            @PathVariable Integer cycleId,
+            @RequestBody List<ResumeFieldValue> fieldValues,
+            HttpServletRequest request) {
+        try {
+            String username = "unknown";
+            if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
+                try {
+                    username = jwtTokenUtil.extractUsername(request.getHeader("Authorization").substring(7));
+                } catch (Exception ex) {
+                    logger.warn("无法从token中提取用户名");
+                }
+            }
+            
+            User currentUser = userService.getUserByUsername(username);
+            
+            logger.info("用户{}更新{}年份简历，字段数量: {}", username, cycleId, fieldValues.size());
+            Resume resume = resumeService.getResumeByUserIdAndCycleId(currentUser.getUserId(), cycleId);
+            if (resume == null) {
+                logger.warn("简历不存在，用户ID: {}，年份: {}", currentUser.getUserId(), cycleId);
+                throw new BusinessException(BusinessExceptionEnum.RESUME_NOT_FOUND);
+            }
+            
+            // 检查简历状态，已提交的简历不能更新
+            if (resume.getStatus() != null && resume.getStatus() >= 2) {
+                logger.warn("尝试更新已提交的简历，用户ID: {}，年份: {}，状态: {}", 
+                        currentUser.getUserId(), cycleId, resume.getStatus());
+                throw new BusinessException(BusinessExceptionEnum.RESUME_ALREADY_SUBMITTED);
+            }
+            
+            // 设置简历ID
+            for (ResumeFieldValue fieldValue : fieldValues) {
+                fieldValue.setResumeId(resume.getResumeId());
+            }
+            
+            // 保存字段值
+            resumeService.saveFieldValues(fieldValues);
+            
+            // 更新简历更新时间
+            resume.setUpdatedAt(LocalDateTime.now());
+            resumeService.updateResume(resume);
+            
+            return ResponseEntity.ok(ResponseMessage.success("简历更新成功"));
+        } catch (BusinessException e) {
+            String username = "unknown";
+            if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
+                try {
+                    username = jwtTokenUtil.extractUsername(request.getHeader("Authorization").substring(7));
+                } catch (Exception ex) {
+                    logger.warn("无法从token中提取用户名");
+                }
+            }
+            
+            logger.warn("更新简历业务异常，用户: {}，年份: {}，错误码: {}，错误信息: {}", 
+                    username, cycleId, e.getCode(), e.getMessage());
+            HttpStatus status;
+            if (e.getCode() == BusinessExceptionEnum.RESUME_NOT_FOUND.getCode()) {
+                status = HttpStatus.NOT_FOUND;
+            } else {
+                status = HttpStatus.BAD_REQUEST;
+            }
+            return ResponseEntity.status(status)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            String username = "unknown";
+            if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
+                try {
+                    username = jwtTokenUtil.extractUsername(request.getHeader("Authorization").substring(7));
+                } catch (Exception ex) {
+                    logger.warn("无法从token中提取用户名");
+                }
+            }
+            
+            logger.error("更新简历系统异常，用户: {}，年份: {}", username, cycleId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
+                            "简历更新失败: " + e.getMessage()));
+        }
+    }
 }
