@@ -54,16 +54,29 @@ public class AuthController {
             messageUtils.validatePhone(registerDTO.getPhone());
 
             // 检查用户名是否已存在
-            if (userService.getUserByUsername(registerDTO.getUsername()) != null) {
+            User existingUser = userService.getUserByUsername(registerDTO.getUsername());
+            if (existingUser != null) {
                 throw new BusinessException(BusinessExceptionEnum.USERNAME_ALREADY_EXISTS);
             }
 
             // 检查邮箱是否已存在
-            if (userService.getUserByEmail(registerDTO.getEmail()) != null) {
+            existingUser = userService.getUserByEmail(registerDTO.getEmail());
+            if (existingUser != null) {
                 throw new BusinessException(BusinessExceptionEnum.EMAIL_ALREADY_EXISTS);
             }
 
-            // 创建用户DTO并设置基本信息
+            // 检查手机号是否已存在
+            existingUser = userService.getUserByPhone(registerDTO.getPhone());
+            if (existingUser != null) {
+                throw new BusinessException(BusinessExceptionEnum.PHONE_ALREADY_EXISTS);
+            }
+            
+            // 验证邮箱验证码
+            if (!loginService.verifyVerificationCode(registerDTO.getEmail(), registerDTO.getEmailCode())) {
+                throw new BusinessException(BusinessExceptionEnum.INVALID_CAPTCHA);
+            }
+
+            // 转换RegisterDTO为UserDTO
             UserDTO userDTO = new UserDTO();
             userDTO.setUsername(registerDTO.getUsername());
             userDTO.setPassword(registerDTO.getPassword());
@@ -73,18 +86,22 @@ public class AuthController {
             userDTO.setRole(User.ROLE_USER); // 默认普通用户角色
             userDTO.setStatus(true); // 默认激活状态
 
-            User newUser = userService.register(userDTO);
+            // 注册用户
+            User user = userService.register(userDTO);
+
+            // 构建响应数据
             Map<String, Object> data = new HashMap<>();
-            data.put("user_id", newUser.getUserId());
-            data.put("username", newUser.getUsername());
+            data.put("userId", user.getUserId());
+            data.put("username", user.getUsername());
+
             return ResponseEntity.status(HttpStatus.CREATED)
-                    .body(ResponseMessage.success(data));
+                    .body(new ResponseMessage<>(201, "注册成功", data));
         } catch (BusinessException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+                    .body(new ResponseMessage<>(500, "服务器内部错误: " + e.getMessage(), null));
         }
     }
 
