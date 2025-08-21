@@ -54,6 +54,8 @@ public class SecurityConfig {
                         // 允许公开访问的接口
                         .requestMatchers("/api/auth/**", "/api/health", "/api/health/**", "/health").permitAll()
                         .requestMatchers("/api/public/**").permitAll()
+                        // 允许访问上传的文件
+                        .requestMatchers("/uploads/**").permitAll()
                         // 允许静态资源访问
                         .requestMatchers(PathRequest.toStaticResources().atCommonLocations()).permitAll()
                         // 其他所有请求需要认证
