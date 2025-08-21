@@ -30,13 +30,13 @@
     <insert id="batchInsert">
         INSERT INTO resume_field_value (resume_id, field_id, field_value, created_at, updated_at)
         VALUES
-        <foreach collection="list" item="fieldValue" separator=",">
+        <foreach collection="fieldValues" item="fieldValue" separator=",">
             (#{fieldValue.resumeId}, #{fieldValue.fieldId}, #{fieldValue.fieldValue}, NOW(), NOW())
         </foreach>
     </insert>
 
     <update id="batchUpdate">
-        <foreach collection="list" item="fieldValue" separator=";">
+        <foreach collection="fieldValues" item="fieldValue" separator=";">
             UPDATE resume_field_value
             SET field_value = #{fieldValue.fieldValue}, updated_at = NOW()
             WHERE value_id = #{fieldValue.valueId}

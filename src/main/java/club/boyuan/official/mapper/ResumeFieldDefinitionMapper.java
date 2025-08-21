@@ -1,8 +1,8 @@
-
 package club.boyuan.official.mapper;
 
 import club.boyuan.official.entity.ResumeFieldDefinition;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 
@@ -36,6 +36,7 @@ public interface ResumeFieldDefinitionMapper {
      * @return 影响行数
      */
     int update(ResumeFieldDefinition fieldDefinition);
+    
     
     /**
      * 删除字段定义

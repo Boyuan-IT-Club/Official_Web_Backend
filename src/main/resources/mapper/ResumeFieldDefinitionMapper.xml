@@ -56,6 +56,30 @@
         WHERE field_id = #{fieldId}
     </update>
     
+    <!-- 批量更新字段定义 -->
+    <update id="batchUpdate" parameterType="club.boyuan.official.entity.ResumeFieldDefinition">
+        UPDATE resume_field_definition 
+        <set>
+            <if test="fieldKey != null and fieldKey != ''">
+                field_key = #{fieldKey},
+            </if>
+            <if test="fieldLabel != null and fieldLabel != ''">
+                field_label = #{fieldLabel},
+            </if>
+            <if test="isRequired != null">
+                is_required = #{isRequired},
+            </if>
+            <if test="sortOrder != null">
+                sort_order = #{sortOrder},
+            </if>
+            <if test="isActive != null">
+                is_active = #{isActive},
+            </if>
+            updated_at = NOW()
+        </set>
+        WHERE field_id = #{fieldId}
+    </update>
+    
     <!-- 删除字段定义 -->
     <delete id="deleteById">
         DELETE FROM resume_field_definition WHERE field_id = #{fieldId}
