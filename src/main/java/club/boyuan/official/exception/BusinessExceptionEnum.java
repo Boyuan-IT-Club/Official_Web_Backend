@@ -29,6 +29,7 @@ public enum BusinessExceptionEnum {
     USER_INFO_UPDATE_FAILED(2010, "用户信息更新失败"),
     PHONE_ALREADY_EXISTS(2011, "手机号已存在"),
     PHONE_FORMAT_ERROR(2012, "手机号格式不正确"),
+    PASSWORD_NOT_MATCH(2013, "密码不一致"),
     
     // 认证相关异常 (2100-2199)
     AUTHENTICATION_FAILED(2100, "认证失败"),

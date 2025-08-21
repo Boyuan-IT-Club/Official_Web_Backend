@@ -46,6 +46,11 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<ResponseMessage<?>> register(@Valid @RequestBody RegisterDTO registerDTO) {
         try {
+            // 验证密码和确认密码是否一致
+            if (!registerDTO.getPassword().equals(registerDTO.getConfirmPassword())) {
+                throw new BusinessException(BusinessExceptionEnum.PASSWORD_NOT_MATCH);
+            }
+
             // 使用工具类验证邮箱和手机号格式
             messageUtils.validateEmail(registerDTO.getEmail());
             if (!registerDTO.getEmail().endsWith("@stu.ecnu.edu.cn")) {
