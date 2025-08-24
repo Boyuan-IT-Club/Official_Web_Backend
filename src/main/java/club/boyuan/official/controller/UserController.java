@@ -294,6 +294,14 @@ public class UserController {
                 existingUser.setPhone((String) userInfo.get("phone"));
                 logger.debug("更新电话为: {}", userInfo.get("phone"));
             }
+            if (userInfo.containsKey("major") && userInfo.get("major") != null) {
+                existingUser.setMajor((String) userInfo.get("major"));
+                logger.debug("更新专业为: {}", userInfo.get("major"));
+            }
+            if (userInfo.containsKey("github") && userInfo.get("github") != null) {
+                existingUser.setGithub((String) userInfo.get("github"));
+                logger.debug("更新GitHub地址为: {}", userInfo.get("github"));
+            }
             if (userInfo.containsKey("dept") && userInfo.get("dept") != null) {
                 existingUser.setDept((String) userInfo.get("dept"));
                 logger.debug("更新部门为: {}", userInfo.get("dept"));
@@ -500,6 +508,14 @@ public class UserController {
             if (userInfo.containsKey("phone") && userInfo.get("phone") != null) {
                 existingUser.setPhone((String) userInfo.get("phone"));
                 logger.debug("更新电话为: {}", userInfo.get("phone"));
+            }
+            if (userInfo.containsKey("major") && userInfo.get("major") != null) {
+                existingUser.setMajor((String) userInfo.get("major"));
+                logger.debug("更新专业为: {}", userInfo.get("major"));
+            }
+            if (userInfo.containsKey("github") && userInfo.get("github") != null) {
+                existingUser.setGithub((String) userInfo.get("github"));
+                logger.debug("更新GitHub地址为: {}", userInfo.get("github"));
             }
             if (userInfo.containsKey("dept") && userInfo.get("dept") != null) {
                 existingUser.setDept((String) userInfo.get("dept"));

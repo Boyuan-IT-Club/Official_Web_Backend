@@ -66,6 +66,13 @@ public enum BusinessExceptionEnum {
     RESUME_FIELD_DEFINITION_DELETE_FAILED(3103, "简历字段定义删除失败"),
     RESUME_FIELD_DEFINITION_QUERY_FAILED(3104, "简历字段定义查询失败"),
     
+    // 招募周期相关异常 (3200-3299)
+    RECRUITMENT_CYCLE_NOT_FOUND(3201, "招募周期不存在"),
+    RECRUITMENT_CYCLE_CREATE_FAILED(3202, "招募周期创建失败"),
+    RECRUITMENT_CYCLE_UPDATE_FAILED(3203, "招募周期更新失败"),
+    RECRUITMENT_CYCLE_DELETE_FAILED(3204, "招募周期删除失败"),
+    RECRUITMENT_CYCLE_QUERY_FAILED(3205, "招募周期查询失败"),
+    
     // 数据库相关异常 (4000-4099)
     DATABASE_OPERATION_FAILED(4001, "数据库操作失败"),
     DATABASE_CONNECTION_FAILED(4002, "数据库连接失败"),

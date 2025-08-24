@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="club.boyuan.official.mapper.RecruitmentCycleMapper">
+
+    <resultMap id="RecruitmentCycleResultMap" type="club.boyuan.official.entity.RecruitmentCycle">
+        <id property="cycleId" column="cycle_id"/>
+        <result property="cycleName" column="cycle_name"/>
+        <result property="description" column="description"/>
+        <result property="startDate" column="start_date"/>
+        <result property="endDate" column="end_date"/>
+        <result property="academicYear" column="academic_year"/>
+        <result property="status" column="status"/>
+        <result property="isActive" column="is_active"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="club.boyuan.official.entity.RecruitmentCycle" useGeneratedKeys="true" keyProperty="cycleId">
+        INSERT INTO recruitment_cycle (cycle_name, description, start_date, end_date, academic_year, status, is_active, created_at, updated_at)
+        VALUES (#{cycleName}, #{description}, #{startDate}, #{endDate}, #{academicYear}, #{status, jdbcType=INTEGER}, #{isActive, jdbcType=INTEGER}, NOW(), NOW())
+    </insert>
+
+    <update id="update" parameterType="club.boyuan.official.entity.RecruitmentCycle">
+        UPDATE recruitment_cycle
+        <set>
+            <if test="cycleName != null and cycleName != ''">
+                cycle_name = #{cycleName},
+            </if>
+            <if test="description != null and description != ''">
+                description = #{description},
+            </if>
+            <if test="startDate != null">
+                start_date = #{startDate},
+            </if>
+            <if test="endDate != null">
+                end_date = #{endDate},
+            </if>
+            <if test="academicYear != null and academicYear != ''">
+                academic_year = #{academicYear},
+            </if>
+            <if test="status != null">
+                status = #{status},
+            </if>
+            <if test="isActive != null">
+                is_active = #{isActive},
+            </if>
+            updated_at = NOW()
+        </set>
+        WHERE cycle_id = #{cycleId}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM recruitment_cycle WHERE cycle_id = #{cycleId}
+    </delete>
+
+    <select id="findById" resultMap="RecruitmentCycleResultMap">
+        SELECT * FROM recruitment_cycle WHERE cycle_id = #{cycleId}
+    </select>
+
+    <select id="findAll" resultMap="RecruitmentCycleResultMap">
+        SELECT * FROM recruitment_cycle ORDER BY created_at DESC
+    </select>
+
+    <select id="findByStatus" resultMap="RecruitmentCycleResultMap">
+        SELECT * FROM recruitment_cycle WHERE status = #{status} ORDER BY created_at DESC
+    </select>
+
+    <select id="findByIsActive" resultMap="RecruitmentCycleResultMap">
+        SELECT * FROM recruitment_cycle WHERE is_active = #{isActive} ORDER BY created_at DESC
+    </select>
+
+    <select id="findByAcademicYear" resultMap="RecruitmentCycleResultMap">
+        SELECT * FROM recruitment_cycle WHERE academic_year = #{academicYear}
+    </select>
+
+</mapper>

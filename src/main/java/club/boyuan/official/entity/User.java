@@ -35,6 +35,12 @@ public class User {
     @Column(name = "phone")
     private String phone;
 
+    @Column(name = "major")
+    private String major;
+
+    @Column(name = "github")
+    private String github;
+
     @Column(name = "dept")
     private String dept;
 
@@ -118,6 +124,22 @@ public class User {
         this.phone = phone;
     }
 
+    public String getMajor() {
+        return major;
+    }
+
+    public void setMajor(String major) {
+        this.major = major;
+    }
+
+    public String getGithub() {
+        return github;
+    }
+
+    public void setGithub(String github) {
+        this.github = github;
+    }
+
     public String getDept() {
         return dept;
     }
@@ -159,6 +181,6 @@ public class User {
     }
 
     public String toString() {
-        return "User{ROLE_ADMIN = " + ROLE_ADMIN + ", ROLE_USER = " + ROLE_USER + ", userId = " + userId + ", username = " + username + ", password = " + password + ", role = " + role + ", name = " + name + ", email = " + email + ", phone = " + phone + ", dept = " + dept + ", createTime = " + createTime + ", status = " + status + ", isMember = " + isMember + "}";
+        return "User{ROLE_ADMIN = " + ROLE_ADMIN + ", ROLE_USER = " + ROLE_USER + ", userId = " + userId + ", username = " + username + ", password = " + password + ", role = " + role + ", name = " + name + ", email = " + email + ", phone = " + phone + ", major = " + major + ", github = " + github + ", dept = " + dept + ", createTime = " + createTime + ", status = " + status + ", isMember = " + isMember + "}";
     }
 }
