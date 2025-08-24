@@ -1,8 +1,8 @@
 package club.boyuan.official.entity;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
-import com.fasterxml.jackson.annotation.JsonFormat;
 
 @Entity
 @Table(name = "resume_field_definition")

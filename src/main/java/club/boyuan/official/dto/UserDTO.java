@@ -23,6 +23,8 @@ public class UserDTO {
     private String name;
     @NotBlank(message = "电话不能为空")
     private String phone;
+    private String major;
+    private String github;
     @Pattern(regexp = "ADMIN|USER", message = "角色必须是ADMIN或USER")
     private String role;
     private boolean status;
@@ -41,6 +43,6 @@ public class UserDTO {
     }
 
     public String toString() {
-        return "UserDTO{userId = " + userId + ", username = " + username + ", password = " + password + ", email = " + email + ", name = " + name + ", phone = " + phone + ", role = " + role + ", status = " + status + ", dept = " + dept + ", avatar = " + avatar + "}";
+        return "UserDTO{userId = " + userId + ", username = " + username + ", password = " + password + ", email = " + email + ", name = " + name + ", phone = " + phone + ", major = " + major + ", github = " + github + ", role = " + role + ", status = " + status + ", dept = " + dept + ", avatar = " + avatar + "}";
     }
 }

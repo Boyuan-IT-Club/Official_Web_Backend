@@ -1,8 +1,8 @@
 package club.boyuan.official.entity;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
-import com.fasterxml.jackson.annotation.JsonFormat;
 
 @Entity
 @Table(name = "resume")
@@ -18,7 +18,14 @@ public class Resume {
     @Column(name = "cycle_id", nullable = false)
     private Integer cycleId;
 
-    // 修复字段定义，使其与数据库结构匹配
+    /**
+     * 简历状态:
+     * 1 - 草稿
+     * 2 - 已提交
+     * 3 - 评审中
+     * 4 - 通过
+     * 5 - 未通过
+     */
     @Column(name = "status", columnDefinition = "tinyint")
     private Integer status;
 

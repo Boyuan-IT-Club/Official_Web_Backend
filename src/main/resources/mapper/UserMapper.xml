@@ -11,6 +11,8 @@
             <if test="role != null">role,</if>
             <if test="name != null">name,</if>
             <if test="phone != null">phone,</if>
+            <if test="major != null">major,</if>
+            <if test="github != null">github,</if>
             <if test="dept != null">dept,</if>
             <if test="avatar != null">avatar,</if>
             create_time,
@@ -25,6 +27,8 @@
             <if test="role != null">#{role},</if>
             <if test="name != null">#{name},</if>
             <if test="phone != null">#{phone},</if>
+            <if test="major != null">#{major},</if>
+            <if test="github != null">#{github},</if>
             <if test="dept != null">#{dept},</if>
             <if test="avatar != null">#{avatar},</if>
             NOW(),
@@ -41,6 +45,8 @@
                role,
                name,
                phone,
+               major,
+               github,
                dept,
                avatar,
                create_time,
@@ -58,6 +64,8 @@
                role,
                name,
                phone,
+               major,
+               github,
                dept,
                avatar,
                create_time,
@@ -75,6 +83,8 @@
                role,
                name,
                phone,
+               major,
+               github,
                dept,
                avatar,
                create_time,
@@ -92,6 +102,8 @@
                role,
                name,
                phone,
+               major,
+               github,
                dept,
                avatar,
                create_time,
@@ -110,6 +122,8 @@
             <if test="role != null">role = #{role},</if>
             <if test="name != null">name = #{name},</if>
             <if test="phone != null">phone = #{phone},</if>
+            <if test="major != null">major = #{major},</if>
+            <if test="github != null">github = #{github},</if>
             <if test="dept != null">dept = #{dept},</if>
             <if test="avatar != null">avatar = #{avatar},</if>
             <if test="status != null">status = #{status},</if>
@@ -138,6 +152,8 @@
                role,
                name,
                phone,
+               major,
+               github,
                dept,
                avatar,
                create_time,
@@ -147,7 +163,8 @@
     </select>
 
     <select id="findByRoleAndDeptAndStatus" resultType="club.boyuan.official.entity.User">
-        SELECT user_id, username, password, email, role, name, phone, dept, avatar, create_time, status, is_member FROM user
+        SELECT user_id, username, password, email, role, name, phone, dept, avatar, create_time, status, is_member
+        FROM user
         <where>
             <if test="role != null and role != ''">
                 AND role = #{role}
@@ -186,6 +203,8 @@
                role,
                name,
                phone,
+               major,
+               github,
                dept,
                avatar,
                create_time,
