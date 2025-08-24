@@ -655,4 +655,59 @@ public class ResumeController {
                             "简历更新失败: " + e.getMessage()));
         }
     }
+    
+    /**
+     * 删除简历
+     * @param resumeId 简历ID
+     * @param request HTTP请求
+     * @return 删除结果
+     */
+    @DeleteMapping("/{resumeId}")
+    public ResponseEntity<ResponseMessage<String>> deleteResume(
+            @PathVariable Integer resumeId, HttpServletRequest request) {
+        try {
+            String token = request.getHeader("Authorization").substring(7);
+            String username = jwtTokenUtil.extractUsername(token);
+            User currentUser = userService.getUserByUsername(username);
+            
+            logger.info("用户{}尝试删除简历{}", username, resumeId);
+            
+            // 获取要删除的简历
+            Resume resume = resumeService.getResumeById(resumeId);
+            if (resume == null) {
+                logger.warn("尝试删除不存在的简历，简历ID: {}", resumeId);
+                throw new BusinessException(BusinessExceptionEnum.RESUME_NOT_FOUND);
+            }
+            
+            // 检查权限：管理员或简历所有者可以删除
+            if (!User.ROLE_ADMIN.equals(currentUser.getRole()) && !currentUser.getUserId().equals(resume.getUserId())) {
+                logger.warn("用户{}尝试删除不属于自己的简历{}", username, resumeId);
+                throw new BusinessException(BusinessExceptionEnum.USER_ROLE_NOT_AUTHORIZED);
+            }
+            
+            // 执行删除操作
+            resumeService.deleteResume(resumeId);
+            
+            logger.info("用户{}成功删除简历{}", username, resumeId);
+            return ResponseEntity.ok(new ResponseMessage<>(200, "简历删除成功", "简历删除成功"));
+        } catch (BusinessException e) {
+            logger.warn("删除简历业务异常，简历ID: {}，错误码: {}，错误信息: {}", resumeId, e.getCode(), e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
+        } catch (Exception e) {
+            String username = "unknown";
+            if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
+                try {
+                    username = jwtTokenUtil.extractUsername(request.getHeader("Authorization").substring(7));
+                } catch (Exception ex) {
+                    logger.warn("无法从token中提取用户名");
+                }
+            }
+            
+            logger.error("删除简历系统异常，用户: {}，简历ID: {}", username, resumeId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
+                            "简历删除失败: " + e.getMessage(), null));
+        }
+    }
 }
