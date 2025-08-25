@@ -184,23 +184,30 @@ public class UserServiceImpl implements IUserService {
             throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
         }
 
-        // 先删除用户的所有简历相关的字段值
-        List<Resume> resumes = resumeMapper.findByUserId(userId);
-        for (Resume resume : resumes) {
-            resumeFieldValueMapper.deleteByResumeId(resume.getResumeId());
+        try {
+            // 先删除用户的所有简历相关的字段值
+            List<Resume> resumes = resumeMapper.findByUserId(userId);
+            for (Resume resume : resumes) {
+                // 删除简历相关的字段值
+                resumeFieldValueMapper.deleteByResumeId(resume.getResumeId());
+            }
+
+            // 删除用户的所有简历
+            resumeMapper.deleteByUserId(userId);
+
+            // 删除用户的所有获奖经历
+            awardExperienceMapper.deleteAwardsByUserId(userId);
+
+            // 删除用户本身
+            int rows = userMapper.deleteById(userId);
+            if (rows <= 0) {
+                throw new BusinessException(BusinessExceptionEnum.SYSTEM_ERROR);
+            }
+            logger.info("成功删除用户，用户ID: {}", userId);
+        } catch (Exception e) {
+            logger.error("删除用户失败，用户ID: {}", userId, e);
+            throw new RuntimeException("删除用户失败: " + e.getMessage(), e);
         }
-
-        // 删除用户的所有简历
-        resumeMapper.deleteByUserId(userId);
-
-        // 删除用户的所有获奖经历
-        awardExperienceMapper.deleteAwardsByUserId(userId);
-
-        int rows = userMapper.deleteById(userId);
-        if (rows <= 0) {
-            throw new BusinessException(BusinessExceptionEnum.SYSTEM_ERROR);
-        }
-        logger.info("成功删除用户，用户ID: {}", userId);
     }
 
     @Override

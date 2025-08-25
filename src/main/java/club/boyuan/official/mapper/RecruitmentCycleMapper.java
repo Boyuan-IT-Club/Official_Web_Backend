@@ -4,6 +4,7 @@ import club.boyuan.official.entity.RecruitmentCycle;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -66,4 +67,72 @@ public interface RecruitmentCycleMapper {
      * @return 招募周期实体
      */
     RecruitmentCycle findByAcademicYear(String academicYear);
+    
+    /**
+     * 批量删除招募周期
+     * @param cycleIds 招募周期ID列表
+     * @return 影响行数
+     */
+    int batchDelete(@Param("cycleIds") List<Integer> cycleIds);
+    
+    /**
+     * 批量更新招募周期
+     * @param recruitmentCycles 招募周期列表
+     * @return 影响行数
+     */
+    int batchUpdate(@Param("recruitmentCycles") List<RecruitmentCycle> recruitmentCycles);
+    
+    /**
+     * 查询所有招募周期（支持分页和排序）
+     * @param offset 偏移量
+     * @param limit 限制数量
+     * @param sortBy 排序字段
+     * @param sortOrder 排序顺序
+     * @return 招募周期列表
+     */
+    List<RecruitmentCycle> findAllWithPaginationAndSorting(@Param("offset") int offset, 
+                                                           @Param("limit") int limit, 
+                                                           @Param("sortBy") String sortBy, 
+                                                           @Param("sortOrder") String sortOrder);
+    
+    /**
+     * 根据条件查询招募周期（支持分页和排序）
+     * @param cycleName 招募周期名称
+     * @param academicYear 学年
+     * @param status 状态
+     * @param isActive 是否启用
+     * @param offset 偏移量
+     * @param limit 限制数量
+     * @param sortBy 排序字段
+     * @param sortOrder 排序顺序
+     * @return 招募周期列表
+     */
+    List<RecruitmentCycle> findByConditions(@Param("cycleName") String cycleName,
+                                            @Param("academicYear") String academicYear,
+                                            @Param("status") Integer status,
+                                            @Param("isActive") Integer isActive,
+                                            @Param("offset") int offset,
+                                            @Param("limit") int limit,
+                                            @Param("sortBy") String sortBy,
+                                            @Param("sortOrder") String sortOrder);
+    
+    /**
+     * 统计符合条件的招募周期数量
+     * @param cycleName 招募周期名称
+     * @param academicYear 学年
+     * @param status 状态
+     * @param isActive 是否启用
+     * @return 数量
+     */
+    long countByConditions(@Param("cycleName") String cycleName,
+                           @Param("academicYear") String academicYear,
+                           @Param("status") Integer status,
+                           @Param("isActive") Integer isActive);
+    
+    /**
+     * 根据当前日期更新招募周期状态
+     * @param currentDate 当前日期
+     * @return 影响行数
+     */
+    int updateStatusBasedOnDate(@Param("currentDate") LocalDate currentDate);
 }

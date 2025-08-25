@@ -1,7 +1,9 @@
 package club.boyuan.official.service;
 
+import club.boyuan.official.dto.PageResultDTO;
 import club.boyuan.official.entity.RecruitmentCycle;
 
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -62,4 +64,48 @@ public interface IRecruitmentCycleService {
      * @return 招募周期实体
      */
     RecruitmentCycle getRecruitmentCycleByAcademicYear(String academicYear);
+    
+    /**
+     * 批量删除招募周期
+     * @param cycleIds 招募周期ID列表
+     */
+    void deleteRecruitmentCycles(List<Integer> cycleIds);
+    
+    /**
+     * 根据当前时间自动更新招募周期状态
+     * @param currentDate 当前日期
+     */
+    void updateRecruitmentCycleStatusesBasedOnDate(LocalDate currentDate);
+    
+    /**
+     * 批量更新招募周期
+     * @param recruitmentCycles 招募周期列表
+     */
+    void updateRecruitmentCycles(List<RecruitmentCycle> recruitmentCycles);
+    
+    /**
+     * 分页获取所有招募周期
+     * @param page 页码（从0开始）
+     * @param size 每页大小
+     * @param sortBy 排序字段
+     * @param sortOrder 排序顺序（ASC/DESC）
+     * @return 分页结果
+     */
+    PageResultDTO<RecruitmentCycle> getAllRecruitmentCyclesWithPagination(int page, int size, String sortBy, String sortOrder);
+    
+    /**
+     * 根据条件分页查询招募周期
+     * @param cycleName 招募周期名称
+     * @param academicYear 学年
+     * @param status 状态
+     * @param isActive 是否启用
+     * @param page 页码（从0开始）
+     * @param size 每页大小
+     * @param sortBy 排序字段
+     * @param sortOrder 排序顺序（ASC/DESC）
+     * @return 分页结果
+     */
+    PageResultDTO<RecruitmentCycle> getRecruitmentCyclesByConditions(String cycleName, String academicYear, 
+                                                                     Integer status, Integer isActive,
+                                                                     int page, int size, String sortBy, String sortOrder);
 }

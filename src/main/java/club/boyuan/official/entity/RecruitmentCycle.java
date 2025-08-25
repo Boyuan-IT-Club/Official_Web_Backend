@@ -152,4 +152,25 @@ public class RecruitmentCycle {
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
     }
+
+    /**
+     * 根据当前日期自动更新状态
+     * @param currentDate 当前日期
+     */
+    public void updateStatusBasedOnDate(LocalDate currentDate) {
+        if (this.startDate != null && this.endDate != null) {
+            // 如果当前日期早于开始日期，则状态为未开始
+            if (currentDate.isBefore(this.startDate)) {
+                this.status = 1; // 未开始
+            }
+            // 如果当前日期在开始日期和结束日期之间，则状态为进行中
+            else if (!currentDate.isAfter(this.endDate) && !currentDate.isBefore(this.startDate)) {
+                this.status = 2; // 进行中
+            }
+            // 如果当前日期晚于结束日期，则状态为已结束
+            else if (currentDate.isAfter(this.endDate)) {
+                this.status = 3; // 已结束
+            }
+        }
+    }
 }

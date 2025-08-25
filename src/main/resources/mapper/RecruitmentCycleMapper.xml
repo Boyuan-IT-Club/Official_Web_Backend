@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8" ?>
+<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="club.boyuan.official.mapper.RecruitmentCycleMapper">
 
@@ -72,5 +72,165 @@
     <select id="findByAcademicYear" resultMap="RecruitmentCycleResultMap">
         SELECT * FROM recruitment_cycle WHERE academic_year = #{academicYear}
     </select>
-
+    
+    <!-- 新增方法的实现 -->
+    
+    <delete id="batchDelete">
+        DELETE FROM recruitment_cycle WHERE cycle_id IN
+        <foreach collection="cycleIds" item="cycleId" open="(" separator="," close=")">
+            #{cycleId}
+        </foreach>
+    </delete>
+    
+    <update id="batchUpdate">
+        UPDATE recruitment_cycle
+        <set>
+            <if test="recruitmentCycles[0].cycleName != null and recruitmentCycles[0].cycleName != ''">
+                cycle_name = CASE cycle_id
+                <foreach collection="recruitmentCycles" item="recruitmentCycle">
+                    <if test="recruitmentCycle.cycleName != null and recruitmentCycle.cycleName != ''">
+                        WHEN #{recruitmentCycle.cycleId} THEN #{recruitmentCycle.cycleName}
+                    </if>
+                </foreach>
+                END,
+            </if>
+            <if test="recruitmentCycles[0].description != null and recruitmentCycles[0].description != ''">
+                description = CASE cycle_id
+                <foreach collection="recruitmentCycles" item="recruitmentCycle">
+                    <if test="recruitmentCycle.description != null and recruitmentCycle.description != ''">
+                        WHEN #{recruitmentCycle.cycleId} THEN #{recruitmentCycle.description}
+                    </if>
+                </foreach>
+                END,
+            </if>
+            <if test="recruitmentCycles[0].startDate != null">
+                start_date = CASE cycle_id
+                <foreach collection="recruitmentCycles" item="recruitmentCycle">
+                    <if test="recruitmentCycle.startDate != null">
+                        WHEN #{recruitmentCycle.cycleId} THEN #{recruitmentCycle.startDate}
+                    </if>
+                </foreach>
+                END,
+            </if>
+            <if test="recruitmentCycles[0].endDate != null">
+                end_date = CASE cycle_id
+                <foreach collection="recruitmentCycles" item="recruitmentCycle">
+                    <if test="recruitmentCycle.endDate != null">
+                        WHEN #{recruitmentCycle.cycleId} THEN #{recruitmentCycle.endDate}
+                    </if>
+                </foreach>
+                END,
+            </if>
+            <if test="recruitmentCycles[0].academicYear != null and recruitmentCycles[0].academicYear != ''">
+                academic_year = CASE cycle_id
+                <foreach collection="recruitmentCycles" item="recruitmentCycle">
+                    <if test="recruitmentCycle.academicYear != null and recruitmentCycle.academicYear != ''">
+                        WHEN #{recruitmentCycle.cycleId} THEN #{recruitmentCycle.academicYear}
+                    </if>
+                </foreach>
+                END,
+            </if>
+            <if test="recruitmentCycles[0].status != null">
+                status = CASE cycle_id
+                <foreach collection="recruitmentCycles" item="recruitmentCycle">
+                    <if test="recruitmentCycle.status != null">
+                        WHEN #{recruitmentCycle.cycleId} THEN #{recruitmentCycle.status}
+                    </if>
+                </foreach>
+                END,
+            </if>
+            <if test="recruitmentCycles[0].isActive != null">
+                is_active = CASE cycle_id
+                <foreach collection="recruitmentCycles" item="recruitmentCycle">
+                    <if test="recruitmentCycle.isActive != null">
+                        WHEN #{recruitmentCycle.cycleId} THEN #{recruitmentCycle.isActive}
+                    </if>
+                </foreach>
+                END,
+            </if>
+            updated_at = NOW()
+        </set>
+        WHERE cycle_id IN
+        <foreach collection="recruitmentCycles" item="recruitmentCycle" open="(" separator="," close=")">
+            #{recruitmentCycle.cycleId}
+        </foreach>
+    </update>
+    
+    <select id="findAllWithPaginationAndSorting" resultMap="RecruitmentCycleResultMap">
+        SELECT * FROM recruitment_cycle
+        <if test="sortBy != null and sortBy != ''">
+            ORDER BY ${sortBy} 
+            <if test="sortOrder != null and sortOrder != ''">
+                ${sortOrder}
+            </if>
+            <if test="sortOrder == null or sortOrder == ''">
+                ASC
+            </if>
+        </if>
+        <if test="sortBy == null or sortBy == ''">
+            ORDER BY created_at DESC
+        </if>
+        LIMIT #{offset}, #{limit}
+    </select>
+    
+    <select id="findByConditions" resultMap="RecruitmentCycleResultMap">
+        SELECT * FROM recruitment_cycle
+        <where>
+            <if test="cycleName != null and cycleName != ''">
+                AND cycle_name LIKE CONCAT('%', #{cycleName}, '%')
+            </if>
+            <if test="academicYear != null and academicYear != ''">
+                AND academic_year = #{academicYear}
+            </if>
+            <if test="status != null">
+                AND status = #{status}
+            </if>
+            <if test="isActive != null">
+                AND is_active = #{isActive}
+            </if>
+        </where>
+        <if test="sortBy != null and sortBy != ''">
+            ORDER BY ${sortBy} 
+            <if test="sortOrder != null and sortOrder != ''">
+                ${sortOrder}
+            </if>
+            <if test="sortOrder == null or sortOrder == ''">
+                ASC
+            </if>
+        </if>
+        <if test="sortBy == null or sortBy == ''">
+            ORDER BY created_at DESC
+        </if>
+        LIMIT #{offset}, #{limit}
+    </select>
+    
+    <select id="countByConditions" resultType="long">
+        SELECT COUNT(*) FROM recruitment_cycle
+        <where>
+            <if test="cycleName != null and cycleName != ''">
+                AND cycle_name LIKE CONCAT('%', #{cycleName}, '%')
+            </if>
+            <if test="academicYear != null and academicYear != ''">
+                AND academic_year = #{academicYear}
+            </if>
+            <if test="status != null">
+                AND status = #{status}
+            </if>
+            <if test="isActive != null">
+                AND is_active = #{isActive}
+            </if>
+        </where>
+    </select>
+    
+    <update id="updateStatusBasedOnDate">
+        UPDATE recruitment_cycle 
+        SET status = CASE 
+            WHEN start_date > #{currentDate} THEN 1  <!-- 未开始 -->
+            WHEN start_date &lt;= #{currentDate} AND end_date >= #{currentDate} THEN 2  <!-- 进行中 -->
+            WHEN end_date &lt; #{currentDate} THEN 3  <!-- 已结束 -->
+            ELSE status
+        END,
+        updated_at = NOW()
+        WHERE start_date IS NOT NULL AND end_date IS NOT NULL
+    </update>
 </mapper>
