@@ -1,5 +1,6 @@
 package club.boyuan.official.service.impl;
 
+import club.boyuan.official.dto.PageResultDTO;
 import club.boyuan.official.dto.UserDTO;
 import club.boyuan.official.entity.AwardExperience;
 import club.boyuan.official.entity.Resume;
@@ -145,28 +146,30 @@ public class UserServiceImpl implements IUserService {
     }
 
     @Override
-    public Page<User> getUsersByConditions(String role, String dept, String status, Pageable pageable, User currentUser) {
+    public PageResultDTO<User> getUsersByConditions(String role, String dept, String status, Pageable pageable, User currentUser) {
         // 检查权限，管理员才能调用此方法
         if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
             throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
         }
         
         // 查询总记录数
-        long total = userMapper.countByRoleAndDeptAndStatus(role, dept, status);
+        long totalElements = userMapper.countByRoleAndDeptAndStatus(role, dept, status);
         
         // 计算总页数
         int pageSize = pageable.getPageSize();
-        int totalPage = (int) Math.ceil((double) total / pageSize);
+        int totalPages = (int) Math.ceil((double) totalElements / pageSize);
         
         // 如果请求的页码超过了最大页码，则返回空列表
         int pageNumber = pageable.getPageNumber();
-        if (totalPage > 0 && pageNumber >= totalPage) {
+        if (totalPages > 0 && pageNumber >= totalPages) {
             // 返回空列表而不是错误，避免前端出现异常
-            return new PageImpl<>(List.of(), pageable, total);
+            return new PageResultDTO<>(List.of(), totalElements, totalPages, pageNumber, pageSize, pageNumber == 0, pageNumber >= totalPages - 1);
         }
         
         List<User> userList = userMapper.findByRoleAndDeptAndStatus(role, dept, status, pageable);
-        return new PageImpl<>(userList, pageable, total);
+        boolean isFirst = pageNumber == 0;
+        boolean isLast = pageNumber >= totalPages - 1;
+        return new PageResultDTO<>(userList, totalElements, totalPages, pageNumber, pageSize, isFirst, isLast);
     }
 
     @Override

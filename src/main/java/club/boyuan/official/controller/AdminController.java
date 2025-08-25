@@ -1,5 +1,6 @@
 package club.boyuan.official.controller;
 
+import club.boyuan.official.dto.PageResultDTO;
 import club.boyuan.official.dto.ResponseMessage;
 import club.boyuan.official.dto.UserDTO;
 import club.boyuan.official.entity.User;
@@ -14,8 +15,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -135,11 +134,6 @@ public class AdminController {
     /**
      * 获取用户列表接口
      * 支持分页和条件查询
-     * @param role 角色
-     * @param dept 部门
-     * @param status 状态
-     * @param pageable 分页参数
-     * @return 用户列表
      */
     @GetMapping("/users")
     public ResponseEntity<ResponseMessage<?>> getUsers(
@@ -155,16 +149,9 @@ public class AdminController {
             String username = jwtTokenUtil.extractUsername(token);
             User currentUser = userService.getUserByUsername(username);
 
-            Page<User> userPage = userService.getUsersByConditions(role, dept, status, pageable, currentUser);
+            PageResultDTO<User> userPage = userService.getUsersByConditions(role, dept, status, pageable, currentUser);
 
-            Map<String, Object> data = new HashMap<>();
-            data.put("users", userPage.getContent());
-            data.put("currentPage", userPage.getNumber() + 1);
-            data.put("totalPages", userPage.getTotalPages());
-            data.put("totalElements", userPage.getTotalElements());
-            data.put("size", userPage.getSize());
-            
-            return ResponseEntity.ok(ResponseMessage.success(data));
+            return ResponseEntity.ok(ResponseMessage.success(userPage));
         } catch (BusinessException e) {
             logger.warn("获取用户列表失败: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
