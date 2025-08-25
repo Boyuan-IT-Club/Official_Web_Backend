@@ -1,5 +1,6 @@
 package club.boyuan.official.controller;
 
+import club.boyuan.official.dto.PageResultDTO;
 import club.boyuan.official.dto.ResponseMessage;
 import club.boyuan.official.entity.RecruitmentCycle;
 import club.boyuan.official.entity.User;
@@ -12,11 +13,11 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.AllArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -205,10 +206,6 @@ public class RecruitmentCycleController {
         try {
             logger.debug("根据学年获取招募周期，学年: {}", academicYear);
             RecruitmentCycle cycle = recruitmentCycleService.getRecruitmentCycleByAcademicYear(academicYear);
-            if (cycle == null) {
-                logger.warn("招募周期不存在，学年: {}", academicYear);
-                throw new BusinessException(BusinessExceptionEnum.RECRUITMENT_CYCLE_NOT_FOUND);
-            }
             return ResponseEntity.ok(new ResponseMessage<>(200, "获取招募周期成功", cycle));
         } catch (BusinessException e) {
             logger.warn("根据学年获取招募周期业务异常，错误码: {}，错误信息: {}", e.getCode(), e.getMessage());
@@ -219,6 +216,137 @@ public class RecruitmentCycleController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
                             "获取招募周期失败: " + e.getMessage(), null));
+        }
+    }
+    
+    /**
+     * 批量删除招募周期（仅管理员）
+     */
+    @DeleteMapping("/batch")
+    public ResponseEntity<ResponseMessage<String>> deleteRecruitmentCycles(@RequestBody List<Integer> cycleIds) {
+        try {
+            // 验证管理员权限
+            User currentUser = getCurrentUser();
+            checkAdminPermission(currentUser);
+            
+            logger.info("管理员{}批量删除招募周期，IDs: {}", currentUser.getUsername(), cycleIds);
+            recruitmentCycleService.deleteRecruitmentCycles(cycleIds);
+            return ResponseEntity.ok(new ResponseMessage<>(200, "招募周期批量删除成功", "招募周期批量删除成功"));
+        } catch (BusinessException e) {
+            logger.warn("批量删除招募周期业务异常，错误码: {}，错误信息: {}", e.getCode(), e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
+        } catch (Exception e) {
+            logger.error("批量删除招募周期系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
+                            "招募周期批量删除失败: " + e.getMessage(), null));
+        }
+    }
+    
+    /**
+     * 批量更新招募周期（仅管理员）
+     */
+    @PutMapping("/batch")
+    public ResponseEntity<ResponseMessage<String>> updateRecruitmentCycles(@RequestBody List<RecruitmentCycle> recruitmentCycles) {
+        try {
+            // 验证管理员权限
+            User currentUser = getCurrentUser();
+            checkAdminPermission(currentUser);
+            
+            logger.info("管理员{}批量更新招募周期，数量: {}", currentUser.getUsername(), recruitmentCycles.size());
+            recruitmentCycleService.updateRecruitmentCycles(recruitmentCycles);
+            return ResponseEntity.ok(new ResponseMessage<>(200, "招募周期批量更新成功", "招募周期批量更新成功"));
+        } catch (BusinessException e) {
+            logger.warn("批量更新招募周期业务异常，错误码: {}，错误信息: {}", e.getCode(), e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
+        } catch (Exception e) {
+            logger.error("批量更新招募周期系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
+                            "招募周期批量更新失败: " + e.getMessage(), null));
+        }
+    }
+    
+    /**
+     * 根据当前时间自动更新招募周期状态（仅管理员）
+     */
+    @PostMapping("/update-statuses")
+    public ResponseEntity<ResponseMessage<String>> updateRecruitmentCycleStatusesBasedOnDate() {
+        try {
+            // 验证管理员权限
+            User currentUser = getCurrentUser();
+            checkAdminPermission(currentUser);
+            
+            logger.info("管理员{}根据当前时间更新招募周期状态", currentUser.getUsername());
+            recruitmentCycleService.updateRecruitmentCycleStatusesBasedOnDate(LocalDate.now());
+            return ResponseEntity.ok(new ResponseMessage<>(200, "招募周期状态更新成功", "招募周期状态更新成功"));
+        } catch (BusinessException e) {
+            logger.warn("根据当前时间更新招募周期状态业务异常，错误码: {}，错误信息: {}", e.getCode(), e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
+        } catch (Exception e) {
+            logger.error("根据当前时间更新招募周期状态系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
+                            "招募周期状态更新失败: " + e.getMessage(), null));
+        }
+    }
+    
+    /**
+     * 分页获取所有招募周期
+     */
+    @GetMapping("/page")
+    public ResponseEntity<ResponseMessage<PageResultDTO<RecruitmentCycle>>> getAllRecruitmentCyclesWithPagination(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "cycleId") String sortBy,
+            @RequestParam(defaultValue = "DESC") String sortOrder) {
+        try {
+            logger.debug("分页获取所有招募周期，页码: {}, 大小: {}, 排序字段: {}, 排序顺序: {}", page, size, sortBy, sortOrder);
+            PageResultDTO<RecruitmentCycle> pageResult = recruitmentCycleService.getAllRecruitmentCyclesWithPagination(page, size, sortBy, sortOrder);
+            return ResponseEntity.ok(new ResponseMessage<>(200, "获取招募周期列表成功", pageResult));
+        } catch (BusinessException e) {
+            logger.warn("分页获取招募周期列表业务异常，错误码: {}，错误信息: {}", e.getCode(), e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
+        } catch (Exception e) {
+            logger.error("分页获取招募周期列表系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
+                            "获取招募周期列表失败: " + e.getMessage(), null));
+        }
+    }
+    
+    /**
+     * 根据条件分页查询招募周期
+     */
+    @GetMapping("/search")
+    public ResponseEntity<ResponseMessage<PageResultDTO<RecruitmentCycle>>> getRecruitmentCyclesByConditions(
+            @RequestParam(required = false) String cycleName,
+            @RequestParam(required = false) String academicYear,
+            @RequestParam(required = false) Integer status,
+            @RequestParam(required = false) Integer isActive,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "cycleId") String sortBy,
+            @RequestParam(defaultValue = "DESC") String sortOrder) {
+        try {
+            logger.debug("根据条件分页查询招募周期，名称: {}, 学年: {}, 状态: {}, 是否启用: {}, 页码: {}, 大小: {}, 排序字段: {}, 排序顺序: {}", 
+                    cycleName, academicYear, status, isActive, page, size, sortBy, sortOrder);
+            PageResultDTO<RecruitmentCycle> pageResult = recruitmentCycleService.getRecruitmentCyclesByConditions(
+                    cycleName, academicYear, status, isActive, page, size, sortBy, sortOrder);
+            return ResponseEntity.ok(new ResponseMessage<>(200, "获取招募周期列表成功", pageResult));
+        } catch (BusinessException e) {
+            logger.warn("根据条件分页查询招募周期列表业务异常，错误码: {}，错误信息: {}", e.getCode(), e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
+        } catch (Exception e) {
+            logger.error("根据条件分页查询招募周期列表系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
+                            "获取招募周期列表失败: " + e.getMessage(), null));
         }
     }
     
