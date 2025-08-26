@@ -58,24 +58,39 @@ jobs:
       - name: Bump Version
         id: version
         run: |
+          echo "Fetching latest version from DockerHub for ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}"
+          
           # 尝试从标签获取版本号
           if [[ "${{ github.ref_type }}" == 'tag' ]]; then
-            echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
-            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+            VERSION_TAG=${GITHUB_REF#refs/tags/v}
+            echo "Using version from tag: $VERSION_TAG"
+            echo "VERSION=$VERSION_TAG" >> $GITHUB_ENV
+            echo "version=$VERSION_TAG" >> $GITHUB_OUTPUT
           else
             # 从DockerHub获取当前最新版本
-            LATEST_VERSION=$(curl -s https://hub.docker.com/v2/repositories/${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}/tags | jq -r '.results[0].name' 2>/dev/null || echo "0.0.0")
-            if [[ $LATEST_VERSION == "null" ]] || [[ -z "$LATEST_VERSION" ]]; then
+            echo "Fetching tags from DockerHub..."
+            RESPONSE=$(curl -s https://hub.docker.com/v2/repositories/${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}/tags)
+            echo "DockerHub API response: $RESPONSE"
+            
+            LATEST_VERSION=$(echo "$RESPONSE" | jq -r '.results[].name' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
+            echo "Latest semantic version found: $LATEST_VERSION"
+            
+            if [[ -z "$LATEST_VERSION" ]] || [[ "$LATEST_VERSION" == "null" ]]; then
               LATEST_VERSION="0.0.0"
+              echo "No valid semantic version found, starting from $LATEST_VERSION"
             fi
             
-            # 简单的版本号自增逻辑 (将最后一位数字+1)
+            # 版本号自增逻辑 (将最后一位数字+1)
             IFS='.' read -ra VERSION_PARTS <<< "$LATEST_VERSION"
             if [ ${#VERSION_PARTS[@]} -eq 3 ]; then
+              MAJOR=${VERSION_PARTS[0]}
+              MINOR=${VERSION_PARTS[1]}
               PATCH=$((${VERSION_PARTS[2]} + 1))
-              NEW_VERSION="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}.$PATCH"
+              NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+              echo "Incrementing version from $LATEST_VERSION to $NEW_VERSION"
             else
-              NEW_VERSION="1.0.0"
+              NEW_VERSION="0.0.1"
+              echo "Invalid version format, using default $NEW_VERSION"
             fi
             
             echo "VERSION=$NEW_VERSION" >> $GITHUB_ENV
@@ -106,8 +121,9 @@ jobs:
           echo "Checking if image ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ needs.build.outputs.version }} exists"
           IMAGE_INFO=$(curl -s https://hub.docker.com/v2/repositories/${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}/tags/${{ needs.build.outputs.version }})
           if echo "$IMAGE_INFO" | jq -e .name > /dev/null 2>&1; then
-            echo "SUCCESS: Image successfully pushed to Docker Hub"
+            echo "SUCCESS: Image successfully pushed to Docker Hub with version ${{ needs.build.outputs.version }}"
           else
             echo "ERROR: Failed to push image to Docker Hub"
+            echo "Response from DockerHub: $IMAGE_INFO"
             exit 1
           fi
