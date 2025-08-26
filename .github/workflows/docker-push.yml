@@ -6,22 +6,23 @@ on:
   push:
     branches:
       - main
+    # 当有标签推送时触发
+    tags: [ 'v*.*.*' ]
   # 允许从Actions页面手动触发
   workflow_dispatch:
 
 # 定义环境变量
 env:
   DOCKER_USERNAME: boyuanclub
-  IMAGE_NAME: official
+  IMAGE_NAME: official-core-api
   DOCKERHUB_EMAIL: notify@boyuan.club
 
 # 定义工作流任务
 jobs:
-  # 构建和推送任务
-  build-and_push:
-    # 运行环境为Ubuntu最新版
+  build:
     runs-on: ubuntu-latest
-    
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     # 定义任务步骤
     steps:
       # 步骤1: 检出代码
@@ -47,17 +48,43 @@ jobs:
         
       # 步骤5: 登录到Docker Hub
       - name: Login to Docker Hub
+        if: github.event_name == 'push'
         uses: docker/login-action@v3
         with:
           username: ${{ env.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           
-      # 步骤6: 提取项目版本号
-      - name: Extract Maven project version
-        run: echo "VERSION=$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout)" >> $GITHUB_ENV
+      # 步骤6: 获取或增加版本号
+      - name: Bump Version
+        id: version
+        run: |
+          # 尝试从标签获取版本号
+          if [[ "${{ github.ref_type }}" == 'tag' ]]; then
+            echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          else
+            # 从DockerHub获取当前最新版本
+            LATEST_VERSION=$(curl -s https://hub.docker.com/v2/repositories/${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}/tags | jq -r '.results[0].name' 2>/dev/null || echo "0.0.0")
+            if [[ $LATEST_VERSION == "null" ]] || [[ -z "$LATEST_VERSION" ]]; then
+              LATEST_VERSION="0.0.0"
+            fi
+            
+            # 简单的版本号自增逻辑 (将最后一位数字+1)
+            IFS='.' read -ra VERSION_PARTS <<< "$LATEST_VERSION"
+            if [ ${#VERSION_PARTS[@]} -eq 3 ]; then
+              PATCH=$((${VERSION_PARTS[2]} + 1))
+              NEW_VERSION="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}.$PATCH"
+            else
+              NEW_VERSION="1.0.0"
+            fi
+            
+            echo "VERSION=$NEW_VERSION" >> $GITHUB_ENV
+            echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          fi
           
       # 步骤7: 构建并推送Docker镜像
       - name: Build and push Docker image
+        if: github.event_name == 'push'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -65,4 +92,22 @@ jobs:
           push: true
           tags: |
             ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest
-            ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
+            ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+  
+  # 部署验证任务
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push'
+    steps:
+      # 验证镜像是否正确推送
+      - name: Verify Docker image
+        run: |
+          echo "Checking if image ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ needs.build.outputs.version }} exists"
+          IMAGE_INFO=$(curl -s https://hub.docker.com/v2/repositories/${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}/tags/${{ needs.build.outputs.version }})
+          if echo "$IMAGE_INFO" | jq -e .name > /dev/null 2>&1; then
+            echo "SUCCESS: Image successfully pushed to Docker Hub"
+          else
+            echo "ERROR: Failed to push image to Docker Hub"
+            exit 1
+          fi
