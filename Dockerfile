@@ -12,13 +12,12 @@ ENV LANG=zh_CN.UTF-8 \
     LANGUAGE=zh_CN:zh \
     LC_ALL=zh_CN.UTF-8
 
-# 创建目录
-RUN mkdir -p /official
+# 设置工作目录
 WORKDIR /official
 
 # 复制应用JAR包
-COPY *.jar official.jar
+COPY Official-*.jar official.jar
 
 EXPOSE 8080
 
-ENTRYPOINT ["java", "-jar", "/official/official.jar", "--spring.profiles.active=prod"]
+ENTRYPOINT ["java", "-jar", "official.jar", "--spring.profiles.active=prod"]
