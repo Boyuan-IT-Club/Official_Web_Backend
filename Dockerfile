@@ -4,6 +4,8 @@ FROM openjdk:17-jdk-slim
 RUN apt-get update && apt-get install -y \
     locales \
     fonts-noto-cjk \
+    curl \
+    jq \
     && locale-gen zh_CN.UTF-8 \
     && rm -rf /var/lib/apt/lists/*
 
