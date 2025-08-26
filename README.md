@@ -23,6 +23,12 @@ Official 是一个社团管理系统，旨在为社团提供完整的成员管�
 - Redis
 - Java 17
 
+### 版本管理
+- 使用语义化版本号（SemVer）规范：主版本号.次版本号.补丁版本号
+- 默认采用自动版本管理机制：向main分支推送代码时，CI/CD流程会自动递增补丁版本号
+- 支持通过Git标签手动指定版本号
+- Docker镜像版本与项目版本号保持一致
+
 ### 开发工具
 - JDK 17
 - Maven 3.x
@@ -64,9 +70,44 @@ make dev-down
 
 ## 部署说明
 
-### 本地测试环境部署
+### Docker镜像版本管理
 
-使用 Docker Compose 启动完整的测试环境：
+本项目采用语义化版本号（SemVer）管理机制：
+
+#### 自动版本管理
+当向main分支推送代码时，CI/CD流程会自动执行以下操作：
+1. 从DockerHub获取当前最新版本号
+2. 自动递增补丁版本号（例如：1.0.0 → 1.0.1）
+3. 使用新版本号构建和推送Docker镜像
+
+#### 手动指定版本号
+您也可以通过创建Git标签来手动指定版本号：
+```bash
+git tag v1.2.3
+git push origin v1.2.3
+```
+这样CI/CD流程会使用标签中的版本号（1.2.3）而不是自动生成版本号。
+
+#### 验证版本号更新
+1. 查看GitHub Actions日志
+   - 进入仓库的Actions选项卡
+   - 选择"Push to Docker Hub on main branch merge"工作流
+   - 查看"Build and push Docker image"步骤的输出
+
+2. 检查DockerHub标签
+   - 访问DockerHub仓库页面
+   - 查看Tags选项卡中的版本列表
+
+3. 使用本地测试脚本验证版本管理
+   ```bash
+   # 测试版本自增逻辑
+   bash test_version_bump.sh
+   
+   # 测试从DockerHub获取真实标签
+   bash test_dockerhub_version.sh
+   ```
+
+### 本地测试环境部署
 
 ```bash
 # 构建并启动完整测试环境（包括应用、MySQL和Redis）
