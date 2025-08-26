@@ -12,11 +12,11 @@ ENV LANG=zh_CN.UTF-8 \
     LANGUAGE=zh_CN:zh \
     LC_ALL=zh_CN.UTF-8
 
-# 设置工作目录
+# 创建目录
 WORKDIR /official
 
 # 复制应用JAR包
-COPY Official-*.jar official.jar
+COPY target/Official-*.jar official.jar
 
 EXPOSE 8080
 
