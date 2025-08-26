@@ -1,9 +1,7 @@
-FROM ubuntu:22.04
+FROM openjdk:17-jdk-slim
 
 # 安装必要的工具
 RUN apt-get update && apt-get install -y \
-    wget \
-    tar \
     locales \
     fonts-noto-cjk \
     language-pack-zh-hans \
@@ -20,7 +18,7 @@ RUN mkdir -p /official
 WORKDIR /official
 
 # 复制应用JAR包
-COPY target/Official-0.0.1-SNAPSHOT.jar official.jar
+COPY *.jar official.jar
 
 EXPOSE 8080
 
