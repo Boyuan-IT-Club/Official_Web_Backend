@@ -85,6 +85,7 @@ public class SecurityConfig {
         configuration.addAllowedOriginPattern("https://localhost:3000");
         configuration.addAllowedOriginPattern("http://127.0.0.1:8080");
         configuration.addAllowedOriginPattern("http://127.0.0.1:3000");
+        configuration.addAllowedOriginPattern("https://official.boyuan.club");
 
         // 允许的请求头
         configuration.addAllowedHeader("*");
