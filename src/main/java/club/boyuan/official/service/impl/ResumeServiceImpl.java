@@ -205,6 +205,33 @@ public class ResumeServiceImpl implements IResumeService {
     }
     
     @Override
+    public List<ResumeDTO> queryResumes(String name, String major, Integer cycleId, Integer status) {
+        logger.info("条件查询简历：name={}, major={}, cycleId={}, status={}", name, major, cycleId, status);
+        try {
+            List<Resume> resumes = resumeMapper.queryResumes(name, major, cycleId, status);
+            List<ResumeDTO> result = new ArrayList<>();
+            for (Resume resume : resumes) {
+                ResumeDTO dto = new ResumeDTO();
+                dto.setResumeId(resume.getResumeId());
+                dto.setUserId(resume.getUserId());
+                dto.setCycleId(resume.getCycleId());
+                dto.setStatus(resume.getStatus());
+                dto.setSubmittedAt(resume.getSubmittedAt());
+                dto.setCreatedAt(resume.getCreatedAt());
+                dto.setUpdatedAt(resume.getUpdatedAt());
+                // 可选：添加简化字段信息
+                List<SimpleResumeFieldDTO> simpleFields = getSimpleFieldValuesByResumeId(resume.getResumeId());
+                dto.setSimpleFields(simpleFields);
+                result.add(dto);
+            }
+            return result;
+        } catch (Exception e) {
+            logger.error("条件查询简历失败", e);
+            throw new BusinessException(BusinessExceptionEnum.RESUME_QUERY_FAILED);
+        }
+    }
+    
+    @Override
  public ResumeDTO getResumeWithFieldValues(Integer userId, Integer cycleId) {
         logger.debug("获取用户{}在{}年的简历及字段值", userId, cycleId);
         try {
