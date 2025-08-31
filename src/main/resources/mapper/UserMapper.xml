@@ -218,5 +218,54 @@
            OR dept LIKE CONCAT('%', #{keyword}, '%') 
         LIMIT 20
     </select>
+    
+    <update id="batchUpdateStatusByIds">
+        UPDATE user 
+        SET status = #{status, jdbcType=BOOLEAN}
+        WHERE user_id IN
+        <foreach collection="userIds" item="userId" open="(" separator="," close=")">
+            #{userId}
+        </foreach>
+    </update>
+    
+    <update id="batchUpdateDeptByIds">
+        UPDATE user 
+        SET dept = #{dept}
+        WHERE user_id IN
+        <foreach collection="userIds" item="userId" open="(" separator="," close=")">
+            #{userId}
+        </foreach>
+    </update>
+    
+    <update id="batchUpdateMembershipByIds">
+        UPDATE user 
+        SET is_member = #{isMember, jdbcType=BOOLEAN}
+        WHERE user_id IN
+        <foreach collection="userIds" item="userId" open="(" separator="," close=")">
+            #{userId}
+        </foreach>
+    </update>
+    
+    <select id="selectByIds" resultType="club.boyuan.official.entity.User">
+        SELECT user_id,
+               username,
+               password,
+               email,
+               role,
+               name,
+               phone,
+               major,
+               github,
+               dept,
+               avatar,
+               create_time,
+               status,
+               is_member
+        FROM user
+        WHERE user_id IN
+        <foreach collection="userIds" item="userId" open="(" separator="," close=")">
+            #{userId}
+        </foreach>
+    </select>
 
 </mapper>

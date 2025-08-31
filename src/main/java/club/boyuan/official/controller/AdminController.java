@@ -20,6 +20,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.web.server.ResponseStatusException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -273,6 +274,152 @@ public class AdminController {
                     .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             logger.error("更新用户会员状态时发生服务器内部错误", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
+    }
+    
+    /**
+     * 批量冻结/解冻用户接口
+     * @param statusRequest 状态请求 (frozen 或 active)
+     * @return 更新结果
+     */
+    @PutMapping("/users/batch/status")
+    public ResponseEntity<ResponseMessage<?>> batchUpdateUserStatus(
+            @RequestBody Map<String, Object> statusRequest) {
+        try {
+            logger.info("开始处理批量用户状态更新请求");
+            
+            // 验证管理员权限
+            checkAdminRole();
+            
+            String status = (String) statusRequest.get("status");
+            List<Integer> userIds = (List<Integer>) statusRequest.get("userIds");
+            
+            if (status == null || (!"frozen".equals(status) && !"active".equals(status))) {
+                logger.warn("无效的冻结状态值: {}", status);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(ResponseMessage.error(400, "状态值必须为 'frozen' 或 'active'"));
+            }
+            
+            if (userIds == null || userIds.isEmpty()) {
+                logger.warn("用户ID列表不能为空");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(ResponseMessage.error(400, "用户ID列表不能为空"));
+            }
+
+            int updatedCount = userService.batchUpdateUserStatus(userIds, status);
+            String action = "frozen".equals(status) ? "冻结" : "解冻";
+            logger.info("管理员成功{}{}个用户", action, updatedCount);
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("updatedCount", updatedCount);
+            result.put("status", status);
+            
+            return ResponseEntity.ok(ResponseMessage.success(result));
+        } catch (BusinessException e) {
+            logger.warn("批量更新用户状态失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("批量更新用户状态时发生服务器内部错误", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
+    }
+    
+    /**
+     * 批量修改用户部门接口
+     * @param deptRequest 部门信息请求
+     * @return 更新结果
+     */
+    @PutMapping("/users/batch/dept")
+    public ResponseEntity<ResponseMessage<?>> batchUpdateUserDept(
+            @RequestBody Map<String, Object> deptRequest) {
+        try {
+            logger.info("开始处理批量用户部门更新请求");
+            
+            // 验证管理员权限
+            checkAdminRole();
+            
+            String dept = (String) deptRequest.get("dept");
+            List<Integer> userIds = (List<Integer>) deptRequest.get("userIds");
+            
+            if (dept == null || dept.trim().isEmpty()) {
+                logger.warn("部门信息不能为空");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(ResponseMessage.error(400, "部门信息不能为空"));
+            }
+            
+            if (userIds == null || userIds.isEmpty()) {
+                logger.warn("用户ID列表不能为空");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(ResponseMessage.error(400, "用户ID列表不能为空"));
+            }
+
+            int updatedCount = userService.batchUpdateUserDept(userIds, dept);
+            logger.info("管理员成功更新{}个用户的部门为{}", updatedCount, dept);
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("updatedCount", updatedCount);
+            result.put("dept", dept);
+            
+            return ResponseEntity.ok(ResponseMessage.success(result));
+        } catch (BusinessException e) {
+            logger.warn("批量更新用户部门失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("批量更新用户部门时发生服务器内部错误", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
+    }
+    
+    /**
+     * 批量修改用户会员状态接口（录取/取消录取）
+     * @param membershipRequest 会员状态请求
+     * @return 更新结果
+     */
+    @PutMapping("/users/batch/membership")
+    public ResponseEntity<ResponseMessage<?>> batchUpdateUserMembership(
+            @RequestBody Map<String, Object> membershipRequest) {
+        try {
+            logger.info("开始处理批量用户会员状态更新请求");
+            
+            // 验证管理员权限
+            checkAdminRole();
+            
+            Boolean isMember = (Boolean) membershipRequest.get("isMember");
+            List<Integer> userIds = (List<Integer>) membershipRequest.get("userIds");
+            
+            if (isMember == null) {
+                logger.warn("缺少必要的 isMember 字段");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(ResponseMessage.error(400, "缺少必要的 isMember 字段"));
+            }
+            
+            if (userIds == null || userIds.isEmpty()) {
+                logger.warn("用户ID列表不能为空");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(ResponseMessage.error(400, "用户ID列表不能为空"));
+            }
+
+            int updatedCount = userService.batchUpdateUserMembership(userIds, isMember);
+            String action = isMember ? "录取" : "取消录取";
+            logger.info("管理员成功{}{}个用户", action, updatedCount);
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("updatedCount", updatedCount);
+            result.put("isMember", isMember);
+            
+            return ResponseEntity.ok(ResponseMessage.success(result));
+        } catch (BusinessException e) {
+            logger.warn("批量更新用户会员状态失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("批量更新用户会员状态时发生服务器内部错误", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
         }

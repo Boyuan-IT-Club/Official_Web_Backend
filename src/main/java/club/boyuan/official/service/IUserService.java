@@ -30,4 +30,28 @@ public interface IUserService {
     User updateAvatar(Integer userId, String avatarPath) throws BusinessException;
     User updatePassword(Integer userId, String newPassword);
     User updateUserMembership(Integer userId, Boolean isMember);
+    
+    /**
+     * 批量更新用户状态
+     * @param userIds 用户ID列表
+     * @param status 状态值 (active 或 frozen)
+     * @return 更新的用户数量
+     */
+    int batchUpdateUserStatus(List<Integer> userIds, String status);
+    
+    /**
+     * 批量更新用户部门
+     * @param userIds 用户ID列表
+     * @param dept 部门名称
+     * @return 更新的用户数量
+     */
+    int batchUpdateUserDept(List<Integer> userIds, String dept);
+    
+    /**
+     * 批量更新用户会员状态
+     * @param userIds 用户ID列表
+     * @param isMember 会员状态
+     * @return 更新的用户数量
+     */
+    int batchUpdateUserMembership(List<Integer> userIds, Boolean isMember);
 }
