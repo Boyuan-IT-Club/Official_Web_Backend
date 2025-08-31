@@ -284,7 +284,7 @@ public class AdminController {
      * @param statusRequest 状态请求 (frozen 或 active)
      * @return 更新结果
      */
-    @PutMapping("/users/batch/status")
+    @PutMapping("/users/batch-status")
     public ResponseEntity<ResponseMessage<?>> batchUpdateUserStatus(
             @RequestBody Map<String, Object> statusRequest) {
         try {
@@ -333,7 +333,7 @@ public class AdminController {
      * @param deptRequest 部门信息请求
      * @return 更新结果
      */
-    @PutMapping("/users/batch/dept")
+    @PutMapping("/users/batch-dept")
     public ResponseEntity<ResponseMessage<?>> batchUpdateUserDept(
             @RequestBody Map<String, Object> deptRequest) {
         try {
@@ -381,7 +381,7 @@ public class AdminController {
      * @param membershipRequest 会员状态请求
      * @return 更新结果
      */
-    @PutMapping("/users/batch/membership")
+    @PutMapping("/users/batch-membership")
     public ResponseEntity<ResponseMessage<?>> batchUpdateUserMembership(
             @RequestBody Map<String, Object> membershipRequest) {
         try {
