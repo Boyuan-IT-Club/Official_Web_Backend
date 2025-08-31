@@ -710,4 +710,40 @@ public class ResumeController {
                             "简历删除失败: " + e.getMessage(), null));
         }
     }
+    
+    /**
+     * 条件查询简历列表
+     * 支持按姓名、专业、年份、状态等多条件组合查询
+     */
+    @GetMapping("/search")
+    public ResponseEntity<ResponseMessage<List<ResumeDTO>>> queryResumes(
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String major,
+            @RequestParam(required = false) Integer cycleId,
+            @RequestParam(required = false) Integer status,
+            HttpServletRequest request) {
+        try {
+            String token = request.getHeader("Authorization");
+            String username = "unknown";
+            if (token != null && token.startsWith("Bearer ")) {
+                username = jwtTokenUtil.extractUsername(token.substring(7));
+            }
+            User currentUser = userService.getUserByUsername(username);
+            // 仅管理员可用
+            if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
+                logger.warn("用户{}尝试条件查询简历，但权限不足", username);
+                throw new BusinessException(BusinessExceptionEnum.USER_ROLE_NOT_AUTHORIZED);
+            }
+            List<ResumeDTO> result = resumeService.queryResumes(name, major, cycleId, status);
+            return ResponseEntity.ok(ResponseMessage.success(result));
+        } catch (BusinessException e) {
+            logger.warn("条件查询简历业务异常，错误码: {}，错误信息: {}", e.getCode(), e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("条件查询简历系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), "条件查询简历失败: " + e.getMessage()));
+        }
+    }
 }
