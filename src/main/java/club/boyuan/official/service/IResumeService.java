@@ -92,4 +92,14 @@ public interface IResumeService {
      * @return 简历DTO（包含字段值及字段定义信息）
      */
     ResumeDTO getResumeWithFieldValuesById(Integer resumeId);
+    
+    /**
+     * 条件查询简历列表
+     * @param name 姓名（可选）
+     * @param major 专业（可选）
+     * @param cycleId 年份ID（可选）
+     * @param status 简历状态（可选）
+     * @return 简历DTO列表
+     */
+    List<ResumeDTO> queryResumes(String name, String major, Integer cycleId, Integer status);
 }

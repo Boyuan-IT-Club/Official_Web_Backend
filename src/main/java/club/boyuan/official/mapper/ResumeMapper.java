@@ -58,4 +58,14 @@ public interface ResumeMapper {
      * @return 影响行数
      */
     int deleteByUserId(Integer userId);
+    
+    /**
+     * 多条件查询简历列表
+     * @param name 姓名（可选）
+     * @param major 专业（可选）
+     * @param cycleId 年份ID（可选）
+     * @param status 简历状态（可选）
+     * @return 简历列表
+     */
+    List<Resume> queryResumes(@Param("name") String name, @Param("major") String major, @Param("cycleId") Integer cycleId, @Param("status") Integer status);
 }
