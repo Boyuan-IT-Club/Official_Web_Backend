@@ -260,6 +260,90 @@ public class UserServiceImpl implements IUserService {
     }
 
     @Override
+    @Transactional
+    public int batchUpdateUserStatus(List<Integer> userIds, String status) {
+        if (userIds == null || userIds.isEmpty()) {
+            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
+        }
+        
+        if (status == null || (!"active".equals(status) && !"frozen".equals(status))) {
+            throw new BusinessException(BusinessExceptionEnum.PARAMETER_VALIDATION_FAILED, "无效的状态值");
+        }
+        
+        // 检查用户是否存在且不是管理员
+        List<User> users = userMapper.selectByIds(userIds);
+        for (User user : users) {
+            if (user == null) {
+                throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
+            }
+            // 不允许修改管理员状态
+            if (User.ROLE_ADMIN.equals(user.getRole())) {
+                throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED, "不允许批量修改管理员状态");
+            }
+        }
+        
+        int updatedCount = userMapper.batchUpdateStatusByIds(userIds, "active".equals(status));
+        logger.info("批量更新用户状态成功，更新数量: {}，状态: {}", updatedCount, status);
+        return updatedCount;
+    }
+
+    @Override
+    @Transactional
+    public int batchUpdateUserDept(List<Integer> userIds, String dept) {
+        if (userIds == null || userIds.isEmpty()) {
+            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
+        }
+        
+        if (dept == null) {
+            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "部门信息不能为空");
+        }
+        
+        // 检查用户是否存在且不是管理员
+        List<User> users = userMapper.selectByIds(userIds);
+        for (User user : users) {
+            if (user == null) {
+                throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
+            }
+            // 不允许修改管理员信息
+            if (User.ROLE_ADMIN.equals(user.getRole())) {
+                throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED, "不允许批量修改管理员信息");
+            }
+        }
+        
+        int updatedCount = userMapper.batchUpdateDeptByIds(userIds, dept);
+        logger.info("批量更新用户部门成功，更新数量: {}，部门: {}", updatedCount, dept);
+        return updatedCount;
+    }
+
+    @Override
+    @Transactional
+    public int batchUpdateUserMembership(List<Integer> userIds, Boolean isMember) {
+        if (userIds == null || userIds.isEmpty()) {
+            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
+        }
+        
+        if (isMember == null) {
+            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "会员状态不能为空");
+        }
+        
+        // 检查用户是否存在且不是管理员
+        List<User> users = userMapper.selectByIds(userIds);
+        for (User user : users) {
+            if (user == null) {
+                throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
+            }
+            // 不允许修改管理员会员状态
+            if (User.ROLE_ADMIN.equals(user.getRole())) {
+                throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED, "不允许批量修改管理员会员状态");
+            }
+        }
+        
+        int updatedCount = userMapper.batchUpdateMembershipByIds(userIds, isMember);
+        logger.info("批量更新用户会员状态成功，更新数量: {}，会员状态: {}", updatedCount, isMember);
+        return updatedCount;
+    }
+
+    @Override
     public User getUserById(Integer userId) {
         return userMapper.selectById(userId);
     }
