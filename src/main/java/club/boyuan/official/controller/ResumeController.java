@@ -761,6 +761,13 @@ public class ResumeController {
                 // 获取简历信息
                 ResumeDTO resumeDTO = resumeService.getResumeWithFieldValuesById(resumeId);
                 
+                // 检查简历是否存在
+                if (resumeDTO == null) {
+                    logger.warn("尝试导出不存在的简历，简历ID: {}，用户: {}", resumeId, username);
+                    response.sendError(HttpServletResponse.SC_NOT_FOUND, "简历不存在");
+                    return;
+                }
+                
                 // 权限检查：管理员或简历所有者可以导出
                 if (!User.ROLE_ADMIN.equals(currentUser.getRole()) && !currentUser.getUserId().equals(resumeDTO.getUserId())) {
                     logger.warn("用户{}尝试导出不属于自己的简历{}", username, resumeId);

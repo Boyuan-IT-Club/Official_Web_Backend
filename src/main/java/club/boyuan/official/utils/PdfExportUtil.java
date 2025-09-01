@@ -3,6 +3,8 @@ package club.boyuan.official.utils;
 import club.boyuan.official.dto.ResumeDTO;
 import club.boyuan.official.dto.ResumeFieldValueDTO;
 import club.boyuan.official.dto.SimpleResumeFieldDTO;
+import club.boyuan.official.exception.BusinessException;
+import club.boyuan.official.exception.BusinessExceptionEnum;
 import com.itextpdf.text.*;
 import com.itextpdf.text.pdf.BaseFont;
 import com.itextpdf.text.pdf.PdfPCell;
@@ -24,88 +26,92 @@ public class PdfExportUtil {
      * 将简历数据导出为PDF格式
      * @param resumeDTO 简历数据传输对象
      * @return PDF字节数组
-     * @throws DocumentException 文档异常
+     * @throws BusinessException 导出失败时抛出业务异常
      */
-    public static byte[] exportResumeToPdf(ResumeDTO resumeDTO) throws DocumentException {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        
-        // 创建文档
-        Document document = new Document(PageSize.A4);
-        PdfWriter.getInstance(document, baos);
-        document.open();
-        
-        // 设置字体
-        Font titleFont = getFont(18, Font.BOLD);
-        Font headerFont = getFont(14, Font.BOLD);
-        Font normalFont = getFont(10, Font.NORMAL);
-        
+    public static byte[] exportResumeToPdf(ResumeDTO resumeDTO) throws BusinessException {
         try {
-            // 添加标题
-            Paragraph title = new Paragraph("个人简历", titleFont);
-            title.setAlignment(Element.ALIGN_CENTER);
-            title.setSpacingAfter(20);
-            document.add(title);
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
             
-            // 添加基本信息
-            PdfPTable infoTable = new PdfPTable(2);
-            infoTable.setWidthPercentage(100);
-            infoTable.setSpacingAfter(20);
+            // 创建文档
+            Document document = new Document(PageSize.A4);
+            PdfWriter.getInstance(document, baos);
+            document.open();
             
-            PdfPCell cell1 = new PdfPCell(new Paragraph("用户ID: " + resumeDTO.getUserId(), normalFont));
-            PdfPCell cell2 = new PdfPCell(new Paragraph("招募周期ID: " + resumeDTO.getCycleId(), normalFont));
-            PdfPCell cell3 = new PdfPCell(new Paragraph("状态: " + getStatusText(resumeDTO.getStatus()), normalFont));
-            PdfPCell cell4 = new PdfPCell(new Paragraph("创建时间: " + formatDateTime(resumeDTO.getCreatedAt()), normalFont));
+            // 设置字体
+            Font titleFont = getFont(18, Font.BOLD);
+            Font headerFont = getFont(14, Font.BOLD);
+            Font normalFont = getFont(10, Font.NORMAL);
             
-            infoTable.addCell(cell1);
-            infoTable.addCell(cell2);
-            infoTable.addCell(cell3);
-            infoTable.addCell(cell4);
-            
-            document.add(infoTable);
-            
-            // 添加字段值信息
-            if (resumeDTO.getSimpleFields() != null && !resumeDTO.getSimpleFields().isEmpty()) {
-                Paragraph fieldsTitle = new Paragraph("简历详情", headerFont);
-                fieldsTitle.setSpacingBefore(20);
-                fieldsTitle.setSpacingAfter(10);
-                document.add(fieldsTitle);
+            try {
+                // 添加标题
+                Paragraph title = new Paragraph("个人简历", titleFont);
+                title.setAlignment(Element.ALIGN_CENTER);
+                title.setSpacingAfter(20);
+                document.add(title);
                 
-                PdfPTable fieldsTable = new PdfPTable(2);
-                fieldsTable.setWidthPercentage(100);
-                fieldsTable.setWidths(new int[]{1, 3});
+                // 添加基本信息
+                PdfPTable infoTable = new PdfPTable(2);
+                infoTable.setWidthPercentage(100);
+                infoTable.setSpacingAfter(20);
                 
-                // 表头
-                PdfPCell header1 = new PdfPCell(new Paragraph("字段名称", headerFont));
-                PdfPCell header2 = new PdfPCell(new Paragraph("字段值", headerFont));
-                fieldsTable.addCell(header1);
-                fieldsTable.addCell(header2);
+                PdfPCell cell1 = new PdfPCell(new Paragraph("用户ID: " + resumeDTO.getUserId(), normalFont));
+                PdfPCell cell2 = new PdfPCell(new Paragraph("招募周期ID: " + resumeDTO.getCycleId(), normalFont));
+                PdfPCell cell3 = new PdfPCell(new Paragraph("状态: " + getStatusText(resumeDTO.getStatus()), normalFont));
+                PdfPCell cell4 = new PdfPCell(new Paragraph("创建时间: " + formatDateTime(resumeDTO.getCreatedAt()), normalFont));
                 
-                // 数据行
-                for (SimpleResumeFieldDTO field : resumeDTO.getSimpleFields()) {
-                    PdfPCell fieldLabel = new PdfPCell(new Paragraph(
-                        field.getFieldLabel() != null ? field.getFieldLabel() : "未知字段", 
-                        normalFont));
-                    PdfPCell fieldValueCell = new PdfPCell(new Paragraph(
-                        field.getFieldValue() != null ? field.getFieldValue() : "", 
-                        normalFont));
-                    fieldsTable.addCell(fieldLabel);
-                    fieldsTable.addCell(fieldValueCell);
+                infoTable.addCell(cell1);
+                infoTable.addCell(cell2);
+                infoTable.addCell(cell3);
+                infoTable.addCell(cell4);
+                
+                document.add(infoTable);
+                
+                // 添加字段值信息
+                if (resumeDTO.getSimpleFields() != null && !resumeDTO.getSimpleFields().isEmpty()) {
+                    Paragraph fieldsTitle = new Paragraph("简历详情", headerFont);
+                    fieldsTitle.setSpacingBefore(20);
+                    fieldsTitle.setSpacingAfter(10);
+                    document.add(fieldsTitle);
+                    
+                    PdfPTable fieldsTable = new PdfPTable(2);
+                    fieldsTable.setWidthPercentage(100);
+                    fieldsTable.setWidths(new int[]{1, 3});
+                    
+                    // 表头
+                    PdfPCell header1 = new PdfPCell(new Paragraph("字段名称", headerFont));
+                    PdfPCell header2 = new PdfPCell(new Paragraph("字段值", headerFont));
+                    fieldsTable.addCell(header1);
+                    fieldsTable.addCell(header2);
+                    
+                    // 数据行
+                    for (SimpleResumeFieldDTO field : resumeDTO.getSimpleFields()) {
+                        PdfPCell fieldLabel = new PdfPCell(new Paragraph(
+                            field.getFieldLabel() != null ? field.getFieldLabel() : "未知字段", 
+                            normalFont));
+                        PdfPCell fieldValueCell = new PdfPCell(new Paragraph(
+                            field.getFieldValue() != null ? field.getFieldValue() : "", 
+                            normalFont));
+                        fieldsTable.addCell(fieldLabel);
+                        fieldsTable.addCell(fieldValueCell);
+                    }
+                    
+                    document.add(fieldsTable);
                 }
                 
-                document.add(fieldsTable);
+                // 添加导出时间
+                Paragraph exportTime = new Paragraph("导出时间: " + formatDateTime(LocalDateTime.now()), normalFont);
+                exportTime.setAlignment(Element.ALIGN_RIGHT);
+                exportTime.setSpacingBefore(20);
+                document.add(exportTime);
+                
+            } finally {
+                document.close();
             }
             
-            // 添加导出时间
-            Paragraph exportTime = new Paragraph("导出时间: " + formatDateTime(LocalDateTime.now()), normalFont);
-            exportTime.setAlignment(Element.ALIGN_RIGHT);
-            exportTime.setSpacingBefore(20);
-            document.add(exportTime);
-            
-        } finally {
-            document.close();
+            return baos.toByteArray();
+        } catch (Exception e) {
+            throw new BusinessException(BusinessExceptionEnum.EXPORT_PDF_FAILED);
         }
-        
-        return baos.toByteArray();
     }
     
     /**
