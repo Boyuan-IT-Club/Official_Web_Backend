@@ -1,8 +1,10 @@
 FROM openjdk:17-jdk-slim
 
-# 安装必要的工具
+# 安装必要的工具和字体库
 RUN apt-get update && apt-get install -y \
     locales \
+    fontconfig \
+    libfreetype6 \
     fonts-noto-cjk \
     curl \
     jq \

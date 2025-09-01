@@ -12,6 +12,7 @@ import com.itextpdf.text.pdf.PdfWriter;
 import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Objects;
 
 /**
  * PDF导出工具类
@@ -33,10 +34,10 @@ public class PdfExportUtil {
         PdfWriter.getInstance(document, baos);
         document.open();
         
-        // 设置中文字体
-        Font titleFont = getChineseFont(18, Font.BOLD);
-        Font headerFont = getChineseFont(14, Font.BOLD);
-        Font normalFont = getChineseFont(10, Font.NORMAL);
+        // 设置字体
+        Font titleFont = getFont(18, Font.BOLD);
+        Font headerFont = getFont(14, Font.BOLD);
+        Font normalFont = getFont(10, Font.NORMAL);
         
         try {
             // 添加标题
@@ -108,38 +109,51 @@ public class PdfExportUtil {
     }
     
     /**
-     * 获取支持中文的字体
+     * 获取字体，支持中文显示
      * @param size 字体大小
      * @param style 字体样式
-     * @return 支持中文的字体
+     * @return 字体对象
      */
-    private static Font getChineseFont(int size, int style) {
-        try {
-            // 尝试使用系统中文字体
-            BaseFont baseFont = BaseFont.createFont("STSong-Light", "UniGB-UCS2-H", BaseFont.NOT_EMBEDDED);
+    private static Font getFont(int size, int style) {
+        // 首先尝试创建支持中文的字体
+        BaseFont baseFont = getChineseBaseFont();
+        if (baseFont != null) {
             return new Font(baseFont, size, style);
-        } catch (Exception e) {
+        }
+        
+        // 如果无法创建中文字体，则使用默认字体
+        return new Font(Font.FontFamily.HELVETICA, size, style);
+    }
+    
+    /**
+     * 获取支持中文的BaseFont
+     * @return BaseFont对象，如果无法创建则返回null
+     */
+    private static BaseFont getChineseBaseFont() {
+        // 尝试多种中文字体方案
+        String[][] fontConfigs = {
+            // iText内置中文字体
+            {"STSong-Light", "UniGB-UCS2-H"},
+            // 系统字体路径
+            {"/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc,0", BaseFont.IDENTITY_H},
+            {"/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc,0", BaseFont.IDENTITY_H},
+            {"C:/Windows/Fonts/simsun.ttc,0", BaseFont.IDENTITY_H},
+            {"C:/Windows/Fonts/msyh.ttc,0", BaseFont.IDENTITY_H},
+            // 嵌入式字体
+            {BaseFont.HELVETICA, BaseFont.CP1252}
+        };
+        
+        for (String[] fontConfig : fontConfigs) {
             try {
-                // 尝试使用系统默认中文字体
-                BaseFont baseFont = BaseFont.createFont("C:/Windows/Fonts/simsun.ttc,0", BaseFont.IDENTITY_H, BaseFont.NOT_EMBEDDED);
-                return new Font(baseFont, size, style);
-            } catch (Exception ex) {
-                try {
-                    // 尝试使用微软雅黑字体
-                    BaseFont baseFont = BaseFont.createFont("C:/Windows/Fonts/msyh.ttc,0", BaseFont.IDENTITY_H, BaseFont.NOT_EMBEDDED);
-                    return new Font(baseFont, size, style);
-                } catch (Exception exc) {
-                    try {
-                        // 使用iText内置的通用字体
-                        BaseFont baseFont = BaseFont.createFont(BaseFont.HELVETICA, BaseFont.CP1252, BaseFont.EMBEDDED);
-                        return new Font(baseFont, size, style);
-                    } catch (Exception exce) {
-                        // 最后回退到默认字体
-                        return new Font(Font.FontFamily.HELVETICA, size, style);
-                    }
-                }
+                BaseFont baseFont = BaseFont.createFont(fontConfig[0], fontConfig[1], BaseFont.NOT_EMBEDDED);
+                return baseFont;
+            } catch (Exception e) {
+                // 忽略异常，尝试下一个字体配置
             }
         }
+        
+        // 所有字体都失败，返回null
+        return null;
     }
     
     /**
