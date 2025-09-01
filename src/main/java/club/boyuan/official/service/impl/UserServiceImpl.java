@@ -42,18 +42,23 @@ public class UserServiceImpl implements IUserService {
 
     @Override
     public User add(UserDTO userDTO) {
+        logger.info("开始添加新用户，用户名: {}", userDTO.getUsername());
+        
         // 检查用户名是否已存在
         if (userMapper.selectByUsername(userDTO.getUsername()) != null) {
+            logger.warn("添加用户失败，用户名已存在: {}", userDTO.getUsername());
             throw new BusinessException(BusinessExceptionEnum.USERNAME_ALREADY_EXISTS);
         }
 
         // 检查邮箱是否已存在
         if (userMapper.selectByEmail(userDTO.getEmail()) != null) {
+            logger.warn("添加用户失败，邮箱已存在: {}", userDTO.getEmail());
             throw new BusinessException(BusinessExceptionEnum.EMAIL_ALREADY_EXISTS);
         }
 
         // 检查手机号是否已存在
         if (userMapper.selectByPhone(userDTO.getPhone()) != null) {
+            logger.warn("添加用户失败，手机号已存在: {}", userDTO.getPhone());
             throw new BusinessException(BusinessExceptionEnum.PHONE_ALREADY_EXISTS);
         }
 
@@ -175,15 +180,22 @@ public class UserServiceImpl implements IUserService {
     @Override
     @Transactional
     public void deleteUserById(Integer userId) {
+        logger.info("开始删除用户，用户ID: {}", userId);
+        
         if (userId == null) {
+            logger.warn("删除用户失败，用户ID不能为空");
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
         }
+        
         User user = getUserById(userId);
         if (user == null) {
+            logger.warn("删除用户失败，用户不存在，用户ID: {}", userId);
             throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
         }
+        
         // 不允许删除管理员
         if (User.ROLE_ADMIN.equals(user.getRole())) {
+            logger.warn("删除用户失败，不允许删除管理员用户，用户ID: {}", userId);
             throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
         }
 
@@ -204,6 +216,7 @@ public class UserServiceImpl implements IUserService {
             // 删除用户本身
             int rows = userMapper.deleteById(userId);
             if (rows <= 0) {
+                logger.error("删除用户失败，数据库操作异常，用户ID: {}", userId);
                 throw new BusinessException(BusinessExceptionEnum.SYSTEM_ERROR);
             }
             logger.info("成功删除用户，用户ID: {}", userId);

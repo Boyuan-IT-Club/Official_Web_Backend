@@ -13,7 +13,9 @@ import club.boyuan.official.service.IResumeFieldDefinitionService;
 import club.boyuan.official.service.IResumeService;
 import club.boyuan.official.service.IUserService;
 import club.boyuan.official.utils.JwtTokenUtil;
+import club.boyuan.official.utils.PdfExportUtil;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.AllArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,23 +44,24 @@ public class ResumeController {
     private final JwtTokenUtil jwtTokenUtil;
     
     /**
-     * 获取指定年份的简历字段定义
-     * @param cycleId 招聘年份ID
+     * 获取指定招募周期的简历字段定义
+     * @param cycleId 招募周期ID
      * @return 字段定义列表
      */
     @GetMapping("/fields/{cycleId}")
     public ResponseEntity<ResponseMessage<List<ResumeFieldDefinition>>> getFieldDefinitions(
             @PathVariable Integer cycleId) {
         try {
-            logger.info("获取{}年份的简历字段定义", cycleId);
+            logger.info("获取ID为{}的招募周期的简历字段定义", cycleId);
             List<ResumeFieldDefinition> fieldDefinitions = fieldDefinitionService.getFieldDefinitionsByCycleId(cycleId);
+            logger.info("成功获取ID为{}的招募周期的简历字段定义，共{}条记录", cycleId, fieldDefinitions.size());
             return ResponseEntity.ok(new ResponseMessage<>(200, "获取字段定义成功", fieldDefinitions));
         } catch (BusinessException e) {
-            logger.warn("获取字段定义业务异常，年份: {}，错误码: {}，错误信息: {}", cycleId, e.getCode(), e.getMessage());
+            logger.warn("获取字段定义业务异常，招募周期ID: {}，错误码: {}，错误信息: {}", cycleId, e.getCode(), e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new ResponseMessage<>(e.getCode(), e.getMessage(), null));
         } catch (Exception e) {
-            logger.error("获取字段定义系统异常，年份: {}", cycleId, e);
+            logger.error("获取字段定义系统异常，招募周期ID: {}", cycleId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
                             "获取字段定义失败: " + e.getMessage(), null));
@@ -203,8 +206,8 @@ public class ResumeController {
     }
     
     /**
-     * 根据年份获取简历
-     * @param cycleId 年份ID
+     * 根据招募周期获取简历
+     * @param cycleId 招募周期ID
      * @param request HTTP请求
      * @return 简历信息
      */
@@ -212,11 +215,10 @@ public class ResumeController {
     public ResponseEntity<ResponseMessage<?>> getResumeByCycleId(
             @PathVariable Integer cycleId, HttpServletRequest request) {
         try {
-            String token = request.getHeader("Authorization").substring(7);
-            String username = jwtTokenUtil.extractUsername(token);
-            User currentUser = userService.getUserByUsername(username);
+            Integer userId = getAuthenticatedUserIdFromRequest(request);
+            User currentUser = userService.getUserById(userId);
             
-            logger.info("用户{}获取{}年份简历", username, cycleId);
+            logger.info("用户{}({})获取招募周期ID为{}的简历", currentUser.getUsername(), userId, cycleId);
             ResumeDTO resumeDTO = resumeService.getResumeWithFieldValues(currentUser.getUserId(), cycleId);
             
             if (resumeDTO == null) {
@@ -230,20 +232,40 @@ public class ResumeController {
                 resumeDTO = resumeService.getResumeWithFieldValues(currentUser.getUserId(), cycleId);
             }
             
+            logger.info("用户{}({})成功获取招募周期ID为{}的简历", currentUser.getUsername(), userId, cycleId);
             return ResponseEntity.ok(ResponseMessage.success(resumeDTO));
         } catch (BusinessException e) {
-            logger.warn("获取简历业务异常，年份: {}，错误码: {}，错误信息: {}", cycleId, e.getCode(), e.getMessage());
+            logger.warn("获取简历业务异常，招募周期ID: {}，错误码: {}，错误信息: {}", cycleId, e.getCode(), e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
-            logger.error("获取简历系统异常，用户ID: {}，年份: {}", 
-                    request.getHeader("Authorization") != null ? 
-                            jwtTokenUtil.extractUsername(request.getHeader("Authorization").substring(7)) : "unknown", 
-                    cycleId, e);
+            Integer userId = null;
+            String username = "unknown";
+            try {
+                userId = getAuthenticatedUserIdFromRequest(request);
+                User currentUser = userService.getUserById(userId);
+                username = currentUser.getUsername();
+            } catch (Exception ex) {
+                logger.warn("无法获取当前用户信息");
+            }
+            
+            logger.error("获取简历系统异常，用户: {}({})，招募周期ID: {}", username, userId, cycleId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ResponseMessage.error(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
                             "获取简历失败: " + e.getMessage()));
         }
+    }
+    
+    /**
+     * 从请求中获取认证用户ID
+     * @param request HTTP请求
+     * @return 用户ID
+     */
+    private Integer getAuthenticatedUserIdFromRequest(HttpServletRequest request) {
+        String token = request.getHeader("Authorization").substring(7);
+        String username = jwtTokenUtil.extractUsername(token);
+        User currentUser = userService.getUserByUsername(username);
+        return currentUser.getUserId();
     }
     
     /**
@@ -292,7 +314,7 @@ public class ResumeController {
     
     /**
      * 保存字段值
-     * @param cycleId 年份ID
+     * @param cycleId 招募周期ID
      * @param fieldValues 字段值列表
      * @param request HTTP请求
      * @return 保存结果
@@ -314,7 +336,7 @@ public class ResumeController {
             
             User currentUser = userService.getUserByUsername(username);
             
-            logger.info("用户{}保存{}年份简历字段值，字段数量: {}", username, cycleId, fieldValues.size());
+            logger.info("用户{}保存招募周期ID为{}的简历字段值，字段数量: {}", username, cycleId, fieldValues.size());
             Resume resume = resumeService.getResumeByUserIdAndCycleId(currentUser.getUserId(), cycleId);
             if (resume == null) {
                 resume = new Resume();
@@ -333,7 +355,7 @@ public class ResumeController {
             
             return ResponseEntity.ok(ResponseMessage.success("字段值保存成功"));
         } catch (BusinessException e) {
-            logger.warn("保存字段值业务异常，年份: {}，错误码: {}，错误信息: {}", cycleId, e.getCode(), e.getMessage());
+            logger.warn("保存字段值业务异常，招募周期ID: {}，错误码: {}，错误信息: {}", cycleId, e.getCode(), e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
@@ -346,7 +368,7 @@ public class ResumeController {
                 }
             }
             
-            logger.error("保存字段值系统异常，用户: {}，年份: {}", username, cycleId, e);
+            logger.error("保存字段值系统异常，用户: {}，招募周期ID: {}", username, cycleId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ResponseMessage.error(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
                             "保存失败: " + e.getMessage()));
@@ -355,7 +377,7 @@ public class ResumeController {
     
     /**
      * 获取字段值
-     * @param cycleId 年份ID
+     * @param cycleId 招募周期ID
      * @param request HTTP请求
      * @return 字段值列表
      */
@@ -374,10 +396,10 @@ public class ResumeController {
             
             User currentUser = userService.getUserByUsername(username);
             
-            logger.info("用户{}获取{}年份简历字段值", username, cycleId);
+            logger.info("用户{}获取招募周期ID为{}的简历字段值", username, cycleId);
             Resume resume = resumeService.getResumeByUserIdAndCycleId(currentUser.getUserId(), cycleId);
             if (resume == null) {
-                logger.warn("简历不存在，用户ID: {}，年份: {}", currentUser.getUserId(), cycleId);
+                logger.warn("简历不存在，用户ID: {}，招募周期ID: {}", currentUser.getUserId(), cycleId);
                 throw new BusinessException(BusinessExceptionEnum.RESUME_NOT_FOUND);
             }
             
@@ -394,7 +416,7 @@ public class ResumeController {
                 }
             }
             
-            logger.warn("获取字段值业务异常，用户: {}，年份: {}，错误码: {}，错误信息: {}", username, cycleId, e.getCode(), e.getMessage());
+            logger.warn("获取字段值业务异常，用户: {}，招募周期ID: {}，错误码: {}，错误信息: {}", username, cycleId, e.getCode(), e.getMessage());
             HttpStatus status;
             if (e.getCode() == BusinessExceptionEnum.RESUME_NOT_FOUND.getCode()) {
                 status = HttpStatus.NOT_FOUND;
@@ -413,7 +435,7 @@ public class ResumeController {
                 }
             }
             
-            logger.error("获取字段值系统异常，用户: {}，年份: {}", username, cycleId, e);
+            logger.error("获取字段值系统异常，用户: {}，招募周期ID: {}", username, cycleId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ResponseMessage.error(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
                             "获取字段值失败: " + e.getMessage()));
@@ -422,7 +444,7 @@ public class ResumeController {
     
     /**
      * 提交简历
-     * @param cycleId 年份ID
+     * @param cycleId 招募周期ID
      * @param request HTTP请求
      * @return 提交的简历
      */
@@ -441,15 +463,15 @@ public class ResumeController {
             
             User currentUser = userService.getUserByUsername(username);
             
-            logger.info("用户{}提交{}年份简历", username, cycleId);
+            logger.info("用户{}提交招募周期ID为{}的简历", username, cycleId);
             Resume resume = resumeService.getResumeByUserIdAndCycleId(currentUser.getUserId(), cycleId);
             if (resume == null) {
-                logger.warn("简历不存在，用户ID: {}，年份: {}", currentUser.getUserId(), cycleId);
+                logger.warn("简历不存在，用户ID: {}，招募周期ID: {}", currentUser.getUserId(), cycleId);
                 throw new BusinessException(BusinessExceptionEnum.RESUME_NOT_FOUND);
             }
             
             if (resume.getStatus() != null && resume.getStatus() >= 2) {
-                logger.warn("简历已提交或已在评审中，用户ID: {}，年份: {}，状态: {}", 
+                logger.warn("简历已提交或已在评审中，用户ID: {}，招募周期ID: {}，状态: {}", 
                         currentUser.getUserId(), cycleId, resume.getStatus());
                 throw new BusinessException(BusinessExceptionEnum.RESUME_ALREADY_SUBMITTED);
             }
@@ -467,7 +489,7 @@ public class ResumeController {
                 }
             }
             
-            logger.warn("提交简历业务异常，用户: {}，年份: {}，错误码: {}，错误信息: {}", username, cycleId, e.getCode(), e.getMessage());
+            logger.warn("提交简历业务异常，用户: {}，招募周期ID: {}，错误码: {}，错误信息: {}", username, cycleId, e.getCode(), e.getMessage());
             HttpStatus status;
             if (e.getCode() == BusinessExceptionEnum.RESUME_NOT_FOUND.getCode()) {
                 status = HttpStatus.NOT_FOUND;
@@ -486,7 +508,7 @@ public class ResumeController {
                 }
             }
             
-            logger.error("提交简历系统异常，用户: {}，年份: {}", username, cycleId, e);
+            logger.error("提交简历系统异常，用户: {}，招募周期ID: {}", username, cycleId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ResponseMessage.error(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
                             "简历提交失败: " + e.getMessage()));
@@ -570,7 +592,7 @@ public class ResumeController {
     
     /**
      * 更新简历内容
-     * @param cycleId 年份ID
+     * @param cycleId 招募周期ID
      * @param fieldValues 字段值列表
      * @param request HTTP请求
      * @return 更新结果
@@ -592,16 +614,16 @@ public class ResumeController {
             
             User currentUser = userService.getUserByUsername(username);
             
-            logger.info("用户{}更新{}年份简历，字段数量: {}", username, cycleId, fieldValues.size());
+            logger.info("用户{}更新招募周期ID为{}的简历，字段数量: {}", username, cycleId, fieldValues.size());
             Resume resume = resumeService.getResumeByUserIdAndCycleId(currentUser.getUserId(), cycleId);
             if (resume == null) {
-                logger.warn("简历不存在，用户ID: {}，年份: {}", currentUser.getUserId(), cycleId);
+                logger.warn("简历不存在，用户ID: {}，招募周期ID: {}", currentUser.getUserId(), cycleId);
                 throw new BusinessException(BusinessExceptionEnum.RESUME_NOT_FOUND);
             }
             
             // 检查简历状态，已提交的简历不能更新
             if (resume.getStatus() != null && resume.getStatus() >= 2) {
-                logger.warn("尝试更新已提交的简历，用户ID: {}，年份: {}，状态: {}", 
+                logger.warn("尝试更新已提交的简历，用户ID: {}，招募周期ID: {}，状态: {}", 
                         currentUser.getUserId(), cycleId, resume.getStatus());
                 throw new BusinessException(BusinessExceptionEnum.RESUME_ALREADY_SUBMITTED);
             }
@@ -629,7 +651,7 @@ public class ResumeController {
                 }
             }
             
-            logger.warn("更新简历业务异常，用户: {}，年份: {}，错误码: {}，错误信息: {}", 
+            logger.warn("更新简历业务异常，用户: {}，招募周期ID: {}，错误码: {}，错误信息: {}", 
                     username, cycleId, e.getCode(), e.getMessage());
             HttpStatus status;
             if (e.getCode() == BusinessExceptionEnum.RESUME_NOT_FOUND.getCode()) {
@@ -649,7 +671,7 @@ public class ResumeController {
                 }
             }
             
-            logger.error("更新简历系统异常，用户: {}，年份: {}", username, cycleId, e);
+            logger.error("更新简历系统异常，用户: {}，招募周期ID: {}", username, cycleId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ResponseMessage.error(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
                             "简历更新失败: " + e.getMessage()));
@@ -712,8 +734,71 @@ public class ResumeController {
     }
     
     /**
+     * 导出简历为PDF格式
+     * @param resumeId 简历ID
+     * @param request HTTP请求
+     * @param response HTTP响应
+     */
+    @GetMapping("/export/pdf/{resumeId}")
+    public void exportResumeToPdf(
+            @PathVariable Integer resumeId,
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        try {
+            // 检查认证头
+            String authHeader = request.getHeader("Authorization");
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                logger.warn("导出简历请求缺少有效的认证头");
+                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "未提供令牌");
+                return;
+            }
+            
+            try {
+                String token = authHeader.substring(7);
+                String username = jwtTokenUtil.extractUsername(token);
+                User currentUser = userService.getUserByUsername(username);
+                
+                // 获取简历信息
+                ResumeDTO resumeDTO = resumeService.getResumeWithFieldValuesById(resumeId);
+                
+                // 权限检查：管理员或简历所有者可以导出
+                if (!User.ROLE_ADMIN.equals(currentUser.getRole()) && !currentUser.getUserId().equals(resumeDTO.getUserId())) {
+                    logger.warn("用户{}尝试导出不属于自己的简历{}", username, resumeId);
+                    response.sendError(HttpServletResponse.SC_FORBIDDEN, "权限不足");
+                    return;
+                }
+                
+                // 生成PDF
+                byte[] pdfBytes = PdfExportUtil.exportResumeToPdf(resumeDTO);
+                
+                // 设置响应头
+                response.setContentType("application/pdf");
+                response.setHeader("Content-Disposition", "attachment; filename=resume_" + resumeId + ".pdf");
+                response.setContentLength(pdfBytes.length);
+                
+                // 写入响应
+                response.getOutputStream().write(pdfBytes);
+                response.getOutputStream().flush();
+                
+                logger.info("用户{}成功导出简历{}为PDF", username, resumeId);
+            } catch (Exception e) {
+                logger.error("令牌验证失败", e);
+                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "令牌验证失败");
+                return;
+            }
+        } catch (Exception e) {
+            logger.error("导出简历为PDF失败，简历ID: {}", resumeId, e);
+            try {
+                response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "导出失败: " + e.getMessage());
+            } catch (Exception ex) {
+                logger.error("设置错误响应失败", ex);
+            }
+        }
+    }
+    
+    /**
      * 条件查询简历列表
-     * 支持按姓名、专业、年份、状态等多条件组合查询
+     * 支持按姓名、专业、招募周期、状态等多条件组合查询
      */
     @GetMapping("/search")
     public ResponseEntity<ResponseMessage<List<ResumeDTO>>> queryResumes(
@@ -735,6 +820,7 @@ public class ResumeController {
                 throw new BusinessException(BusinessExceptionEnum.USER_ROLE_NOT_AUTHORIZED);
             }
             List<ResumeDTO> result = resumeService.queryResumes(name, major, cycleId, status);
+            logger.info("管理员{}执行条件查询简历，结果数量: {}", username, result.size());
             return ResponseEntity.ok(ResponseMessage.success(result));
         } catch (BusinessException e) {
             logger.warn("条件查询简历业务异常，错误码: {}，错误信息: {}", e.getCode(), e.getMessage());

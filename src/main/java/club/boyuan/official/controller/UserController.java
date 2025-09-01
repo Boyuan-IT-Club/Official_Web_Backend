@@ -7,14 +7,21 @@ import club.boyuan.official.exception.BusinessException;
 import club.boyuan.official.exception.BusinessExceptionEnum;
 import club.boyuan.official.service.IAwardExperienceService;
 import club.boyuan.official.service.IUserService;
+import club.boyuan.official.utils.ExcelExportUtil;
+import club.boyuan.official.utils.FileUploadUtil;
+import club.boyuan.official.utils.JwtTokenUtil;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.AllArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
@@ -22,24 +29,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
-import java.util.Map;
-import club.boyuan.official.utils.JwtTokenUtil;
-import club.boyuan.official.utils.FileUploadUtil;
-
 import java.util.List;
-import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.web.multipart.MultipartFile;
-
-import java.util.HashMap;
 import java.util.Map;
-import club.boyuan.official.utils.JwtTokenUtil;
-
-import java.util.List;
-import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static club.boyuan.official.utils.FileUploadUtil.generateFullHttpPath;
 
@@ -66,6 +57,7 @@ public class UserController {
         try {
             // 检查文件是否为空
             if (file == null || file.isEmpty()) {
+                logger.warn("头像上传失败: 上传文件为空");
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(new ResponseMessage(400, "上传文件为空", null));
             }
@@ -127,21 +119,12 @@ public class UserController {
     @PostMapping("/upload")
     public ResponseEntity<ResponseMessage> uploadFile(
             @RequestParam("file") MultipartFile file,
-            @RequestParam("uploadPath") String uploadPath,
-            HttpServletRequest request) {
+            @RequestParam("uploadPath") String uploadPath) {
         try {
             // 获取当前用户
-            String username = "unknown";
-            if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
-                try {
-                    username = jwtTokenUtil.extractUsername(request.getHeader("Authorization").substring(7));
-                } catch (Exception ex) {
-                    logger.warn("无法从token中提取用户名");
-                }
-            }
-            
             Integer userId = getAuthenticatedUserId();
-            logger.info("用户{}尝试上传文件到路径{}", username, uploadPath);
+            User user = userService.getUserById(userId);
+            logger.info("用户{}({})尝试上传文件到路径{}", user.getUsername(), userId, uploadPath);
             
             // 上传文件并获取路径
             String filePath = FileUploadUtil.uploadFile(file, uploadPath);
@@ -153,19 +136,20 @@ public class UserController {
             responseData.put("filePath", filePath);
             responseData.put("fullHttpPath", fullHttpPath);
             
-            logger.info("用户{}成功上传文件，路径为{}", username, filePath);
+            logger.info("用户{}({})成功上传文件，路径为{}", user.getUsername(), userId, filePath);
             return ResponseEntity.ok(ResponseMessage.success(responseData));
         } catch (Exception e) {
+            Integer userId = null;
             String username = "unknown";
-            if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
-                try {
-                    username = jwtTokenUtil.extractUsername(request.getHeader("Authorization").substring(7));
-                } catch (Exception ex) {
-                    logger.warn("无法从token中提取用户名");
-                }
+            try {
+                userId = getAuthenticatedUserId();
+                User user = userService.getUserById(userId);
+                username = user.getUsername();
+            } catch (Exception ex) {
+                logger.warn("无法获取当前用户信息");
             }
             
-            logger.error("文件上传失败，用户: {}", username, e);
+            logger.error("文件上传失败，用户: {}({})", username, userId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ResponseMessage.error(500, "文件上传失败: " + e.getMessage()));
         }
@@ -182,21 +166,12 @@ public class UserController {
     public ResponseEntity<ResponseMessage> uploadTypedFile(
             @RequestParam("file") MultipartFile file,
             @RequestParam("uploadPath") String uploadPath,
-            @RequestParam("fileType") String fileType,
-            HttpServletRequest request) {
+            @RequestParam("fileType") String fileType) {
         try {
             // 获取当前用户
-            String username = "unknown";
-            if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
-                try {
-                    username = jwtTokenUtil.extractUsername(request.getHeader("Authorization").substring(7));
-                } catch (Exception ex) {
-                    logger.warn("无法从token中提取用户名");
-                }
-            }
-            
             Integer userId = getAuthenticatedUserId();
-            logger.info("用户{}尝试上传{}类型的文件到路径{}", username, fileType, uploadPath);
+            User user = userService.getUserById(userId);
+            logger.info("用户{}({})尝试上传{}类型的文件到路径{}", user.getUsername(), userId, fileType, uploadPath);
             
             // 上传文件并获取路径
             String filePath = FileUploadUtil.uploadFile(file, uploadPath, fileType);
@@ -208,51 +183,47 @@ public class UserController {
             responseData.put("filePath", filePath);
             responseData.put("fullHttpPath", fullHttpPath);
             
-            logger.info("用户{}成功上传{}类型的文件，路径为{}", username, fileType, filePath);
+            logger.info("用户{}({})成功上传{}类型的文件，路径为{}", user.getUsername(), userId, fileType, filePath);
             return ResponseEntity.ok(ResponseMessage.success(responseData));
         } catch (Exception e) {
+            Integer userId = null;
             String username = "unknown";
-            if (request.getHeader("Authorization") != null && request.getHeader("Authorization").startsWith("Bearer ")) {
-                try {
-                    username = jwtTokenUtil.extractUsername(request.getHeader("Authorization").substring(7));
-                } catch (Exception ex) {
-                    logger.warn("无法从token中提取用户名");
-                }
+            try {
+                userId = getAuthenticatedUserId();
+                User user = userService.getUserById(userId);
+                username = user.getUsername();
+            } catch (Exception ex) {
+                logger.warn("无法获取当前用户信息");
             }
             
-            logger.error("文件上传失败，用户: {}", username, e);
+            logger.error("文件上传失败，用户: {}({})", username, userId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ResponseMessage.error(500, "文件上传失败: " + e.getMessage()));
         }
     }
     
-    /**
-     * 获取当前用户信息，返回响应实体
-     */
     @GetMapping("/me")
     public ResponseEntity<ResponseMessage> getCurrentUser() {
         try {
-            // 在实际项目中，应该从token中解析用户ID
-            // 从认证信息中获取用户ID（实际项目中实现）
             Integer userId = getAuthenticatedUserId();
             User user = userService.getUserById(userId);
             List<AwardExperience> awardExperiences = awardExperienceService.getByUserId(userId);
             Map<String, Object> responseData = new HashMap<>();
             responseData.put("user", user);
             responseData.put("awardExperiences", awardExperiences);
+            logger.info("成功获取用户ID为{}的用户信息", userId);
             return ResponseEntity.ok(ResponseMessage.success(responseData));
         } catch (BusinessException e) {
+            logger.warn("获取当前用户信息业务异常: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
+            logger.error("获取当前用户信息系统异常", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
         }
     }
 
-    /**
-     * 获取当前登录用户信息，返回用户对象
-     */
     private User getCurrentUserEntity() {
         Integer userId = getAuthenticatedUserId();
         return userService.getUserById(userId);
@@ -343,6 +314,65 @@ public class UserController {
             return bearerToken.substring(7);
         }
         return null;
+    }
+
+    /**
+     * 导出用户数据为Excel格式（仅管理员可用）
+     * @param request HTTP请求
+     * @param response HTTP响应
+     */
+    @GetMapping("/export/excel")
+    public void exportUsersToExcel(HttpServletRequest request, HttpServletResponse response) {
+        try {
+            // 检查认证头
+            String authHeader = request.getHeader("Authorization");
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                logger.warn("导出用户数据请求缺少有效的认证头");
+                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "未提供令牌");
+                return;
+            }
+            
+            try {
+                String token = authHeader.substring(7);
+                String username = jwtTokenUtil.extractUsername(token);
+                User currentUser = userService.getUserByUsername(username);
+                
+                // 仅管理员可用
+                if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
+                    logger.warn("用户{}尝试导出用户数据为Excel，但权限不足", username);
+                    response.sendError(HttpServletResponse.SC_FORBIDDEN, "权限不足");
+                    return;
+                }
+                
+                // 获取所有用户
+                List<User> users = userService.getAllUsers(currentUser); // 使用已有的getAllUsers方法获取所有用户
+                
+                // 生成Excel
+                byte[] excelBytes = ExcelExportUtil.exportUsersToExcel(users);
+                
+                // 设置响应头
+                response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+                response.setHeader("Content-Disposition", "attachment; filename=users_" + System.currentTimeMillis() + ".xlsx");
+                response.setContentLength(excelBytes.length);
+                
+                // 写入响应
+                response.getOutputStream().write(excelBytes);
+                response.getOutputStream().flush();
+                
+                logger.info("管理员{}成功导出{}个用户为Excel", username, users.size());
+            } catch (Exception e) {
+                logger.error("令牌验证失败", e);
+                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "令牌验证失败");
+                return;
+            }
+        } catch (Exception e) {
+            logger.error("导出用户为Excel失败", e);
+            try {
+                response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "导出失败: " + e.getMessage());
+            } catch (Exception ex) {
+                logger.error("设置错误响应失败", ex);
+            }
+        }
     }
 
     /**
