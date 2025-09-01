@@ -29,7 +29,7 @@ services:
       - official-network
 
   official:
-    image: ${DOCKERHUB_USERNAME:-boyuanclub}/official:latest  # 使用Docker Hub镜像
+    image: ${DOCKERHUB_USERNAME:-boyuanclub}/official-core-api:latest  # 使用Docker Hub镜像
     container_name: ${PROJECT_NAME:-official}-app
     ports:
       - "${APP_PORT:-8080}:8080"
@@ -48,6 +48,12 @@ services:
       - MAIL_USERNAME=${MAIL_USERNAME:-notify@boyuan.club}
       - MAIL_PASSWORD=${MAIL_PASSWORD:-12bGmEWjvyRDjzxE}
       - SERVER_PORT=8080
+      # 添加中文环境支持
+      - LANG=zh_CN.UTF-8
+      - LANGUAGE=zh_CN:zh
+      - LC_ALL=zh_CN.UTF-8
+      # 添加JVM参数以支持UTF-8编码
+      - JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8
     # 移除了command行，因为已经在Dockerfile中定义了ENTRYPOINT
     depends_on:
       - mysql
