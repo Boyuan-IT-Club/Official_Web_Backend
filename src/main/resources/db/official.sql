@@ -279,9 +279,6 @@ VALUES (18, 2, 'reason', '加入理由', 1, 14, 1, '2025-08-15 18:00:00', '2025-
 INSERT INTO `resume_field_definition` (`field_id`, `cycle_id`, `field_key`, `field_label`, `is_required`, `sort_order`,
                                        `is_active`, `created_at`, `updated_at`)
 VALUES (19, 2, 'github', 'GitHub地址', 0, 15, 1, '2025-08-15 18:00:00', '2025-08-15 18:00:00');
-INSERT INTO `resume_field_definition` (`field_id`, `cycle_id`, `field_key`, `field_label`, `is_required`, `sort_order`,
-                                       `is_active`, `created_at`, `updated_at`)
-VALUES (20, 2, 'github_url', 'GitHub地址', 0, 16, 1, '2025-08-15 18:00:00', '2025-08-15 18:00:00');
 
 -- ----------------------------
 -- Table structure for resume_field_value
@@ -334,7 +331,7 @@ INSERT INTO `resume_field_value` (`resume_id`, `field_id`, `field_value`, `creat
 VALUES (2, 13, '参与开发学校图书馆管理系统，使用Java Spring Boot框架和MySQL数据库。负责后端接口开发和数据库设计。',
         '2025-08-15 15:25:10', '2025-08-15 15:25:10');
 INSERT INTO `resume_field_value` (`resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`)
-VALUES (2, 14, '工作日下午', '2025-08-15 15:25:10', '2025-08-15 15:25:10');
+VALUES (2, 14, '2025-09-17 13:00:00', '2025-08-15 15:25:10', '2025-08-15 15:25:10');
 INSERT INTO `resume_field_value` (`resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`)
 VALUES (2, 15, '/uploads/photos/user2.jpg', '2025-08-15 15:25:10', '2025-08-15 15:25:10');
 INSERT INTO `resume_field_value` (`resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`)
@@ -345,8 +342,6 @@ INSERT INTO `resume_field_value` (`resume_id`, `field_id`, `field_value`, `creat
 VALUES (2, 18, '希望提升自己的技术能力，同时为社团发展贡献力量', '2025-08-15 15:25:10', '2025-08-15 15:25:10');
 INSERT INTO `resume_field_value` (`resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`)
 VALUES (2, 19, 'https://github.com/testuser1', '2025-08-15 15:25:10', '2025-08-15 15:25:10');
-INSERT INTO `resume_field_value` (`resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`)
-VALUES (2, 20, 'https://github.com/testuser1', '2025-08-15 15:25:10', '2025-08-15 15:25:10');
 
 INSERT INTO `resume_field_value` (`resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`)
 VALUES (3, 4, '测试用户2', '2025-08-15 16:40:20', '2025-08-15 16:40:20');
@@ -370,7 +365,7 @@ INSERT INTO `resume_field_value` (`resume_id`, `field_id`, `field_value`, `creat
 VALUES (3, 13, '设计学校官方网站界面，使用Figma进行UI设计，并使用HTML/CSS实现部分页面。', '2025-08-15 16:40:20',
         '2025-08-15 16:40:20');
 INSERT INTO `resume_field_value` (`resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`)
-VALUES (3, 14, '周末全天', '2025-08-15 16:40:20', '2025-08-15 16:40:20');
+VALUES (3, 14, '2025-09-17 09:00:00', '2025-08-15 16:40:20', '2025-08-15 16:40:20');
 INSERT INTO `resume_field_value` (`resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`)
 VALUES (3, 15, '/uploads/photos/user3.jpg', '2025-08-15 16:40:20', '2025-08-15 16:40:20');
 INSERT INTO `resume_field_value` (`resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`)
@@ -381,8 +376,6 @@ INSERT INTO `resume_field_value` (`resume_id`, `field_id`, `field_value`, `creat
 VALUES (3, 18, '希望通过参与社团活动提升设计能力，结识志同道合的朋友', '2025-08-15 16:40:20', '2025-08-15 16:40:20');
 INSERT INTO `resume_field_value` (`resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`)
 VALUES (3, 19, 'https://github.com/testuser2', '2025-08-15 16:40:20', '2025-08-15 16:40:20');
-INSERT INTO `resume_field_value` (`resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`)
-VALUES (3, 20, 'https://github.com/testuser2', '2025-08-15 16:40:20', '2025-08-15 16:40:20');
 
 INSERT INTO `resume_field_value` (`resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`)
 VALUES (4, 4, '测试用户3', '2025-08-15 17:10:30', '2025-08-15 17:10:30');
@@ -407,7 +400,7 @@ INSERT INTO `resume_field_value` (`resume_id`, `field_id`, `field_value`, `creat
 VALUES (4, 13, '分析学校社团活动参与数据，使用Python进行数据清洗和分析，并用Tableau制作可视化报告。',
         '2025-08-15 17:10:30', '2025-08-15 17:10:30');
 INSERT INTO `resume_field_value` (`resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`)
-VALUES (4, 14, '工作日晚上或周末', '2025-08-15 17:10:30', '2025-08-15 17:10:30');
+VALUES (4, 14, '2025-09-18 13:00:00', '2025-08-15 17:10:30', '2025-08-15 17:10:30');
 INSERT INTO `resume_field_value` (`resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`)
 VALUES (4, 15, '/uploads/photos/user4.jpg', '2025-08-15 17:10:30', '2025-08-15 17:10:30');
 INSERT INTO `resume_field_value` (`resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`)
@@ -418,8 +411,6 @@ INSERT INTO `resume_field_value` (`resume_id`, `field_id`, `field_value`, `creat
 VALUES (4, 18, '希望通过参与社团活动提升市场运营能力，为社团发展贡献力量', '2025-08-15 17:10:30', '2025-08-15 17:10:30');
 INSERT INTO `resume_field_value` (`resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`)
 VALUES (4, 19, 'https://github.com/testuser3', '2025-08-15 17:10:30', '2025-08-15 17:10:30');
-INSERT INTO `resume_field_value` (`resume_id`, `field_id`, `field_value`, `created_at`, `updated_at`)
-VALUES (4, 20, 'https://github.com/testuser3', '2025-08-15 17:10:30', '2025-08-15 17:10:30');
 
 -- 添加更多简历字段值
 INSERT INTO `resume_field_value` (`resume_id`, `field_id`, `field_value`)
@@ -433,13 +424,12 @@ VALUES (5, 4, '张三'),
        (5, 11, '热爱编程和开源技术，有良好的团队协作能力'),
        (5, 12, '["Java", "Python", "Linux", "Docker"]'),
        (5, 13, '参与学校开源社区项目，贡献代码并维护文档'),
-       (5, 14, '2025-09-15 14:00:00'),
+       (5, 14, '2025-09-17 09:00:00'),
        (5, 15, '/uploads/photos/student3.jpg'),
        (5, 16, '202312345678901'),
        (5, 17, '我是一个对技术充满热情的学生，希望能在技术部门学习和成长'),
        (5, 18, '希望提升自己的技术能力，同时为社团发展贡献力量'),
        (5, 19, 'https://github.com/zhangsan'),
-       (5, 20, 'https://github.com/zhangsan'),
 
        (6, 4, '李四'),
        (6, 5, '数字媒体技术'),
@@ -451,13 +441,12 @@ VALUES (5, 4, '张三'),
        (6, 11, '热爱设计和艺术，有独特的审美和创意能力'),
        (6, 12, '["Photoshop", "Illustrator", "Figma", "After Effects"]'),
        (6, 13, '设计学校宣传海报和活动物料，参与多个设计项目'),
-       (6, 14, '2025-09-16 10:00:00'),
+       (6, 14, '2025-09-17 13:00:00'),
        (6, 15, '/uploads/photos/student4.jpg'),
        (6, 16, '202212345678902'),
        (6, 17, '我是一个创意丰富的设计师，希望能在设计部发挥自己的才能'),
        (6, 18, '希望通过参与社团活动提升设计能力，结识志同道合的朋友'),
        (6, 19, 'https://github.com/lisi'),
-       (6, 20, 'https://github.com/lisi'),
 
        (7, 4, '王五'),
        (7, 5, '市场营销'),
@@ -469,12 +458,11 @@ VALUES (5, 4, '张三'),
        (7, 11, '具备良好的沟通能力和市场洞察力，善于团队协作'),
        (7, 12, '["市场分析", "数据处理", "活动策划", "演讲"]'),
        (7, 13, '策划并执行学校多项营销活动，取得良好效果'),
-       (7, 14, '2025-09-17 15:00:00'),
+       (7, 14, '2025-09-18 09:00:00'),
        (7, 15, '/uploads/photos/student5.jpg'),
        (7, 16, '202112345678903'),
        (7, 17, '我是一个善于沟通和策划的学生，希望能在市场部发挥作用'),
        (7, 18, '希望通过参与社团活动提升市场运营能力，为社团发展贡献力量'),
-       (7, 19, 'https://github.com/wangwu'),
-       (7, 20, 'https://github.com/wangwu');
+       (7, 19, 'https://github.com/wangwu');
 
 SET FOREIGN_KEY_CHECKS = 1;
