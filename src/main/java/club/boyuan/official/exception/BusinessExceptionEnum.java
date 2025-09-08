@@ -5,7 +5,7 @@ import lombok.Getter;
 
 /**
  * 业务异常枚举类
- * 统一管理错误码和错误消息
+ * 用于统一管理系统中的业务异常
  */
 @Getter
 @AllArgsConstructor
@@ -72,6 +72,12 @@ public enum BusinessExceptionEnum {
     RECRUITMENT_CYCLE_UPDATE_FAILED(3203, "招募周期更新失败"),
     RECRUITMENT_CYCLE_DELETE_FAILED(3204, "招募周期删除失败"),
     RECRUITMENT_CYCLE_QUERY_FAILED(3205, "招募周期查询失败"),
+    
+    // 导出相关异常 (3300-3399)
+    EXPORT_PDF_FAILED(3301, "PDF导出失败"),
+    EXPORT_EXCEL_FAILED(3302, "Excel导出失败"),
+    EXPORT_DATA_NOT_FOUND(3303, "导出数据不存在"),
+    EXPORT_PERMISSION_DENIED(3304, "导出权限不足"),
     
     // 数据库相关异常 (4000-4099)
     DATABASE_OPERATION_FAILED(4001, "数据库操作失败"),

@@ -347,6 +347,13 @@ public class UserController {
                 // 获取所有用户
                 List<User> users = userService.getAllUsers(currentUser); // 使用已有的getAllUsers方法获取所有用户
                 
+                // 检查用户列表是否为空
+                if (users == null || users.isEmpty()) {
+                    logger.warn("管理员{}尝试导出用户数据，但用户列表为空", username);
+                    response.sendError(HttpServletResponse.SC_NOT_FOUND, "没有可导出的用户数据");
+                    return;
+                }
+                
                 // 生成Excel
                 byte[] excelBytes = ExcelExportUtil.exportUsersToExcel(users);
                 

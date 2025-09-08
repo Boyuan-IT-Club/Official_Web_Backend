@@ -119,6 +119,14 @@ public class UserServiceImpl implements IUserService {
             user.setDept(userDTO.getDept());
             logger.debug("部门更新为: {}", userDTO.getDept());
         }
+        if (userDTO.getMajor() != null) {
+            user.setMajor(userDTO.getMajor());
+            logger.debug("专业更新为: {}", userDTO.getMajor());
+        }
+        if (userDTO.getGithub() != null) {
+            user.setGithub(userDTO.getGithub());
+            logger.debug("GitHub更新为: {}", userDTO.getGithub());
+        }
         if (userDTO.getAvatar() != null) {
             user.setAvatar(userDTO.getAvatar());
             logger.debug("头像更新为: {}", userDTO.getAvatar());
