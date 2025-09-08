@@ -2,11 +2,15 @@ package club.boyuan.official.service;
 
 import club.boyuan.official.dto.ResumeDTO;
 import club.boyuan.official.dto.ResumeFieldValueDTO;
+import club.boyuan.official.dto.SimpleResumeFieldDTO;
 import club.boyuan.official.entity.Resume;
 import club.boyuan.official.entity.ResumeFieldValue;
 
 import java.util.List;
 
+/**
+ * 简历服务接口
+ */
 public interface IResumeService {
     
     /**
@@ -102,4 +106,11 @@ public interface IResumeService {
      * @return 简历DTO列表
      */
     List<ResumeDTO> queryResumes(String name, String major, Integer cycleId, Integer status);
+    
+    /**
+     * 根据cycleId获取所有简历
+     * @param cycleId 招募周期ID
+     * @return 简历实体列表
+     */
+    List<Resume> getAllResumesByCycleId(Integer cycleId);
 }

@@ -32,6 +32,13 @@ public interface ResumeMapper {
     List<Resume> findByUserId(Integer userId);
     
     /**
+     * 根据招聘周期ID查询简历列表
+     * @param cycleId 招聘周期ID
+     * @return 简历列表
+     */
+    List<Resume> findByCycleId(@Param("cycleId") Integer cycleId);
+    
+    /**
      * 插入简历
      * @param resume 简历实体
      * @return 影响行数
