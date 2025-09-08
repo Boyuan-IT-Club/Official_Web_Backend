@@ -1,0 +1,184 @@
+package club.boyuan.official.dto;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+/**
+ * 面试时间分配结果DTO
+ */
+public class InterviewAssignmentResultDTO {
+    
+    /**
+     * 成功分配的面试列表
+     */
+    private List<AssignedInterviewDTO> assignedInterviews;
+    
+    /**
+     * 未能分配的用户列表
+     */
+    private List<UnassignedUserDTO> unassignedUsers;
+    
+    public InterviewAssignmentResultDTO() {
+    }
+    
+    public InterviewAssignmentResultDTO(List<AssignedInterviewDTO> assignedInterviews, List<UnassignedUserDTO> unassignedUsers) {
+        this.assignedInterviews = assignedInterviews;
+        this.unassignedUsers = unassignedUsers;
+    }
+    
+    // Getter和Setter方法
+    
+    public List<AssignedInterviewDTO> getAssignedInterviews() {
+        return assignedInterviews;
+    }
+    
+    public void setAssignedInterviews(List<AssignedInterviewDTO> assignedInterviews) {
+        this.assignedInterviews = assignedInterviews;
+    }
+    
+    public List<UnassignedUserDTO> getUnassignedUsers() {
+        return unassignedUsers;
+    }
+    
+    public void setUnassignedUsers(List<UnassignedUserDTO> unassignedUsers) {
+        this.unassignedUsers = unassignedUsers;
+    }
+    
+    /**
+     * 已分配的面试信息
+     */
+    public static class AssignedInterviewDTO {
+        private Integer userId;
+        private String username;
+        private String name;
+        private LocalDateTime interviewTime;
+        private String period; // 上午/下午
+        private String interviewDepartment; // 面试部门（第一志愿）
+        
+        public AssignedInterviewDTO() {
+        }
+        
+        public AssignedInterviewDTO(Integer userId, String username, String name, LocalDateTime interviewTime, String period, String interviewDepartment) {
+            this.userId = userId;
+            this.username = username;
+            this.name = name;
+            this.interviewTime = interviewTime;
+            this.period = period;
+            this.interviewDepartment = interviewDepartment;
+        }
+        
+        // Getter和Setter方法
+        
+        public Integer getUserId() {
+            return userId;
+        }
+        
+        public void setUserId(Integer userId) {
+            this.userId = userId;
+        }
+        
+        public String getUsername() {
+            return username;
+        }
+        
+        public void setUsername(String username) {
+            this.username = username;
+        }
+        
+        public String getName() {
+            return name;
+        }
+        
+        public void setName(String name) {
+            this.name = name;
+        }
+        
+        public LocalDateTime getInterviewTime() {
+            return interviewTime;
+        }
+        
+        public void setInterviewTime(LocalDateTime interviewTime) {
+            this.interviewTime = interviewTime;
+        }
+        
+        public String getPeriod() {
+            return period;
+        }
+        
+        public void setPeriod(String period) {
+            this.period = period;
+        }
+        
+        public String getInterviewDepartment() {
+            return interviewDepartment;
+        }
+        
+        public void setInterviewDepartment(String interviewDepartment) {
+            this.interviewDepartment = interviewDepartment;
+        }
+    }
+    
+    /**
+     * 未分配的用户信息
+     */
+    public static class UnassignedUserDTO {
+        private Integer userId;
+        private String username;
+        private String name;
+        private String preferredTimes; // 用户期望的面试时间
+        private String preferredDepartments; // 用户期望的面试部门
+        
+        public UnassignedUserDTO() {
+        }
+        
+        public UnassignedUserDTO(Integer userId, String username, String name, String preferredTimes, String preferredDepartments) {
+            this.userId = userId;
+            this.username = username;
+            this.name = name;
+            this.preferredTimes = preferredTimes;
+            this.preferredDepartments = preferredDepartments;
+        }
+        
+        // Getter和Setter方法
+        
+        public Integer getUserId() {
+            return userId;
+        }
+        
+        public void setUserId(Integer userId) {
+            this.userId = userId;
+        }
+        
+        public String getUsername() {
+            return username;
+        }
+        
+        public void setUsername(String username) {
+            this.username = username;
+        }
+        
+        public String getName() {
+            return name;
+        }
+        
+        public void setName(String name) {
+            this.name = name;
+        }
+        
+        public String getPreferredTimes() {
+            return preferredTimes;
+        }
+        
+        public void setPreferredTimes(String preferredTimes) {
+            this.preferredTimes = preferredTimes;
+        }
+        
+        public String getPreferredDepartments() {
+            return preferredDepartments;
+        }
+        
+        public void setPreferredDepartments(String preferredDepartments) {
+            this.preferredDepartments = preferredDepartments;
+        }
+    }
+}

@@ -27,6 +27,11 @@
         SELECT * FROM resume WHERE user_id = #{userId}
     </select>
     
+    <!-- 根据招募周期ID查询简历列表 -->
+    <select id="findByCycleId" resultMap="ResumeMap">
+        SELECT * FROM resume WHERE cycle_id = #{cycleId}
+    </select>
+    
     <!-- 多条件查询简历列表 -->
     <select id="queryResumes" resultMap="ResumeMap">
         SELECT r.* FROM resume r

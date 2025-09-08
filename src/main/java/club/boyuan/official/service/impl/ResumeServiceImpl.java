@@ -317,4 +317,15 @@ public class ResumeServiceImpl implements IResumeService {
             throw new BusinessException(BusinessExceptionEnum.DATABASE_QUERY_FAILED);
         }
     }
+    
+    @Override
+    public List<Resume> getAllResumesByCycleId(Integer cycleId) {
+        logger.debug("获取招募周期 {} 下的所有简历", cycleId);
+        try {
+            return resumeMapper.findByCycleId(cycleId);
+        } catch (Exception e) {
+            logger.error("获取招募周期下的所有简历失败，招募周期ID: {}", cycleId, e);
+            throw new BusinessException(BusinessExceptionEnum.RESUME_QUERY_FAILED);
+        }
+    }
 }
