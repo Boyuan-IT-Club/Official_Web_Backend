@@ -92,6 +92,15 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
             List<String> preferredTimes = userPreferredTimes.getOrDefault(resume.getUserId(), new ArrayList<>());
             List<String> preferredDepartments = userPreferredDepartments.getOrDefault(resume.getUserId(), new ArrayList<>());
             
+            // 只有当用户有期望面试时间时才分配面试时间
+            if (preferredTimes.isEmpty()) {
+                logger.info("用户 {} 没有填写期望面试时间，跳过面试时间分配", user.getUsername());
+                String preferredDepartmentsStr = String.join(", ", preferredDepartments);
+                unassignedUsers.add(new InterviewAssignmentResultDTO.UnassignedUserDTO(
+                        user.getUserId(), user.getUsername(), user.getName(), "未填写期望面试时间", preferredDepartmentsStr));
+                continue;
+            }
+            
             // 获取第一志愿部门
             String firstDepartment = preferredDepartments.isEmpty() ? "未指定部门" : preferredDepartments.get(0);
             
