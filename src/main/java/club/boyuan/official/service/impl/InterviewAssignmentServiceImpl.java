@@ -269,6 +269,11 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
     private boolean tryAssignInterviewTime(User user, List<String> preferredTimes, String department,
                                          Map<String, Map<LocalDateTime, Boolean>> departmentSlotAvailability,
                                          List<InterviewAssignmentResultDTO.AssignedInterviewDTO> assignedInterviews) {
+        // 如果用户没有填写期望面试时间，则不分配面试时间
+        if (preferredTimes == null || preferredTimes.isEmpty()) {
+            return false;
+        }
+        
         // 按照用户期望的时间顺序尝试分配
         for (String preferredTime : preferredTimes) {
             LocalDateTime assignedSlot = findAndReserveSlot(preferredTime, department, departmentSlotAvailability);
