@@ -74,8 +74,10 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
         Map<Integer, List<String>> userPreferredTimes = getUserPreferredTimes(resumes, interviewTimeField.getFieldId());
         Map<Integer, List<String>> userPreferredDepartments = getUserPreferredDepartments(resumes, expectedDepartmentsField.getFieldId());
         
-        // 初始化各部门面试时间槽
-        List<LocalDateTime> timeSlots = generateTimeSlots(cycle.getStartDate(), cycle.getEndDate());
+        // 初始化各部门面试时间槽 (将Day1设置为9月27日，Day2设置为9月28日)
+        LocalDate day1 = LocalDate.of(2025, 9, 27);
+        LocalDate day2 = LocalDate.of(2025, 9, 28);
+        List<LocalDateTime> timeSlots = generateTimeSlotsForSpecificDays(day1, day2);
         Map<String, Map<LocalDateTime, Boolean>> departmentSlotAvailability = initializeDepartmentSlotAvailability(timeSlots, userPreferredDepartments);
         
         // 分配面试时间
@@ -200,7 +202,30 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
     }
     
     /**
-     * 生成面试时间槽
+     * 为特定日期生成面试时间槽 (Day1为9月27日，Day2为9月28日)
+     */
+    private List<LocalDateTime> generateTimeSlotsForSpecificDays(LocalDate day1, LocalDate day2) {
+        List<LocalDateTime> timeSlots = new ArrayList<>();
+        
+        // 为指定的两天生成面试时间槽
+        LocalDate[] dates = {day1, day2};
+        for (LocalDate date : dates) {
+            // 生成上午时间段 (9:00-11:00)
+            for (LocalTime time = MORNING_START; time.isBefore(MORNING_END); time = time.plusMinutes(INTERVIEW_DURATION)) {
+                timeSlots.add(LocalDateTime.of(date, time));
+            }
+            
+            // 生成下午时间段 (13:00-17:00)
+            for (LocalTime time = AFTERNOON_START; time.isBefore(AFTERNOON_END); time = time.plusMinutes(INTERVIEW_DURATION)) {
+                timeSlots.add(LocalDateTime.of(date, time));
+            }
+        }
+        
+        return timeSlots;
+    }
+    
+    /**
+     * 生成面试时间槽（原始方法，基于招募周期）
      */
     private List<LocalDateTime> generateTimeSlots(LocalDate startDate, LocalDate endDate) {
         List<LocalDateTime> timeSlots = new ArrayList<>();
@@ -246,7 +271,7 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
         }
         
         // 默认添加一些常见部门
-        String[] defaultDepartments = {"技术部", "产品部", "设计部", "运营部"};
+        String[] defaultDepartments = {"技术部", "媒体部", "项目部", "综合部"};
         for (String department : defaultDepartments) {
             if (!departmentSlotAvailability.containsKey(department)) {
                 Map<LocalDateTime, Boolean> slotAvailability = new HashMap<>();
