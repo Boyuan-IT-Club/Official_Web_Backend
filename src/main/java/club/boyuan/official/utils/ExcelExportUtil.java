@@ -11,6 +11,9 @@ import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
 
 /**
  * Excel导出工具类
@@ -90,7 +93,7 @@ public class ExcelExportUtil {
     }
 
     /**
-     * 将面试安排结果导出为Excel，包含两个Sheet：已分配、未分配
+     * 将面试安排结果导出为Excel，在同一个工作表中按部门区分
      * @param result 面试安排结果
      * @return Excel字节数组
      */
@@ -106,29 +109,58 @@ public class ExcelExportUtil {
             headerStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
             headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
 
-            DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+            DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+            DateTimeFormatter timeRangeFormat = DateTimeFormatter.ofPattern("HH:mm");
 
             // Sheet1: 已分配
             Sheet assignedSheet = workbook.createSheet("已分配");
             Row assignedHeader = assignedSheet.createRow(0);
-            String[] assignedHeaders = {"用户ID", "用户名", "姓名", "所属部门", "面试时间", "时间段"};
+            // 修改表头，添加部门列，删除用户ID列
+            String[] assignedHeaders = {"用户名", "姓名", "所属部门", "面试时间", "时间段"};
             for (int i = 0; i < assignedHeaders.length; i++) {
                 Cell cell = assignedHeader.createCell(i);
                 cell.setCellValue(assignedHeaders[i]);
                 cell.setCellStyle(headerStyle);
             }
-            int r = 1;
+            
+            int assignedRowNum = 1;
             if (result != null && result.getAssignedInterviews() != null) {
-                for (InterviewAssignmentResultDTO.AssignedInterviewDTO dto : result.getAssignedInterviews()) {
-                    Row row = assignedSheet.createRow(r++);
-                    row.createCell(0).setCellValue(dto.getUserId() != null ? dto.getUserId() : 0);
-                    row.createCell(1).setCellValue(dto.getUsername() != null ? dto.getUsername() : "");
-                    row.createCell(2).setCellValue(dto.getName() != null ? dto.getName() : "");
-                    row.createCell(3).setCellValue(dto.getInterviewDepartment() != null ? dto.getInterviewDepartment() : "");
-                    row.createCell(4).setCellValue(dto.getInterviewTime() != null ? dtf.format(dto.getInterviewTime()) : "");
-                    row.createCell(5).setCellValue(dto.getPeriod() != null ? dto.getPeriod() : "");
+                // 按部门和时间排序
+                List<InterviewAssignmentResultDTO.AssignedInterviewDTO> sortedAssigned = result.getAssignedInterviews()
+                        .stream()
+                        .sorted((a, b) -> {
+                            // 首先按部门排序
+                            int deptCompare = a.getInterviewDepartment().compareTo(b.getInterviewDepartment());
+                            if (deptCompare != 0) {
+                                return deptCompare;
+                            }
+                            // 然后按时间排序
+                            return a.getInterviewTime().compareTo(b.getInterviewTime());
+                        })
+                        .collect(Collectors.toList());
+                
+                for (InterviewAssignmentResultDTO.AssignedInterviewDTO dto : sortedAssigned) {
+                    Row row = assignedSheet.createRow(assignedRowNum++);
+                    
+                    // 删除用户ID字段，从第0列开始
+                    row.createCell(0).setCellValue(dto.getUsername() != null ? dto.getUsername() : "");
+                    row.createCell(1).setCellValue(dto.getName() != null ? dto.getName() : "");
+                    row.createCell(2).setCellValue(dto.getInterviewDepartment() != null ? dto.getInterviewDepartment() : "");
+                    
+                    // 修改面试时间格式为 时间1-时间2，删除重复的日期显示
+                    if (dto.getInterviewTime() != null) {
+                        LocalDateTime startTime = dto.getInterviewTime();
+                        LocalDateTime endTime = startTime.plusMinutes(10); // 面试时长10分钟
+                        String timeRange = timeRangeFormat.format(startTime) + "-" + timeRangeFormat.format(endTime);
+                        row.createCell(3).setCellValue(startTime.format(dtf) + " " + timeRange);
+                    } else {
+                        row.createCell(3).setCellValue("");
+                    }
+                    
+                    row.createCell(4).setCellValue(dto.getPeriod() != null ? dto.getPeriod() : "");
                 }
             }
+            
             for (int i = 0; i < assignedHeaders.length; i++) {
                 assignedSheet.autoSizeColumn(i);
             }
@@ -136,23 +168,27 @@ public class ExcelExportUtil {
             // Sheet2: 未分配
             Sheet unassignedSheet = workbook.createSheet("未分配");
             Row unassignedHeader = unassignedSheet.createRow(0);
-            String[] unassignedHeaders = {"用户ID", "用户名", "姓名", "期望时间", "期望部门"};
+            // 删除用户ID字段
+            String[] unassignedHeaders = {"用户名", "姓名", "期望时间", "期望部门"};
             for (int i = 0; i < unassignedHeaders.length; i++) {
                 Cell cell = unassignedHeader.createCell(i);
                 cell.setCellValue(unassignedHeaders[i]);
                 cell.setCellStyle(headerStyle);
             }
-            r = 1;
+            
+            int unassignedRowNum = 1;
             if (result != null && result.getUnassignedUsers() != null) {
                 for (InterviewAssignmentResultDTO.UnassignedUserDTO dto : result.getUnassignedUsers()) {
-                    Row row = unassignedSheet.createRow(r++);
-                    row.createCell(0).setCellValue(dto.getUserId() != null ? dto.getUserId() : 0);
-                    row.createCell(1).setCellValue(dto.getUsername() != null ? dto.getUsername() : "");
-                    row.createCell(2).setCellValue(dto.getName() != null ? dto.getName() : "");
-                    row.createCell(3).setCellValue(dto.getPreferredTimes() != null ? dto.getPreferredTimes() : "");
-                    row.createCell(4).setCellValue(dto.getPreferredDepartments() != null ? dto.getPreferredDepartments() : "");
+                    Row row = unassignedSheet.createRow(unassignedRowNum++);
+                    
+                    // 删除用户ID字段
+                    row.createCell(0).setCellValue(dto.getUsername() != null ? dto.getUsername() : "");
+                    row.createCell(1).setCellValue(dto.getName() != null ? dto.getName() : "");
+                    row.createCell(2).setCellValue(dto.getPreferredTimes() != null ? dto.getPreferredTimes() : "");
+                    row.createCell(3).setCellValue(dto.getPreferredDepartments() != null ? dto.getPreferredDepartments() : "");
                 }
             }
+            
             for (int i = 0; i < unassignedHeaders.length; i++) {
                 unassignedSheet.autoSizeColumn(i);
             }
