@@ -356,14 +356,8 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
             }
         }
         
-        // 如果按照用户期望的时间无法分配，则尝试分配到任何可用的时间
-        LocalDateTime assignedSlot = findAnyAvailableSlot(department, departmentSlotAvailability);
-        if (assignedSlot != null) {
-            String period = assignedSlot.getHour() < 12 ? "上午" : "下午";
-            assignedInterviews.add(new InterviewAssignmentResultDTO.AssignedInterviewDTO(
-                    user.getUserId(), user.getUsername(), user.getName(), assignedSlot, period, department));
-            return true;
-        }
+        // 如果按照用户期望的时间无法分配，则将用户加入未分配列表
+        // 不再尝试分配任何可用的时间，确保只在用户期望的时间段内分配
         
         return false; // 无法分配时间
     }
