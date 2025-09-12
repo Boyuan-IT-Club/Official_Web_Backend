@@ -80,10 +80,21 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
         List<LocalDateTime> timeSlots = generateTimeSlotsForSpecificDays(day1, day2);
         Map<String, Map<LocalDateTime, Boolean>> departmentSlotAvailability = initializeDepartmentSlotAvailability(timeSlots, userPreferredDepartments);
         
-        // 分配面试时间
-        List<InterviewAssignmentResultDTO.AssignedInterviewDTO> assignedInterviews = new ArrayList<>();
-        List<InterviewAssignmentResultDTO.UnassignedUserDTO> unassignedUsers = new ArrayList<>();
+        // 使用优化的分配策略分配面试时间
+        return assignInterviewsWithOptimization(resumes, userPreferredTimes, userPreferredDepartments, departmentSlotAvailability);
+    }
+    
+    /**
+     * 使用优化策略分配面试时间，以满足更多人的偏好
+     */
+    private InterviewAssignmentResultDTO assignInterviewsWithOptimization(
+            List<Resume> resumes,
+            Map<Integer, List<String>> userPreferredTimes,
+            Map<Integer, List<String>> userPreferredDepartments,
+            Map<String, Map<LocalDateTime, Boolean>> departmentSlotAvailability) {
         
+        // 创建候选人列表，包含他们的偏好信息
+        List<CandidateInfo> candidates = new ArrayList<>();
         for (Resume resume : resumes) {
             User user = userService.getUserById(resume.getUserId());
             if (user == null) {
@@ -94,31 +105,68 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
             List<String> preferredTimes = userPreferredTimes.getOrDefault(resume.getUserId(), new ArrayList<>());
             List<String> preferredDepartments = userPreferredDepartments.getOrDefault(resume.getUserId(), new ArrayList<>());
             
-            // 如果用户没有填写期望面试时间或部门，跳过分配（不考虑为他们分配时间）
+            // 如果用户没有填写期望面试时间或部门，跳过分配
             if (preferredTimes.isEmpty() || preferredDepartments.isEmpty()) {
                 logger.info("用户 {} 没有填写期望面试时间或部门，跳过面试时间分配", user.getUsername());
                 continue;
             }
             
-            // 获取第一志愿部门
             String firstDepartment = preferredDepartments.isEmpty() ? "未指定部门" : preferredDepartments.get(0);
+            candidates.add(new CandidateInfo(user, preferredTimes, preferredDepartments, firstDepartment));
+        }
+        
+        // 按照偏好满足度排序候选人（偏好越多的候选人优先级越高）
+        candidates.sort((c1, c2) -> {
+            // 优先考虑偏好时间更多的候选人
+            int timePrefCompare = Integer.compare(c2.preferredTimes.size(), c1.preferredTimes.size());
+            if (timePrefCompare != 0) {
+                return timePrefCompare;
+            }
+            // 如果偏好时间数量相同，则考虑偏好部门数量
+            return Integer.compare(c2.preferredDepartments.size(), c1.preferredDepartments.size());
+        });
+        
+        // 分配面试时间
+        List<InterviewAssignmentResultDTO.AssignedInterviewDTO> assignedInterviews = new ArrayList<>();
+        List<InterviewAssignmentResultDTO.UnassignedUserDTO> unassignedUsers = new ArrayList<>();
+        
+        for (CandidateInfo candidate : candidates) {
+            User user = candidate.user;
+            List<String> preferredTimes = candidate.preferredTimes;
+            String department = candidate.firstDepartment;
             
             // 尝试分配面试时间
             boolean assigned = tryAssignInterviewTime(
-                    user, preferredTimes, firstDepartment, departmentSlotAvailability, assignedInterviews);
+                    user, preferredTimes, department, departmentSlotAvailability, assignedInterviews);
             
             // 如果无法分配（所有时间段都满了），则加入未分配列表
             if (!assigned) {
                 String preferredTimesStr = String.join(", ", preferredTimes);
-                String preferredDepartmentsStr = String.join(", ", preferredDepartments);
+                String preferredDepartmentsStr = String.join(", ", candidate.preferredDepartments);
                 unassignedUsers.add(new InterviewAssignmentResultDTO.UnassignedUserDTO(
                         user.getUserId(), user.getUsername(), user.getName(), preferredTimesStr, preferredDepartmentsStr));
             }
         }
         
         logger.info("面试时间分配完成，已分配 {} 人，未分配 {} 人", assignedInterviews.size(), unassignedUsers.size());
-        
         return new InterviewAssignmentResultDTO(assignedInterviews, unassignedUsers);
+    }
+    
+    /**
+     * 候选人信息类，用于存储分配过程中的相关信息
+     */
+    private static class CandidateInfo {
+        private final User user;
+        private final List<String> preferredTimes;
+        private final List<String> preferredDepartments;
+        private final String firstDepartment;
+        
+        public CandidateInfo(User user, List<String> preferredTimes, List<String> preferredDepartments, String firstDepartment) {
+            this.user = user;
+            this.preferredTimes = preferredTimes;
+            this.preferredDepartments = preferredDepartments;
+            this.firstDepartment = firstDepartment;
+        }
     }
     
     /**
