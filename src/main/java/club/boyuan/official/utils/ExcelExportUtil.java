@@ -1,5 +1,6 @@
 package club.boyuan.official.utils;
 
+import club.boyuan.official.dto.InterviewAssignmentResultDTO;
 import club.boyuan.official.entity.User;
 import club.boyuan.official.exception.BusinessException;
 import club.boyuan.official.exception.BusinessExceptionEnum;
@@ -80,6 +81,86 @@ public class ExcelExportUtil {
                 workbook.write(baos);
                 return baos.toByteArray();
                 
+            } finally {
+                workbook.close();
+            }
+        } catch (Exception e) {
+            throw new BusinessException(BusinessExceptionEnum.EXPORT_EXCEL_FAILED);
+        }
+    }
+
+    /**
+     * 将面试安排结果导出为Excel，包含两个Sheet：已分配、未分配
+     * @param result 面试安排结果
+     * @return Excel字节数组
+     */
+    public static byte[] exportInterviewAssignmentsToExcel(InterviewAssignmentResultDTO result) throws BusinessException {
+        try {
+            Workbook workbook = new XSSFWorkbook();
+
+            // 通用样式
+            CellStyle headerStyle = workbook.createCellStyle();
+            Font headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerStyle.setFont(headerFont);
+            headerStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+            headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
+            DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+
+            // Sheet1: 已分配
+            Sheet assignedSheet = workbook.createSheet("已分配");
+            Row assignedHeader = assignedSheet.createRow(0);
+            String[] assignedHeaders = {"用户ID", "用户名", "姓名", "所属部门", "面试时间", "时间段"};
+            for (int i = 0; i < assignedHeaders.length; i++) {
+                Cell cell = assignedHeader.createCell(i);
+                cell.setCellValue(assignedHeaders[i]);
+                cell.setCellStyle(headerStyle);
+            }
+            int r = 1;
+            if (result != null && result.getAssignedInterviews() != null) {
+                for (InterviewAssignmentResultDTO.AssignedInterviewDTO dto : result.getAssignedInterviews()) {
+                    Row row = assignedSheet.createRow(r++);
+                    row.createCell(0).setCellValue(dto.getUserId() != null ? dto.getUserId() : 0);
+                    row.createCell(1).setCellValue(dto.getUsername() != null ? dto.getUsername() : "");
+                    row.createCell(2).setCellValue(dto.getName() != null ? dto.getName() : "");
+                    row.createCell(3).setCellValue(dto.getInterviewDepartment() != null ? dto.getInterviewDepartment() : "");
+                    row.createCell(4).setCellValue(dto.getInterviewTime() != null ? dtf.format(dto.getInterviewTime()) : "");
+                    row.createCell(5).setCellValue(dto.getPeriod() != null ? dto.getPeriod() : "");
+                }
+            }
+            for (int i = 0; i < assignedHeaders.length; i++) {
+                assignedSheet.autoSizeColumn(i);
+            }
+
+            // Sheet2: 未分配
+            Sheet unassignedSheet = workbook.createSheet("未分配");
+            Row unassignedHeader = unassignedSheet.createRow(0);
+            String[] unassignedHeaders = {"用户ID", "用户名", "姓名", "期望时间", "期望部门"};
+            for (int i = 0; i < unassignedHeaders.length; i++) {
+                Cell cell = unassignedHeader.createCell(i);
+                cell.setCellValue(unassignedHeaders[i]);
+                cell.setCellStyle(headerStyle);
+            }
+            r = 1;
+            if (result != null && result.getUnassignedUsers() != null) {
+                for (InterviewAssignmentResultDTO.UnassignedUserDTO dto : result.getUnassignedUsers()) {
+                    Row row = unassignedSheet.createRow(r++);
+                    row.createCell(0).setCellValue(dto.getUserId() != null ? dto.getUserId() : 0);
+                    row.createCell(1).setCellValue(dto.getUsername() != null ? dto.getUsername() : "");
+                    row.createCell(2).setCellValue(dto.getName() != null ? dto.getName() : "");
+                    row.createCell(3).setCellValue(dto.getPreferredTimes() != null ? dto.getPreferredTimes() : "");
+                    row.createCell(4).setCellValue(dto.getPreferredDepartments() != null ? dto.getPreferredDepartments() : "");
+                }
+            }
+            for (int i = 0; i < unassignedHeaders.length; i++) {
+                unassignedSheet.autoSizeColumn(i);
+            }
+
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            try {
+                workbook.write(baos);
+                return baos.toByteArray();
             } finally {
                 workbook.close();
             }
