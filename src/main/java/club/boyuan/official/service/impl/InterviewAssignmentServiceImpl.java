@@ -95,6 +95,8 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
         
         // 创建候选人列表，包含他们的偏好信息
         List<CandidateInfo> candidates = new ArrayList<>();
+        List<InterviewAssignmentResultDTO.UnassignedUserDTO> unassignedUsers = new ArrayList<>();
+        
         for (Resume resume : resumes) {
             User user = userService.getUserById(resume.getUserId());
             if (user == null) {
@@ -105,13 +107,29 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
             List<String> preferredTimes = userPreferredTimes.getOrDefault(resume.getUserId(), new ArrayList<>());
             List<String> preferredDepartments = userPreferredDepartments.getOrDefault(resume.getUserId(), new ArrayList<>());
             
-            // 如果用户没有填写期望面试时间或部门，跳过分配
-            if (preferredTimes.isEmpty() || preferredDepartments.isEmpty()) {
-                logger.info("用户 {} 没有填写期望面试时间或部门，跳过面试时间分配", user.getUsername());
+            // 添加调试日志
+            logger.info("用户 {} 的期望面试时间: {}", user.getUsername(), preferredTimes);
+            logger.info("用户 {} 的期望部门: {}", user.getUsername(), preferredDepartments);
+            
+            // 如果用户没有填写期望面试时间，则加入未分配列表
+            if (preferredTimes.isEmpty()) {
+                logger.info("用户 {} 没有填写期望面试时间，加入未分配列表", user.getUsername());
+                unassignedUsers.add(new InterviewAssignmentResultDTO.UnassignedUserDTO(
+                        user.getUserId(), user.getUsername(), user.getName(), "未填写期望面试时间", 
+                        preferredDepartments.isEmpty() ? "未填写期望部门" : String.join(", ", preferredDepartments)));
                 continue;
             }
             
-            String firstDepartment = preferredDepartments.isEmpty() ? "未指定部门" : preferredDepartments.get(0);
+            // 如果用户没有填写期望部门，则加入未分配列表
+            if (preferredDepartments.isEmpty()) {
+                logger.info("用户 {} 没有填写期望部门，加入未分配列表", user.getUsername());
+                unassignedUsers.add(new InterviewAssignmentResultDTO.UnassignedUserDTO(
+                        user.getUserId(), user.getUsername(), user.getName(), 
+                        String.join(", ", preferredTimes), "未填写期望部门"));
+                continue;
+            }
+            
+            String firstDepartment = preferredDepartments.get(0);
             candidates.add(new CandidateInfo(user, preferredTimes, preferredDepartments, firstDepartment));
         }
         
@@ -128,7 +146,6 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
         
         // 分配面试时间
         List<InterviewAssignmentResultDTO.AssignedInterviewDTO> assignedInterviews = new ArrayList<>();
-        List<InterviewAssignmentResultDTO.UnassignedUserDTO> unassignedUsers = new ArrayList<>();
         
         for (CandidateInfo candidate : candidates) {
             User user = candidate.user;
@@ -143,8 +160,11 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
             if (!assigned) {
                 String preferredTimesStr = String.join(", ", preferredTimes);
                 String preferredDepartmentsStr = String.join(", ", candidate.preferredDepartments);
+                logger.info("用户 {} 未被分配，期望时间: {}，期望部门: {}", user.getUsername(), preferredTimesStr, preferredDepartmentsStr);
                 unassignedUsers.add(new InterviewAssignmentResultDTO.UnassignedUserDTO(
                         user.getUserId(), user.getUsername(), user.getName(), preferredTimesStr, preferredDepartmentsStr));
+            } else {
+                logger.info("用户 {} 已成功分配面试时间", user.getUsername());
             }
         }
         
@@ -199,21 +219,30 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
         
         for (Resume resume : resumes) {
             List<ResumeFieldValue> fieldValues = resumeService.getFieldValuesByResumeId(resume.getResumeId());
-            Optional<ResumeFieldValue> interviewTimeValue = fieldValues.stream()
+            // 获取所有匹配的字段值
+            List<ResumeFieldValue> interviewTimeValues = fieldValues.stream()
                     .filter(value -> fieldId.equals(value.getFieldId()))
-                    .findFirst();
+                    .collect(Collectors.toList());
             
-            if (interviewTimeValue.isPresent()) {
-                try {
-                    // 解析JSON数组
-                    List<String> preferredTimes = objectMapper.readValue(
-                            interviewTimeValue.get().getFieldValue(), 
-                            new TypeReference<List<String>>() {});
-                    userPreferredTimes.put(resume.getUserId(), preferredTimes);
-                } catch (Exception e) {
-                    logger.warn("解析用户 {} 的期望面试时间失败: {}", resume.getUserId(), 
-                            interviewTimeValue.get().getFieldValue(), e);
+            logger.info("用户 {} 的期望面试时间字段值数量: {}", resume.getUserId(), interviewTimeValues.size());
+            
+            if (!interviewTimeValues.isEmpty()) {
+                List<String> allPreferredTimes = new ArrayList<>();
+                for (ResumeFieldValue interviewTimeValue : interviewTimeValues) {
+                    logger.info("用户 {} 的期望面试时间字段值: {}", resume.getUserId(), interviewTimeValue.getFieldValue());
+                    try {
+                        // 解析JSON数组
+                        List<String> preferredTimes = objectMapper.readValue(
+                                interviewTimeValue.getFieldValue(), 
+                                new TypeReference<List<String>>() {});
+                        allPreferredTimes.addAll(preferredTimes);
+                    } catch (Exception e) {
+                        logger.warn("解析用户 {} 的期望面试时间失败: {}", resume.getUserId(), 
+                                interviewTimeValue.getFieldValue(), e);
+                    }
                 }
+                logger.info("用户 {} 解析后的所有期望面试时间: {}", resume.getUserId(), allPreferredTimes);
+                userPreferredTimes.put(resume.getUserId(), allPreferredTimes);
             }
         }
         
@@ -228,21 +257,30 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
         
         for (Resume resume : resumes) {
             List<ResumeFieldValue> fieldValues = resumeService.getFieldValuesByResumeId(resume.getResumeId());
-            Optional<ResumeFieldValue> expectedDepartmentsValue = fieldValues.stream()
+            // 获取所有匹配的字段值
+            List<ResumeFieldValue> expectedDepartmentsValues = fieldValues.stream()
                     .filter(value -> fieldId.equals(value.getFieldId()))
-                    .findFirst();
+                    .collect(Collectors.toList());
             
-            if (expectedDepartmentsValue.isPresent()) {
-                try {
-                    // 解析JSON数组
-                    List<String> preferredDepartments = objectMapper.readValue(
-                            expectedDepartmentsValue.get().getFieldValue(), 
-                            new TypeReference<List<String>>() {});
-                    userPreferredDepartments.put(resume.getUserId(), preferredDepartments);
-                } catch (Exception e) {
-                    logger.warn("解析用户 {} 的期望部门失败: {}", resume.getUserId(), 
-                            expectedDepartmentsValue.get().getFieldValue(), e);
+            logger.info("用户 {} 的期望部门字段值数量: {}", resume.getUserId(), expectedDepartmentsValues.size());
+            
+            if (!expectedDepartmentsValues.isEmpty()) {
+                List<String> allPreferredDepartments = new ArrayList<>();
+                for (ResumeFieldValue expectedDepartmentsValue : expectedDepartmentsValues) {
+                    logger.info("用户 {} 的期望部门字段值: {}", resume.getUserId(), expectedDepartmentsValue.getFieldValue());
+                    try {
+                        // 解析JSON数组
+                        List<String> preferredDepartments = objectMapper.readValue(
+                                expectedDepartmentsValue.getFieldValue(), 
+                                new TypeReference<List<String>>() {});
+                        allPreferredDepartments.addAll(preferredDepartments);
+                    } catch (Exception e) {
+                        logger.warn("解析用户 {} 的期望部门失败: {}", resume.getUserId(), 
+                                expectedDepartmentsValue.getFieldValue(), e);
+                    }
                 }
+                logger.info("用户 {} 解析后的所有期望部门: {}", resume.getUserId(), allPreferredDepartments);
+                userPreferredDepartments.put(resume.getUserId(), allPreferredDepartments);
             }
         }
         
@@ -259,12 +297,12 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
         LocalDate[] dates = {day1, day2};
         for (LocalDate date : dates) {
             // 生成上午时间段 (9:00-11:00)
-            for (LocalTime time = MORNING_START; time.isBefore(MORNING_END); time = time.plusMinutes(INTERVIEW_DURATION)) {
+            for (LocalTime time = MORNING_START; !time.equals(MORNING_END); time = time.plusMinutes(INTERVIEW_DURATION)) {
                 timeSlots.add(LocalDateTime.of(date, time));
             }
             
             // 生成下午时间段 (13:00-17:00)
-            for (LocalTime time = AFTERNOON_START; time.isBefore(AFTERNOON_END); time = time.plusMinutes(INTERVIEW_DURATION)) {
+            for (LocalTime time = AFTERNOON_START; !time.equals(AFTERNOON_END); time = time.plusMinutes(INTERVIEW_DURATION)) {
                 timeSlots.add(LocalDateTime.of(date, time));
             }
         }
@@ -283,12 +321,12 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
             LocalDate date = startDate.plusDays(dayOffset);
             
             // 生成上午时间段 (9:00-11:00)
-            for (LocalTime time = MORNING_START; time.isBefore(MORNING_END); time = time.plusMinutes(INTERVIEW_DURATION)) {
+            for (LocalTime time = MORNING_START; !time.equals(MORNING_END); time = time.plusMinutes(INTERVIEW_DURATION)) {
                 timeSlots.add(LocalDateTime.of(date, time));
             }
             
             // 生成下午时间段 (13:00-17:00)
-            for (LocalTime time = AFTERNOON_START; time.isBefore(AFTERNOON_END); time = time.plusMinutes(INTERVIEW_DURATION)) {
+            for (LocalTime time = AFTERNOON_START; !time.equals(AFTERNOON_END); time = time.plusMinutes(INTERVIEW_DURATION)) {
                 timeSlots.add(LocalDateTime.of(date, time));
             }
         }
@@ -344,22 +382,62 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
             return false;
         }
         
+        logger.info("开始为用户 {} 分配面试时间，期望时间: {}", user.getUsername(), preferredTimes);
+        
         // 按照用户期望的时间顺序尝试分配
         for (String preferredTime : preferredTimes) {
-            LocalDateTime assignedSlot = findAndReserveSlot(preferredTime, department, departmentSlotAvailability);
-            if (assignedSlot != null) {
-                // 成功分配时间
-                String period = assignedSlot.getHour() < 12 ? "上午" : "下午";
-                assignedInterviews.add(new InterviewAssignmentResultDTO.AssignedInterviewDTO(
-                        user.getUserId(), user.getUsername(), user.getName(), assignedSlot, period, department));
+            logger.info("尝试为用户 {} 分配时间: {}", user.getUsername(), preferredTime);
+            // 检查该时间段是否有空位
+            if (hasAvailableSlot(preferredTime, department, departmentSlotAvailability)) {
+                logger.info("用户 {} 的时间段 {} 有空位，正在分配", user.getUsername(), preferredTime);
+                // 如果有空位，则分配时间
+                LocalDateTime assignedSlot = findAndReserveSlot(preferredTime, department, departmentSlotAvailability);
+                if (assignedSlot != null) {
+                    // 成功分配时间
+                    String period = assignedSlot.getHour() < 12 ? "上午" : "下午";
+                    logger.info("成功为用户 {} 分配面试时间: {}", user.getUsername(), assignedSlot);
+                    assignedInterviews.add(new InterviewAssignmentResultDTO.AssignedInterviewDTO(
+                            user.getUserId(), user.getUsername(), user.getName(), assignedSlot, period, department));
+                    return true;
+                }
+            } else {
+                logger.info("用户 {} 的时间段 {} 没有空位，尝试下一个时间段", user.getUsername(), preferredTime);
+            }
+        }
+        
+        // 如果用户选择的所有时间段都没有空位，则不分配时间
+        logger.info("用户 {} 的所有期望时间段都没有空位，无法分配", user.getUsername());
+        return false;
+    }
+    
+    /**
+     * 检查指定时间段是否还有空位
+     */
+    private boolean hasAvailableSlot(String preferredTime, String department,
+                                   Map<String, Map<LocalDateTime, Boolean>> departmentSlotAvailability) {
+        Map<LocalDateTime, Boolean> slotAvailability = departmentSlotAvailability.get(department);
+        if (slotAvailability == null) {
+            return false;
+        }
+        
+        // 获取所有可用的时间槽
+        List<LocalDateTime> availableSlots = slotAvailability.entrySet().stream()
+                .filter(Map.Entry::getValue) // 只考虑可用的时间槽
+                .map(Map.Entry::getKey)
+                .sorted()
+                .collect(Collectors.toList());
+        
+        logger.debug("部门 {} 的可用时间槽: {}", department, availableSlots);
+        
+        // 检查是否有符合期望时间段的时间槽
+        for (LocalDateTime slotTime : availableSlots) {
+            if (isSlotMatchPreference(slotTime, preferredTime)) {
+                logger.debug("找到匹配的时间槽: {} 对应偏好时间: {}", slotTime, preferredTime);
                 return true;
             }
         }
         
-        // 如果按照用户期望的时间无法分配，则将用户加入未分配列表
-        // 不再尝试分配任何可用的时间，确保只在用户期望的时间段内分配
-        
-        return false; // 无法分配时间
+        return false;
     }
     
     /**
@@ -384,6 +462,7 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
             if (isSlotMatchPreference(slotTime, preferredTime)) {
                 // 预留该时间槽
                 slotAvailability.put(slotTime, false);
+                logger.info("为部门 {} 预留时间槽: {}", department, slotTime);
                 return slotTime;
             }
         }
@@ -419,6 +498,7 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
     
     /**
      * 检查时间槽是否符合用户的期望时间段
+     * 严格按照用户选择的具体日期和时间段进行匹配
      */
     private boolean isSlotMatchPreference(LocalDateTime slotTime, String preferredTime) {
         String[] parts = preferredTime.split(" ");
@@ -430,9 +510,20 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
             int dayNumber = Integer.parseInt(parts[1]);
             String period = parts[2]; // "上午" 或 "下午"
             
-            // 判断是第几天 (假设面试从招募周期开始日期算起)
-            // 注意：这里简化处理，实际应该根据开始日期计算
-            if (dayNumber == 1 || dayNumber == 2) {
+            // 根据面试时间槽的日期确定是第几天
+            LocalDate day1 = LocalDate.of(2025, 9, 27);
+            LocalDate day2 = LocalDate.of(2025, 9, 28);
+            
+            // 严格匹配具体日期和时间段
+            if (dayNumber == 1 && slotTime.toLocalDate().equals(day1)) {
+                // 检查时间段是否匹配
+                LocalTime time = slotTime.toLocalTime();
+                if ("上午".equals(period)) {
+                    return !time.isBefore(MORNING_START) && time.isBefore(MORNING_END);
+                } else if ("下午".equals(period)) {
+                    return !time.isBefore(AFTERNOON_START) && time.isBefore(AFTERNOON_END);
+                }
+            } else if (dayNumber == 2 && slotTime.toLocalDate().equals(day2)) {
                 // 检查时间段是否匹配
                 LocalTime time = slotTime.toLocalTime();
                 if ("上午".equals(period)) {
