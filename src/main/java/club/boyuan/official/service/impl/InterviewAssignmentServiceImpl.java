@@ -111,21 +111,15 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
             logger.info("用户 {} 的期望面试时间: {}", user.getUsername(), preferredTimes);
             logger.info("用户 {} 的期望部门: {}", user.getUsername(), preferredDepartments);
             
-            // 如果用户没有填写期望面试时间，则加入未分配列表
+            // 如果用户没有填写期望面试时间，则不纳入安排范畴（不加入未分配列表）
             if (preferredTimes.isEmpty()) {
-                logger.info("用户 {} 没有填写期望面试时间，加入未分配列表", user.getUsername());
-                unassignedUsers.add(new InterviewAssignmentResultDTO.UnassignedUserDTO(
-                        user.getUserId(), user.getUsername(), user.getName(), "未填写期望面试时间", 
-                        preferredDepartments.isEmpty() ? "未填写期望部门" : String.join(", ", preferredDepartments)));
+                logger.info("用户 {} 没有填写期望面试时间，不纳入安排范畴", user.getUsername());
                 continue;
             }
             
-            // 如果用户没有填写期望部门，则加入未分配列表
+            // 如果用户没有填写期望部门，则不纳入安排范畴（不加入未分配列表）
             if (preferredDepartments.isEmpty()) {
-                logger.info("用户 {} 没有填写期望部门，加入未分配列表", user.getUsername());
-                unassignedUsers.add(new InterviewAssignmentResultDTO.UnassignedUserDTO(
-                        user.getUserId(), user.getUsername(), user.getName(), 
-                        String.join(", ", preferredTimes), "未填写期望部门"));
+                logger.info("用户 {} 没有填写期望部门，不纳入安排范畴", user.getUsername());
                 continue;
             }
             
