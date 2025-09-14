@@ -622,7 +622,7 @@ public class ResumeController {
             }
             
             // 检查简历状态，已提交的简历不能更新
-            if (resume.getStatus() != null && resume.getStatus() >= 2) {
+            if (resume.getStatus() != null && resume.getStatus() > 2) {
                 logger.warn("尝试更新已提交的简历，用户ID: {}，招募周期ID: {}，状态: {}", 
                         currentUser.getUserId(), cycleId, resume.getStatus());
                 throw new BusinessException(BusinessExceptionEnum.RESUME_ALREADY_SUBMITTED);

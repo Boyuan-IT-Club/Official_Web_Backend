@@ -131,7 +131,66 @@ public class AdminController {
                     .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
         }
     }
-
+    
+    /**
+     * 为用户赋予管理员权限接口
+     * @param userId 用户ID
+     * @return 操作结果
+     */
+    @PostMapping("/users/{userId}/grant-admin")
+    public ResponseEntity<ResponseMessage<?>> grantAdminPermission(@PathVariable Integer userId) {
+        try {
+            // 检查管理员权限
+            checkAdminRole();
+            
+            // 获取当前登录的管理员信息
+            String token = getTokenFromHeader();
+            String adminUsername = jwtTokenUtil.extractUsername(token);
+            User adminUser = userService.getUserByUsername(adminUsername);
+            
+            // 获取要被授权的用户
+            User targetUser = userService.getUserById(userId);
+            if (targetUser == null) {
+                logger.warn("管理员 {} 尝试为不存在的用户ID {} 授权", adminUsername, userId);
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ResponseMessage.error(BusinessExceptionEnum.USER_NOT_FOUND.getCode(), 
+                                BusinessExceptionEnum.USER_NOT_FOUND.getMessage()));
+            }
+            
+            // 检查用户是否已经是管理员
+            if (User.ROLE_ADMIN.equals(targetUser.getRole())) {
+                logger.warn("管理员 {} 尝试为已是管理员的用户 {} 授权", adminUsername, targetUser.getUsername());
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(ResponseMessage.error(400, "用户已经是管理员"));
+            }
+            
+            // 更新用户角色为管理员
+            UserDTO userDTO = new UserDTO();
+            userDTO.setUserId(userId);
+            userDTO.setRole(User.ROLE_ADMIN);
+            userService.edit(userDTO);
+            
+            logger.info("管理员 {} 成功为用户 {} 授予管理员权限", adminUsername, targetUser.getUsername());
+            
+            // 构建响应数据
+            Map<String, Object> data = new HashMap<>();
+            data.put("userId", targetUser.getUserId());
+            data.put("username", targetUser.getUsername());
+            data.put("grantedBy", adminUser.getUsername());
+            data.put("message", "成功授予管理员权限");
+            
+            return ResponseEntity.ok(new ResponseMessage<>(200, "成功授予管理员权限", data));
+        } catch (BusinessException e) {
+            logger.warn("授予管理员权限失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("授予管理员权限时发生服务器内部错误", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
+    }
+    
     /**
      * 获取用户列表接口
      * 支持分页和条件查询
