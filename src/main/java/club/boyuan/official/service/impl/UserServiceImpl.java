@@ -98,7 +98,7 @@ public class UserServiceImpl implements IUserService {
             logger.debug("未检测到密码更新请求，保持原密码不变，用户ID: {}", userDTO.getUserId());
         }
 
-        // 更新其他字段，但不更新角色和状态等敏感字段
+        // 更新其他字段，但不更新状态等敏感字段
         if (userDTO.getUsername() != null) {
             user.setUsername(userDTO.getUsername());
             logger.debug("用户名更新为: {}", userDTO.getUsername());
@@ -131,8 +131,12 @@ public class UserServiceImpl implements IUserService {
             user.setAvatar(userDTO.getAvatar());
             logger.debug("头像更新为: {}", userDTO.getAvatar());
         }
-        // 不允许通过edit方法修改用户角色和状态
-        // user.setRole(userDTO.getRole());
+        // 允许更新用户角色（用于管理员权限授予）
+        if (userDTO.getRole() != null) {
+            user.setRole(userDTO.getRole());
+            logger.debug("角色更新为: {}", userDTO.getRole());
+        }
+        // 不允许通过edit方法修改用户状态
         // user.setStatus(userDTO.getStatus());
 
         userMapper.updateById(user);
