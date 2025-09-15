@@ -192,6 +192,30 @@ public class ExcelExportUtil {
             for (int i = 0; i < unassignedHeaders.length; i++) {
                 unassignedSheet.autoSizeColumn(i);
             }
+            
+            // Sheet3: 未填写期望面试时间
+            Sheet noPreferenceSheet = workbook.createSheet("未填写期望");
+            Row noPreferenceHeader = noPreferenceSheet.createRow(0);
+            String[] noPreferenceHeaders = {"用户名", "姓名"};
+            for (int i = 0; i < noPreferenceHeaders.length; i++) {
+                Cell cell = noPreferenceHeader.createCell(i);
+                cell.setCellValue(noPreferenceHeaders[i]);
+                cell.setCellStyle(headerStyle);
+            }
+            
+            int noPreferenceRowNum = 1;
+            if (result != null && result.getNoPreferenceUsers() != null) {
+                for (InterviewAssignmentResultDTO.NoPreferenceUserDTO dto : result.getNoPreferenceUsers()) {
+                    Row row = noPreferenceSheet.createRow(noPreferenceRowNum++);
+                    
+                    row.createCell(0).setCellValue(dto.getUsername() != null ? dto.getUsername() : "");
+                    row.createCell(1).setCellValue(dto.getName() != null ? dto.getName() : "");
+                }
+            }
+            
+            for (int i = 0; i < noPreferenceHeaders.length; i++) {
+                noPreferenceSheet.autoSizeColumn(i);
+            }
 
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             try {

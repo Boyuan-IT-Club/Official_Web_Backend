@@ -18,12 +18,25 @@ public class InterviewAssignmentResultDTO {
      */
     private List<UnassignedUserDTO> unassignedUsers;
     
+    /**
+     * 未填写期望面试时间的用户列表
+     */
+    private List<NoPreferenceUserDTO> noPreferenceUsers;
+    
     public InterviewAssignmentResultDTO() {
     }
     
     public InterviewAssignmentResultDTO(List<AssignedInterviewDTO> assignedInterviews, List<UnassignedUserDTO> unassignedUsers) {
         this.assignedInterviews = assignedInterviews;
         this.unassignedUsers = unassignedUsers;
+    }
+    
+    public InterviewAssignmentResultDTO(List<AssignedInterviewDTO> assignedInterviews, 
+                                      List<UnassignedUserDTO> unassignedUsers,
+                                      List<NoPreferenceUserDTO> noPreferenceUsers) {
+        this.assignedInterviews = assignedInterviews;
+        this.unassignedUsers = unassignedUsers;
+        this.noPreferenceUsers = noPreferenceUsers;
     }
     
     // Getter和Setter方法
@@ -42,6 +55,14 @@ public class InterviewAssignmentResultDTO {
     
     public void setUnassignedUsers(List<UnassignedUserDTO> unassignedUsers) {
         this.unassignedUsers = unassignedUsers;
+    }
+    
+    public List<NoPreferenceUserDTO> getNoPreferenceUsers() {
+        return noPreferenceUsers;
+    }
+    
+    public void setNoPreferenceUsers(List<NoPreferenceUserDTO> noPreferenceUsers) {
+        this.noPreferenceUsers = noPreferenceUsers;
     }
     
     /**
@@ -179,6 +200,50 @@ public class InterviewAssignmentResultDTO {
         
         public void setPreferredDepartments(String preferredDepartments) {
             this.preferredDepartments = preferredDepartments;
+        }
+    }
+    
+    /**
+     * 未填写期望面试时间的用户信息
+     */
+    public static class NoPreferenceUserDTO {
+        private Integer userId;
+        private String username;
+        private String name;
+        
+        public NoPreferenceUserDTO() {
+        }
+        
+        public NoPreferenceUserDTO(Integer userId, String username, String name) {
+            this.userId = userId;
+            this.username = username;
+            this.name = name;
+        }
+        
+        // Getter和Setter方法
+        
+        public Integer getUserId() {
+            return userId;
+        }
+        
+        public void setUserId(Integer userId) {
+            this.userId = userId;
+        }
+        
+        public String getUsername() {
+            return username;
+        }
+        
+        public void setUsername(String username) {
+            this.username = username;
+        }
+        
+        public String getName() {
+            return name;
+        }
+        
+        public void setName(String name) {
+            this.name = name;
         }
     }
 }
