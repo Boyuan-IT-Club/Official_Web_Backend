@@ -96,6 +96,7 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
         // 创建候选人列表，包含他们的偏好信息
         List<CandidateInfo> candidates = new ArrayList<>();
         List<InterviewAssignmentResultDTO.UnassignedUserDTO> unassignedUsers = new ArrayList<>();
+        List<InterviewAssignmentResultDTO.NoPreferenceUserDTO> noPreferenceUsers = new ArrayList<>();
         
         for (Resume resume : resumes) {
             User user = userService.getUserById(resume.getUserId());
@@ -111,15 +112,19 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
             logger.info("用户 {} 的期望面试时间: {}", user.getUsername(), preferredTimes);
             logger.info("用户 {} 的期望部门: {}", user.getUsername(), preferredDepartments);
             
-            // 如果用户没有填写期望面试时间，则不纳入安排范畴（不加入未分配列表）
+            // 如果用户没有填写期望面试时间，则加入未填写期望面试时间列表
             if (preferredTimes.isEmpty()) {
-                logger.info("用户 {} 没有填写期望面试时间，不纳入安排范畴", user.getUsername());
+                logger.info("用户 {} 没有填写期望面试时间，加入未填写期望面试时间列表", user.getUsername());
+                noPreferenceUsers.add(new InterviewAssignmentResultDTO.NoPreferenceUserDTO(
+                        user.getUserId(), user.getUsername(), user.getName()));
                 continue;
             }
             
-            // 如果用户没有填写期望部门，则不纳入安排范畴（不加入未分配列表）
+            // 如果用户没有填写期望部门，则加入未填写期望面试时间列表
             if (preferredDepartments.isEmpty()) {
-                logger.info("用户 {} 没有填写期望部门，不纳入安排范畴", user.getUsername());
+                logger.info("用户 {} 没有填写期望部门，加入未填写期望面试时间列表", user.getUsername());
+                noPreferenceUsers.add(new InterviewAssignmentResultDTO.NoPreferenceUserDTO(
+                        user.getUserId(), user.getUsername(), user.getName()));
                 continue;
             }
             
@@ -162,8 +167,9 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
             }
         }
         
-        logger.info("面试时间分配完成，已分配 {} 人，未分配 {} 人", assignedInterviews.size(), unassignedUsers.size());
-        return new InterviewAssignmentResultDTO(assignedInterviews, unassignedUsers);
+        logger.info("面试时间分配完成，已分配 {} 人，未分配 {} 人，未填写期望 {} 人", 
+                assignedInterviews.size(), unassignedUsers.size(), noPreferenceUsers.size());
+        return new InterviewAssignmentResultDTO(assignedInterviews, unassignedUsers, noPreferenceUsers);
     }
     
     /**
