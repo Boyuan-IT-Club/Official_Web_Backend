@@ -56,8 +56,12 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
         }
         
         // 获取该周期下的所有简历
-        List<Resume> resumes = resumeService.getAllResumesByCycleId(cycleId);
-        logger.info("获取到 {} 份简历", resumes.size());
+        List<Resume> allResumes = resumeService.getAllResumesByCycleId(cycleId);
+        // 只处理已提交的简历(status >= 2)
+        List<Resume> resumes = allResumes.stream()
+                .filter(resume -> resume.getStatus() != null && resume.getStatus() >= 2)
+                .collect(Collectors.toList());
+        logger.info("获取到 {} 份简历，其中已提交 {} 份", allResumes.size(), resumes.size());
         
         // 获取"期望的面试时间"和"期望部门"字段定义
         ResumeFieldDefinition interviewTimeField = getInterviewTimeFieldDefinition(cycleId);
