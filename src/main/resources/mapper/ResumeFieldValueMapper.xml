@@ -36,10 +36,16 @@
     </insert>
 
     <update id="batchUpdate">
-        <foreach collection="fieldValues" item="fieldValue" separator=";">
-            UPDATE resume_field_value
-            SET field_value = #{fieldValue.fieldValue}, updated_at = NOW()
-            WHERE value_id = #{fieldValue.valueId}
+        UPDATE resume_field_value
+        SET field_value = CASE value_id
+        <foreach collection="fieldValues" item="fieldValue">
+            WHEN #{fieldValue.valueId} THEN #{fieldValue.fieldValue}
+        </foreach>
+        END,
+        updated_at = NOW()
+        WHERE value_id IN
+        <foreach collection="fieldValues" item="fieldValue" open="(" separator="," close=")">
+            #{fieldValue.valueId}
         </foreach>
     </update>
 

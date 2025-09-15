@@ -117,7 +117,7 @@ VALUES (2, 'dinghuaye', '$2a$10$UfOo2mtqbSKOA3yB4F4Ci.54uoNzvFMW2VznfkpXKraHL.e9
         '2025-08-15 14:57:57', 1, 1, '/uploads/avatars/dinghuaye.jpg');
 INSERT INTO `user`
 VALUES (3, 'hucongyu', '$2a$10$UfOo2mtqbSKOA3yB4F4Ci.54uoNzvFMW2VznfkpXKraHL.e9VBWdC', 'ADMIN', '胡淙煜',
-        '10245101417@stu.ecny.edu.cn', '13136397281', '软件工程', '', '技术部',
+        '10245101417@stu.ecnu.edu.cn', '13136397281', '软件工程', '', '技术部',
         '2025-08-15 14:57:57', 1, 1, '/uploads/avatars/hucongyu.jpg');
 
 -- ----------------------------
