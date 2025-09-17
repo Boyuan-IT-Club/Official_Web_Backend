@@ -146,8 +146,11 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
             candidates.add(new CandidateInfo(user, preferredTimes, preferredDepartments, firstDepartment, resume));
         }
         
-        // 使用改进的排序策略：基于约束紧迫度排序
-        candidates = sortCandidatesByUrgency(candidates, userPreferredTimes, departmentSlotAvailability);
+        // 使用改进的三层排序策略：部门-时间段分组排序
+        candidates = sortCandidatesByDepartmentTimeGroup(candidates, userPreferredTimes, departmentSlotAvailability);
+        
+        // 初始化教室分配管理器
+        ClassroomAssigner classroomAssigner = new ClassroomAssigner();
         
         // 分配面试时间
         List<InterviewAssignmentResultDTO.AssignedInterviewDTO> assignedInterviews = new ArrayList<>();
@@ -160,7 +163,7 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
             
             // 严格按照用户偏好分配面试时间，不使用降级策略
             boolean assigned = tryAssignInterviewTime(
-                    user, resume, preferredTimes, department, departmentSlotAvailability, assignedInterviews);
+                    user, resume, preferredTimes, department, departmentSlotAvailability, assignedInterviews, classroomAssigner);
             
             // 如果无法分配（所有时间段都满了），则加入未分配列表
             if (!assigned) {
@@ -365,24 +368,235 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
     }
     
     /**
-     * 候选人信息类，用于存储分配过程中的相关信息
+     * 部门-时间段组合类
      */
-    private static class CandidateInfo {
-        private final User user;
-        private final List<String> preferredTimes;
-        private final List<String> preferredDepartments;
-        private final String firstDepartment;
-        private final Resume resume; // 添加简历字段
-        private double urgencyScore; // 紧迫度分数
+    private static class DepartmentTimeGroup {
+        private final String department;
+        private final String timeSlot;
+        private final List<CandidateInfo> candidates;
+        private double groupPriority;
         
-        public CandidateInfo(User user, List<String> preferredTimes, List<String> preferredDepartments, String firstDepartment, Resume resume) {
-            this.user = user;
-            this.preferredTimes = preferredTimes;
-            this.preferredDepartments = preferredDepartments;
-            this.firstDepartment = firstDepartment;
-            this.resume = resume;
-            this.urgencyScore = 0.0;
+        public DepartmentTimeGroup(String department, String timeSlot) {
+            this.department = department;
+            this.timeSlot = timeSlot;
+            this.candidates = new ArrayList<>();
+            this.groupPriority = 0.0;
         }
+        
+        public void addCandidate(CandidateInfo candidate) {
+            this.candidates.add(candidate);
+        }
+        
+        public String getGroupKey() {
+            return department + "|" + timeSlot;
+        }
+        
+        // getter methods
+        public String getDepartment() { return department; }
+        public String getTimeSlot() { return timeSlot; }
+        public List<CandidateInfo> getCandidates() { return candidates; }
+        public double getGroupPriority() { return groupPriority; }
+        public void setGroupPriority(double groupPriority) { this.groupPriority = groupPriority; }
+        public int getSize() { return candidates.size(); }
+    }
+    
+    /**
+     * 教室分配管理器
+     */
+    private static class ClassroomAssigner {
+        private final Map<String, Integer> timeSlotClassroomCounter = new HashMap<>();
+        private static final String[] CLASSROOMS = {"教室1", "教室2", "教室3"};
+        
+        /**
+         * 为面试分配教室
+         * @param interviewTime 时间段
+         * @return 教室编号，如果没有可用教室则返回 null
+         */
+        public String assignClassroom(LocalDateTime interviewTime) {
+            String timeKey = interviewTime.toString();
+            int currentCount = timeSlotClassroomCounter.getOrDefault(timeKey, 0);
+            
+            if (currentCount < CLASSROOMS.length) {
+                timeSlotClassroomCounter.put(timeKey, currentCount + 1);
+                return CLASSROOMS[currentCount];
+            }
+            
+            return null; // 没有可用教室
+        }
+        
+        /**
+         * 检查指定时间是否还有可用教室
+         */
+        public boolean hasAvailableClassroom(LocalDateTime interviewTime) {
+            String timeKey = interviewTime.toString();
+            int currentCount = timeSlotClassroomCounter.getOrDefault(timeKey, 0);
+            return currentCount < CLASSROOMS.length;
+        }
+    }
+    
+    /**
+     * 使用三层排序策略对候选人进行排序
+     */
+    private List<CandidateInfo> sortCandidatesByDepartmentTimeGroup(
+            List<CandidateInfo> candidates,
+            Map<Integer, List<String>> userPreferredTimes,
+            Map<String, Map<LocalDateTime, Boolean>> departmentSlotAvailability) {
+        
+        logger.info("开始使用三层排序策略对 {} 个候选人进行排序", candidates.size());
+        
+        // 第一层：按(部门,时间段)分组
+        Map<String, DepartmentTimeGroup> groups = createDepartmentTimeGroups(candidates);
+        
+        // 第二层：计算每组的优先级
+        calculateGroupPriorities(groups, departmentSlotAvailability);
+        
+        // 第三层：组内排序
+        sortCandidatesWithinGroups(groups, userPreferredTimes, departmentSlotAvailability);
+        
+        // 按组优先级重新排列候选人
+        return flattenGroupsToSortedList(groups);
+    }
+    
+    /**
+     * 创建部门-时间段组合
+     */
+    private Map<String, DepartmentTimeGroup> createDepartmentTimeGroups(List<CandidateInfo> candidates) {
+        Map<String, DepartmentTimeGroup> groups = new HashMap<>();
+        
+        for (CandidateInfo candidate : candidates) {
+            String department = candidate.firstDepartment;
+            
+            // 为每个期望时间段创建组合
+            for (String timeSlot : candidate.preferredTimes) {
+                String groupKey = department + "|" + timeSlot;
+                
+                DepartmentTimeGroup group = groups.computeIfAbsent(groupKey, 
+                    k -> new DepartmentTimeGroup(department, timeSlot));
+                group.addCandidate(candidate);
+            }
+        }
+        
+        logger.info("创建了 {} 个部门-时间段组合", groups.size());
+        for (DepartmentTimeGroup group : groups.values()) {
+            logger.debug("组合 [{}|{}] 包含 {} 个候选人", 
+                group.getDepartment(), group.getTimeSlot(), group.getSize());
+        }
+        
+        return groups;
+    }
+    
+    /**
+     * 计算每组的优先级
+     */
+    private void calculateGroupPriorities(Map<String, DepartmentTimeGroup> groups,
+                                         Map<String, Map<LocalDateTime, Boolean>> departmentSlotAvailability) {
+        
+        // 找到最大组大小用于归一化
+        int maxGroupSize = groups.values().stream().mapToInt(DepartmentTimeGroup::getSize).max().orElse(1);
+        
+        for (DepartmentTimeGroup group : groups.values()) {
+            double groupSizeWeight = (double) group.getSize() / maxGroupSize; // 归一化的组大小
+            
+            // 计算时间稀缺性
+            double scarcityScore = calculateTimeSlotScarcity(group.getTimeSlot(), group.getDepartment(), departmentSlotAvailability);
+            
+            // 计算部门均衡性分数（简化为固定值）
+            double departmentBalanceScore = 0.5; // 可以根据实际需要调整
+            
+            // 组优先级 = 组大小权重 * 0.5 + 时间稀缺性 * 0.3 + 部门均衡性 * 0.2
+            double groupPriority = groupSizeWeight * 0.5 + scarcityScore * 0.3 + departmentBalanceScore * 0.2;
+            
+            group.setGroupPriority(groupPriority);
+            
+            logger.debug("组合 [{}|{}] 优先级: {:.3f} (组大小:{}, 稀缺性:{:.3f})", 
+                group.getDepartment(), group.getTimeSlot(), groupPriority, group.getSize(), scarcityScore);
+        }
+    }
+    
+    /**
+     * 计算时间段的稀缺性分数
+     */
+    private double calculateTimeSlotScarcity(String timeSlot, String department, 
+                                           Map<String, Map<LocalDateTime, Boolean>> departmentSlotAvailability) {
+        Map<LocalDateTime, Boolean> slotAvailability = departmentSlotAvailability.get(department);
+        if (slotAvailability == null) {
+            return 0.0;
+        }
+        
+        // 计算该时间段的可用时间槽数量
+        int availableSlots = 0;
+        for (Map.Entry<LocalDateTime, Boolean> entry : slotAvailability.entrySet()) {
+            if (entry.getValue() && isSlotMatchPreference(entry.getKey(), timeSlot)) {
+                availableSlots++;
+            }
+        }
+        
+        // 稀缺性分数：可用时间槽越少，稀缺性越高
+        if (availableSlots == 0) {
+            return 1.0; // 最高稀缺性
+        }
+        
+        // 可以根据实际情况调整这个公式
+        return Math.min(1.0, 10.0 / availableSlots);
+    }
+    
+    /**
+     * 组内排序：保留原有的个人紧迫度排序逻辑
+     */
+    private void sortCandidatesWithinGroups(Map<String, DepartmentTimeGroup> groups,
+                                           Map<Integer, List<String>> userPreferredTimes,
+                                           Map<String, Map<LocalDateTime, Boolean>> departmentSlotAvailability) {
+        
+        for (DepartmentTimeGroup group : groups.values()) {
+            // 对组内候选人按个人紧迫度排序
+            List<CandidateInfo> candidates = group.getCandidates();
+            
+            // 计算每个候选人的紧迫度分数
+            Map<String, Integer> timeSlotDemand = calculateTimeSlotDemand(userPreferredTimes);
+            
+            candidates.forEach(candidate -> {
+                double urgencyScore = calculateUrgencyScore(candidate, timeSlotDemand, departmentSlotAvailability);
+                candidate.urgencyScore = urgencyScore;
+            });
+            
+            // 按紧迫度分数降序排列，相同分数的随机打散
+            candidates.sort((c1, c2) -> {
+                int urgencyCompare = Double.compare(c2.urgencyScore, c1.urgencyScore);
+                if (urgencyCompare != 0) {
+                    return urgencyCompare;
+                }
+                // 相同紧迫度的随机打散
+                return Integer.compare(c1.user.getUserId().hashCode(), c2.user.getUserId().hashCode());
+            });
+        }
+    }
+    
+    /**
+     * 将分组后的候选人按组优先级重新排列为单一列表
+     */
+    private List<CandidateInfo> flattenGroupsToSortedList(Map<String, DepartmentTimeGroup> groups) {
+        List<CandidateInfo> sortedCandidates = new ArrayList<>();
+        
+        // 按组优先级降序排列组
+        List<DepartmentTimeGroup> sortedGroups = groups.values().stream()
+            .sorted((g1, g2) -> Double.compare(g2.getGroupPriority(), g1.getGroupPriority()))
+            .collect(Collectors.toList());
+        
+        logger.info("按组优先级排序后的前5个组合：");
+        for (int i = 0; i < Math.min(5, sortedGroups.size()); i++) {
+            DepartmentTimeGroup group = sortedGroups.get(i);
+            logger.info("  {}: [{}|{}] 优先级:{:.3f} 人数:{}", 
+                i + 1, group.getDepartment(), group.getTimeSlot(), 
+                group.getGroupPriority(), group.getSize());
+        }
+        
+        // 将各组的候选人按顺序添加到结果列表
+        for (DepartmentTimeGroup group : sortedGroups) {
+            sortedCandidates.addAll(group.getCandidates());
+        }
+        
+        logger.info("三层排序完成，最终排序结果包含 {} 个候选人", sortedCandidates.size());
+        return sortedCandidates;
     }
     
     /**
@@ -595,7 +809,8 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
      */
     private boolean tryAssignInterviewTime(User user, Resume resume, List<String> preferredTimes, String department,
                                          Map<String, Map<LocalDateTime, Boolean>> departmentSlotAvailability,
-                                         List<InterviewAssignmentResultDTO.AssignedInterviewDTO> assignedInterviews) {
+                                         List<InterviewAssignmentResultDTO.AssignedInterviewDTO> assignedInterviews,
+                                         ClassroomAssigner classroomAssigner) {
         // 如果用户没有填写期望面试时间，则不分配面试时间
         if (preferredTimes == null || preferredTimes.isEmpty()) {
             return false;
@@ -606,40 +821,82 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
         // 按照用户期望的时间顺序尝试分配
         for (String preferredTime : preferredTimes) {
             logger.info("尝试为用户 {} 分配时间: {}", user.getUsername(), preferredTime);
-            // 检查该时间段是否有空位
-            if (hasAvailableSlot(preferredTime, department, departmentSlotAvailability)) {
-                logger.info("用户 {} 的时间段 {} 有空位，正在分配", user.getUsername(), preferredTime);
-                // 如果有空位，则分配时间
+            // 检查该时间段是否有空位且有可用教室
+            if (hasAvailableSlotAndClassroom(preferredTime, department, departmentSlotAvailability, classroomAssigner)) {
+                logger.info("用户 {} 的时间段 {} 有空位且有可用教室，正在分配", user.getUsername(), preferredTime);
+                // 如果有空位且有教室，则分配时间
                 LocalDateTime assignedSlot = findAndReserveSlot(preferredTime, department, departmentSlotAvailability);
                 if (assignedSlot != null) {
-                    // 成功分配时间
-                    String period;
-                    LocalTime timeOfDay = assignedSlot.toLocalTime();
-                    if (!timeOfDay.isBefore(MORNING_START) && timeOfDay.isBefore(MORNING_END)) {
-                        period = "上午";
-                    } else if (!timeOfDay.isBefore(AFTERNOON_START) && timeOfDay.isBefore(AFTERNOON_END)) {
-                        period = "下午";
-                    } else if (!timeOfDay.isBefore(EVENING_START) && timeOfDay.isBefore(EVENING_END)) {
-                        period = "晚上";
+                    // 分配教室
+                    String classroom = classroomAssigner.assignClassroom(assignedSlot);
+                    if (classroom != null) {
+                        // 成功分配时间和教室
+                        String period;
+                        LocalTime timeOfDay = assignedSlot.toLocalTime();
+                        if (!timeOfDay.isBefore(MORNING_START) && timeOfDay.isBefore(MORNING_END)) {
+                            period = "上午";
+                        } else if (!timeOfDay.isBefore(AFTERNOON_START) && timeOfDay.isBefore(AFTERNOON_END)) {
+                            period = "下午";
+                        } else if (!timeOfDay.isBefore(EVENING_START) && timeOfDay.isBefore(EVENING_END)) {
+                            period = "晚上";
+                        } else {
+                            period = "未知"; // 备用，不应该出现
+                        }
+                        logger.info("成功为用户 {} 分配面试时间: {} 教室: {}", user.getUsername(), assignedSlot, classroom);
+                        // 从简历中获取姓名而不是从用户表中获取
+                        String name = getResumeName(resume);
+                        // 从简历中获取邮箱而不是从用户表中获取
+                        String email = getResumeEmail(resume);
+                        assignedInterviews.add(new InterviewAssignmentResultDTO.AssignedInterviewDTO(
+                                user.getUserId(), user.getUsername(), name, email, assignedSlot, period, department, classroom));
+                        return true;
                     } else {
-                        period = "未知"; // 备用，不应该出现
+                        // 没有可用教室，需要释放时间槽
+                        Map<LocalDateTime, Boolean> slotAvailability = departmentSlotAvailability.get(department);
+                        if (slotAvailability != null) {
+                            slotAvailability.put(assignedSlot, true); // 释放时间槽
+                        }
+                        logger.warn("用户 {} 的时间段 {} 没有可用教室，释放时间槽", user.getUsername(), preferredTime);
                     }
-                    logger.info("成功为用户 {} 分配面试时间: {}", user.getUsername(), assignedSlot);
-                    // 从简历中获取姓名而不是从用户表中获取
-                    String name = getResumeName(resume);
-                    // 从简历中获取邮箱而不是从用户表中获取
-                    String email = getResumeEmail(resume);
-                    assignedInterviews.add(new InterviewAssignmentResultDTO.AssignedInterviewDTO(
-                            user.getUserId(), user.getUsername(), name, email, assignedSlot, period, department));
-                    return true;
                 }
             } else {
-                logger.info("用户 {} 的时间段 {} 没有空位，尝试下一个时间段", user.getUsername(), preferredTime);
+                logger.info("用户 {} 的时间段 {} 没有空位或没有可用教室，尝试下一个时间段", user.getUsername(), preferredTime);
             }
         }
         
-        // 如果用户选择的所有时间段都没有空位，则不分配时间
-        logger.info("用户 {} 的所有期望时间段都没有空位，无法分配", user.getUsername());
+        // 如果用户选择的所有时间段都没有空位或没有可用教室，则不分配时间
+        logger.info("用户 {} 的所有期望时间段都没有空位或没有可用教室，无法分配", user.getUsername());
+        return false;
+    }
+    
+    /**
+     * 检查指定时间段是否还有空位且有可用教室
+     */
+    private boolean hasAvailableSlotAndClassroom(String preferredTime, String department,
+                                                Map<String, Map<LocalDateTime, Boolean>> departmentSlotAvailability,
+                                                ClassroomAssigner classroomAssigner) {
+        Map<LocalDateTime, Boolean> slotAvailability = departmentSlotAvailability.get(department);
+        if (slotAvailability == null) {
+            return false;
+        }
+        
+        // 获取所有可用的时间槽
+        List<LocalDateTime> availableSlots = slotAvailability.entrySet().stream()
+                .filter(Map.Entry::getValue) // 只考虑可用的时间槽
+                .map(Map.Entry::getKey)
+                .sorted()
+                .collect(Collectors.toList());
+        
+        logger.debug("部门 {} 的可用时间槽: {}", department, availableSlots);
+        
+        // 检查是否有符合期望时间段的时间槽且有可用教室
+        for (LocalDateTime slotTime : availableSlots) {
+            if (isSlotMatchPreference(slotTime, preferredTime) && classroomAssigner.hasAvailableClassroom(slotTime)) {
+                logger.debug("找到匹配的时间槽: {} 对应偏好时间: {} 且有可用教室", slotTime, preferredTime);
+                return true;
+            }
+        }
+        
         return false;
     }
     
@@ -742,5 +999,26 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
         }
         
         return false;
+    }
+    
+    /**
+     * 候选人信息类，用于存储分配过程中的相关信息
+     */
+    private static class CandidateInfo {
+        private final User user;
+        private final List<String> preferredTimes;
+        private final List<String> preferredDepartments;
+        private final String firstDepartment;
+        private final Resume resume; // 添加简历字段
+        private double urgencyScore; // 紧迫度分数
+        
+        public CandidateInfo(User user, List<String> preferredTimes, List<String> preferredDepartments, String firstDepartment, Resume resume) {
+            this.user = user;
+            this.preferredTimes = preferredTimes;
+            this.preferredDepartments = preferredDepartments;
+            this.firstDepartment = firstDepartment;
+            this.resume = resume;
+            this.urgencyScore = 0.0;
+        }
     }
 }

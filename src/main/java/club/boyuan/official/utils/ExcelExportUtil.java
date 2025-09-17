@@ -13,6 +13,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.ArrayList;
 import java.util.stream.Collectors;
 
 /**
@@ -93,7 +94,7 @@ public class ExcelExportUtil {
     }
 
     /**
-     * 将面试安排结果导出为Excel，在同一个工作表中按部门区分
+     * 将面试安排结果导出为Excel，按教室分布显示
      * @param result 面试安排结果
      * @return Excel字节数组
      */
@@ -112,22 +113,32 @@ public class ExcelExportUtil {
             DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd");
             DateTimeFormatter timeRangeFormat = DateTimeFormatter.ofPattern("HH:mm");
 
-            // Sheet1: 已分配
-            Sheet assignedSheet = workbook.createSheet("已分配");
-            Row assignedHeader = assignedSheet.createRow(0);
-            // 修改表头，添加邮箱列，添加部门列，删除用户ID列
-            String[] assignedHeaders = {"用户名", "姓名", "邮箱", "所属部门", "面试时间", "时间段"};
-            for (int i = 0; i < assignedHeaders.length; i++) {
-                Cell cell = assignedHeader.createCell(i);
-                cell.setCellValue(assignedHeaders[i]);
-                cell.setCellStyle(headerStyle);
-            }
-            
-            int assignedRowNum = 1;
+            // 按教室分组已分配的面试
+            Map<String, List<InterviewAssignmentResultDTO.AssignedInterviewDTO>> classroomGroups = new TreeMap<>();
             if (result != null && result.getAssignedInterviews() != null) {
+                for (InterviewAssignmentResultDTO.AssignedInterviewDTO dto : result.getAssignedInterviews()) {
+                    String classroom = dto.getClassroom() != null ? dto.getClassroom() : "未知教室";
+                    classroomGroups.computeIfAbsent(classroom, k -> new ArrayList<>()).add(dto);
+                }
+            }
+
+            // 为每个教室创建工作表
+            for (Map.Entry<String, List<InterviewAssignmentResultDTO.AssignedInterviewDTO>> entry : classroomGroups.entrySet()) {
+                String classroom = entry.getKey();
+                List<InterviewAssignmentResultDTO.AssignedInterviewDTO> assignments = entry.getValue();
+                
+                Sheet classroomSheet = workbook.createSheet(classroom);
+                Row classroomHeader = classroomSheet.createRow(0);
+                String[] classroomHeaders = {"用户名", "姓名", "邮箱", "所属部门", "面试时间", "时间段"};
+                
+                for (int i = 0; i < classroomHeaders.length; i++) {
+                    Cell cell = classroomHeader.createCell(i);
+                    cell.setCellValue(classroomHeaders[i]);
+                    cell.setCellStyle(headerStyle);
+                }
+                
                 // 按部门和时间排序
-                List<InterviewAssignmentResultDTO.AssignedInterviewDTO> sortedAssigned = result.getAssignedInterviews()
-                        .stream()
+                List<InterviewAssignmentResultDTO.AssignedInterviewDTO> sortedAssignments = assignments.stream()
                         .sorted((a, b) -> {
                             // 首先按部门排序
                             int deptCompare = a.getInterviewDepartment().compareTo(b.getInterviewDepartment());
@@ -139,17 +150,16 @@ public class ExcelExportUtil {
                         })
                         .collect(Collectors.toList());
                 
-                for (InterviewAssignmentResultDTO.AssignedInterviewDTO dto : sortedAssigned) {
-                    Row row = assignedSheet.createRow(assignedRowNum++);
+                int rowNum = 1;
+                for (InterviewAssignmentResultDTO.AssignedInterviewDTO dto : sortedAssignments) {
+                    Row row = classroomSheet.createRow(rowNum++);
                     
-                    // 删除用户ID字段，从第0列开始
                     row.createCell(0).setCellValue(dto.getUsername() != null ? dto.getUsername() : "");
                     row.createCell(1).setCellValue(dto.getName() != null ? dto.getName() : "");
-                    row.createCell(2).setCellValue(dto.getEmail() != null ? dto.getEmail() : ""); // 邮箱列
-                    row.createCell(2).setCellValue(dto.getEmail() != null ? dto.getEmail() : ""); // 邮箱列
+                    row.createCell(2).setCellValue(dto.getEmail() != null ? dto.getEmail() : "");
                     row.createCell(3).setCellValue(dto.getInterviewDepartment() != null ? dto.getInterviewDepartment() : "");
                     
-                    // 修改面试时间格式为 时间1-时间2，删除重复的日期显示
+                    // 修改面试时间格式为 时间1-时间2
                     if (dto.getInterviewTime() != null) {
                         LocalDateTime startTime = dto.getInterviewTime();
                         LocalDateTime endTime = startTime.plusMinutes(10); // 面试时长10分钟
@@ -161,16 +171,15 @@ public class ExcelExportUtil {
                     
                     row.createCell(5).setCellValue(dto.getPeriod() != null ? dto.getPeriod() : "");
                 }
-            }
-            
-            for (int i = 0; i < assignedHeaders.length; i++) {
-                assignedSheet.autoSizeColumn(i);
+                
+                for (int i = 0; i < classroomHeaders.length; i++) {
+                    classroomSheet.autoSizeColumn(i);
+                }
             }
 
-            // Sheet2: 未分配
+            // Sheet: 未分配
             Sheet unassignedSheet = workbook.createSheet("未分配");
             Row unassignedHeader = unassignedSheet.createRow(0);
-            // 添加邮箱列，删除用户ID字段
             String[] unassignedHeaders = {"用户名", "姓名", "邮箱", "期望时间", "期望部门"};
             for (int i = 0; i < unassignedHeaders.length; i++) {
                 Cell cell = unassignedHeader.createCell(i);
@@ -183,10 +192,9 @@ public class ExcelExportUtil {
                 for (InterviewAssignmentResultDTO.UnassignedUserDTO dto : result.getUnassignedUsers()) {
                     Row row = unassignedSheet.createRow(unassignedRowNum++);
                     
-                    // 删除用户ID字段
                     row.createCell(0).setCellValue(dto.getUsername() != null ? dto.getUsername() : "");
                     row.createCell(1).setCellValue(dto.getName() != null ? dto.getName() : "");
-                    row.createCell(2).setCellValue(dto.getEmail() != null ? dto.getEmail() : ""); // 邮箱列
+                    row.createCell(2).setCellValue(dto.getEmail() != null ? dto.getEmail() : "");
                     row.createCell(3).setCellValue(dto.getPreferredTimes() != null ? dto.getPreferredTimes() : "");
                     row.createCell(4).setCellValue(dto.getPreferredDepartments() != null ? dto.getPreferredDepartments() : "");
                 }
@@ -196,7 +204,7 @@ public class ExcelExportUtil {
                 unassignedSheet.autoSizeColumn(i);
             }
             
-            // Sheet3: 未填写期望面试时间
+            // Sheet: 未填写期望
             Sheet noPreferenceSheet = workbook.createSheet("未填写期望");
             Row noPreferenceHeader = noPreferenceSheet.createRow(0);
             String[] noPreferenceHeaders = {"用户名", "姓名", "邮箱"};
@@ -213,6 +221,7 @@ public class ExcelExportUtil {
                     
                     row.createCell(0).setCellValue(dto.getUsername() != null ? dto.getUsername() : "");
                     row.createCell(1).setCellValue(dto.getName() != null ? dto.getName() : "");
+                    row.createCell(2).setCellValue(dto.getEmail() != null ? dto.getEmail() : "");
                 }
             }
             
