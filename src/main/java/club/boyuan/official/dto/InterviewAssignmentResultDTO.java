@@ -76,11 +76,12 @@ public class InterviewAssignmentResultDTO {
         private LocalDateTime interviewTime;
         private String period; // 上午/下午
         private String interviewDepartment; // 面试部门（第一志愿）
+        private String classroom; // 教室信息
         
         public AssignedInterviewDTO() {
         }
         
-        public AssignedInterviewDTO(Integer userId, String username, String name, String email, LocalDateTime interviewTime, String period, String interviewDepartment) {
+        public AssignedInterviewDTO(Integer userId, String username, String name, String email, LocalDateTime interviewTime, String period, String interviewDepartment, String classroom) {
             this.userId = userId;
             this.username = username;
             this.name = name;
@@ -88,6 +89,7 @@ public class InterviewAssignmentResultDTO {
             this.interviewTime = interviewTime;
             this.period = period;
             this.interviewDepartment = interviewDepartment;
+            this.classroom = classroom;
         }
         
         // Getter和Setter方法
@@ -146,6 +148,14 @@ public class InterviewAssignmentResultDTO {
         
         public void setInterviewDepartment(String interviewDepartment) {
             this.interviewDepartment = interviewDepartment;
+        }
+        
+        public String getClassroom() {
+            return classroom;
+        }
+        
+        public void setClassroom(String classroom) {
+            this.classroom = classroom;
         }
     }
     
