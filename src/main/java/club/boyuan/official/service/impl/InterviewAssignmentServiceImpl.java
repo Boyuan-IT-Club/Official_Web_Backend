@@ -13,6 +13,7 @@ import club.boyuan.official.service.IResumeService;
 import club.boyuan.official.service.IUserService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.AllArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -280,11 +281,26 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
                 for (ResumeFieldValue interviewTimeValue : interviewTimeValues) {
                     logger.info("用户 {} 的期望面试时间字段值: {}", resume.getUserId(), interviewTimeValue.getFieldValue());
                     try {
-                        // 解析JSON数组
-                        List<String> preferredTimes = objectMapper.readValue(
-                                interviewTimeValue.getFieldValue(), 
-                                new TypeReference<List<String>>() {});
-                        allPreferredTimes.addAll(preferredTimes);
+                        // 检查是否是包含first和second字段的JSON对象格式
+                        String fieldValue = interviewTimeValue.getFieldValue();
+                        if (fieldValue != null && fieldValue.contains("\"first\"") && fieldValue.contains("\"second\"")) {
+                            // 解析包含first和second字段的JSON对象
+                            JsonNode jsonNode = objectMapper.readTree(fieldValue);
+                            String first = jsonNode.get("first").asText();
+                            String second = jsonNode.get("second").asText();
+                            
+                            // 添加非空的时间选项
+                            if (first != null && !first.isEmpty() && !"null".equals(first)) {
+                                allPreferredTimes.add(first);
+                            }
+                            if (second != null && !second.isEmpty() && !"null".equals(second)) {
+                                allPreferredTimes.add(second);
+                            }
+                        } else {
+                            // 解析普通的JSON数组格式（向后兼容）
+                            List<String> preferredTimes = objectMapper.readValue(fieldValue, new TypeReference<List<String>>() {});
+                            allPreferredTimes.addAll(preferredTimes);
+                        }
                     } catch (Exception e) {
                         logger.warn("解析用户 {} 的期望面试时间失败: {}", resume.getUserId(), 
                                 interviewTimeValue.getFieldValue(), e);
