@@ -494,22 +494,29 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
         // 找到最大组大小用于归一化
         int maxGroupSize = groups.values().stream().mapToInt(DepartmentTimeGroup::getSize).max().orElse(1);
         
+        // 计算各部门的平均组大小用于均衡性计算
+        Map<String, Double> departmentAvgGroupSize = calculateDepartmentAvgGroupSize(groups);
+        
+        // 找到最大平均组大小用于归一化
+        double maxAvgGroupSize = departmentAvgGroupSize.values().stream().mapToDouble(Double::doubleValue).max().orElse(1.0);
+        
         for (DepartmentTimeGroup group : groups.values()) {
             double groupSizeWeight = (double) group.getSize() / maxGroupSize; // 归一化的组大小
             
             // 计算时间稀缺性
             double scarcityScore = calculateTimeSlotScarcity(group.getTimeSlot(), group.getDepartment(), departmentSlotAvailability);
             
-            // 计算部门均衡性分数（简化为固定值）
-            double departmentBalanceScore = 0.5; // 可以根据实际需要调整
+            // 计算部门均衡性分数（基于该部门当前平均组大小）
+            double avgGroupSize = departmentAvgGroupSize.getOrDefault(group.getDepartment(), 0.0);
+            double departmentBalanceScore = 1.0 - (avgGroupSize / maxAvgGroupSize); // 组大小越小，均衡性分数越高
             
             // 组优先级 = 组大小权重 * 0.5 + 时间稀缺性 * 0.3 + 部门均衡性 * 0.2
             double groupPriority = groupSizeWeight * 0.5 + scarcityScore * 0.3 + departmentBalanceScore * 0.2;
             
             group.setGroupPriority(groupPriority);
             
-            logger.debug("组合 [{}|{}] 优先级: {:.3f} (组大小:{}, 稀缺性:{:.3f})", 
-                group.getDepartment(), group.getTimeSlot(), groupPriority, group.getSize(), scarcityScore);
+            logger.debug("组合 [{}|{}] 优先级: {:.3f} (组大小:{}, 稀缺性:{:.3f}, 均衡性:{:.3f})", 
+                group.getDepartment(), group.getTimeSlot(), groupPriority, group.getSize(), scarcityScore, departmentBalanceScore);
         }
     }
     
@@ -538,6 +545,30 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
         
         // 可以根据实际情况调整这个公式
         return Math.min(1.0, 10.0 / availableSlots);
+    }
+    
+    /**
+     * 计算各部门的平均组大小
+     */
+    private Map<String, Double> calculateDepartmentAvgGroupSize(Map<String, DepartmentTimeGroup> groups) {
+        Map<String, List<Integer>> departmentGroupSizes = new HashMap<>();
+        
+        // 收集各部门的组大小
+        for (DepartmentTimeGroup group : groups.values()) {
+            departmentGroupSizes.computeIfAbsent(group.getDepartment(), k -> new ArrayList<>())
+                .add(group.getSize());
+        }
+        
+        // 计算各部门的平均组大小
+        Map<String, Double> departmentAvgGroupSize = new HashMap<>();
+        for (Map.Entry<String, List<Integer>> entry : departmentGroupSizes.entrySet()) {
+            String department = entry.getKey();
+            List<Integer> sizes = entry.getValue();
+            double avgSize = sizes.stream().mapToInt(Integer::intValue).average().orElse(0.0);
+            departmentAvgGroupSize.put(department, avgSize);
+        }
+        
+        return departmentAvgGroupSize;
     }
     
     /**
