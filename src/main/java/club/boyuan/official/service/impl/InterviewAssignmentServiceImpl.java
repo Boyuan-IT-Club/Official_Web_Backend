@@ -362,12 +362,12 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
         LocalDate[] dates = {day1, day2};
         for (LocalDate date : dates) {
             // 生成上午时间段 (9:00-11:00)
-            for (LocalTime time = MORNING_START; !time.equals(MORNING_END); time = time.plusMinutes(INTERVIEW_DURATION)) {
+            for (LocalTime time = MORNING_START; time.isBefore(MORNING_END); time = time.plusMinutes(INTERVIEW_DURATION)) {
                 timeSlots.add(LocalDateTime.of(date, time));
             }
             
             // 生成下午时间段 (13:00-17:00)
-            for (LocalTime time = AFTERNOON_START; !time.equals(AFTERNOON_END); time = time.plusMinutes(INTERVIEW_DURATION)) {
+            for (LocalTime time = AFTERNOON_START; time.isBefore(AFTERNOON_END); time = time.plusMinutes(INTERVIEW_DURATION)) {
                 timeSlots.add(LocalDateTime.of(date, time));
             }
         }
@@ -386,12 +386,12 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
             LocalDate date = startDate.plusDays(dayOffset);
             
             // 生成上午时间段 (9:00-11:00)
-            for (LocalTime time = MORNING_START; !time.equals(MORNING_END); time = time.plusMinutes(INTERVIEW_DURATION)) {
+            for (LocalTime time = MORNING_START; time.isBefore(MORNING_END); time = time.plusMinutes(INTERVIEW_DURATION)) {
                 timeSlots.add(LocalDateTime.of(date, time));
             }
             
             // 生成下午时间段 (13:00-17:00)
-            for (LocalTime time = AFTERNOON_START; !time.equals(AFTERNOON_END); time = time.plusMinutes(INTERVIEW_DURATION)) {
+            for (LocalTime time = AFTERNOON_START; time.isBefore(AFTERNOON_END); time = time.plusMinutes(INTERVIEW_DURATION)) {
                 timeSlots.add(LocalDateTime.of(date, time));
             }
         }
@@ -568,8 +568,10 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
      * 严格按照用户选择的具体日期和时间段进行匹配
      */
     private boolean isSlotMatchPreference(LocalDateTime slotTime, String preferredTime) {
+        // 处理格式如 "Day 1 上午" 或 "Day 1 下午"
         String[] parts = preferredTime.split(" ");
-        if (parts.length != 3 || !"Day".equals(parts[0])) {
+        if (parts.length < 3 || !"Day".equals(parts[0])) {
+            logger.warn("无效的期望时间格式: {}", preferredTime);
             return false;
         }
         
@@ -598,8 +600,11 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
                 } else if ("下午".equals(period)) {
                     return !time.isBefore(AFTERNOON_START) && time.isBefore(AFTERNOON_END);
                 }
+            } else {
+                logger.debug("时间槽 {} 与期望时间 {} 不匹配: 日期不匹配", slotTime, preferredTime);
             }
         } catch (NumberFormatException e) {
+            logger.warn("解析期望时间失败: {}", preferredTime, e);
             return false;
         }
         
