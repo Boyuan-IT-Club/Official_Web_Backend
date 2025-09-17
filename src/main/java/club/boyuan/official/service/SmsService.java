@@ -81,7 +81,7 @@ public class SmsService {
         
         boolean isValid = storedCode.equals(inputCode);
         if (isValid) {
-            redisTemplate.delete("sms:code:" + phoneNumber);
+            // 验证成功后不删除验证码，让其自然过期
             logger.info("验证码验证成功，手机号: {}", phoneNumber);
         } else {
             logger.warn("验证码验证失败，手机号: {}, 输入验证码: {}, 存储验证码: {}", phoneNumber, inputCode, storedCode);

@@ -174,8 +174,7 @@ public class LoginServiceImpl implements ILoginService {
         if (storedCode == null || !storedCode.equals(code)) {
             return false;
         }
-        // 验证成功后删除验证码，防止重复使用
-        redisTemplate.delete(key);
+        // 验证成功后不删除验证码，让其自然过期
         return true;
     }
 
