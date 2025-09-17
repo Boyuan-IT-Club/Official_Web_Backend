@@ -146,16 +146,8 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
             candidates.add(new CandidateInfo(user, preferredTimes, preferredDepartments, firstDepartment, resume));
         }
         
-        // 按照偏好满足度排序候选人（偏好越多的候选人优先级越高）
-        candidates.sort((c1, c2) -> {
-            // 优先考虑偏好时间更多的候选人
-            int timePrefCompare = Integer.compare(c2.preferredTimes.size(), c1.preferredTimes.size());
-            if (timePrefCompare != 0) {
-                return timePrefCompare;
-            }
-            // 如果偏好时间数量相同，则考虑偏好部门数量
-            return Integer.compare(c2.preferredDepartments.size(), c1.preferredDepartments.size());
-        });
+        // 使用改进的排序策略：基于约束紧迫度排序
+        candidates = sortCandidatesByUrgency(candidates, userPreferredTimes, departmentSlotAvailability);
         
         // 分配面试时间
         List<InterviewAssignmentResultDTO.AssignedInterviewDTO> assignedInterviews = new ArrayList<>();
@@ -166,7 +158,7 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
             List<String> preferredTimes = candidate.preferredTimes;
             String department = candidate.firstDepartment;
             
-            // 尝试分配面试时间
+            // 严格按照用户偏好分配面试时间，不使用降级策略
             boolean assigned = tryAssignInterviewTime(
                     user, resume, preferredTimes, department, departmentSlotAvailability, assignedInterviews);
             
@@ -264,6 +256,115 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
     }
     
     /**
+     * 基于约束紧迫度对候选人进行排序，优先满足选择少的候选人
+     * 这样可以提高整体分配成功率
+     */
+    private List<CandidateInfo> sortCandidatesByUrgency(
+            List<CandidateInfo> candidates,
+            Map<Integer, List<String>> userPreferredTimes,
+            Map<String, Map<LocalDateTime, Boolean>> departmentSlotAvailability) {
+        
+        // 统计每个时间段的竞争激烈程度
+        Map<String, Integer> timeSlotDemand = calculateTimeSlotDemand(userPreferredTimes);
+        
+        // 计算每个候选人的紧迫度分数
+        candidates.forEach(candidate -> {
+            double urgencyScore = calculateUrgencyScore(candidate, timeSlotDemand, departmentSlotAvailability);
+            candidate.urgencyScore = urgencyScore;
+            logger.debug("候选人 {} 的紧迫度分数: {}", 
+                    candidate.user.getUsername(), urgencyScore);
+        });
+        
+        // 按紧迫度分数降序排列（分数越高越紧迫，越需要优先分配）
+        candidates.sort((c1, c2) -> Double.compare(c2.urgencyScore, c1.urgencyScore));
+        
+        logger.info("候选人排序完成，前5名紧迫度分数: {}",
+                candidates.stream().limit(5).map(c -> String.format("%s:%.2f", 
+                        c.user.getUsername(), c.urgencyScore)).collect(Collectors.joining(", ")));
+        
+        return candidates;
+    }
+    
+    /**
+     * 统计每个时间段的需求人数
+     */
+    private Map<String, Integer> calculateTimeSlotDemand(Map<Integer, List<String>> userPreferredTimes) {
+        Map<String, Integer> demand = new HashMap<>();
+        
+        for (List<String> preferredTimes : userPreferredTimes.values()) {
+            for (String timeSlot : preferredTimes) {
+                demand.merge(timeSlot, 1, Integer::sum);
+            }
+        }
+        
+        logger.info("时间段需求统计: {}", demand);
+        return demand;
+    }
+    
+    /**
+     * 计算候选人的紧迫度分数
+     * 分数越高表示越需要优先分配
+     */
+    private double calculateUrgencyScore(CandidateInfo candidate, 
+                                       Map<String, Integer> timeSlotDemand,
+                                       Map<String, Map<LocalDateTime, Boolean>> departmentSlotAvailability) {
+        
+        // 基础紧迫度：选择越少越紧迫（1/选择数量）
+        double baseUrgency = 1.0 / candidate.preferredTimes.size();
+        
+        // 稀缺性加权：候选人偏好的时间段竞争越激烈，紧迫度越高
+        double scarcityWeight = 0.0;
+        for (String timeSlot : candidate.preferredTimes) {
+            int demand = timeSlotDemand.getOrDefault(timeSlot, 0);
+            int availableSlots = getAvailableSlotsCount(timeSlot, candidate.firstDepartment, departmentSlotAvailability);
+            if (availableSlots > 0) {
+                // 竞争激烈程度 = 需求人数 / 可用时间槽数
+                double competitionRatio = (double) demand / availableSlots;
+                scarcityWeight += competitionRatio;
+            } else {
+                // 如果某个时间段已无可用时间槽，给予最高的稀缺性加权
+                scarcityWeight += 10.0;
+            }
+        }
+        scarcityWeight = scarcityWeight / candidate.preferredTimes.size(); // 取平均值
+        
+        // 综合紧迫度分数：60%基础紧迫度 + 40%稀缺性加权
+        return baseUrgency * 0.6 + scarcityWeight * 0.4;
+    }
+    
+    /**
+     * 计算指定时间段和部门的可用时间槽数量
+     * @param preferredTime 期望的时间段（如"Day 1 上午"）
+     * @param department 部门名称
+     * @param departmentSlotAvailability 各部门时间槽可用性映射
+     * @return 可用时间槽数量
+     */
+    private int getAvailableSlotsCount(String preferredTime, String department,
+                                     Map<String, Map<LocalDateTime, Boolean>> departmentSlotAvailability) {
+        Map<LocalDateTime, Boolean> slotAvailability = departmentSlotAvailability.get(department);
+        if (slotAvailability == null) {
+            return 0;
+        }
+        
+        // 获取所有可用的时间槽
+        List<LocalDateTime> availableSlots = slotAvailability.entrySet().stream()
+                .filter(Map.Entry::getValue) // 只考虑可用的时间槽
+                .map(Map.Entry::getKey)
+                .sorted()
+                .collect(Collectors.toList());
+        
+        // 计算符合期望时间段的时间槽数量
+        int count = 0;
+        for (LocalDateTime slotTime : availableSlots) {
+            if (isSlotMatchPreference(slotTime, preferredTime)) {
+                count++;
+            }
+        }
+        
+        return count;
+    }
+    
+    /**
      * 候选人信息类，用于存储分配过程中的相关信息
      */
     private static class CandidateInfo {
@@ -272,6 +373,7 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
         private final List<String> preferredDepartments;
         private final String firstDepartment;
         private final Resume resume; // 添加简历字段
+        private double urgencyScore; // 紧迫度分数
         
         public CandidateInfo(User user, List<String> preferredTimes, List<String> preferredDepartments, String firstDepartment, Resume resume) {
             this.user = user;
@@ -279,6 +381,7 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
             this.preferredDepartments = preferredDepartments;
             this.firstDepartment = firstDepartment;
             this.resume = resume;
+            this.urgencyScore = 0.0;
         }
     }
     
@@ -488,7 +591,7 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
     }
     
     /**
-     * 尝试为用户分配面试时间
+     * 尝试为用户分配面试时间，严格按照用户偏好进行分配
      */
     private boolean tryAssignInterviewTime(User user, Resume resume, List<String> preferredTimes, String department,
                                          Map<String, Map<LocalDateTime, Boolean>> departmentSlotAvailability,
@@ -595,32 +698,6 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
                 logger.info("为部门 {} 预留时间槽: {}", department, slotTime);
                 return slotTime;
             }
-        }
-        
-        return null;
-    }
-    
-    /**
-     * 查找任何可用的时间槽
-     */
-    private LocalDateTime findAnyAvailableSlot(String department,
-                                             Map<String, Map<LocalDateTime, Boolean>> departmentSlotAvailability) {
-        Map<LocalDateTime, Boolean> slotAvailability = departmentSlotAvailability.get(department);
-        if (slotAvailability == null) {
-            return null;
-        }
-        
-        // 获取所有可用的时间槽
-        Optional<LocalDateTime> availableSlot = slotAvailability.entrySet().stream()
-                .filter(Map.Entry::getValue) // 只考虑可用的时间槽
-                .map(Map.Entry::getKey)
-                .sorted()
-                .findFirst();
-        
-        if (availableSlot.isPresent()) {
-            // 预留该时间槽
-            slotAvailability.put(availableSlot.get(), false);
-            return availableSlot.get();
         }
         
         return null;
