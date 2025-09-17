@@ -44,7 +44,7 @@ public class VerificationCodeServiceImpl implements IVerificationCodeService {
 
         // 验证验证码
         if (storedCode.equals(code)) {
-            redisTemplate.delete(key);
+            // 验证成功后不删除验证码，让其自然过期
             return true;
         }
 
