@@ -72,6 +72,7 @@ public class InterviewAssignmentResultDTO {
         private Integer userId;
         private String username;
         private String name;
+        private String email; // 添加邮箱字段
         private LocalDateTime interviewTime;
         private String period; // 上午/下午
         private String interviewDepartment; // 面试部门（第一志愿）
@@ -79,10 +80,11 @@ public class InterviewAssignmentResultDTO {
         public AssignedInterviewDTO() {
         }
         
-        public AssignedInterviewDTO(Integer userId, String username, String name, LocalDateTime interviewTime, String period, String interviewDepartment) {
+        public AssignedInterviewDTO(Integer userId, String username, String name, String email, LocalDateTime interviewTime, String period, String interviewDepartment) {
             this.userId = userId;
             this.username = username;
             this.name = name;
+            this.email = email;
             this.interviewTime = interviewTime;
             this.period = period;
             this.interviewDepartment = interviewDepartment;
@@ -112,6 +114,14 @@ public class InterviewAssignmentResultDTO {
         
         public void setName(String name) {
             this.name = name;
+        }
+        
+        public String getEmail() {
+            return email;
+        }
+        
+        public void setEmail(String email) {
+            this.email = email;
         }
         
         public LocalDateTime getInterviewTime() {
@@ -146,16 +156,18 @@ public class InterviewAssignmentResultDTO {
         private Integer userId;
         private String username;
         private String name;
+        private String email; // 添加邮箱字段
         private String preferredTimes; // 用户期望的面试时间
         private String preferredDepartments; // 用户期望的面试部门
         
         public UnassignedUserDTO() {
         }
         
-        public UnassignedUserDTO(Integer userId, String username, String name, String preferredTimes, String preferredDepartments) {
+        public UnassignedUserDTO(Integer userId, String username, String name, String email, String preferredTimes, String preferredDepartments) {
             this.userId = userId;
             this.username = username;
             this.name = name;
+            this.email = email;
             this.preferredTimes = preferredTimes;
             this.preferredDepartments = preferredDepartments;
         }
@@ -184,6 +196,14 @@ public class InterviewAssignmentResultDTO {
         
         public void setName(String name) {
             this.name = name;
+        }
+        
+        public String getEmail() {
+            return email;
+        }
+        
+        public void setEmail(String email) {
+            this.email = email;
         }
         
         public String getPreferredTimes() {
@@ -210,14 +230,16 @@ public class InterviewAssignmentResultDTO {
         private Integer userId;
         private String username;
         private String name;
+        private String email; // 添加邮箱字段
         
         public NoPreferenceUserDTO() {
         }
         
-        public NoPreferenceUserDTO(Integer userId, String username, String name) {
+        public NoPreferenceUserDTO(Integer userId, String username, String name, String email) {
             this.userId = userId;
             this.username = username;
             this.name = name;
+            this.email = email;
         }
         
         // Getter和Setter方法
@@ -244,6 +266,14 @@ public class InterviewAssignmentResultDTO {
         
         public void setName(String name) {
             this.name = name;
+        }
+        
+        public String getEmail() {
+            return email;
+        }
+        
+        public void setEmail(String email) {
+            this.email = email;
         }
     }
 }
