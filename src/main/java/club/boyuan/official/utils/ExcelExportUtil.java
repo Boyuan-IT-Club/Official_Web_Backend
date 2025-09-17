@@ -115,8 +115,8 @@ public class ExcelExportUtil {
             // Sheet1: 已分配
             Sheet assignedSheet = workbook.createSheet("已分配");
             Row assignedHeader = assignedSheet.createRow(0);
-            // 修改表头，添加部门列，删除用户ID列
-            String[] assignedHeaders = {"用户名", "姓名", "所属部门", "面试时间", "时间段"};
+            // 修改表头，添加邮箱列，添加部门列，删除用户ID列
+            String[] assignedHeaders = {"用户名", "姓名", "邮箱", "所属部门", "面试时间", "时间段"};
             for (int i = 0; i < assignedHeaders.length; i++) {
                 Cell cell = assignedHeader.createCell(i);
                 cell.setCellValue(assignedHeaders[i]);
@@ -145,19 +145,21 @@ public class ExcelExportUtil {
                     // 删除用户ID字段，从第0列开始
                     row.createCell(0).setCellValue(dto.getUsername() != null ? dto.getUsername() : "");
                     row.createCell(1).setCellValue(dto.getName() != null ? dto.getName() : "");
-                    row.createCell(2).setCellValue(dto.getInterviewDepartment() != null ? dto.getInterviewDepartment() : "");
+                    row.createCell(2).setCellValue(dto.getEmail() != null ? dto.getEmail() : ""); // 邮箱列
+                    row.createCell(2).setCellValue(dto.getEmail() != null ? dto.getEmail() : ""); // 邮箱列
+                    row.createCell(3).setCellValue(dto.getInterviewDepartment() != null ? dto.getInterviewDepartment() : "");
                     
                     // 修改面试时间格式为 时间1-时间2，删除重复的日期显示
                     if (dto.getInterviewTime() != null) {
                         LocalDateTime startTime = dto.getInterviewTime();
                         LocalDateTime endTime = startTime.plusMinutes(10); // 面试时长10分钟
                         String timeRange = timeRangeFormat.format(startTime) + "-" + timeRangeFormat.format(endTime);
-                        row.createCell(3).setCellValue(startTime.format(dtf) + " " + timeRange);
+                        row.createCell(4).setCellValue(startTime.format(dtf) + " " + timeRange);
                     } else {
-                        row.createCell(3).setCellValue("");
+                        row.createCell(4).setCellValue("");
                     }
                     
-                    row.createCell(4).setCellValue(dto.getPeriod() != null ? dto.getPeriod() : "");
+                    row.createCell(5).setCellValue(dto.getPeriod() != null ? dto.getPeriod() : "");
                 }
             }
             
@@ -168,8 +170,8 @@ public class ExcelExportUtil {
             // Sheet2: 未分配
             Sheet unassignedSheet = workbook.createSheet("未分配");
             Row unassignedHeader = unassignedSheet.createRow(0);
-            // 删除用户ID字段
-            String[] unassignedHeaders = {"用户名", "姓名", "期望时间", "期望部门"};
+            // 添加邮箱列，删除用户ID字段
+            String[] unassignedHeaders = {"用户名", "姓名", "邮箱", "期望时间", "期望部门"};
             for (int i = 0; i < unassignedHeaders.length; i++) {
                 Cell cell = unassignedHeader.createCell(i);
                 cell.setCellValue(unassignedHeaders[i]);
@@ -184,8 +186,9 @@ public class ExcelExportUtil {
                     // 删除用户ID字段
                     row.createCell(0).setCellValue(dto.getUsername() != null ? dto.getUsername() : "");
                     row.createCell(1).setCellValue(dto.getName() != null ? dto.getName() : "");
-                    row.createCell(2).setCellValue(dto.getPreferredTimes() != null ? dto.getPreferredTimes() : "");
-                    row.createCell(3).setCellValue(dto.getPreferredDepartments() != null ? dto.getPreferredDepartments() : "");
+                    row.createCell(2).setCellValue(dto.getEmail() != null ? dto.getEmail() : ""); // 邮箱列
+                    row.createCell(3).setCellValue(dto.getPreferredTimes() != null ? dto.getPreferredTimes() : "");
+                    row.createCell(4).setCellValue(dto.getPreferredDepartments() != null ? dto.getPreferredDepartments() : "");
                 }
             }
             
@@ -196,7 +199,7 @@ public class ExcelExportUtil {
             // Sheet3: 未填写期望面试时间
             Sheet noPreferenceSheet = workbook.createSheet("未填写期望");
             Row noPreferenceHeader = noPreferenceSheet.createRow(0);
-            String[] noPreferenceHeaders = {"用户名", "姓名"};
+            String[] noPreferenceHeaders = {"用户名", "姓名", "邮箱"};
             for (int i = 0; i < noPreferenceHeaders.length; i++) {
                 Cell cell = noPreferenceHeader.createCell(i);
                 cell.setCellValue(noPreferenceHeaders[i]);

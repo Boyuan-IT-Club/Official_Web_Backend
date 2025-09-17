@@ -122,8 +122,10 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
                 logger.info("用户 {} 没有填写期望面试时间，加入未填写期望面试时间列表", user.getUsername());
                 // 从简历中获取姓名而不是从用户表中获取
                 String name = getResumeName(resume);
+                // 从简历中获取邮箱而不是从用户表中获取
+                String email = getResumeEmail(resume);
                 noPreferenceUsers.add(new InterviewAssignmentResultDTO.NoPreferenceUserDTO(
-                        user.getUserId(), user.getUsername(), name));
+                        user.getUserId(), user.getUsername(), name, email));
                 continue;
             }
             
@@ -132,8 +134,10 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
                 logger.info("用户 {} 没有填写期望部门，加入未填写期望面试时间列表", user.getUsername());
                 // 从简历中获取姓名而不是从用户表中获取
                 String name = getResumeName(resume);
+                // 从简历中获取邮箱而不是从用户表中获取
+                String email = getResumeEmail(resume);
                 noPreferenceUsers.add(new InterviewAssignmentResultDTO.NoPreferenceUserDTO(
-                        user.getUserId(), user.getUsername(), name));
+                        user.getUserId(), user.getUsername(), name, email));
                 continue;
             }
             
@@ -171,9 +175,11 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
                 String preferredDepartmentsStr = String.join(", ", candidate.preferredDepartments);
                 logger.info("用户 {} 未被分配，期望时间: {}，期望部门: {}", user.getUsername(), preferredTimesStr, preferredDepartmentsStr);
                 // 从简历中获取姓名而不是从用户表中获取
-                String name = getResumeName(resume);
+                String name = getResumeName(candidate.resume);
+                // 从简历中获取邮箱而不是从用户表中获取
+                String email = getResumeEmail(candidate.resume);
                 unassignedUsers.add(new InterviewAssignmentResultDTO.UnassignedUserDTO(
-                        user.getUserId(), user.getUsername(), name, preferredTimesStr, preferredDepartmentsStr));
+                        user.getUserId(), user.getUsername(), name, email, preferredTimesStr, preferredDepartmentsStr));
             } else {
                 logger.info("用户 {} 已成功分配面试时间", user.getUsername());
             }
@@ -218,6 +224,42 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
         // 如果简历中没有姓名字段或为空，则使用用户表中的姓名
         User user = userService.getUserById(resume.getUserId());
         return user != null ? user.getName() : "";
+    }
+    
+    /**
+     * 从简历中获取邮箱字段值
+     * @param resume 简历对象
+     * @return 邮箱字段值，如果找不到则返回用户表中的邮箱
+     */
+    private String getResumeEmail(Resume resume) {
+        // 获取简历中的所有字段值
+        List<ResumeFieldValue> fieldValues = resumeService.getFieldValuesByResumeId(resume.getResumeId());
+        
+        // 获取当前周期的字段定义
+        List<ResumeFieldDefinition> fieldDefinitions = resumeFieldDefinitionService.getFieldDefinitionsByCycleId(resume.getCycleId());
+        
+        // 查找邮箱字段定义
+        ResumeFieldDefinition emailFieldDefinition = fieldDefinitions.stream()
+                .filter(field -> "邮箱".equals(field.getFieldLabel()))
+                .findFirst()
+                .orElse(null);
+        
+        // 如果找到了邮箱字段定义，则查找对应的字段值
+        if (emailFieldDefinition != null) {
+            String email = fieldValues.stream()
+                    .filter(value -> emailFieldDefinition.getFieldId().equals(value.getFieldId()))
+                    .map(ResumeFieldValue::getFieldValue)
+                    .findFirst()
+                    .orElse(null);
+            
+            if (email != null && !email.isEmpty()) {
+                return email;
+            }
+        }
+        
+        // 如果简历中没有邮箱字段或为空，则使用用户表中的邮箱
+        User user = userService.getUserById(resume.getUserId());
+        return user != null ? user.getEmail() : "";
     }
     
     /**
@@ -283,11 +325,15 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
                     try {
                         // 检查是否是包含first和second字段的JSON对象格式
                         String fieldValue = interviewTimeValue.getFieldValue();
+                        logger.debug("解析用户 {} 的期望面试时间字段值: {}", resume.getUserId(), fieldValue);
+                        
                         if (fieldValue != null && fieldValue.contains("\"first\"") && fieldValue.contains("\"second\"")) {
                             // 解析包含first和second字段的JSON对象
                             JsonNode jsonNode = objectMapper.readTree(fieldValue);
-                            String first = jsonNode.get("first").asText();
-                            String second = jsonNode.get("second").asText();
+                            String first = jsonNode.has("first") ? jsonNode.get("first").asText() : null;
+                            String second = jsonNode.has("second") ? jsonNode.get("second").asText() : null;
+                            
+                            logger.debug("用户 {} 的first字段: {}, second字段: {}", resume.getUserId(), first, second);
                             
                             // 添加非空的时间选项
                             if (first != null && !first.isEmpty() && !"null".equals(first)) {
@@ -301,6 +347,8 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
                             List<String> preferredTimes = objectMapper.readValue(fieldValue, new TypeReference<List<String>>() {});
                             allPreferredTimes.addAll(preferredTimes);
                         }
+                        
+                        logger.debug("用户 {} 添加的期望时间: {}", resume.getUserId(), allPreferredTimes);
                     } catch (Exception e) {
                         logger.warn("解析用户 {} 的期望面试时间失败: {}", resume.getUserId(), 
                                 interviewTimeValue.getFieldValue(), e);
@@ -311,6 +359,7 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
             }
         }
         
+        logger.info("总共解析了 {} 个用户的期望面试时间", userPreferredTimes.size());
         return userPreferredTimes;
     }
     
@@ -463,8 +512,10 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
                     logger.info("成功为用户 {} 分配面试时间: {}", user.getUsername(), assignedSlot);
                     // 从简历中获取姓名而不是从用户表中获取
                     String name = getResumeName(resume);
+                    // 从简历中获取邮箱而不是从用户表中获取
+                    String email = getResumeEmail(resume);
                     assignedInterviews.add(new InterviewAssignmentResultDTO.AssignedInterviewDTO(
-                            user.getUserId(), user.getUsername(), name, assignedSlot, period, department));
+                            user.getUserId(), user.getUsername(), name, email, assignedSlot, period, department));
                     return true;
                 }
             } else {
