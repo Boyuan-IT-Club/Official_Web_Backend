@@ -573,9 +573,12 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
     
     /**
      * 将分组后的候选人按组优先级重新排列为单一列表
+     * 去重策略：优先保留第一志愿时间段，确保同部门同偏好的连续性
      */
     private List<CandidateInfo> flattenGroupsToSortedList(Map<String, DepartmentTimeGroup> groups) {
         List<CandidateInfo> sortedCandidates = new ArrayList<>();
+        Map<Integer, String> userFirstPreference = new HashMap<>(); // 存储每个用户的第一志愿
+        Set<Integer> addedUserIds = new HashSet<>();
         
         // 按组优先级降序排列组
         List<DepartmentTimeGroup> sortedGroups = groups.values().stream()
@@ -590,12 +593,53 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
                 group.getGroupPriority(), group.getSize());
         }
         
-        // 将各组的候选人按顺序添加到结果列表
+        // 第一轮：收集每个用户的第一志愿时间段
         for (DepartmentTimeGroup group : sortedGroups) {
-            sortedCandidates.addAll(group.getCandidates());
+            for (CandidateInfo candidate : group.getCandidates()) {
+                Integer userId = candidate.user.getUserId();
+                if (!userFirstPreference.containsKey(userId) && !candidate.preferredTimes.isEmpty()) {
+                    userFirstPreference.put(userId, candidate.preferredTimes.get(0));
+                    logger.debug("用户 {} 的第一志愿时间段: {}", 
+                        candidate.user.getUsername(), candidate.preferredTimes.get(0));
+                }
+            }
         }
         
-        logger.info("三层排序完成，最终排序结果包含 {} 个候选人", sortedCandidates.size());
+        // 第二轮：优先添加第一志愿匹配的候选人
+        for (DepartmentTimeGroup group : sortedGroups) {
+            String currentTimeSlot = group.getTimeSlot();
+            for (CandidateInfo candidate : group.getCandidates()) {
+                Integer userId = candidate.user.getUserId();
+                String firstPreference = userFirstPreference.get(userId);
+                
+                // 只添加第一志愿匹配且未被处理的候选人
+                if (!addedUserIds.contains(userId) && 
+                    firstPreference != null && 
+                    firstPreference.equals(currentTimeSlot)) {
+                    
+                    sortedCandidates.add(candidate);
+                    addedUserIds.add(userId);
+                    logger.debug("添加候选人 {} 到最终排序列表（第一志愿匹配），时间段: {}", 
+                        candidate.user.getUsername(), currentTimeSlot);
+                }
+            }
+        }
+        
+        // 第三轮：添加剩余的候选人（第一志愿未能匹配的）
+        for (DepartmentTimeGroup group : sortedGroups) {
+            for (CandidateInfo candidate : group.getCandidates()) {
+                Integer userId = candidate.user.getUserId();
+                
+                if (!addedUserIds.contains(userId)) {
+                    sortedCandidates.add(candidate);
+                    addedUserIds.add(userId);
+                    logger.debug("添加候选人 {} 到最终排序列表（非第一志愿），时间段: {}", 
+                        candidate.user.getUsername(), group.getTimeSlot());
+                }
+            }
+        }
+        
+        logger.info("三层排序完成，最终排序结果包含 {} 个候选人（优先第一志愿）", sortedCandidates.size());
         return sortedCandidates;
     }
     
