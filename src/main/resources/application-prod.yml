@@ -2,9 +2,9 @@ spring:
   application:
     name: Official
   datasource:
-    url: jdbc:mysql://mysql:${MYSQL_PORT:3306}/${DB_NAME:official}?serverTimezone=UTC&allowPublicKeyRetrieval=true&useSSL=false
-    username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:root}
+    url: jdbc:mysql://mysql:${MYSQL_PORT}/${DB_NAME}?serverTimezone=UTC&allowPublicKeyRetrieval=true&useSSL=false
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     show-sql: true
@@ -13,15 +13,12 @@ spring:
         format_sql: true
     hibernate:
       ddl-auto: update
-    # 移除数据库方言配置，让Hibernate自动检测
-    # database-platform: org.hibernate.dialect.MySQL8Dialect
-    # 明确关闭open-in-view以消除警告
     open-in-view: false
   mail:
-    host: ${MAIL_HOST:smtp.feishu.cn}
-    port: ${MAIL_PORT:465}
-    username: ${MAIL_USERNAME:notify@boyuan.club}
-    password: ${MAIL_PASSWORD:12bGmEWjvyRDjzxE}
+    host: ${MAIL_HOST}
+    port: ${MAIL_PORT}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
     properties:
       mail:
         smtp:
@@ -34,7 +31,7 @@ spring:
   data:
     redis:
       host: redis
-      port: ${REDIS_PORT:6379}
+      port: ${REDIS_PORT}
       password: ${REDIS_PASSWORD:}
       database: 0
       lettuce:
@@ -59,8 +56,8 @@ mybatis:
     mapUnderscoreToCamelCase: true
 
 jwt:
-  secret: ${JWT_SECRET:30b264511df560046ae9907e50cd6e69a3cb94ce987538fb2c90b98c70ce684a}
-  expiration: ${JWT_EXPIRATION:86400000}
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION}
 
 sms:
   access-key: ${SMS_ACCESS_KEY:your-sms-access-key}

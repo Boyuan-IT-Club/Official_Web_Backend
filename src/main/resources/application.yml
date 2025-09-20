@@ -3,8 +3,8 @@ spring:
     name: Official
   datasource:
     url: jdbc:mysql://localhost:3306/official?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-    username: root
-    password: root
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       maximum-pool-size: 20
@@ -36,10 +36,10 @@ spring:
           max-idle: 8
           min-idle: 0
   mail:
-    host: smtp.feishu.cn
-    port: 465
-    username: notify@boyuan.club
-    password: 12bGmEWjvyRDjzxE
+    host: ${MAIL_HOST}
+    port: ${MAIL_PORT}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
     properties:
       mail:
         smtp:
@@ -56,13 +56,13 @@ mybatis:
     mapUnderscoreToCamelCase: true
 
 jwt:
-  secret: 30b264511df560046ae9907e50cd6e69a3cb94ce987538fb2c90b98c70ce684a
-  expiration: 86400000
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION:86400000}
 
 server:
   port: 8080
 
 # 短信服务配置
 sms:
-  access-key: your-sms-access-key
-  secret-key: your-sms-secret-key
+  access-key: ${SMS_ACCESS_KEY}
+  secret-key: ${SMS_SECRET_KEY}
