@@ -33,3 +33,10 @@ build/
 .vscode/
 
 *.log
+
+### 配置文件 ###
+# 忽略本地配置文件
+.env
+.env.local
+.env.*.local
+!*.template
