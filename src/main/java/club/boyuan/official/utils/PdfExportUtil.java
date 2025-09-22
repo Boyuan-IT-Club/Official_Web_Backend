@@ -17,6 +17,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.Objects;
 import java.util.Base64;
 import java.io.ByteArrayInputStream;
+import java.util.List;
+import java.util.ArrayList;
 
 /**
  * PDF导出工具类
@@ -61,11 +63,36 @@ public class PdfExportUtil {
             Font normalFont = getFont(10, Font.NORMAL);
             
             try {
+                // 首先检查是否有照片字段，如果有则在最前面显示
+                Image photoImage = null;
+                SimpleResumeFieldDTO photoField = null;
+                
+                if (resumeDTO.getSimpleFields() != null) {
+                    for (SimpleResumeFieldDTO field : resumeDTO.getSimpleFields()) {
+                        if (isBase64Image(field.getFieldValue())) {
+                            photoImage = createImageFromBase64(field.getFieldValue());
+                            if (photoImage != null) {
+                                photoField = field;
+                                break; // 找到第一张图片就使用
+                            }
+                        }
+                    }
+                }
+                
                 // 添加标题
                 Paragraph title = new Paragraph("个人简历", titleFont);
                 title.setAlignment(Element.ALIGN_CENTER);
                 title.setSpacingAfter(20);
                 document.add(title);
+                
+                // 如果有照片，在标题下方添加照片
+                if (photoImage != null) {
+                    // 设置照片居中显示
+                    photoImage.setAlignment(Element.ALIGN_CENTER);
+                    photoImage.setSpacingAfter(15);
+                    document.add(photoImage);
+                    System.out.println("照片已添加到简历顶部，字段: " + photoField.getFieldLabel());
+                }
                 
                 // 添加基本信息
                 PdfPTable infoTable = new PdfPTable(2);
@@ -88,65 +115,81 @@ public class PdfExportUtil {
                 if (resumeDTO.getSimpleFields() != null && !resumeDTO.getSimpleFields().isEmpty()) {
                     System.out.println("开始添加简历详情，字段数量: " + resumeDTO.getSimpleFields().size());
                     
-                    Paragraph fieldsTitle = new Paragraph("简历详情", headerFont);
-                    fieldsTitle.setSpacingBefore(20);
-                    fieldsTitle.setSpacingAfter(10);
-                    document.add(fieldsTitle);
-                    
-                    PdfPTable fieldsTable = new PdfPTable(2);
-                    fieldsTable.setWidthPercentage(100);
-                    fieldsTable.setWidths(new int[]{1, 3});
-                    
-                    // 表头
-                    PdfPCell header1 = new PdfPCell(new Paragraph("字段名称", headerFont));
-                    PdfPCell header2 = new PdfPCell(new Paragraph("字段值", headerFont));
-                    header1.setBorder(Rectangle.BOX);
-                    header2.setBorder(Rectangle.BOX);
-                    header1.setBackgroundColor(BaseColor.LIGHT_GRAY);
-                    header2.setBackgroundColor(BaseColor.LIGHT_GRAY);
-                    fieldsTable.addCell(header1);
-                    fieldsTable.addCell(header2);
-                    
-                    // 数据行
+                    // 过滤掉在顶部已显示的照片字段
+                    List<SimpleResumeFieldDTO> filteredFields = new ArrayList<>();
                     for (SimpleResumeFieldDTO field : resumeDTO.getSimpleFields()) {
-                        String fieldLabel = field.getFieldLabel() != null ? field.getFieldLabel() : "未知字段";
-                        String fieldValue = field.getFieldValue() != null ? field.getFieldValue() : "";
-                        
-                        System.out.println("添加字段: " + fieldLabel + " = " + 
-                            (isBase64Image(fieldValue) ? "[图片数据]" : fieldValue));
-                        
-                        PdfPCell fieldLabelCell = new PdfPCell(new Paragraph(fieldLabel, normalFont));
-                        PdfPCell fieldValueCell;
-                        
-                        // 检查是否为Base64图片
-                        if (isBase64Image(fieldValue)) {
-                            Image image = createImageFromBase64(fieldValue);
-                            if (image != null) {
-                                // 使用图片创建单元格
-                                fieldValueCell = new PdfPCell(image, true);
-                                fieldValueCell.setHorizontalAlignment(Element.ALIGN_CENTER);
-                                fieldValueCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
-                                fieldValueCell.setPadding(5f);
-                                System.out.println("成功添加图片到PDF: " + fieldLabel);
-                            } else {
-                                // 图片转换失败，显示错误信息
-                                fieldValueCell = new PdfPCell(new Paragraph("[图片加载失败]", normalFont));
-                                System.err.println("图片转换失败: " + fieldLabel);
-                            }
-                        } else {
-                            // 普通文本字段
-                            fieldValueCell = new PdfPCell(new Paragraph(fieldValue, normalFont));
+                        // 如果是照片字段且已经在顶部显示，则跳过
+                        if (isBase64Image(field.getFieldValue()) && photoField != null && 
+                            field.getFieldId() != null && field.getFieldId().equals(photoField.getFieldId())) {
+                            System.out.println("跳过已在顶部显示的照片字段: " + field.getFieldLabel());
+                            continue;
                         }
-                        
-                        fieldLabelCell.setBorder(Rectangle.BOX);
-                        fieldValueCell.setBorder(Rectangle.BOX);
-                        
-                        fieldsTable.addCell(fieldLabelCell);
-                        fieldsTable.addCell(fieldValueCell);
+                        filteredFields.add(field);
                     }
                     
-                    document.add(fieldsTable);
-                    System.out.println("添加简历详情成功");
+                    if (!filteredFields.isEmpty()) {
+                        Paragraph fieldsTitle = new Paragraph("简历详情", headerFont);
+                        fieldsTitle.setSpacingBefore(20);
+                        fieldsTitle.setSpacingAfter(10);
+                        document.add(fieldsTitle);
+                        
+                        PdfPTable fieldsTable = new PdfPTable(2);
+                        fieldsTable.setWidthPercentage(100);
+                        fieldsTable.setWidths(new int[]{1, 3});
+                        
+                        // 表头
+                        PdfPCell header1 = new PdfPCell(new Paragraph("字段名称", headerFont));
+                        PdfPCell header2 = new PdfPCell(new Paragraph("字段值", headerFont));
+                        header1.setBorder(Rectangle.BOX);
+                        header2.setBorder(Rectangle.BOX);
+                        header1.setBackgroundColor(BaseColor.LIGHT_GRAY);
+                        header2.setBackgroundColor(BaseColor.LIGHT_GRAY);
+                        fieldsTable.addCell(header1);
+                        fieldsTable.addCell(header2);
+                        
+                        // 数据行
+                        for (SimpleResumeFieldDTO field : filteredFields) {
+                            String fieldLabel = field.getFieldLabel() != null ? field.getFieldLabel() : "未知字段";
+                            String fieldValue = field.getFieldValue() != null ? field.getFieldValue() : "";
+                            
+                            System.out.println("添加字段: " + fieldLabel + " = " + 
+                                (isBase64Image(fieldValue) ? "[图片数据]" : fieldValue));
+                            
+                            PdfPCell fieldLabelCell = new PdfPCell(new Paragraph(fieldLabel, normalFont));
+                            PdfPCell fieldValueCell;
+                            
+                            // 检查是否为Base64图片
+                            if (isBase64Image(fieldValue)) {
+                                Image image = createImageFromBase64(fieldValue);
+                                if (image != null) {
+                                    // 使用图片创建单元格
+                                    fieldValueCell = new PdfPCell(image, true);
+                                    fieldValueCell.setHorizontalAlignment(Element.ALIGN_CENTER);
+                                    fieldValueCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+                                    fieldValueCell.setPadding(5f);
+                                    System.out.println("成功添加图片到PDF: " + fieldLabel);
+                                } else {
+                                    // 图片转换失败，显示错误信息
+                                    fieldValueCell = new PdfPCell(new Paragraph("[图片加载失败]", normalFont));
+                                    System.err.println("图片转换失败: " + fieldLabel);
+                                }
+                            } else {
+                                // 普通文本字段
+                                fieldValueCell = new PdfPCell(new Paragraph(fieldValue, normalFont));
+                            }
+                            
+                            fieldLabelCell.setBorder(Rectangle.BOX);
+                            fieldValueCell.setBorder(Rectangle.BOX);
+                            
+                            fieldsTable.addCell(fieldLabelCell);
+                            fieldsTable.addCell(fieldValueCell);
+                        }
+                        
+                        document.add(fieldsTable);
+                        System.out.println("添加简历详情成功");
+                    } else {
+                        System.out.println("警告: 简历详情为空或只有照片字段");
+                    }
                 } else {
                     System.out.println("警告: 简历详情为空或没有字段数据");
                     
@@ -298,9 +341,11 @@ public class PdfExportUtil {
             // 创建Image对象
             Image image = Image.getInstance(imageBytes);
             
-            // 设置图片大小
-            float maxWidth = 120f; // 最大宽度
-            float maxHeight = 120f; // 最大高度
+            // 设置图片大小为页面的1/6左右
+            // A4页面宽度约595点，高度约842点
+            float pageWidth = PageSize.A4.getWidth() - 80; // 减去左右边距
+            float maxWidth = pageWidth / 6; // 页面宽度的1/6
+            float maxHeight = maxWidth; // 保持正方形比例
             
             if (image.getWidth() > maxWidth || image.getHeight() > maxHeight) {
                 image.scaleToFit(maxWidth, maxHeight);
