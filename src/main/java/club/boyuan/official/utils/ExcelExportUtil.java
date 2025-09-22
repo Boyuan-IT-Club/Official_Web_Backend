@@ -30,6 +30,8 @@ public class ExcelExportUtil {
      */
     public static byte[] exportUsersToExcel(List<User> users) throws BusinessException {
         try {
+            System.out.println("开始导出Excel，用户数量: " + (users != null ? users.size() : 0));
+            
             Workbook workbook = new XSSFWorkbook();
             Sheet sheet = workbook.createSheet("用户列表");
             
@@ -37,12 +39,16 @@ public class ExcelExportUtil {
             CellStyle headerStyle = workbook.createCellStyle();
             Font headerFont = workbook.createFont();
             headerFont.setBold(true);
+            headerFont.setCharSet(Font.ANSI_CHARSET); // 设置字符集支持
             headerStyle.setFont(headerFont);
             headerStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
             headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
             
             // 创建数据行样式
             CellStyle dataStyle = workbook.createCellStyle();
+            Font dataFont = workbook.createFont();
+            dataFont.setCharSet(Font.ANSI_CHARSET); // 设置字符集支持
+            dataStyle.setFont(dataFont);
             
             try {
                 // 创建标题行
@@ -60,19 +66,55 @@ public class ExcelExportUtil {
                 for (User user : users) {
                     Row row = sheet.createRow(rowNum++);
                     
-                    row.createCell(0).setCellValue(user.getUserId() != null ? user.getUserId() : 0);
-                    row.createCell(1).setCellValue(user.getUsername() != null ? user.getUsername() : "");
-                    row.createCell(2).setCellValue(user.getName() != null ? user.getName() : "");
-                    row.createCell(3).setCellValue(user.getEmail() != null ? user.getEmail() : "");
-                    row.createCell(4).setCellValue(user.getPhone() != null ? user.getPhone() : "");
-                    row.createCell(5).setCellValue(user.getMajor() != null ? user.getMajor() : "");
-                    row.createCell(6).setCellValue(user.getGithub() != null ? user.getGithub() : "");
-                    row.createCell(7).setCellValue(user.getDept() != null ? user.getDept() : "");
-                    row.createCell(8).setCellValue(user.getRole() != null ? user.getRole() : "");
-                    row.createCell(9).setCellValue(user.getStatus() != null ? (user.getStatus() ? "激活" : "冻结") : "未知");
-                    row.createCell(10).setCellValue(user.getIsMember() != null ? (user.getIsMember() ? "是" : "否") : "未知");
-                    row.createCell(11).setCellValue(user.getCreateTime() != null ? 
+                    // 使用dataStyle并确保中文显示正确
+                    Cell cell0 = row.createCell(0);
+                    cell0.setCellValue(user.getUserId() != null ? user.getUserId() : 0);
+                    cell0.setCellStyle(dataStyle);
+                    
+                    Cell cell1 = row.createCell(1);
+                    cell1.setCellValue(user.getUsername() != null ? user.getUsername() : "");
+                    cell1.setCellStyle(dataStyle);
+                    
+                    Cell cell2 = row.createCell(2);
+                    cell2.setCellValue(user.getName() != null ? user.getName() : "");
+                    cell2.setCellStyle(dataStyle);
+                    
+                    Cell cell3 = row.createCell(3);
+                    cell3.setCellValue(user.getEmail() != null ? user.getEmail() : "");
+                    cell3.setCellStyle(dataStyle);
+                    
+                    Cell cell4 = row.createCell(4);
+                    cell4.setCellValue(user.getPhone() != null ? user.getPhone() : "");
+                    cell4.setCellStyle(dataStyle);
+                    
+                    Cell cell5 = row.createCell(5);
+                    cell5.setCellValue(user.getMajor() != null ? user.getMajor() : "");
+                    cell5.setCellStyle(dataStyle);
+                    
+                    Cell cell6 = row.createCell(6);
+                    cell6.setCellValue(user.getGithub() != null ? user.getGithub() : "");
+                    cell6.setCellStyle(dataStyle);
+                    
+                    Cell cell7 = row.createCell(7);
+                    cell7.setCellValue(user.getDept() != null ? user.getDept() : "");
+                    cell7.setCellStyle(dataStyle);
+                    
+                    Cell cell8 = row.createCell(8);
+                    cell8.setCellValue(user.getRole() != null ? user.getRole() : "");
+                    cell8.setCellStyle(dataStyle);
+                    
+                    Cell cell9 = row.createCell(9);
+                    cell9.setCellValue(user.getStatus() != null ? (user.getStatus() ? "激活" : "冻结") : "未知");
+                    cell9.setCellStyle(dataStyle);
+                    
+                    Cell cell10 = row.createCell(10);
+                    cell10.setCellValue(user.getIsMember() != null ? (user.getIsMember() ? "是" : "否") : "未知");
+                    cell10.setCellStyle(dataStyle);
+                    
+                    Cell cell11 = row.createCell(11);
+                    cell11.setCellValue(user.getCreateTime() != null ? 
                         user.getCreateTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) : "");
+                    cell11.setCellStyle(dataStyle);
                 }
                 
                 // 自动调整列宽
@@ -89,7 +131,10 @@ public class ExcelExportUtil {
                 workbook.close();
             }
         } catch (Exception e) {
-            throw new BusinessException(BusinessExceptionEnum.EXPORT_EXCEL_FAILED);
+            System.err.println("Excel导出失败: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+            e.printStackTrace();
+            throw new BusinessException(BusinessExceptionEnum.EXPORT_EXCEL_FAILED, 
+                "Excel导出失败: " + e.getMessage());
         }
     }
 
@@ -100,15 +145,24 @@ public class ExcelExportUtil {
      */
     public static byte[] exportInterviewAssignmentsToExcel(InterviewAssignmentResultDTO result) throws BusinessException {
         try {
+            System.out.println("开始导出面试安排Excel...");
+            
             Workbook workbook = new XSSFWorkbook();
 
             // 通用样式
             CellStyle headerStyle = workbook.createCellStyle();
             Font headerFont = workbook.createFont();
             headerFont.setBold(true);
+            headerFont.setCharSet(Font.ANSI_CHARSET); // 设置字符集支持
             headerStyle.setFont(headerFont);
             headerStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
             headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            
+            // 数据行样式
+            CellStyle dataStyle = workbook.createCellStyle();
+            Font dataFont = workbook.createFont();
+            dataFont.setCharSet(Font.ANSI_CHARSET); // 设置字符集支持
+            dataStyle.setFont(dataFont);
 
             DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd");
             DateTimeFormatter timeRangeFormat = DateTimeFormatter.ofPattern("HH:mm");
@@ -154,22 +208,37 @@ public class ExcelExportUtil {
                 for (InterviewAssignmentResultDTO.AssignedInterviewDTO dto : sortedAssignments) {
                     Row row = classroomSheet.createRow(rowNum++);
                     
-                    row.createCell(0).setCellValue(dto.getUsername() != null ? dto.getUsername() : "");
-                    row.createCell(1).setCellValue(dto.getName() != null ? dto.getName() : "");
-                    row.createCell(2).setCellValue(dto.getEmail() != null ? dto.getEmail() : "");
-                    row.createCell(3).setCellValue(dto.getInterviewDepartment() != null ? dto.getInterviewDepartment() : "");
+                    Cell cell0 = row.createCell(0);
+                    cell0.setCellValue(dto.getUsername() != null ? dto.getUsername() : "");
+                    cell0.setCellStyle(dataStyle);
                     
+                    Cell cell1 = row.createCell(1);
+                    cell1.setCellValue(dto.getName() != null ? dto.getName() : "");
+                    cell1.setCellStyle(dataStyle);
+                    
+                    Cell cell2 = row.createCell(2);
+                    cell2.setCellValue(dto.getEmail() != null ? dto.getEmail() : "");
+                    cell2.setCellStyle(dataStyle);
+                    
+                    Cell cell3 = row.createCell(3);
+                    cell3.setCellValue(dto.getInterviewDepartment() != null ? dto.getInterviewDepartment() : "");
+                    cell3.setCellStyle(dataStyle);
+                    
+                    Cell cell4 = row.createCell(4);
                     // 修改面试时间格式为 时间1-时间2
                     if (dto.getInterviewTime() != null) {
                         LocalDateTime startTime = dto.getInterviewTime();
                         LocalDateTime endTime = startTime.plusMinutes(10); // 面试时长10分钟
                         String timeRange = timeRangeFormat.format(startTime) + "-" + timeRangeFormat.format(endTime);
-                        row.createCell(4).setCellValue(startTime.format(dtf) + " " + timeRange);
+                        cell4.setCellValue(startTime.format(dtf) + " " + timeRange);
                     } else {
-                        row.createCell(4).setCellValue("");
+                        cell4.setCellValue("");
                     }
+                    cell4.setCellStyle(dataStyle);
                     
-                    row.createCell(5).setCellValue(dto.getPeriod() != null ? dto.getPeriod() : "");
+                    Cell cell5 = row.createCell(5);
+                    cell5.setCellValue(dto.getPeriod() != null ? dto.getPeriod() : "");
+                    cell5.setCellStyle(dataStyle);
                 }
                 
                 for (int i = 0; i < classroomHeaders.length; i++) {
@@ -237,7 +306,10 @@ public class ExcelExportUtil {
                 workbook.close();
             }
         } catch (Exception e) {
-            throw new BusinessException(BusinessExceptionEnum.EXPORT_EXCEL_FAILED);
+            System.err.println("面试安排Excel导出失败: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+            e.printStackTrace();
+            throw new BusinessException(BusinessExceptionEnum.EXPORT_EXCEL_FAILED, 
+                "面试安排Excel导出失败: " + e.getMessage());
         }
     }
 }

@@ -53,7 +53,7 @@ services:
       - LANGUAGE=zh_CN:zh
       - LC_ALL=zh_CN.UTF-8
       # 添加JVM参数以支持UTF-8编码和字体处理
-      - JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8 -Djava.awt.headless=true
+      - JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8 -Djava.awt.headless=true -Djava.awt.fontconfig=/etc/fonts/fonts.conf -Dsun.java2d.fontpath=/usr/share/fonts
     # 移除了command行，因为已经在Dockerfile中定义了ENTRYPOINT
     depends_on:
       - mysql

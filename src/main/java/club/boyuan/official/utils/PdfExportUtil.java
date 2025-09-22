@@ -30,6 +30,10 @@ public class PdfExportUtil {
      */
     public static byte[] exportResumeToPdf(ResumeDTO resumeDTO) throws BusinessException {
         try {
+            // 在开始之前检查字体可用性
+            System.out.println("开始初始化PDF字体...");
+            BaseFont testFont = getChineseBaseFont();
+            
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             
             // 创建文档
@@ -110,7 +114,17 @@ public class PdfExportUtil {
             
             return baos.toByteArray();
         } catch (Exception e) {
-            throw new BusinessException(BusinessExceptionEnum.EXPORT_PDF_FAILED);
+            System.err.println("PDF导出失败: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+            e.printStackTrace();
+            
+            // 提供更详细的错误信息
+            if (e.getMessage() != null && e.getMessage().contains("FontManager")) {
+                throw new BusinessException(BusinessExceptionEnum.EXPORT_PDF_FAILED, 
+                    "PDF导出失败: 字体初始化错误，请联系管理员检查服务器配置");
+            } else {
+                throw new BusinessException(BusinessExceptionEnum.EXPORT_PDF_FAILED, 
+                    "PDF导出失败: " + e.getMessage());
+            }
         }
     }
     
@@ -136,29 +150,44 @@ public class PdfExportUtil {
      * @return BaseFont对象，如果无法创建则返回null
      */
     private static BaseFont getChineseBaseFont() {
-        // 尝试多种中文字体方案
+        // 优先尝试Docker容器中常见的字体路径
         String[][] fontConfigs = {
-            // iText内置中文字体
-            {"STSong-Light", "UniGB-UCS2-H"},
-            // 系统字体路径
+            // 容器中的Noto字体 - 最高优先级
             {"/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc,0", BaseFont.IDENTITY_H},
             {"/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc,0", BaseFont.IDENTITY_H},
+            {"/usr/share/fonts/truetype/noto/NotoSerifCJK-Regular.ttc,0", BaseFont.IDENTITY_H},
+            {"/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc,0", BaseFont.IDENTITY_H},
+            
+            // 容器中的DejaVu字体
+            {"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", BaseFont.IDENTITY_H},
+            {"/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf", BaseFont.IDENTITY_H},
+            
+            // iText内置中文字体
+            {"STSong-Light", "UniGB-UCS2-H"},
+            {"STSongStd-Light", "UniGB-UCS2-H"},
+            
+            // Windows系统字体（本地开发环境）
             {"C:/Windows/Fonts/simsun.ttc,0", BaseFont.IDENTITY_H},
             {"C:/Windows/Fonts/msyh.ttc,0", BaseFont.IDENTITY_H},
-            // 嵌入式字体
+            
+            // 备用选项 - 使用默认字体
             {BaseFont.HELVETICA, BaseFont.CP1252}
         };
         
         for (String[] fontConfig : fontConfigs) {
             try {
                 BaseFont baseFont = BaseFont.createFont(fontConfig[0], fontConfig[1], BaseFont.NOT_EMBEDDED);
+                // 成功创建字体，记录日志并返回
+                System.out.println("PDF字体初始化成功: " + fontConfig[0]);
                 return baseFont;
             } catch (Exception e) {
                 // 忽略异常，尝试下一个字体配置
+                System.out.println("PDF字体初始化失败: " + fontConfig[0] + ", 错误: " + e.getMessage());
             }
         }
         
-        // 所有字体都失败，返回null
+        // 所有字体都失败，记录警告并返回null
+        System.err.println("警告: 所有PDF字体初始化尝试都失败，将使用默认字体");
         return null;
     }
     
