@@ -7,7 +7,6 @@ import club.boyuan.official.mapper.ResumeFieldDefinitionMapper;
 import club.boyuan.official.mapper.ResumeFieldValueMapper;
 import club.boyuan.official.service.IResumeFieldDefinitionService;
 import lombok.AllArgsConstructor;
-import org.apache.ibatis.session.ExecutorType;
 import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.slf4j.Logger;
@@ -17,6 +16,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -47,14 +47,22 @@ public class ResumeFieldDefinitionServiceImpl implements IResumeFieldDefinitionS
         try {
             // 尝试从Redis缓存中获取数据
             String cacheKey = "field_definition:" + fieldId;
-            ResumeFieldDefinition cachedDefinition = (ResumeFieldDefinition) redisTemplate.opsForValue().get(cacheKey);
+            Object cachedObject = redisTemplate.opsForValue().get(cacheKey);
             
-            if (cachedDefinition != null) {
-                logger.debug("从Redis缓存中获取到字段定义，字段ID: {}", fieldId);
-                return cachedDefinition;
+            if (cachedObject != null) {
+                // 检查缓存对象类型并进行适当转换
+                if (cachedObject instanceof ResumeFieldDefinition) {
+                    logger.debug("从Redis缓存中获取到字段定义，字段ID: {}", fieldId);
+                    return (ResumeFieldDefinition) cachedObject;
+                } else if (cachedObject instanceof Map) {
+                    // 如果是Map类型，尝试手动转换
+                    logger.debug("从Redis缓存中获取到字段定义Map，字段ID: {}", fieldId);
+                    // 由于复杂的类型转换可能出错，我们选择直接从数据库查询
+                    logger.debug("缓存中对象类型不匹配，将从数据库重新查询");
+                }
             }
             
-            // 缓存未命中，从数据库查询
+            // 缓存未命中或类型不匹配，从数据库查询
             ResumeFieldDefinition definition = resumeFieldDefinitionMapper.findById(fieldId);
             
             // 将查询结果存入Redis缓存，设置过期时间为1小时
@@ -106,7 +114,7 @@ public class ResumeFieldDefinitionServiceImpl implements IResumeFieldDefinitionS
     @Override
     public List<ResumeFieldDefinition> batchUpdateFieldDefinitions(List<ResumeFieldDefinition> fieldDefinitions) {
         logger.info("批量更新简历字段定义，字段数量: {}", fieldDefinitions.size());
-        try (SqlSession sqlSession = sqlSessionFactory.openSession(ExecutorType.BATCH)) {
+        try (SqlSession sqlSession = sqlSessionFactory.openSession()) {
             ResumeFieldDefinitionMapper batchMapper = sqlSession.getMapper(ResumeFieldDefinitionMapper.class);
             
             // 批量更新字段定义
