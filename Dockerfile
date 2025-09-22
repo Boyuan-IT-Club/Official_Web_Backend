@@ -28,17 +28,7 @@ RUN mvn clean package -DskipTests
 # 运行阶段
 FROM openjdk:17-jdk-slim
 
-# 安装必要的工具和字体库
-RUN apt-get update && apt-get install -y \
-    locales \
-    fontconfig \
-    libfreetype6 \
-    fonts-noto-cjk \
-    && locale-gen zh_CN.UTF-8 \
-    && update-locale LANG=zh_CN.UTF-8 \
-    && rm -rf /var/lib/apt/lists/*
-
-# 设置中文环境变量
+# 设置中文环境变量（基础支持，不依赖 locale-gen）
 ENV LANG=zh_CN.UTF-8 \
     LANGUAGE=zh_CN:zh \
     LC_ALL=zh_CN.UTF-8
@@ -52,7 +42,7 @@ COPY --from=builder /official/target/Official-*.jar official.jar
 # 暴露端口
 EXPOSE 8080
 
-# 添加JVM参数以支持UTF-8编码和字体处理
+# 添加JVM参数以支持UTF-8编码和无头模式
 ENV JAVA_TOOL_OPTIONS="-Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8 -Djava.awt.headless=true"
 
 # 启动应用
