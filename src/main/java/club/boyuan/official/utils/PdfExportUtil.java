@@ -34,6 +34,18 @@ public class PdfExportUtil {
             System.out.println("开始初始化PDF字体...");
             BaseFont testFont = getChineseBaseFont();
             
+            // 检查简历数据是否为空
+            if (resumeDTO == null) {
+                throw new BusinessException(BusinessExceptionEnum.EXPORT_PDF_FAILED, "PDF导出失败: 简历数据为空");
+            }
+            
+            System.out.println("开始导出PDF，用户ID: " + resumeDTO.getUserId());
+            if (resumeDTO.getSimpleFields() != null) {
+                System.out.println("简历字段数量: " + resumeDTO.getSimpleFields().size());
+            } else {
+                System.out.println("警告: 简历字段为null");
+            }
+            
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             
             // 创建文档
@@ -72,6 +84,8 @@ public class PdfExportUtil {
                 
                 // 添加字段值信息
                 if (resumeDTO.getSimpleFields() != null && !resumeDTO.getSimpleFields().isEmpty()) {
+                    System.out.println("开始添加简历详情，字段数量: " + resumeDTO.getSimpleFields().size());
+                    
                     Paragraph fieldsTitle = new Paragraph("简历详情", headerFont);
                     fieldsTitle.setSpacingBefore(20);
                     fieldsTitle.setSpacingAfter(10);
@@ -84,22 +98,40 @@ public class PdfExportUtil {
                     // 表头
                     PdfPCell header1 = new PdfPCell(new Paragraph("字段名称", headerFont));
                     PdfPCell header2 = new PdfPCell(new Paragraph("字段值", headerFont));
+                    header1.setBorder(Rectangle.BOX);
+                    header2.setBorder(Rectangle.BOX);
+                    header1.setBackgroundColor(BaseColor.LIGHT_GRAY);
+                    header2.setBackgroundColor(BaseColor.LIGHT_GRAY);
                     fieldsTable.addCell(header1);
                     fieldsTable.addCell(header2);
                     
                     // 数据行
                     for (SimpleResumeFieldDTO field : resumeDTO.getSimpleFields()) {
-                        PdfPCell fieldLabel = new PdfPCell(new Paragraph(
-                            field.getFieldLabel() != null ? field.getFieldLabel() : "未知字段", 
-                            normalFont));
-                        PdfPCell fieldValueCell = new PdfPCell(new Paragraph(
-                            field.getFieldValue() != null ? field.getFieldValue() : "", 
-                            normalFont));
-                        fieldsTable.addCell(fieldLabel);
+                        String fieldLabel = field.getFieldLabel() != null ? field.getFieldLabel() : "未知字段";
+                        String fieldValue = field.getFieldValue() != null ? field.getFieldValue() : "";
+                        
+                        System.out.println("添加字段: " + fieldLabel + " = " + fieldValue);
+                        
+                        PdfPCell fieldLabelCell = new PdfPCell(new Paragraph(fieldLabel, normalFont));
+                        PdfPCell fieldValueCell = new PdfPCell(new Paragraph(fieldValue, normalFont));
+                        
+                        fieldLabelCell.setBorder(Rectangle.BOX);
+                        fieldValueCell.setBorder(Rectangle.BOX);
+                        
+                        fieldsTable.addCell(fieldLabelCell);
                         fieldsTable.addCell(fieldValueCell);
                     }
                     
                     document.add(fieldsTable);
+                    System.out.println("添加简历详情成功");
+                } else {
+                    System.out.println("警告: 简历详情为空或没有字段数据");
+                    
+                    // 添加提示信息
+                    Paragraph noDataMsg = new Paragraph("暂无简历详情数据", normalFont);
+                    noDataMsg.setSpacingBefore(20);
+                    noDataMsg.setAlignment(Element.ALIGN_CENTER);
+                    document.add(noDataMsg);
                 }
                 
                 // 添加导出时间
@@ -112,7 +144,9 @@ public class PdfExportUtil {
                 document.close();
             }
             
-            return baos.toByteArray();
+            byte[] pdfBytes = baos.toByteArray();
+            System.out.println("PDF导出成功，文件大小: " + pdfBytes.length + " bytes");
+            return pdfBytes;
         } catch (Exception e) {
             System.err.println("PDF导出失败: " + e.getClass().getSimpleName() + " - " + e.getMessage());
             e.printStackTrace();
@@ -152,11 +186,15 @@ public class PdfExportUtil {
     private static BaseFont getChineseBaseFont() {
         // 优先尝试Docker容器中常见的字体路径
         String[][] fontConfigs = {
-            // 容器中的Noto字体 - 最高优先级
-            {"/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc,0", BaseFont.IDENTITY_H},
+            // 容器中的Noto字体 - 按实际存在的路径优先排序
             {"/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc,0", BaseFont.IDENTITY_H},
-            {"/usr/share/fonts/truetype/noto/NotoSerifCJK-Regular.ttc,0", BaseFont.IDENTITY_H},
             {"/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc,0", BaseFont.IDENTITY_H},
+            {"/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc,0", BaseFont.IDENTITY_H},
+            {"/usr/share/fonts/truetype/noto/NotoSerifCJK-Regular.ttc,0", BaseFont.IDENTITY_H},
+            
+            // 单独的CJK字体文件
+            {"/usr/share/fonts/opentype/noto/NotoSansCJK-SC-Regular.otf", BaseFont.IDENTITY_H},
+            {"/usr/share/fonts/opentype/noto/NotoSerifCJK-SC-Regular.otf", BaseFont.IDENTITY_H},
             
             // 容器中的DejaVu字体
             {"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", BaseFont.IDENTITY_H},

@@ -13,7 +13,8 @@ RUN apt-get update && \
         fonts-noto-cjk-extra \
         fonts-liberation \
         libfontconfig1 \
-        && rm -rf /var/lib/apt/lists/*
+        && rm -rf /var/lib/apt/lists/* \
+        && fc-cache -fv
 
 # 设置中文环境变量
 ENV LANG=zh_CN.UTF-8 \
