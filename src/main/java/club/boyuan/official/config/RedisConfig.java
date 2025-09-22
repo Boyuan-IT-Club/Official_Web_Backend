@@ -26,10 +26,11 @@ public class RedisConfig {
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
         objectMapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
-        // 启用类型信息存储，以便正确反序列化对象
+        
+        // 修改默认的类型推断机制，避免GenericJackson2JsonRedisSerializer在处理单个对象时出现类型信息问题
         objectMapper.activateDefaultTyping(
             objectMapper.getPolymorphicTypeValidator(),
-            ObjectMapper.DefaultTyping.NON_FINAL);
+            ObjectMapper.DefaultTyping.EVERYTHING);
         
         // 使用GenericJackson2JsonRedisSerializer序列化和反序列化value值
         template.setValueSerializer(new GenericJackson2JsonRedisSerializer(objectMapper));
