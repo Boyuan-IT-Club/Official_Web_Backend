@@ -53,6 +53,48 @@
         ORDER BY r.created_at DESC
     </select>
     
+    <!-- 多条件查询简历列表（分页） -->
+    <select id="queryResumesWithPagination" resultMap="ResumeMap">
+        SELECT r.* FROM resume r
+        LEFT JOIN user u ON r.user_id = u.user_id
+        <where>
+            <if test="name != null and name != ''">
+                AND u.name LIKE CONCAT('%', #{name}, '%')
+            </if>
+            <if test="major != null and major != ''">
+                AND u.major LIKE CONCAT('%', #{major}, '%')
+            </if>
+            <if test="cycleId != null">
+                AND r.cycle_id = #{cycleId}
+            </if>
+            <if test="status != null">
+                AND r.status = #{status}
+            </if>
+        </where>
+        ORDER BY r.created_at DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+    
+    <!-- 统计多条件查询简历数量 -->
+    <select id="countResumes" resultType="int">
+        SELECT COUNT(*) FROM resume r
+        LEFT JOIN user u ON r.user_id = u.user_id
+        <where>
+            <if test="name != null and name != ''">
+                AND u.name LIKE CONCAT('%', #{name}, '%')
+            </if>
+            <if test="major != null and major != ''">
+                AND u.major LIKE CONCAT('%', #{major}, '%')
+            </if>
+            <if test="cycleId != null">
+                AND r.cycle_id = #{cycleId}
+            </if>
+            <if test="status != null">
+                AND r.status = #{status}
+            </if>
+        </where>
+    </select>
+    
     <!-- 插入简历 -->
     <insert id="insert" parameterType="club.boyuan.official.entity.Resume" useGeneratedKeys="true" keyProperty="resumeId">
         INSERT INTO resume(user_id, cycle_id, status)
