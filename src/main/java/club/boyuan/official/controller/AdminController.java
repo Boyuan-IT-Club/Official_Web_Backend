@@ -7,6 +7,7 @@ import club.boyuan.official.entity.User;
 import club.boyuan.official.exception.BusinessException;
 import club.boyuan.official.exception.BusinessExceptionEnum;
 import club.boyuan.official.service.IUserService;
+import club.boyuan.official.utils.RedisUtil;
 import lombok.AllArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,6 +36,8 @@ public class AdminController {
     private final IUserService userService;
 
     private final JwtTokenUtil jwtTokenUtil;
+
+    private final RedisUtil redisUtil;
 
     private static final Logger logger = LoggerFactory.getLogger(AdminController.class);
 
@@ -479,6 +482,51 @@ public class AdminController {
                     .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
             logger.error("批量更新用户会员状态时发生服务器内部错误", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
+    }
+    
+    /**
+     * 清理Redis缓存接口
+     * @param cacheRequest 缓存清理请求
+     * @return 清理结果
+     */
+    @PostMapping("/cache/clear")
+    public ResponseEntity<ResponseMessage<?>> clearCache(
+            @RequestBody(required = false) Map<String, String> cacheRequest) {
+        try {
+            checkAdminRole();
+            
+            String cacheType = cacheRequest != null ? cacheRequest.get("type") : "field_definition";
+            
+            switch (cacheType) {
+                case "field_definition":
+                    redisUtil.clearFieldDefinitionCache();
+                    logger.info("管理员清理了字段定义缓存");
+                    return ResponseEntity.ok(ResponseMessage.success("字段定义缓存清理成功"));
+                    
+                case "all":
+                    redisUtil.clearAllCache();
+                    logger.info("管理员清理了所有缓存");
+                    return ResponseEntity.ok(ResponseMessage.success("所有缓存清理成功"));
+                    
+                default:
+                    if (cacheType.contains("*")) {
+                        redisUtil.clearCacheByPattern(cacheType);
+                        logger.info("管理员清理了模式 '{}' 的缓存", cacheType);
+                        return ResponseEntity.ok(ResponseMessage.success("模式缓存清理成功: " + cacheType));
+                    } else {
+                        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                                .body(ResponseMessage.error(400, "不支持的缓存类型: " + cacheType));
+                    }
+            }
+        } catch (BusinessException e) {
+            logger.warn("清理缓存失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("清理缓存时发生服务器内部错误", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
         }
