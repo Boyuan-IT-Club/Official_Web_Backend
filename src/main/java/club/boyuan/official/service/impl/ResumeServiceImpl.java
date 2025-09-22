@@ -1,5 +1,6 @@
 package club.boyuan.official.service.impl;
 
+import club.boyuan.official.dto.PageResultDTO;
 import club.boyuan.official.dto.ResumeDTO;
 import club.boyuan.official.dto.ResumeFieldValueDTO;
 import club.boyuan.official.dto.SimpleResumeFieldDTO;
@@ -284,6 +285,58 @@ public class ResumeServiceImpl implements IResumeService {
             return result;
         } catch (Exception e) {
             logger.error("条件查询简历失败", e);
+            throw new BusinessException(BusinessExceptionEnum.RESUME_QUERY_FAILED);
+        }
+    }
+    
+    @Override
+    public PageResultDTO<ResumeDTO> queryResumesWithPagination(String name, String major, Integer cycleId, Integer status, int page, int size) {
+        logger.info("分页条件查询简历：name={}, major={}, cycleId={}, status={}, page={}, size={}", name, major, cycleId, status, page, size);
+        
+        try {
+            // 参数校验
+            if (page < 0) page = 0;
+            if (size <= 0) size = 10;
+            if (size > 100) size = 100; // 限制最大分页大小
+            
+            // 计算偏移量
+            int offset = page * size;
+            
+            // 查询总数
+            int totalElements = resumeMapper.countResumes(name, major, cycleId, status);
+            
+            // 查询数据
+            List<Resume> resumes = resumeMapper.queryResumesWithPagination(name, major, cycleId, status, offset, size);
+            
+            // 转换为DTO
+            List<ResumeDTO> result = new ArrayList<>();
+            for (Resume resume : resumes) {
+                ResumeDTO dto = new ResumeDTO();
+                dto.setResumeId(resume.getResumeId());
+                dto.setUserId(resume.getUserId());
+                dto.setCycleId(resume.getCycleId());
+                dto.setStatus(resume.getStatus());
+                dto.setSubmittedAt(resume.getSubmittedAt());
+                dto.setCreatedAt(resume.getCreatedAt());
+                dto.setUpdatedAt(resume.getUpdatedAt());
+                // 可选：添加简化字段信息
+                List<SimpleResumeFieldDTO> simpleFields = getSimpleFieldValuesByResumeId(resume.getResumeId());
+                dto.setSimpleFields(simpleFields);
+                result.add(dto);
+            }
+            
+            // 计算分页信息
+            int totalPages = (int) Math.ceil((double) totalElements / size);
+            boolean first = page == 0;
+            boolean last = page >= totalPages - 1;
+            
+            PageResultDTO<ResumeDTO> pageResult = new PageResultDTO<>(result, totalElements, totalPages, page, size, first, last);
+            
+            logger.info("分页条件查询简历完成：总记录数={}, 总页数={}, 当前页={}, 当前记录数={}", totalElements, totalPages, page, result.size());
+            
+            return pageResult;
+        } catch (Exception e) {
+            logger.error("分页条件查询简历失败", e);
             throw new BusinessException(BusinessExceptionEnum.RESUME_QUERY_FAILED);
         }
     }

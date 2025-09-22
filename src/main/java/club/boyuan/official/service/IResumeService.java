@@ -1,5 +1,6 @@
 package club.boyuan.official.service;
 
+import club.boyuan.official.dto.PageResultDTO;
 import club.boyuan.official.dto.ResumeDTO;
 import club.boyuan.official.dto.ResumeFieldValueDTO;
 import club.boyuan.official.dto.SimpleResumeFieldDTO;
@@ -106,6 +107,18 @@ public interface IResumeService {
      * @return 简历DTO列表
      */
     List<ResumeDTO> queryResumes(String name, String major, Integer cycleId, Integer status);
+    
+    /**
+     * 条件查询简历列表（分页）
+     * @param name 姓名（可选）
+     * @param major 专业（可选）
+     * @param cycleId 年份ID（可选）
+     * @param status 简历状态（可选）
+     * @param page 页码（从0开始）
+     * @param size 每页大小
+     * @return 分页结果DTO
+     */
+    PageResultDTO<ResumeDTO> queryResumesWithPagination(String name, String major, Integer cycleId, Integer status, int page, int size);
     
     /**
      * 根据cycleId获取所有简历

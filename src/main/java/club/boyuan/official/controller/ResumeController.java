@@ -1,5 +1,6 @@
 package club.boyuan.official.controller;
 
+import club.boyuan.official.dto.PageResultDTO;
 import club.boyuan.official.dto.ResponseMessage;
 import club.boyuan.official.dto.ResumeDTO;
 import club.boyuan.official.dto.ResumeFieldValueDTO;
@@ -808,11 +809,13 @@ public class ResumeController {
      * 支持按姓名、专业、招募周期、状态等多条件组合查询
      */
     @GetMapping("/search")
-    public ResponseEntity<ResponseMessage<List<ResumeDTO>>> queryResumes(
+    public ResponseEntity<ResponseMessage<?>> queryResumes(
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String major,
             @RequestParam(required = false) Integer cycleId,
             @RequestParam(required = false) Integer status,
+            @RequestParam(required = false, defaultValue = "0") Integer page,
+            @RequestParam(required = false, defaultValue = "10") Integer size,
             HttpServletRequest request) {
         try {
             String token = request.getHeader("Authorization");
@@ -826,9 +829,18 @@ public class ResumeController {
                 logger.warn("用户{}尝试条件查询简历，但权限不足", username);
                 throw new BusinessException(BusinessExceptionEnum.USER_ROLE_NOT_AUTHORIZED);
             }
-            List<ResumeDTO> result = resumeService.queryResumes(name, major, cycleId, status);
-            logger.info("管理员{}执行条件查询简历，结果数量: {}", username, result.size());
-            return ResponseEntity.ok(ResponseMessage.success(result));
+            
+            // 如果page和size参数都为默认值，则使用原来的查询方法（保持向后兼容）
+            if (page == 0 && size == 10) {
+                List<ResumeDTO> result = resumeService.queryResumes(name, major, cycleId, status);
+                logger.info("管理员{}执行条件查询简历，结果数量: {}", username, result.size());
+                return ResponseEntity.ok(ResponseMessage.success(result));
+            } else {
+                // 使用分页查询
+                PageResultDTO<ResumeDTO> result = resumeService.queryResumesWithPagination(name, major, cycleId, status, page, size);
+                logger.info("管理员{}执行分页条件查询简历，结果数量: {}，总记录数: {}", username, result.getContent().size(), result.getTotalElements());
+                return ResponseEntity.ok(ResponseMessage.success(result));
+            }
         } catch (BusinessException e) {
             logger.warn("条件查询简历业务异常，错误码: {}，错误信息: {}", e.getCode(), e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
