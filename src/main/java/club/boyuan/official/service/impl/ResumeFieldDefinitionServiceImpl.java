@@ -47,19 +47,36 @@ public class ResumeFieldDefinitionServiceImpl implements IResumeFieldDefinitionS
         try {
             // 尝试从Redis缓存中获取数据
             String cacheKey = "field_definition:" + fieldId;
-            Object cachedObject = redisTemplate.opsForValue().get(cacheKey);
+            ResumeFieldDefinition cachedDefinition = null;
             
-            if (cachedObject != null) {
-                // 检查缓存对象类型并进行适当转换
-                if (cachedObject instanceof ResumeFieldDefinition) {
-                    logger.debug("从Redis缓存中获取到字段定义，字段ID: {}", fieldId);
-                    return (ResumeFieldDefinition) cachedObject;
-                } else if (cachedObject instanceof Map) {
-                    // 如果是Map类型，尝试手动转换
-                    logger.debug("从Redis缓存中获取到字段定义Map，字段ID: {}", fieldId);
-                    // 由于复杂的类型转换可能出错，我们选择直接从数据库查询
-                    logger.debug("缓存中对象类型不匹配，将从数据库重新查询");
+            try {
+                Object cachedObject = redisTemplate.opsForValue().get(cacheKey);
+                
+                if (cachedObject != null) {
+                    // 检查缓存对象类型并进行适当转换
+                    if (cachedObject instanceof ResumeFieldDefinition) {
+                        cachedDefinition = (ResumeFieldDefinition) cachedObject;
+                        logger.debug("从Redis缓存中获取到字段定义，字段ID: {}", fieldId);
+                    } else {
+                        // 如果类型不匹配，删除损坏的缓存数据
+                        logger.warn("缓存中对象类型不匹配，将清除损坏的缓存数据，字段ID: {}", fieldId);
+                        redisTemplate.delete(cacheKey);
+                    }
                 }
+            } catch (Exception redisException) {
+                // Redis反序列化失败，记录警告并清除损坏的缓存
+                logger.warn("从Redis获取数据失败，将清除损坏的缓存数据，字段ID: {}, 错误: {}", 
+                          fieldId, redisException.getMessage());
+                try {
+                    redisTemplate.delete(cacheKey);
+                } catch (Exception deleteException) {
+                    logger.error("清除损坏缓存失败，字段ID: {}", fieldId, deleteException);
+                }
+            }
+            
+            // 如果缓存命中，直接返回
+            if (cachedDefinition != null) {
+                return cachedDefinition;
             }
             
             // 缓存未命中或类型不匹配，从数据库查询
@@ -67,8 +84,13 @@ public class ResumeFieldDefinitionServiceImpl implements IResumeFieldDefinitionS
             
             // 将查询结果存入Redis缓存，设置过期时间为1小时
             if (definition != null) {
-                redisTemplate.opsForValue().set(cacheKey, definition, 1, TimeUnit.HOURS);
-                logger.debug("将字段定义存入Redis缓存，字段ID: {}，过期时间1小时", fieldId);
+                try {
+                    redisTemplate.opsForValue().set(cacheKey, definition, 1, TimeUnit.HOURS);
+                    logger.debug("将字段定义存入Redis缓存，字段ID: {}，过期时间1小时", fieldId);
+                } catch (Exception cacheException) {
+                    // 缓存存储失败不影响主流程，只记录警告
+                    logger.warn("存储字段定义到Redis缓存失败，字段ID: {}", fieldId, cacheException);
+                }
             }
             
             return definition;
