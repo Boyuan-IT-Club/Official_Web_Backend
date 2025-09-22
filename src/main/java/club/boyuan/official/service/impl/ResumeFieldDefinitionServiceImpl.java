@@ -12,10 +12,12 @@ import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @AllArgsConstructor
@@ -26,6 +28,7 @@ public class ResumeFieldDefinitionServiceImpl implements IResumeFieldDefinitionS
     private final ResumeFieldDefinitionMapper resumeFieldDefinitionMapper;
     private final ResumeFieldValueMapper resumeFieldValueMapper;
     private final SqlSessionFactory sqlSessionFactory;
+    private final RedisTemplate<String, Object> redisTemplate;
     
     @Override
     public List<ResumeFieldDefinition> getFieldDefinitionsByCycleId(Integer cycleId) {
@@ -42,7 +45,25 @@ public class ResumeFieldDefinitionServiceImpl implements IResumeFieldDefinitionS
     public ResumeFieldDefinition getFieldDefinitionById(Integer fieldId) {
         logger.debug("根据ID{}查询简历字段定义", fieldId);
         try {
-            return resumeFieldDefinitionMapper.findById(fieldId);
+            // 尝试从Redis缓存中获取数据
+            String cacheKey = "field_definition:" + fieldId;
+            ResumeFieldDefinition cachedDefinition = (ResumeFieldDefinition) redisTemplate.opsForValue().get(cacheKey);
+            
+            if (cachedDefinition != null) {
+                logger.debug("从Redis缓存中获取到字段定义，字段ID: {}", fieldId);
+                return cachedDefinition;
+            }
+            
+            // 缓存未命中，从数据库查询
+            ResumeFieldDefinition definition = resumeFieldDefinitionMapper.findById(fieldId);
+            
+            // 将查询结果存入Redis缓存，设置过期时间为1小时
+            if (definition != null) {
+                redisTemplate.opsForValue().set(cacheKey, definition, 1, TimeUnit.HOURS);
+                logger.debug("将字段定义存入Redis缓存，字段ID: {}，过期时间1小时", fieldId);
+            }
+            
+            return definition;
         } catch (Exception e) {
             logger.error("根据ID查询简历字段定义失败，字段ID: {}", fieldId, e);
             throw new BusinessException(BusinessExceptionEnum.RESUME_FIELD_DEFINITION_QUERY_FAILED);
@@ -70,6 +91,10 @@ public class ResumeFieldDefinitionServiceImpl implements IResumeFieldDefinitionS
         try {
             fieldDefinition.setUpdatedAt(LocalDateTime.now());
             resumeFieldDefinitionMapper.update(fieldDefinition);
+            
+            // 清除相关缓存
+            clearCacheByFieldId(fieldDefinition.getFieldId());
+            
             return fieldDefinition;
         } catch (Exception e) {
             logger.error("更新简历字段定义失败，字段ID: {}，字段键名: {}", 
@@ -88,6 +113,9 @@ public class ResumeFieldDefinitionServiceImpl implements IResumeFieldDefinitionS
             for (ResumeFieldDefinition fieldDefinition : fieldDefinitions) {
                 fieldDefinition.setUpdatedAt(LocalDateTime.now());
                 batchMapper.update(fieldDefinition);
+                
+                // 清除相关缓存
+                clearCacheByFieldId(fieldDefinition.getFieldId());
             }
             
             // 提交批处理
@@ -108,9 +136,26 @@ public class ResumeFieldDefinitionServiceImpl implements IResumeFieldDefinitionS
             resumeFieldValueMapper.deleteByFieldId(fieldId);
             // 再删除字段定义本身
             resumeFieldDefinitionMapper.deleteById(fieldId);
+            
+            // 清除相关缓存
+            clearCacheByFieldId(fieldId);
         } catch (Exception e) {
             logger.error("删除简历字段定义失败，字段ID: {}", fieldId, e);
             throw new BusinessException(BusinessExceptionEnum.RESUME_FIELD_DEFINITION_DELETE_FAILED);
+        }
+    }
+    
+    /**
+     * 根据字段ID清除相关缓存
+     * @param fieldId 字段ID
+     */
+    private void clearCacheByFieldId(Integer fieldId) {
+        try {
+            String cacheKey = "field_definition:" + fieldId;
+            redisTemplate.delete(cacheKey);
+            logger.debug("清除字段定义缓存: {}", cacheKey);
+        } catch (Exception e) {
+            logger.warn("清除字段定义缓存失败，字段ID: {}", fieldId, e);
         }
     }
 }
