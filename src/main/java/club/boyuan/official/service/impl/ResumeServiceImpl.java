@@ -35,6 +35,11 @@ public class ResumeServiceImpl implements IResumeService {
     private final IResumeFieldDefinitionService fieldDefinitionService;
     private final RedisTemplate<String, Object> redisTemplate;
     
+    // Redis缓存键前缀
+    private static final String RESUME_CACHE_PREFIX = "resumes:cycle:";
+    private static final String QUERY_RESUME_CACHE_PREFIX = "resumes:query:";
+    private static final long CACHE_EXPIRE_TIME = 300; // 缓存过期时间(秒)
+
     @Override
     public Resume getResumeByUserIdAndCycleId(Integer userId, Integer cycleId) {
         logger.debug("查询用户{}在{}年的简历", userId, cycleId);
@@ -74,6 +79,8 @@ public class ResumeServiceImpl implements IResumeService {
         logger.info("创建简历，用户ID: {}，年份: {}", resume.getUserId(), resume.getCycleId());
         try {
             resumeMapper.insert(resume);
+            // 清除相关缓存
+            clearCacheByCycleId(resume.getCycleId());
             return resume;
         } catch (Exception e) {
             logger.error("创建简历失败，用户ID: {}，年份: {}", resume.getUserId(), resume.getCycleId(), e);
@@ -86,7 +93,12 @@ public class ResumeServiceImpl implements IResumeService {
     public Resume updateResume(Resume resume) {
         logger.info("更新简历，简历ID: {}", resume.getResumeId());
         try {
+            Resume oldResume = resumeMapper.findById(resume.getResumeId());
             resumeMapper.update(resume);
+            // 清除相关缓存
+            if (oldResume != null) {
+                clearCacheByCycleId(oldResume.getCycleId());
+            }
             return resume;
         } catch (Exception e) {
             logger.error("更新简历失败，简历ID: {}", resume.getResumeId(), e);
@@ -99,13 +111,16 @@ public class ResumeServiceImpl implements IResumeService {
     public void deleteResume(Integer resumeId) {
         logger.info("删除简历，简历ID: {}", resumeId);
         try {
+            // 获取简历信息用于清除缓存
+            Resume resume = resumeMapper.findById(resumeId);
             // 先删除字段值
             resumeFieldValueMapper.deleteByResumeId(resumeId);
             // 再删除简历
             resumeMapper.deleteById(resumeId);
-            
             // 清除相关缓存
-            clearCacheByResumeId(resumeId);
+            if (resume != null) {
+                clearCacheByCycleId(resume.getCycleId());
+            }
         } catch (Exception e) {
             logger.error("删除简历失败，简历ID: {}", resumeId, e);
             throw new BusinessException(BusinessExceptionEnum.RESUME_DELETE_FAILED);
@@ -122,9 +137,8 @@ public class ResumeServiceImpl implements IResumeService {
                 resume.setStatus(2); // 设置为已提交状态
                 resume.setSubmittedAt(LocalDateTime.now());
                 resumeMapper.update(resume);
-                
                 // 清除相关缓存
-                clearCacheByResumeId(resumeId);
+                clearCacheByCycleId(resume.getCycleId());
             }
             return resume;
         } catch (Exception e) {
@@ -141,6 +155,8 @@ public class ResumeServiceImpl implements IResumeService {
             List<ResumeFieldValue> toInsert = new ArrayList<>();
             List<ResumeFieldValue> toUpdate = new ArrayList<>();
             
+            Integer cycleId = null;
+            
             for (ResumeFieldValue fieldValue : fieldValues) {
                 ResumeFieldValue existingValue = resumeFieldValueMapper.findByResumeIdAndFieldId(
                         fieldValue.getResumeId(), fieldValue.getFieldId());
@@ -151,6 +167,14 @@ public class ResumeServiceImpl implements IResumeService {
                 } else {
                     // 插入新的字段值
                     toInsert.add(fieldValue);
+                }
+                
+                // 获取cycleId用于清除缓存
+                if (cycleId == null) {
+                    Resume resume = resumeMapper.findById(fieldValue.getResumeId());
+                    if (resume != null) {
+                        cycleId = resume.getCycleId();
+                    }
                 }
             }
             
@@ -167,8 +191,8 @@ public class ResumeServiceImpl implements IResumeService {
             }
             
             // 清除相关缓存
-            if (!fieldValues.isEmpty()) {
-                clearCacheByResumeId(fieldValues.get(0).getResumeId());
+            if (cycleId != null) {
+                clearCacheByCycleId(cycleId);
             }
         } catch (Exception e) {
             logger.error("保存简历字段值失败，字段值数量: {}", fieldValues.size(), e);
@@ -221,7 +245,21 @@ public class ResumeServiceImpl implements IResumeService {
     @Override
     public List<ResumeDTO> queryResumes(String name, String major, Integer cycleId, Integer status) {
         logger.info("条件查询简历：name={}, major={}, cycleId={}, status={}", name, major, cycleId, status);
+        // 构建缓存键
+        String cacheKey = QUERY_RESUME_CACHE_PREFIX + "name:" + (name != null ? name : "") 
+                + ":major:" + (major != null ? major : "") 
+                + ":cycleId:" + (cycleId != null ? cycleId : "") 
+                + ":status:" + (status != null ? status : "");
+        
         try {
+            // 尝试从缓存中获取
+            List<ResumeDTO> cachedResult = (List<ResumeDTO>) redisTemplate.opsForValue().get(cacheKey);
+            if (cachedResult != null) {
+                logger.debug("从缓存中获取条件查询简历结果，缓存键: {}", cacheKey);
+                return cachedResult;
+            }
+            
+            // 缓存未命中，从数据库查询
             List<Resume> resumes = resumeMapper.queryResumes(name, major, cycleId, status);
             List<ResumeDTO> result = new ArrayList<>();
             for (Resume resume : resumes) {
@@ -238,6 +276,11 @@ public class ResumeServiceImpl implements IResumeService {
                 dto.setSimpleFields(simpleFields);
                 result.add(dto);
             }
+            
+            // 将结果存入缓存
+            redisTemplate.opsForValue().set(cacheKey, result, CACHE_EXPIRE_TIME, TimeUnit.SECONDS);
+            logger.debug("将条件查询简历结果存入缓存，缓存键: {}", cacheKey);
+            
             return result;
         } catch (Exception e) {
             logger.error("条件查询简历失败", e);
@@ -335,22 +378,22 @@ public class ResumeServiceImpl implements IResumeService {
     @Override
     public List<Resume> getAllResumesByCycleId(Integer cycleId) {
         logger.debug("获取招募周期 {} 下的所有简历", cycleId);
+        String cacheKey = RESUME_CACHE_PREFIX + cycleId;
+        
         try {
-            // 尝试从Redis缓存中获取数据
-            String cacheKey = "resumes:cycle:" + cycleId;
+            // 尝试从缓存中获取
             List<Resume> cachedResumes = (List<Resume>) redisTemplate.opsForValue().get(cacheKey);
-            
             if (cachedResumes != null) {
-                logger.debug("从Redis缓存中获取到招募周期 {} 的简历数据，共 {} 条", cycleId, cachedResumes.size());
+                logger.debug("从缓存中获取招募周期 {} 下的所有简历", cycleId);
                 return cachedResumes;
             }
             
             // 缓存未命中，从数据库查询
             List<Resume> resumes = resumeMapper.findByCycleId(cycleId);
             
-            // 将查询结果存入Redis缓存，设置过期时间为30分钟
-            redisTemplate.opsForValue().set(cacheKey, resumes, 30, TimeUnit.MINUTES);
-            logger.debug("将招募周期 {} 的简历数据存入Redis缓存，共 {} 条，过期时间30分钟", cycleId, resumes.size());
+            // 将结果存入缓存
+            redisTemplate.opsForValue().set(cacheKey, resumes, CACHE_EXPIRE_TIME, TimeUnit.SECONDS);
+            logger.debug("将招募周期 {} 下的所有简历存入缓存", cycleId);
             
             return resumes;
         } catch (Exception e) {
@@ -360,20 +403,14 @@ public class ResumeServiceImpl implements IResumeService {
     }
     
     /**
-     * 根据简历ID清除相关缓存
-     * @param resumeId 简历ID
+     * 清除指定招募周期的简历缓存
+     * @param cycleId 招募周期ID
      */
-    private void clearCacheByResumeId(Integer resumeId) {
-        try {
-            // 获取简历信息以确定cycleId
-            Resume resume = resumeMapper.findById(resumeId);
-            if (resume != null) {
-                String cacheKey = "resumes:cycle:" + resume.getCycleId();
-                redisTemplate.delete(cacheKey);
-                logger.debug("清除缓存: {}", cacheKey);
-            }
-        } catch (Exception e) {
-            logger.warn("清除简历相关缓存失败，简历ID: {}", resumeId, e);
+    private void clearCacheByCycleId(Integer cycleId) {
+        if (cycleId != null) {
+            String cacheKey = RESUME_CACHE_PREFIX + cycleId;
+            redisTemplate.delete(cacheKey);
+            logger.debug("清除招募周期 {} 的简历缓存", cycleId);
         }
     }
 }
