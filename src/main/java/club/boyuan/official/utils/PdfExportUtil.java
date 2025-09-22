@@ -15,6 +15,8 @@ import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Objects;
+import java.util.Base64;
+import java.io.ByteArrayInputStream;
 
 /**
  * PDF导出工具类
@@ -110,10 +112,31 @@ public class PdfExportUtil {
                         String fieldLabel = field.getFieldLabel() != null ? field.getFieldLabel() : "未知字段";
                         String fieldValue = field.getFieldValue() != null ? field.getFieldValue() : "";
                         
-                        System.out.println("添加字段: " + fieldLabel + " = " + fieldValue);
+                        System.out.println("添加字段: " + fieldLabel + " = " + 
+                            (isBase64Image(fieldValue) ? "[图片数据]" : fieldValue));
                         
                         PdfPCell fieldLabelCell = new PdfPCell(new Paragraph(fieldLabel, normalFont));
-                        PdfPCell fieldValueCell = new PdfPCell(new Paragraph(fieldValue, normalFont));
+                        PdfPCell fieldValueCell;
+                        
+                        // 检查是否为Base64图片
+                        if (isBase64Image(fieldValue)) {
+                            Image image = createImageFromBase64(fieldValue);
+                            if (image != null) {
+                                // 使用图片创建单元格
+                                fieldValueCell = new PdfPCell(image, true);
+                                fieldValueCell.setHorizontalAlignment(Element.ALIGN_CENTER);
+                                fieldValueCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+                                fieldValueCell.setPadding(5f);
+                                System.out.println("成功添加图片到PDF: " + fieldLabel);
+                            } else {
+                                // 图片转换失败，显示错误信息
+                                fieldValueCell = new PdfPCell(new Paragraph("[图片加载失败]", normalFont));
+                                System.err.println("图片转换失败: " + fieldLabel);
+                            }
+                        } else {
+                            // 普通文本字段
+                            fieldValueCell = new PdfPCell(new Paragraph(fieldValue, normalFont));
+                        }
                         
                         fieldLabelCell.setBorder(Rectangle.BOX);
                         fieldValueCell.setBorder(Rectangle.BOX);
@@ -244,6 +267,51 @@ public class PdfExportUtil {
             case 4: return "通过";
             case 5: return "未通过";
             default: return "未知状态";
+        }
+    }
+    
+    /**
+     * 检查字段值是否为Base64图片
+     * @param fieldValue 字段值
+     * @return 如果是Base64图片返回true
+     */
+    private static boolean isBase64Image(String fieldValue) {
+        if (fieldValue == null || fieldValue.length() < 20) {
+            return false;
+        }
+        return fieldValue.startsWith("data:image/") && fieldValue.contains("base64,");
+    }
+    
+    /**
+     * 将Base64图片字符串转换为Image对象
+     * @param base64String Base64图片字符串
+     * @return Image对象，如果转换失败返回null
+     */
+    private static Image createImageFromBase64(String base64String) {
+        try {
+            // 提取Base64数据部分（去掉data:image/jpeg;base64,前缀）
+            String base64Data = base64String.substring(base64String.indexOf(",") + 1);
+            
+            // 解码Base64
+            byte[] imageBytes = Base64.getDecoder().decode(base64Data);
+            
+            // 创建Image对象
+            Image image = Image.getInstance(imageBytes);
+            
+            // 设置图片大小
+            float maxWidth = 120f; // 最大宽度
+            float maxHeight = 120f; // 最大高度
+            
+            if (image.getWidth() > maxWidth || image.getHeight() > maxHeight) {
+                image.scaleToFit(maxWidth, maxHeight);
+            }
+            
+            System.out.println("成功解析Base64图片，原始尺寸: " + image.getPlainWidth() + "x" + image.getPlainHeight());
+            return image;
+            
+        } catch (Exception e) {
+            System.err.println("Base64图片转换失败: " + e.getMessage());
+            return null;
         }
     }
     
