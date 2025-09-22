@@ -25,9 +25,13 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -357,9 +361,13 @@ public class UserController {
                 // 生成Excel
                 byte[] excelBytes = ExcelExportUtil.exportUsersToExcel(users);
                 
+                // 生成带时间戳的文件名，并进行URL编码
+                String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+                String filename = URLEncoder.encode("用户列表_" + timestamp + ".xlsx", StandardCharsets.UTF_8);
+                
                 // 设置响应头
                 response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-                response.setHeader("Content-Disposition", "attachment; filename=users_" + System.currentTimeMillis() + ".xlsx");
+                response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + filename);
                 response.setContentLength(excelBytes.length);
                 
                 // 写入响应
