@@ -103,22 +103,22 @@ public interface IResumeService {
      * @param name 姓名（可选）
      * @param major 专业（可选）
      * @param cycleId 年份ID（可选）
-     * @param status 简历状态（可选）
+     * @param status 简历状态（可选），支持多个状态，用逗号分隔，如"2,3,4,5"
      * @return 简历DTO列表
      */
-    List<ResumeDTO> queryResumes(String name, String major, Integer cycleId, Integer status);
+    List<ResumeDTO> queryResumes(String name, String major, Integer cycleId, String status);
     
     /**
      * 条件查询简历列表（分页）
      * @param name 姓名（可选）
      * @param major 专业（可选）
      * @param cycleId 年份ID（可选）
-     * @param status 简历状态（可选）
+     * @param status 简历状态（可选），支持多个状态，用逗号分隔，如"2,3,4,5"
      * @param page 页码（从0开始）
      * @param size 每页大小
      * @return 分页结果DTO
      */
-    PageResultDTO<ResumeDTO> queryResumesWithPagination(String name, String major, Integer cycleId, Integer status, int page, int size);
+    PageResultDTO<ResumeDTO> queryResumesWithPagination(String name, String major, Integer cycleId, String status, int page, int size);
     
     /**
      * 根据cycleId获取所有简历

@@ -813,7 +813,7 @@ public class ResumeController {
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String major,
             @RequestParam(required = false) Integer cycleId,
-            @RequestParam(required = false) Integer status,
+            @RequestParam(required = false) String status,
             @RequestParam(required = false, defaultValue = "0") Integer page,
             @RequestParam(required = false, defaultValue = "10") Integer size,
             HttpServletRequest request) {

@@ -46,8 +46,18 @@
             <if test="cycleId != null">
                 AND r.cycle_id = #{cycleId}
             </if>
-            <if test="status != null">
-                AND r.status = #{status}
+            <if test="status != null and status != ''">
+                <choose>
+                    <when test="status.indexOf(',') > -1">
+                        AND r.status IN 
+                        <foreach collection="status.split(',')" item="statusValue" open="(" separator="," close=")">
+                            #{statusValue}
+                        </foreach>
+                    </when>
+                    <otherwise>
+                        AND r.status = #{status}
+                    </otherwise>
+                </choose>
             </if>
         </where>
         ORDER BY r.created_at DESC
@@ -67,8 +77,18 @@
             <if test="cycleId != null">
                 AND r.cycle_id = #{cycleId}
             </if>
-            <if test="status != null">
-                AND r.status = #{status}
+            <if test="status != null and status != ''">
+                <choose>
+                    <when test="status.indexOf(',') > -1">
+                        AND r.status IN 
+                        <foreach collection="status.split(',')" item="statusValue" open="(" separator="," close=")">
+                            #{statusValue}
+                        </foreach>
+                    </when>
+                    <otherwise>
+                        AND r.status = #{status}
+                    </otherwise>
+                </choose>
             </if>
         </where>
         ORDER BY r.created_at DESC
@@ -89,8 +109,18 @@
             <if test="cycleId != null">
                 AND r.cycle_id = #{cycleId}
             </if>
-            <if test="status != null">
-                AND r.status = #{status}
+            <if test="status != null and status != ''">
+                <choose>
+                    <when test="status.indexOf(',') > -1">
+                        AND r.status IN 
+                        <foreach collection="status.split(',')" item="statusValue" open="(" separator="," close=")">
+                            #{statusValue}
+                        </foreach>
+                    </when>
+                    <otherwise>
+                        AND r.status = #{status}
+                    </otherwise>
+                </choose>
             </if>
         </where>
     </select>
