@@ -244,7 +244,7 @@ public class ResumeServiceImpl implements IResumeService {
     }
     
     @Override
-    public List<ResumeDTO> queryResumes(String name, String major, Integer cycleId, Integer status) {
+    public List<ResumeDTO> queryResumes(String name, String major, Integer cycleId, String status) {
         logger.info("条件查询简历：name={}, major={}, cycleId={}, status={}", name, major, cycleId, status);
         // 构建缓存键
         String cacheKey = QUERY_RESUME_CACHE_PREFIX + "name:" + (name != null ? name : "") 
@@ -290,7 +290,7 @@ public class ResumeServiceImpl implements IResumeService {
     }
     
     @Override
-    public PageResultDTO<ResumeDTO> queryResumesWithPagination(String name, String major, Integer cycleId, Integer status, int page, int size) {
+    public PageResultDTO<ResumeDTO> queryResumesWithPagination(String name, String major, Integer cycleId, String status, int page, int size) {
         logger.info("分页条件查询简历：name={}, major={}, cycleId={}, status={}, page={}, size={}", name, major, cycleId, status, page, size);
         
         try {
