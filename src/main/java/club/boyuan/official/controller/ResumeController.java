@@ -806,12 +806,13 @@ public class ResumeController {
     
     /**
      * 条件查询简历列表
-     * 支持按姓名、专业、招募周期、状态等多条件组合查询
+     * 支持按姓名、专业、期望部门、招募周期、状态等多条件组合查询
      */
     @GetMapping("/search")
     public ResponseEntity<ResponseMessage<?>> queryResumes(
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String major,
+            @RequestParam(required = false) String expectedDepartment,
             @RequestParam(required = false) Integer cycleId,
             @RequestParam(required = false) String status,
             @RequestParam(required = false, defaultValue = "0") Integer page,
@@ -832,12 +833,12 @@ public class ResumeController {
             
             // 如果page和size参数都为默认值，则使用原来的查询方法（保持向后兼容）
             if (page == 0 && size == 10) {
-                List<ResumeDTO> result = resumeService.queryResumes(name, major, cycleId, status);
+                List<ResumeDTO> result = resumeService.queryResumes(name, major, expectedDepartment, cycleId, status);
                 logger.info("管理员{}执行条件查询简历，结果数量: {}", username, result.size());
                 return ResponseEntity.ok(ResponseMessage.success(result));
             } else {
                 // 使用分页查询
-                PageResultDTO<ResumeDTO> result = resumeService.queryResumesWithPagination(name, major, cycleId, status, page, size);
+                PageResultDTO<ResumeDTO> result = resumeService.queryResumesWithPagination(name, major, expectedDepartment, cycleId, status, page, size);
                 logger.info("管理员{}执行分页条件查询简历，结果数量: {}，总记录数: {}", username, result.getContent().size(), result.getTotalElements());
                 return ResponseEntity.ok(ResponseMessage.success(result));
             }
