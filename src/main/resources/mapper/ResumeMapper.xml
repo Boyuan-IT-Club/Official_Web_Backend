@@ -34,14 +34,19 @@
     
     <!-- 多条件查询简历列表 -->
     <select id="queryResumes" resultMap="ResumeMap">
-        SELECT r.* FROM resume r
+        SELECT DISTINCT r.* FROM resume r
         LEFT JOIN user u ON r.user_id = u.user_id
+        LEFT JOIN resume_field_value rfv_ed ON r.resume_id = rfv_ed.resume_id
+        LEFT JOIN resume_field_definition rfd_ed ON rfv_ed.field_id = rfd_ed.field_id AND rfd_ed.field_key = 'expected_departments'
         <where>
             <if test="name != null and name != ''">
                 AND u.name LIKE CONCAT('%', #{name}, '%')
             </if>
             <if test="major != null and major != ''">
                 AND u.major LIKE CONCAT('%', #{major}, '%')
+            </if>
+            <if test="expectedDepartment != null and expectedDepartment != ''">
+                AND rfv_ed.field_value LIKE CONCAT('%', #{expectedDepartment}, '%')
             </if>
             <if test="cycleId != null">
                 AND r.cycle_id = #{cycleId}
@@ -65,14 +70,19 @@
     
     <!-- 多条件查询简历列表（分页） -->
     <select id="queryResumesWithPagination" resultMap="ResumeMap">
-        SELECT r.* FROM resume r
+        SELECT DISTINCT r.* FROM resume r
         LEFT JOIN user u ON r.user_id = u.user_id
+        LEFT JOIN resume_field_value rfv_ed ON r.resume_id = rfv_ed.resume_id
+        LEFT JOIN resume_field_definition rfd_ed ON rfv_ed.field_id = rfd_ed.field_id AND rfd_ed.field_key = 'expected_departments'
         <where>
             <if test="name != null and name != ''">
                 AND u.name LIKE CONCAT('%', #{name}, '%')
             </if>
             <if test="major != null and major != ''">
                 AND u.major LIKE CONCAT('%', #{major}, '%')
+            </if>
+            <if test="expectedDepartment != null and expectedDepartment != ''">
+                AND rfv_ed.field_value LIKE CONCAT('%', #{expectedDepartment}, '%')
             </if>
             <if test="cycleId != null">
                 AND r.cycle_id = #{cycleId}
@@ -97,14 +107,19 @@
     
     <!-- 统计多条件查询简历数量 -->
     <select id="countResumes" resultType="int">
-        SELECT COUNT(*) FROM resume r
+        SELECT COUNT(DISTINCT r.resume_id) FROM resume r
         LEFT JOIN user u ON r.user_id = u.user_id
+        LEFT JOIN resume_field_value rfv_ed ON r.resume_id = rfv_ed.resume_id
+        LEFT JOIN resume_field_definition rfd_ed ON rfv_ed.field_id = rfd_ed.field_id AND rfd_ed.field_key = 'expected_departments'
         <where>
             <if test="name != null and name != ''">
                 AND u.name LIKE CONCAT('%', #{name}, '%')
             </if>
             <if test="major != null and major != ''">
                 AND u.major LIKE CONCAT('%', #{major}, '%')
+            </if>
+            <if test="expectedDepartment != null and expectedDepartment != ''">
+                AND rfv_ed.field_value LIKE CONCAT('%', #{expectedDepartment}, '%')
             </if>
             <if test="cycleId != null">
                 AND r.cycle_id = #{cycleId}

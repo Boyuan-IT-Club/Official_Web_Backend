@@ -242,13 +242,14 @@ public class ResumeServiceImpl implements IResumeService {
             throw new BusinessException(BusinessExceptionEnum.DATABASE_QUERY_FAILED);
         }
     }
-    
+
     @Override
-    public List<ResumeDTO> queryResumes(String name, String major, Integer cycleId, String status) {
-        logger.info("条件查询简历：name={}, major={}, cycleId={}, status={}", name, major, cycleId, status);
+    public List<ResumeDTO> queryResumes(String name, String major, String expectedDepartment, Integer cycleId, String status) {
+        logger.info("条件查询简历：name={}, major={}, expectedDepartment={}, cycleId={}, status={}", name, major, expectedDepartment, cycleId, status);
         // 构建缓存键
         String cacheKey = QUERY_RESUME_CACHE_PREFIX + "name:" + (name != null ? name : "") 
-                + ":major:" + (major != null ? major : "") 
+                + ":major:" + (major != null ? major : "")
+                + ":expectedDepartment:" + (expectedDepartment != null ? expectedDepartment : "")
                 + ":cycleId:" + (cycleId != null ? cycleId : "") 
                 + ":status:" + (status != null ? status : "");
         
@@ -261,7 +262,7 @@ public class ResumeServiceImpl implements IResumeService {
             }
             
             // 缓存未命中，从数据库查询
-            List<Resume> resumes = resumeMapper.queryResumes(name, major, cycleId, status);
+            List<Resume> resumes = resumeMapper.queryResumes(name, major, expectedDepartment, cycleId, status);
             List<ResumeDTO> result = new ArrayList<>();
             for (Resume resume : resumes) {
                 ResumeDTO dto = new ResumeDTO();
@@ -288,10 +289,10 @@ public class ResumeServiceImpl implements IResumeService {
             throw new BusinessException(BusinessExceptionEnum.RESUME_QUERY_FAILED);
         }
     }
-    
+
     @Override
-    public PageResultDTO<ResumeDTO> queryResumesWithPagination(String name, String major, Integer cycleId, String status, int page, int size) {
-        logger.info("分页条件查询简历：name={}, major={}, cycleId={}, status={}, page={}, size={}", name, major, cycleId, status, page, size);
+    public PageResultDTO<ResumeDTO> queryResumesWithPagination(String name, String major, String expectedDepartment, Integer cycleId, String status, int page, int size) {
+        logger.info("分页条件查询简历：name={}, major={}, expectedDepartment={}, cycleId={}, status={}, page={}, size={}", name, major, expectedDepartment, cycleId, status, page, size);
         
         try {
             // 参数校验
@@ -303,10 +304,10 @@ public class ResumeServiceImpl implements IResumeService {
             int offset = page * size;
             
             // 查询总数
-            int totalElements = resumeMapper.countResumes(name, major, cycleId, status);
+            int totalElements = resumeMapper.countResumes(name, major, expectedDepartment, cycleId, status);
             
             // 查询数据
-            List<Resume> resumes = resumeMapper.queryResumesWithPagination(name, major, cycleId, status, offset, size);
+            List<Resume> resumes = resumeMapper.queryResumesWithPagination(name, major, expectedDepartment, cycleId, status, offset, size);
             
             // 转换为DTO
             List<ResumeDTO> result = new ArrayList<>();
