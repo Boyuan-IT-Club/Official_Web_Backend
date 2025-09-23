@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -464,7 +465,22 @@ public class ResumeServiceImpl implements IResumeService {
         if (cycleId != null) {
             String cacheKey = RESUME_CACHE_PREFIX + cycleId;
             redisTemplate.delete(cacheKey);
-            logger.debug("清除招募周期 {} 的简历缓存", cycleId);
+            
+            // 清除查询缓存 - 使用模式匹配清除所有相关的查询缓存
+            String queryPattern = QUERY_RESUME_CACHE_PREFIX + "*:cycleId:" + cycleId + ":*";
+            Set<String> keys = redisTemplate.keys(queryPattern);
+            if (keys != null && !keys.isEmpty()) {
+                redisTemplate.delete(keys);
+            }
+            
+            // 清除不包含cycleId的通用查询缓存（可能也会受到影响）
+            String generalPattern = QUERY_RESUME_CACHE_PREFIX + "*";
+            Set<String> generalKeys = redisTemplate.keys(generalPattern);
+            if (generalKeys != null && !generalKeys.isEmpty()) {
+                redisTemplate.delete(generalKeys);
+            }
+            
+            logger.debug("清除招募周期 {} 的简历缓存和相关查询缓存", cycleId);
         }
     }
 }
