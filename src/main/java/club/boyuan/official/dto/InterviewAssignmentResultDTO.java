@@ -73,6 +73,9 @@ public class InterviewAssignmentResultDTO {
         private String username;
         private String name;
         private String email; // 添加邮箱字段
+        private String major; // 添加专业字段
+        private String grade; // 添加年级字段
+        private String preferredDepartments; // 添加期望部门字段（第一、第二志愿）
         private LocalDateTime interviewTime;
         private String period; // 上午/下午
         private String interviewDepartment; // 面试部门（第一志愿）
@@ -81,11 +84,16 @@ public class InterviewAssignmentResultDTO {
         public AssignedInterviewDTO() {
         }
         
-        public AssignedInterviewDTO(Integer userId, String username, String name, String email, LocalDateTime interviewTime, String period, String interviewDepartment, String classroom) {
+        public AssignedInterviewDTO(Integer userId, String username, String name, String email, 
+                                  String major, String grade, String preferredDepartments, 
+                                  LocalDateTime interviewTime, String period, String interviewDepartment, String classroom) {
             this.userId = userId;
             this.username = username;
             this.name = name;
             this.email = email;
+            this.major = major;
+            this.grade = grade;
+            this.preferredDepartments = preferredDepartments;
             this.interviewTime = interviewTime;
             this.period = period;
             this.interviewDepartment = interviewDepartment;
@@ -124,6 +132,30 @@ public class InterviewAssignmentResultDTO {
         
         public void setEmail(String email) {
             this.email = email;
+        }
+        
+        public String getMajor() {
+            return major;
+        }
+        
+        public void setMajor(String major) {
+            this.major = major;
+        }
+        
+        public String getGrade() {
+            return grade;
+        }
+        
+        public void setGrade(String grade) {
+            this.grade = grade;
+        }
+        
+        public String getPreferredDepartments() {
+            return preferredDepartments;
+        }
+        
+        public void setPreferredDepartments(String preferredDepartments) {
+            this.preferredDepartments = preferredDepartments;
         }
         
         public LocalDateTime getInterviewTime() {
@@ -167,17 +199,22 @@ public class InterviewAssignmentResultDTO {
         private String username;
         private String name;
         private String email; // 添加邮箱字段
+        private String major; // 添加专业字段
+        private String grade; // 添加年级字段
         private String preferredTimes; // 用户期望的面试时间
         private String preferredDepartments; // 用户期望的面试部门
         
         public UnassignedUserDTO() {
         }
         
-        public UnassignedUserDTO(Integer userId, String username, String name, String email, String preferredTimes, String preferredDepartments) {
+        public UnassignedUserDTO(Integer userId, String username, String name, String email, 
+                               String major, String grade, String preferredTimes, String preferredDepartments) {
             this.userId = userId;
             this.username = username;
             this.name = name;
             this.email = email;
+            this.major = major;
+            this.grade = grade;
             this.preferredTimes = preferredTimes;
             this.preferredDepartments = preferredDepartments;
         }
@@ -214,6 +251,22 @@ public class InterviewAssignmentResultDTO {
         
         public void setEmail(String email) {
             this.email = email;
+        }
+        
+        public String getMajor() {
+            return major;
+        }
+        
+        public void setMajor(String major) {
+            this.major = major;
+        }
+        
+        public String getGrade() {
+            return grade;
+        }
+        
+        public void setGrade(String grade) {
+            this.grade = grade;
         }
         
         public String getPreferredTimes() {
@@ -241,15 +294,20 @@ public class InterviewAssignmentResultDTO {
         private String username;
         private String name;
         private String email; // 添加邮箱字段
+        private String major; // 添加专业字段
+        private String grade; // 添加年级字段
         
         public NoPreferenceUserDTO() {
         }
         
-        public NoPreferenceUserDTO(Integer userId, String username, String name, String email) {
+        public NoPreferenceUserDTO(Integer userId, String username, String name, String email, 
+                                 String major, String grade) {
             this.userId = userId;
             this.username = username;
             this.name = name;
             this.email = email;
+            this.major = major;
+            this.grade = grade;
         }
         
         // Getter和Setter方法
@@ -284,6 +342,22 @@ public class InterviewAssignmentResultDTO {
         
         public void setEmail(String email) {
             this.email = email;
+        }
+        
+        public String getMajor() {
+            return major;
+        }
+        
+        public void setMajor(String major) {
+            this.major = major;
+        }
+        
+        public String getGrade() {
+            return grade;
+        }
+        
+        public void setGrade(String grade) {
+            this.grade = grade;
         }
     }
 }

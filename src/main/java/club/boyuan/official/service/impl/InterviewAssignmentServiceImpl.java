@@ -125,8 +125,11 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
                 String name = getResumeName(resume);
                 // 从简历中获取邮箱而不是从用户表中获取
                 String email = getResumeEmail(resume);
+                // 从简历中获取专业和年级
+                String major = getResumeMajor(resume);
+                String grade = getResumeGrade(resume);
                 noPreferenceUsers.add(new InterviewAssignmentResultDTO.NoPreferenceUserDTO(
-                        user.getUserId(), user.getUsername(), name, email));
+                        user.getUserId(), user.getUsername(), name, email, major, grade));
                 continue;
             }
             
@@ -137,8 +140,11 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
                 String name = getResumeName(resume);
                 // 从简历中获取邮箱而不是从用户表中获取
                 String email = getResumeEmail(resume);
+                // 从简历中获取专业和年级
+                String major = getResumeMajor(resume);
+                String grade = getResumeGrade(resume);
                 noPreferenceUsers.add(new InterviewAssignmentResultDTO.NoPreferenceUserDTO(
-                        user.getUserId(), user.getUsername(), name, email));
+                        user.getUserId(), user.getUsername(), name, email, major, grade));
                 continue;
             }
             
@@ -163,7 +169,7 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
             
             // 严格按照用户偏好分配面试时间，不使用降级策略
             boolean assigned = tryAssignInterviewTime(
-                    user, resume, preferredTimes, department, departmentSlotAvailability, assignedInterviews, classroomAssigner);
+                    user, resume, preferredTimes, department, departmentSlotAvailability, assignedInterviews, classroomAssigner, userPreferredDepartments);
             
             // 如果无法分配（所有时间段都满了），则加入未分配列表
             if (!assigned) {
@@ -174,8 +180,11 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
                 String name = getResumeName(candidate.resume);
                 // 从简历中获取邮箱而不是从用户表中获取
                 String email = getResumeEmail(candidate.resume);
+                // 从简历中获取专业和年级
+                String major = getResumeMajor(candidate.resume);
+                String grade = getResumeGrade(candidate.resume);
                 unassignedUsers.add(new InterviewAssignmentResultDTO.UnassignedUserDTO(
-                        user.getUserId(), user.getUsername(), name, email, preferredTimesStr, preferredDepartmentsStr));
+                        user.getUserId(), user.getUsername(), name, email, major, grade, preferredTimesStr, preferredDepartmentsStr));
             } else {
                 logger.info("用户 {} 已成功分配面试时间", user.getUsername());
             }
@@ -256,6 +265,99 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
         // 如果简历中没有邮箱字段或为空，则使用用户表中的邮箱
         User user = userService.getUserById(resume.getUserId());
         return user != null ? user.getEmail() : "";
+    }
+    
+    /**
+     * 从简历中获取专业字段值
+     * @param resume 简历对象
+     * @return 专业字段值，如果找不到则返回空字符串
+     */
+    private String getResumeMajor(Resume resume) {
+        // 获取简历中的所有字段值
+        List<ResumeFieldValue> fieldValues = resumeService.getFieldValuesByResumeId(resume.getResumeId());
+        
+        // 获取当前周期的字段定义
+        List<ResumeFieldDefinition> fieldDefinitions = resumeFieldDefinitionService.getFieldDefinitionsByCycleId(resume.getCycleId());
+        
+        // 查找专业字段定义
+        ResumeFieldDefinition majorFieldDefinition = fieldDefinitions.stream()
+                .filter(field -> "专业".equals(field.getFieldLabel()))
+                .findFirst()
+                .orElse(null);
+        
+        // 如果找到了专业字段定义，则查找对应的字段值
+        if (majorFieldDefinition != null) {
+            String major = fieldValues.stream()
+                    .filter(value -> majorFieldDefinition.getFieldId().equals(value.getFieldId()))
+                    .map(ResumeFieldValue::getFieldValue)
+                    .findFirst()
+                    .orElse(null);
+            
+            if (major != null && !major.isEmpty()) {
+                return major;
+            }
+        }
+        
+        // 如果简历中没有专业字段或为空，则返回空字符串
+        return "";
+    }
+    
+    /**
+     * 从简历中获取专业和年级
+     * @param resume 简历对象
+     * @return 年级字段值，如果找不到则返回空字符串
+     */
+    private String getResumeGrade(Resume resume) {
+        // 获取简历中的所有字段值
+        List<ResumeFieldValue> fieldValues = resumeService.getFieldValuesByResumeId(resume.getResumeId());
+        
+        // 获取当前周期的字段定义
+        List<ResumeFieldDefinition> fieldDefinitions = resumeFieldDefinitionService.getFieldDefinitionsByCycleId(resume.getCycleId());
+        
+        // 查找年级字段定义（年级或大几）
+        ResumeFieldDefinition gradeFieldDefinition = fieldDefinitions.stream()
+                .filter(field -> "年级".equals(field.getFieldLabel()) || "大几".equals(field.getFieldLabel()))
+                .findFirst()
+                .orElse(null);
+        
+        // 如果找到了年级字段定义，则查找对应的字段值
+        if (gradeFieldDefinition != null) {
+            String grade = fieldValues.stream()
+                    .filter(value -> gradeFieldDefinition.getFieldId().equals(value.getFieldId()))
+                    .map(ResumeFieldValue::getFieldValue)
+                    .findFirst()
+                    .orElse(null);
+            
+            if (grade != null && !grade.isEmpty()) {
+                return grade;
+            }
+        }
+        
+        // 如果简历中没有年级字段或为空，则返回空字符串
+        return "";
+    }
+    
+    /**
+     * 获取格式化的期望部门字符串（第一志愿、第二志愿）
+     * @param userId 用户ID
+     * @param userPreferredDepartments 用户期望部门映射
+     * @return 格式化的期望部门字符串
+     */
+    private String getFormattedPreferredDepartments(Integer userId, Map<Integer, List<String>> userPreferredDepartments) {
+        List<String> departments = userPreferredDepartments.get(userId);
+        if (departments == null || departments.isEmpty()) {
+            return "";
+        }
+        
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < departments.size() && i < 2; i++) { // 最多显示两个志愿
+            if (i > 0) {
+                sb.append("、");
+            }
+            sb.append("第").append(i + 1).append("志愿：").append(departments.get(i));
+        }
+        
+        return sb.toString();
     }
     
     /**
@@ -885,7 +987,8 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
     private boolean tryAssignInterviewTime(User user, Resume resume, List<String> preferredTimes, String department,
                                          Map<String, Map<LocalDateTime, Boolean>> departmentSlotAvailability,
                                          List<InterviewAssignmentResultDTO.AssignedInterviewDTO> assignedInterviews,
-                                         ClassroomAssigner classroomAssigner) {
+                                         ClassroomAssigner classroomAssigner, 
+                                         Map<Integer, List<String>> userPreferredDepartments) {
         // 如果用户没有填写期望面试时间，则不分配面试时间
         if (preferredTimes == null || preferredTimes.isEmpty()) {
             return false;
@@ -922,8 +1025,13 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
                         String name = getResumeName(resume);
                         // 从简历中获取邮箱而不是从用户表中获取
                         String email = getResumeEmail(resume);
+                        // 从简历中获取专业和年级
+                        String major = getResumeMajor(resume);
+                        String grade = getResumeGrade(resume);
+                        // 获取格式化的期望部门信息
+                        String preferredDepartments = getFormattedPreferredDepartments(user.getUserId(), userPreferredDepartments);
                         assignedInterviews.add(new InterviewAssignmentResultDTO.AssignedInterviewDTO(
-                                user.getUserId(), user.getUsername(), name, email, assignedSlot, period, department, classroom));
+                                user.getUserId(), user.getUsername(), name, email, major, grade, preferredDepartments, assignedSlot, period, department, classroom));
                         return true;
                     } else {
                         // 没有可用教室，需要释放时间槽
