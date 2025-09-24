@@ -183,7 +183,7 @@ public class ExcelExportUtil {
                 
                 Sheet classroomSheet = workbook.createSheet(classroom);
                 Row classroomHeader = classroomSheet.createRow(0);
-                String[] classroomHeaders = {"用户名", "姓名", "邮箱", "所属部门", "面试时间", "时间段"};
+                String[] classroomHeaders = {"用户名", "姓名", "邮箱", "专业", "年级", "期望部门", "所属部门", "面试时间", "时间段"};
                 
                 for (int i = 0; i < classroomHeaders.length; i++) {
                     Cell cell = classroomHeader.createCell(i);
@@ -221,24 +221,36 @@ public class ExcelExportUtil {
                     cell2.setCellStyle(dataStyle);
                     
                     Cell cell3 = row.createCell(3);
-                    cell3.setCellValue(dto.getInterviewDepartment() != null ? dto.getInterviewDepartment() : "");
+                    cell3.setCellValue(dto.getMajor() != null ? dto.getMajor() : "");
                     cell3.setCellStyle(dataStyle);
                     
                     Cell cell4 = row.createCell(4);
+                    cell4.setCellValue(dto.getGrade() != null ? dto.getGrade() : "");
+                    cell4.setCellStyle(dataStyle);
+                    
+                    Cell cell5 = row.createCell(5);
+                    cell5.setCellValue(dto.getPreferredDepartments() != null ? dto.getPreferredDepartments() : "");
+                    cell5.setCellStyle(dataStyle);
+                    
+                    Cell cell6 = row.createCell(6);
+                    cell6.setCellValue(dto.getInterviewDepartment() != null ? dto.getInterviewDepartment() : "");
+                    cell6.setCellStyle(dataStyle);
+                    
+                    Cell cell7 = row.createCell(7);
                     // 修改面试时间格式为 时间1-时间2
                     if (dto.getInterviewTime() != null) {
                         LocalDateTime startTime = dto.getInterviewTime();
                         LocalDateTime endTime = startTime.plusMinutes(10); // 面试时长10分钟
                         String timeRange = timeRangeFormat.format(startTime) + "-" + timeRangeFormat.format(endTime);
-                        cell4.setCellValue(startTime.format(dtf) + " " + timeRange);
+                        cell7.setCellValue(startTime.format(dtf) + " " + timeRange);
                     } else {
-                        cell4.setCellValue("");
+                        cell7.setCellValue("");
                     }
-                    cell4.setCellStyle(dataStyle);
+                    cell7.setCellStyle(dataStyle);
                     
-                    Cell cell5 = row.createCell(5);
-                    cell5.setCellValue(dto.getPeriod() != null ? dto.getPeriod() : "");
-                    cell5.setCellStyle(dataStyle);
+                    Cell cell8 = row.createCell(8);
+                    cell8.setCellValue(dto.getPeriod() != null ? dto.getPeriod() : "");
+                    cell8.setCellStyle(dataStyle);
                 }
                 
                 for (int i = 0; i < classroomHeaders.length; i++) {
@@ -249,7 +261,7 @@ public class ExcelExportUtil {
             // Sheet: 未分配
             Sheet unassignedSheet = workbook.createSheet("未分配");
             Row unassignedHeader = unassignedSheet.createRow(0);
-            String[] unassignedHeaders = {"用户名", "姓名", "邮箱", "期望时间", "期望部门"};
+            String[] unassignedHeaders = {"用户名", "姓名", "邮箱", "专业", "年级", "期望时间", "期望部门"};
             for (int i = 0; i < unassignedHeaders.length; i++) {
                 Cell cell = unassignedHeader.createCell(i);
                 cell.setCellValue(unassignedHeaders[i]);
@@ -264,8 +276,10 @@ public class ExcelExportUtil {
                     row.createCell(0).setCellValue(dto.getUsername() != null ? dto.getUsername() : "");
                     row.createCell(1).setCellValue(dto.getName() != null ? dto.getName() : "");
                     row.createCell(2).setCellValue(dto.getEmail() != null ? dto.getEmail() : "");
-                    row.createCell(3).setCellValue(dto.getPreferredTimes() != null ? dto.getPreferredTimes() : "");
-                    row.createCell(4).setCellValue(dto.getPreferredDepartments() != null ? dto.getPreferredDepartments() : "");
+                    row.createCell(3).setCellValue(dto.getMajor() != null ? dto.getMajor() : "");
+                    row.createCell(4).setCellValue(dto.getGrade() != null ? dto.getGrade() : "");
+                    row.createCell(5).setCellValue(dto.getPreferredTimes() != null ? dto.getPreferredTimes() : "");
+                    row.createCell(6).setCellValue(dto.getPreferredDepartments() != null ? dto.getPreferredDepartments() : "");
                 }
             }
             
@@ -276,7 +290,7 @@ public class ExcelExportUtil {
             // Sheet: 未填写期望
             Sheet noPreferenceSheet = workbook.createSheet("未填写期望");
             Row noPreferenceHeader = noPreferenceSheet.createRow(0);
-            String[] noPreferenceHeaders = {"用户名", "姓名", "邮箱"};
+            String[] noPreferenceHeaders = {"用户名", "姓名", "邮箱", "专业", "年级"};
             for (int i = 0; i < noPreferenceHeaders.length; i++) {
                 Cell cell = noPreferenceHeader.createCell(i);
                 cell.setCellValue(noPreferenceHeaders[i]);
@@ -291,6 +305,8 @@ public class ExcelExportUtil {
                     row.createCell(0).setCellValue(dto.getUsername() != null ? dto.getUsername() : "");
                     row.createCell(1).setCellValue(dto.getName() != null ? dto.getName() : "");
                     row.createCell(2).setCellValue(dto.getEmail() != null ? dto.getEmail() : "");
+                    row.createCell(3).setCellValue(dto.getMajor() != null ? dto.getMajor() : "");
+                    row.createCell(4).setCellValue(dto.getGrade() != null ? dto.getGrade() : "");
                 }
             }
             
