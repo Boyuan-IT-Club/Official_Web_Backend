@@ -43,7 +43,7 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
     private static final LocalTime MORNING_START = LocalTime.of(9, 0);
     private static final LocalTime MORNING_END = LocalTime.of(11, 0);
     private static final LocalTime AFTERNOON_START = LocalTime.of(13, 0);
-    private static final LocalTime AFTERNOON_END = LocalTime.of(17, 0);
+    private static final LocalTime AFTERNOON_END = LocalTime.of(17, 30);
     private static final LocalTime EVENING_START = LocalTime.of(19, 0);
     private static final LocalTime EVENING_END = LocalTime.of(21, 0);
     private static final int INTERVIEW_DURATION = 10; // 面试时长10分钟
@@ -1030,8 +1030,10 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
                         String grade = getResumeGrade(resume);
                         // 获取格式化的期望部门信息
                         String preferredDepartments = getFormattedPreferredDepartments(user.getUserId(), userPreferredDepartments);
+                        // 获取用户期望的面试时间
+                        String preferredTimesStr = String.join(", ", preferredTimes);
                         assignedInterviews.add(new InterviewAssignmentResultDTO.AssignedInterviewDTO(
-                                user.getUserId(), user.getUsername(), name, email, major, grade, preferredDepartments, assignedSlot, period, department, classroom));
+                                user.getUserId(), user.getUsername(), name, email, major, grade, preferredDepartments, preferredTimesStr, assignedSlot, period, department, classroom));
                         return true;
                     } else {
                         // 没有可用教室，需要释放时间槽

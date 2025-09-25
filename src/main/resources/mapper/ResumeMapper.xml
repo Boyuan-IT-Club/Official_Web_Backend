@@ -80,7 +80,22 @@
                 </choose>
             </if>
         </where>
-        ORDER BY r.created_at DESC
+        <choose>
+            <when test="sortBy != null and sortBy != ''">
+                ORDER BY r.${sortBy} 
+                <choose>
+                    <when test="sortOrder != null and sortOrder != ''">
+                        ${sortOrder}
+                    </when>
+                    <otherwise>
+                        DESC
+                    </otherwise>
+                </choose>
+            </when>
+            <otherwise>
+                ORDER BY r.created_at DESC
+            </otherwise>
+        </choose>
     </select>
     
     <!-- 多条件查询简历列表（分页） -->
@@ -131,7 +146,22 @@
                 </choose>
             </if>
         </where>
-        ORDER BY r.created_at DESC
+        <choose>
+            <when test="sortBy != null and sortBy != ''">
+                ORDER BY r.${sortBy} 
+                <choose>
+                    <when test="sortOrder != null and sortOrder != ''">
+                        ${sortOrder}
+                    </when>
+                    <otherwise>
+                        DESC
+                    </otherwise>
+                </choose>
+            </when>
+            <otherwise>
+                ORDER BY r.created_at DESC
+            </otherwise>
+        </choose>
         LIMIT #{offset}, #{limit}
     </select>
     

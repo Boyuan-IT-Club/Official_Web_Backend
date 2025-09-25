@@ -118,9 +118,11 @@ public interface IResumeService {
      * @param status 简历状态（可选），支持多个状态，用逗号分隔，如"2,3,4,5"
      * @param page 页码（从0开始）
      * @param size 每页大小
+     * @param sortBy 排序字段
+     * @param sortOrder 排序顺序（ASC/DESC）
      * @return 分页结果DTO
      */
-    PageResultDTO<ResumeDTO> queryResumesWithPagination(String name, String major, String expectedDepartment, Integer cycleId, String status, int page, int size);
+    PageResultDTO<ResumeDTO> queryResumesWithPagination(String name, String major, String expectedDepartment, Integer cycleId, String status, int page, int size, String sortBy, String sortOrder);
     
     /**
      * 根据cycleId获取所有简历

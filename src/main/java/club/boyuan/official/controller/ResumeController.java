@@ -817,6 +817,8 @@ public class ResumeController {
             @RequestParam(required = false) String status,
             @RequestParam(required = false, defaultValue = "0") Integer page,
             @RequestParam(required = false, defaultValue = "10") Integer size,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(required = false) String sortOrder,
             HttpServletRequest request) {
         try {
             String token = request.getHeader("Authorization");
@@ -832,13 +834,13 @@ public class ResumeController {
             }
             
             // 如果page和size参数都为默认值，则使用原来的查询方法（保持向后兼容）
-            if (page == 0 && size == 10) {
+            if (page == 0 && size == 10 && sortBy == null) {
                 List<ResumeDTO> result = resumeService.queryResumes(name, major, expectedDepartment, cycleId, status);
                 logger.info("管理员{}执行条件查询简历，结果数量: {}", username, result.size());
                 return ResponseEntity.ok(ResponseMessage.success(result));
             } else {
                 // 使用分页查询
-                PageResultDTO<ResumeDTO> result = resumeService.queryResumesWithPagination(name, major, expectedDepartment, cycleId, status, page, size);
+                PageResultDTO<ResumeDTO> result = resumeService.queryResumesWithPagination(name, major, expectedDepartment, cycleId, status, page, size, sortBy, sortOrder);
                 logger.info("管理员{}执行分页条件查询简历，结果数量: {}，总记录数: {}", username, result.getContent().size(), result.getTotalElements());
                 return ResponseEntity.ok(ResponseMessage.success(result));
             }

@@ -292,8 +292,8 @@ public class ResumeServiceImpl implements IResumeService {
     }
 
     @Override
-    public PageResultDTO<ResumeDTO> queryResumesWithPagination(String name, String major, String expectedDepartment, Integer cycleId, String status, int page, int size) {
-        logger.info("分页条件查询简历：name={}, major={}, expectedDepartment={}, cycleId={}, status={}, page={}, size={}", name, major, expectedDepartment, cycleId, status, page, size);
+    public PageResultDTO<ResumeDTO> queryResumesWithPagination(String name, String major, String expectedDepartment, Integer cycleId, String status, int page, int size, String sortBy, String sortOrder) {
+        logger.info("分页条件查询简历：name={}, major={}, expectedDepartment={}, cycleId={}, status={}, page={}, size={}, sortBy={}, sortOrder={}", name, major, expectedDepartment, cycleId, status, page, size, sortBy, sortOrder);
         
         try {
             // 参数校验
@@ -308,7 +308,7 @@ public class ResumeServiceImpl implements IResumeService {
             int totalElements = resumeMapper.countResumes(name, major, expectedDepartment, cycleId, status);
             
             // 查询数据
-            List<Resume> resumes = resumeMapper.queryResumesWithPagination(name, major, expectedDepartment, cycleId, status, offset, size);
+            List<Resume> resumes = resumeMapper.queryResumesWithPagination(name, major, expectedDepartment, cycleId, status, offset, size, sortBy, sortOrder);
             
             // 转换为DTO
             List<ResumeDTO> result = new ArrayList<>();
