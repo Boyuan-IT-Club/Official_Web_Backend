@@ -183,7 +183,7 @@ public class ExcelExportUtil {
                 
                 Sheet classroomSheet = workbook.createSheet(classroom);
                 Row classroomHeader = classroomSheet.createRow(0);
-                String[] classroomHeaders = {"用户名", "姓名", "邮箱", "专业", "年级", "期望部门", "所属部门", "面试时间", "时间段"};
+                String[] classroomHeaders = {"用户名", "姓名", "邮箱", "专业", "年级", "期望部门", "所属部门", "面试时间", "时间段", "期望时间"};
                 
                 for (int i = 0; i < classroomHeaders.length; i++) {
                     Cell cell = classroomHeader.createCell(i);
@@ -251,6 +251,11 @@ public class ExcelExportUtil {
                     Cell cell8 = row.createCell(8);
                     cell8.setCellValue(dto.getPeriod() != null ? dto.getPeriod() : "");
                     cell8.setCellStyle(dataStyle);
+                    
+                    // 添加期望时间字段
+                    Cell cell9 = row.createCell(9);
+                    cell9.setCellValue(dto.getPreferredTimes() != null ? dto.getPreferredTimes() : "");
+                    cell9.setCellStyle(dataStyle);
                 }
                 
                 for (int i = 0; i < classroomHeaders.length; i++) {
@@ -273,13 +278,33 @@ public class ExcelExportUtil {
                 for (InterviewAssignmentResultDTO.UnassignedUserDTO dto : result.getUnassignedUsers()) {
                     Row row = unassignedSheet.createRow(unassignedRowNum++);
                     
-                    row.createCell(0).setCellValue(dto.getUsername() != null ? dto.getUsername() : "");
-                    row.createCell(1).setCellValue(dto.getName() != null ? dto.getName() : "");
-                    row.createCell(2).setCellValue(dto.getEmail() != null ? dto.getEmail() : "");
-                    row.createCell(3).setCellValue(dto.getMajor() != null ? dto.getMajor() : "");
-                    row.createCell(4).setCellValue(dto.getGrade() != null ? dto.getGrade() : "");
-                    row.createCell(5).setCellValue(dto.getPreferredTimes() != null ? dto.getPreferredTimes() : "");
-                    row.createCell(6).setCellValue(dto.getPreferredDepartments() != null ? dto.getPreferredDepartments() : "");
+                    Cell cell0 = row.createCell(0);
+                    cell0.setCellValue(dto.getUsername() != null ? dto.getUsername() : "");
+                    cell0.setCellStyle(dataStyle);
+                    
+                    Cell cell1 = row.createCell(1);
+                    cell1.setCellValue(dto.getName() != null ? dto.getName() : "");
+                    cell1.setCellStyle(dataStyle);
+                    
+                    Cell cell2 = row.createCell(2);
+                    cell2.setCellValue(dto.getEmail() != null ? dto.getEmail() : "");
+                    cell2.setCellStyle(dataStyle);
+                    
+                    Cell cell3 = row.createCell(3);
+                    cell3.setCellValue(dto.getMajor() != null ? dto.getMajor() : "");
+                    cell3.setCellStyle(dataStyle);
+                    
+                    Cell cell4 = row.createCell(4);
+                    cell4.setCellValue(dto.getGrade() != null ? dto.getGrade() : "");
+                    cell4.setCellStyle(dataStyle);
+                    
+                    Cell cell5 = row.createCell(5);
+                    cell5.setCellValue(dto.getPreferredTimes() != null ? dto.getPreferredTimes() : "");
+                    cell5.setCellStyle(dataStyle);
+                    
+                    Cell cell6 = row.createCell(6);
+                    cell6.setCellValue(dto.getPreferredDepartments() != null ? dto.getPreferredDepartments() : "");
+                    cell6.setCellStyle(dataStyle);
                 }
             }
             
@@ -302,11 +327,25 @@ public class ExcelExportUtil {
                 for (InterviewAssignmentResultDTO.NoPreferenceUserDTO dto : result.getNoPreferenceUsers()) {
                     Row row = noPreferenceSheet.createRow(noPreferenceRowNum++);
                     
-                    row.createCell(0).setCellValue(dto.getUsername() != null ? dto.getUsername() : "");
-                    row.createCell(1).setCellValue(dto.getName() != null ? dto.getName() : "");
-                    row.createCell(2).setCellValue(dto.getEmail() != null ? dto.getEmail() : "");
-                    row.createCell(3).setCellValue(dto.getMajor() != null ? dto.getMajor() : "");
-                    row.createCell(4).setCellValue(dto.getGrade() != null ? dto.getGrade() : "");
+                    Cell cell0 = row.createCell(0);
+                    cell0.setCellValue(dto.getUsername() != null ? dto.getUsername() : "");
+                    cell0.setCellStyle(dataStyle);
+                    
+                    Cell cell1 = row.createCell(1);
+                    cell1.setCellValue(dto.getName() != null ? dto.getName() : "");
+                    cell1.setCellStyle(dataStyle);
+                    
+                    Cell cell2 = row.createCell(2);
+                    cell2.setCellValue(dto.getEmail() != null ? dto.getEmail() : "");
+                    cell2.setCellStyle(dataStyle);
+                    
+                    Cell cell3 = row.createCell(3);
+                    cell3.setCellValue(dto.getMajor() != null ? dto.getMajor() : "");
+                    cell3.setCellStyle(dataStyle);
+                    
+                    Cell cell4 = row.createCell(4);
+                    cell4.setCellValue(dto.getGrade() != null ? dto.getGrade() : "");
+                    cell4.setCellStyle(dataStyle);
                 }
             }
             

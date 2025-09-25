@@ -76,6 +76,7 @@ public class InterviewAssignmentResultDTO {
         private String major; // 添加专业字段
         private String grade; // 添加年级字段
         private String preferredDepartments; // 添加期望部门字段（第一、第二志愿）
+        private String preferredTimes; // 添加期望时间字段
         private LocalDateTime interviewTime;
         private String period; // 上午/下午
         private String interviewDepartment; // 面试部门（第一志愿）
@@ -85,7 +86,7 @@ public class InterviewAssignmentResultDTO {
         }
         
         public AssignedInterviewDTO(Integer userId, String username, String name, String email, 
-                                  String major, String grade, String preferredDepartments, 
+                                  String major, String grade, String preferredDepartments, String preferredTimes,
                                   LocalDateTime interviewTime, String period, String interviewDepartment, String classroom) {
             this.userId = userId;
             this.username = username;
@@ -94,6 +95,7 @@ public class InterviewAssignmentResultDTO {
             this.major = major;
             this.grade = grade;
             this.preferredDepartments = preferredDepartments;
+            this.preferredTimes = preferredTimes;
             this.interviewTime = interviewTime;
             this.period = period;
             this.interviewDepartment = interviewDepartment;
@@ -156,6 +158,14 @@ public class InterviewAssignmentResultDTO {
         
         public void setPreferredDepartments(String preferredDepartments) {
             this.preferredDepartments = preferredDepartments;
+        }
+        
+        public String getPreferredTimes() {
+            return preferredTimes;
+        }
+        
+        public void setPreferredTimes(String preferredTimes) {
+            this.preferredTimes = preferredTimes;
         }
         
         public LocalDateTime getInterviewTime() {

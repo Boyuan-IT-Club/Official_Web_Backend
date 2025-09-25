@@ -88,12 +88,15 @@ public interface ResumeMapper {
      * @param status 简历状态（可选），支持多个状态，用逗号分隔，如"2,3,4,5"
      * @param offset 偏移量
      * @param limit 限制数量
+     * @param sortBy 排序字段
+     * @param sortOrder 排序顺序
      * @return 简历列表
      */
     List<Resume> queryResumesWithPagination(@Param("name") String name, @Param("major") String major, 
                                            @Param("expectedDepartment") String expectedDepartment,
                                            @Param("cycleId") Integer cycleId, @Param("status") String status, 
-                                           @Param("offset") int offset, @Param("limit") int limit);
+                                           @Param("offset") int offset, @Param("limit") int limit,
+                                           @Param("sortBy") String sortBy, @Param("sortOrder") String sortOrder);
     
     /**
      * 统计多条件查询简历数量
