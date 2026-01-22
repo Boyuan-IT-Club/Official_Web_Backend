@@ -16,9 +16,6 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 @Table(name = "user")
 @TableName("user") // MyBatis-Plus 表映射注解
 public class User {
-    public static final String ROLE_ADMIN = "ADMIN";
-    public static final String ROLE_USER = "USER";
-    
     @Id
     @TableId(value = "user_id", type = IdType.AUTO) // MyBatis-Plus 主键映射，指定自增策略
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -32,10 +29,6 @@ public class User {
     @Column(name = "password", nullable = false)
     @TableField("password")
     private String password;
-
-    @Column(name = "role", nullable = false)
-    @TableField("role") // MyBatis-Plus 字段映射
-    private String role;
 
     @Column(name = "name")
     @TableField("name")
@@ -57,31 +50,27 @@ public class User {
     @TableField("github")
     private String github;
 
-    @Column(name = "dept")
-    @TableField("dept")
-    private String dept;
-
-    @Column(name = "create_time", columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    @TableField(value = "create_time", fill = FieldFill.INSERT) // 自动填充创建时间
-    private LocalDateTime createTime;
-
-    @Column(name = "status", columnDefinition = "TINYINT(1) DEFAULT 0")
-    @TableField("status")
-    private Integer status;
-
-    @Column(name = "is_member", columnDefinition = "TINYINT(1) DEFAULT 0")
-    @TableField("is_member")
-    private Integer isMember;
+    @Column(name = "dept_id")
+    @TableField("dept_id")
+    private Integer deptId;
 
     @Column(name = "avatar")
     @TableField("avatar")
     private String avatar;
 
+    @Column(name = "status", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 1")
+    @TableField("status")
+    private Integer status;
+
     @Column(name = "is_deleted", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 0")
     @TableField("is_deleted")
     @TableLogic // MyBatis-Plus 逻辑删除注解
     private Integer isDeleted;
+
+    @Column(name = "create_time", columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField(value = "create_time", fill = FieldFill.INSERT) // 自动填充创建时间
+    private LocalDateTime createTime;
 
     @Column(name = "update_time", columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
@@ -201,14 +190,6 @@ public class User {
         this.status = status;
     }
 
-    public Integer getIsMember() {
-        return isMember;
-    }
-
-    public void setIsMember(Integer isMember) {
-        this.isMember = isMember;
-    }
-
     public Integer getIsDeleted() {
         return isDeleted;
     }
@@ -250,6 +231,6 @@ public class User {
     }
 
     public String toString() {
-        return "User{userId = " + userId + ", username = " + username + ", password = " + password + ", role = " + role + ", name = " + name + ", email = " + email + ", phone = " + phone + ", major = " + major + ", github = " + github + ", dept = " + dept + ", status = " + status + ", isMember = " + isMember + ", avatar = " + avatar + ", isDeleted = " + isDeleted + ", createTime = " + createTime + ", updateTime = " + updateTime + "}";
+        return "User{userId = " + userId + ", username = " + username + ", password = " + password + ", name = " + name + ", email = " + email + ", phone = " + phone + ", major = " + major + ", github = " + github + ", deptId = " + deptId + ", avatar = " + avatar + ", status = " + status + ", isDeleted = " + isDeleted + ", createTime = " + createTime + ", updateTime = " + updateTime + "}";
     }
 }
