@@ -26,7 +26,7 @@ public class AwardExperienceServiceImpl implements IAwardExperienceService {
         logger.debug("获奖经历详情: awardName={}, awardTime={}, description={}", 
                     awardExperience.getAwardName(), awardExperience.getAwardTime(), awardExperience.getDescription());
         
-        int result = awardExperienceMapper.save(awardExperience);
+        int result = awardExperienceMapper.insert(awardExperience);
         if (result <= 0) {
             logger.error("创建获奖经历失败，用户ID: {}", awardExperience.getUserId());
             throw new BusinessException(BusinessExceptionEnum.SYSTEM_ERROR);

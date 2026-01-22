@@ -1,32 +1,44 @@
 package club.boyuan.official.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "resume_field_value")
+@TableName("resume_field_value") // MyBatis-Plus 表映射注解
 public class ResumeFieldValue {
     @Id
+    @TableId(value = "value_id", type = IdType.AUTO) // MyBatis-Plus 主键映射，指定自增策略
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "value_id")
     private Integer valueId;
 
     @Column(name = "resume_id", nullable = false)
+    @TableField("resume_id") // MyBatis-Plus 字段映射
     private Integer resumeId;
 
     @Column(name = "field_id", nullable = false)
+    @TableField("field_id")
     private Integer fieldId;
 
     @Column(name = "field_value", columnDefinition = "TEXT")
+    @TableField("field_value")
     private String fieldValue;
 
     @Column(name = "created_at", columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField(value = "created_at", fill = FieldFill.INSERT) // 自动填充创建时间
     private LocalDateTime createdAt;
 
     @Column(name = "updated_at", columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField(value = "updated_at", fill = FieldFill.INSERT_UPDATE) // 自动填充更新时间
     private LocalDateTime updatedAt;
 
     // 构造函数
