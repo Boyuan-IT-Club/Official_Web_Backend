@@ -1,6 +1,7 @@
 package club.boyuan.official.mapper;
 
 import club.boyuan.official.entity.RecruitmentCycle;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -11,28 +12,7 @@ import java.util.List;
  * 招募周期Mapper接口
  */
 @Mapper
-public interface RecruitmentCycleMapper {
-    
-    /**
-     * 插入招募周期
-     * @param recruitmentCycle 招募周期实体
-     * @return 影响行数
-     */
-    int insert(RecruitmentCycle recruitmentCycle);
-    
-    /**
-     * 根据ID更新招募周期
-     * @param recruitmentCycle 招募周期实体
-     * @return 影响行数
-     */
-    int update(RecruitmentCycle recruitmentCycle);
-    
-    /**
-     * 根据ID删除招募周期
-     * @param cycleId 招募周期ID
-     * @return 影响行数
-     */
-    int deleteById(Integer cycleId);
+public interface RecruitmentCycleMapper extends BaseMapper<RecruitmentCycle> {
     
     /**
      * 根据ID查询招募周期

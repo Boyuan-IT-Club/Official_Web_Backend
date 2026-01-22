@@ -1,7 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="club.boyuan.official.mapper.ResumeFieldDefinitionMapper">
-    
+
     <resultMap id="ResumeFieldDefinitionMap" type="club.boyuan.official.entity.ResumeFieldDefinition">
         <id column="field_id" property="fieldId"/>
         <result column="cycle_id" property="cycleId"/>
@@ -13,76 +13,17 @@
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
     </resultMap>
-    
-    <!-- 根据招聘年份ID查询字段定义列表 -->
-    <select id="findByCycleId" resultMap="ResumeFieldDefinitionMap">
-        SELECT * FROM resume_field_definition 
-        WHERE cycle_id = #{cycleId} AND is_active = TRUE 
-        ORDER BY sort_order
+
+    <!-- 自定义查询方法 -->
+    <select id="findByCycleId" parameterType="java.lang.Integer" resultMap="ResumeFieldDefinitionMap">
+        SELECT * FROM resume_field_definition
+        WHERE cycle_id = #{cycleId} AND is_active = 1
+        ORDER BY sort_order ASC
     </select>
-    
-    <!-- 根据字段ID查询字段定义 -->
-    <select id="findById" resultMap="ResumeFieldDefinitionMap">
-        SELECT * FROM resume_field_definition WHERE field_id = #{fieldId}
+
+    <select id="findById" parameterType="java.lang.Integer" resultMap="ResumeFieldDefinitionMap">
+        SELECT * FROM resume_field_definition
+        WHERE field_id = #{fieldId}
     </select>
-    
-    <!-- 插入字段定义 -->
-    <insert id="insert" parameterType="club.boyuan.official.entity.ResumeFieldDefinition" useGeneratedKeys="true" keyProperty="fieldId">
-        INSERT INTO resume_field_definition(cycle_id, field_key, field_label, is_required, sort_order, is_active)
-        VALUES(#{cycleId}, #{fieldKey}, #{fieldLabel}, #{isRequired}, #{sortOrder}, #{isActive})
-    </insert>
-    
-    <!-- 更新字段定义 -->
-    <update id="update" parameterType="club.boyuan.official.entity.ResumeFieldDefinition">
-        UPDATE resume_field_definition 
-        <set>
-            <if test="fieldKey != null and fieldKey != ''">
-                field_key = #{fieldKey},
-            </if>
-            <if test="fieldLabel != null and fieldLabel != ''">
-                field_label = #{fieldLabel},
-            </if>
-            <if test="isRequired != null">
-                is_required = #{isRequired},
-            </if>
-            <if test="sortOrder != null">
-                sort_order = #{sortOrder},
-            </if>
-            <if test="isActive != null">
-                is_active = #{isActive},
-            </if>
-            updated_at = NOW()
-        </set>
-        WHERE field_id = #{fieldId}
-    </update>
-    
-    <!-- 批量更新字段定义 -->
-    <update id="batchUpdate" parameterType="club.boyuan.official.entity.ResumeFieldDefinition">
-        UPDATE resume_field_definition 
-        <set>
-            <if test="fieldKey != null and fieldKey != ''">
-                field_key = #{fieldKey},
-            </if>
-            <if test="fieldLabel != null and fieldLabel != ''">
-                field_label = #{fieldLabel},
-            </if>
-            <if test="isRequired != null">
-                is_required = #{isRequired},
-            </if>
-            <if test="sortOrder != null">
-                sort_order = #{sortOrder},
-            </if>
-            <if test="isActive != null">
-                is_active = #{isActive},
-            </if>
-            updated_at = NOW()
-        </set>
-        WHERE field_id = #{fieldId}
-    </update>
-    
-    <!-- 删除字段定义 -->
-    <delete id="deleteById">
-        DELETE FROM resume_field_definition WHERE field_id = #{fieldId}
-    </delete>
-    
+
 </mapper>

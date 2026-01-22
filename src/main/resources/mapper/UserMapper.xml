@@ -2,42 +2,28 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="club.boyuan.official.mapper.UserMapper">
 
-    <insert id="insert" parameterType="club.boyuan.official.entity.User" useGeneratedKeys="true" keyProperty="userId">
-        INSERT INTO user
-        <trim prefix="(" suffix=")" suffixOverrides=",">
-            <if test="username != null">username,</if>
-            <if test="password != null">password,</if>
-            <if test="email != null">email,</if>
-            <if test="role != null">role,</if>
-            <if test="name != null">name,</if>
-            <if test="phone != null">phone,</if>
-            <if test="major != null">major,</if>
-            <if test="github != null">github,</if>
-            <if test="dept != null">dept,</if>
-            <if test="avatar != null">avatar,</if>
-            create_time,
-            <if test="status != null">status,</if>
-            <if test="isMember != null">is_member,</if>
-        </trim>
-        VALUES
-        <trim prefix="(" suffix=")" suffixOverrides=",">
-            <if test="username != null">#{username},</if>
-            <if test="password != null">#{password},</if>
-            <if test="email != null">#{email},</if>
-            <if test="role != null">#{role},</if>
-            <if test="name != null">#{name},</if>
-            <if test="phone != null">#{phone},</if>
-            <if test="major != null">#{major},</if>
-            <if test="github != null">#{github},</if>
-            <if test="dept != null">#{dept},</if>
-            <if test="avatar != null">#{avatar},</if>
-            NOW(),
-            <if test="status != null">#{status},</if>
-            <if test="isMember != null">#{isMember},</if>
-        </trim>
-    </insert>
+    <!-- 结果映射 -->
+    <resultMap id="UserResultMap" type="club.boyuan.official.entity.User">
+        <id property="userId" column="user_id"/>
+        <result property="username" column="username"/>
+        <result property="password" column="password"/>
+        <result property="email" column="email"/>
+        <result property="role" column="role"/>
+        <result property="name" column="name"/>
+        <result property="phone" column="phone"/>
+        <result property="major" column="major"/>
+        <result property="github" column="github"/>
+        <result property="dept" column="dept"/>
+        <result property="avatar" column="avatar"/>
+        <result property="status" column="status"/>
+        <result property="isMember" column="is_member"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="isDeleted" column="is_deleted"/>
+    </resultMap>
 
-    <select id="selectById" parameterType="java.lang.Integer" resultType="club.boyuan.official.entity.User">
+    <!-- 自定义查询方法 -->
+    <select id="selectById" parameterType="java.lang.Integer" resultMap="UserResultMap">
         SELECT user_id,
                username,
                password,
@@ -53,10 +39,10 @@
                status,
                is_member
         FROM user
-        WHERE user_id = #{userId}
+        WHERE user_id = #{userId} AND is_deleted = 0
     </select>
 
-    <select id="selectByUsername" parameterType="java.lang.String" resultType="club.boyuan.official.entity.User">
+    <select id="selectByUsername" parameterType="java.lang.String" resultMap="UserResultMap">
         SELECT user_id,
                username,
                password,
@@ -72,10 +58,10 @@
                status,
                is_member
         FROM user
-        WHERE username = #{username}
+        WHERE username = #{username} AND is_deleted = 0
     </select>
 
-    <select id="selectByEmail" parameterType="java.lang.String" resultType="club.boyuan.official.entity.User">
+    <select id="selectByEmail" parameterType="java.lang.String" resultMap="UserResultMap">
         SELECT user_id,
                username,
                password,
@@ -91,10 +77,10 @@
                status,
                is_member
         FROM user
-        WHERE email = #{email}
+        WHERE email = #{email} AND is_deleted = 0
     </select>
 
-    <select id="selectByPhone" parameterType="java.lang.String" resultType="club.boyuan.official.entity.User">
+    <select id="selectByPhone" parameterType="java.lang.String" resultMap="UserResultMap">
         SELECT user_id,
                username,
                password,
@@ -110,7 +96,7 @@
                status,
                is_member
         FROM user
-        WHERE phone = #{phone}
+        WHERE phone = #{phone} AND is_deleted = 0
     </select>
 
     <update id="updateById" parameterType="club.boyuan.official.entity.User">
@@ -128,23 +114,23 @@
             <if test="avatar != null">avatar = #{avatar},</if>
             <if test="status != null">status = #{status},</if>
             <if test="isMember != null">is_member = #{isMember},</if>
+            update_time = NOW()
         </set>
         WHERE user_id = #{userId}
     </update>
 
     <update id="updatePasswordById" parameterType="map">
         UPDATE user
-        SET password = #{password}
+        SET password = #{password}, update_time = NOW()
         WHERE user_id = #{userId}
     </update>
 
     <delete id="deleteById" parameterType="java.lang.Integer">
-        DELETE
-        FROM user
+        UPDATE user SET is_deleted = 1, update_time = NOW()
         WHERE user_id = #{userId}
     </delete>
 
-    <select id="selectAll" resultType="club.boyuan.official.entity.User">
+    <select id="selectAll" resultMap="UserResultMap">
         SELECT user_id,
                username,
                password,
@@ -160,12 +146,14 @@
                status,
                is_member
         FROM user
+        WHERE is_deleted = 0
     </select>
 
-    <select id="findByRoleAndDeptAndStatus" resultType="club.boyuan.official.entity.User">
+    <select id="findByRoleAndDeptAndStatus" resultMap="UserResultMap">
         SELECT user_id, username, password, email, role, name, phone, dept, avatar, create_time, status, is_member
         FROM user
         <where>
+            AND is_deleted = 0
             <if test="role != null and role != ''">
                 AND role = #{role}
             </if>
@@ -176,13 +164,14 @@
                 AND status = #{status, jdbcType=BOOLEAN}
             </if>
         </where>
-        LIMIT #{pageable.pageNumber}, #{pageable.pageSize}
+        LIMIT #{pageable.offset}, #{pageable.pageSize}
     </select>
 
     <select id="countByRoleAndDeptAndStatus" resultType="java.lang.Long">
         SELECT COUNT(*)
         FROM user
         <where>
+            AND is_deleted = 0
             <if test="role != null and role != ''">
                 AND role = #{role}
             </if>
@@ -195,7 +184,7 @@
         </where>
     </select>
     
-    <select id="searchUsers" parameterType="string" resultType="club.boyuan.official.entity.User">
+    <select id="searchUsers" parameterType="string" resultMap="UserResultMap">
         SELECT user_id,
                username,
                password,
@@ -211,42 +200,46 @@
                status,
                is_member
         FROM user 
-        WHERE username LIKE CONCAT('%', #{keyword}, '%') 
+        WHERE (username LIKE CONCAT('%', #{keyword}, '%') 
            OR name LIKE CONCAT('%', #{keyword}, '%') 
            OR email LIKE CONCAT('%', #{keyword}, '%') 
            OR phone LIKE CONCAT('%', #{keyword}, '%') 
-           OR dept LIKE CONCAT('%', #{keyword}, '%') 
+           OR dept LIKE CONCAT('%', #{keyword}, '%'))
+           AND is_deleted = 0
         LIMIT 20
     </select>
     
     <update id="batchUpdateStatusByIds">
         UPDATE user 
-        SET status = #{status, jdbcType=BOOLEAN}
+        SET status = #{status, jdbcType=BOOLEAN}, update_time = NOW()
         WHERE user_id IN
         <foreach collection="userIds" item="userId" open="(" separator="," close=")">
             #{userId}
         </foreach>
+        AND is_deleted = 0
     </update>
     
     <update id="batchUpdateDeptByIds">
         UPDATE user 
-        SET dept = #{dept}
+        SET dept = #{dept}, update_time = NOW()
         WHERE user_id IN
         <foreach collection="userIds" item="userId" open="(" separator="," close=")">
             #{userId}
         </foreach>
+        AND is_deleted = 0
     </update>
     
     <update id="batchUpdateMembershipByIds">
         UPDATE user 
-        SET is_member = #{isMember, jdbcType=BOOLEAN}
+        SET is_member = #{isMember, jdbcType=BOOLEAN}, update_time = NOW()
         WHERE user_id IN
         <foreach collection="userIds" item="userId" open="(" separator="," close=")">
             #{userId}
         </foreach>
+        AND is_deleted = 0
     </update>
     
-    <select id="selectByIds" resultType="club.boyuan.official.entity.User">
+    <select id="selectByIds" resultMap="UserResultMap">
         SELECT user_id,
                username,
                password,
@@ -266,6 +259,7 @@
         <foreach collection="userIds" item="userId" open="(" separator="," close=")">
             #{userId}
         </foreach>
+        AND is_deleted = 0
     </select>
 
 </mapper>

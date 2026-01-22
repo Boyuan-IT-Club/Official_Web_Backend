@@ -1,13 +1,14 @@
 package club.boyuan.official.mapper;
 
 import club.boyuan.official.entity.ResumeFieldValue;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 
 @Mapper
-public interface ResumeFieldValueMapper {
+public interface ResumeFieldValueMapper extends BaseMapper<ResumeFieldValue> {
     
     /**
      * 根据简历ID查询字段值列表
@@ -58,18 +59,4 @@ public interface ResumeFieldValueMapper {
      * @return 影响行数
      */
     int deleteByFieldId(Integer fieldId);
-    
-    /**
-     * 根据字段值ID删除字段值
-     * @param valueId 字段值ID
-     * @return 影响行数
-     */
-    int deleteById(Integer valueId);
-    
-    /**
-     * 插入字段值
-     * @param fieldValue 字段值实体
-     * @return 影响行数
-     */
-    int insert(ResumeFieldValue fieldValue);
 }

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="club.boyuan.official.mapper.RecruitmentCycleMapper">
 
@@ -15,164 +15,81 @@
         <result property="updatedAt" column="updated_at"/>
     </resultMap>
 
-    <insert id="insert" parameterType="club.boyuan.official.entity.RecruitmentCycle" useGeneratedKeys="true" keyProperty="cycleId">
-        INSERT INTO recruitment_cycle (cycle_name, description, start_date, end_date, academic_year, status, is_active, created_at, updated_at)
-        VALUES (#{cycleName}, #{description}, #{startDate}, #{endDate}, #{academicYear}, #{status, jdbcType=INTEGER}, #{isActive, jdbcType=INTEGER}, NOW(), NOW())
-    </insert>
-
-    <update id="update" parameterType="club.boyuan.official.entity.RecruitmentCycle">
-        UPDATE recruitment_cycle
-        <set>
-            <if test="cycleName != null and cycleName != ''">
-                cycle_name = #{cycleName},
-            </if>
-            <if test="description != null and description != ''">
-                description = #{description},
-            </if>
-            <if test="startDate != null">
-                start_date = #{startDate},
-            </if>
-            <if test="endDate != null">
-                end_date = #{endDate},
-            </if>
-            <if test="academicYear != null and academicYear != ''">
-                academic_year = #{academicYear},
-            </if>
-            <if test="status != null">
-                status = #{status},
-            </if>
-            <if test="isActive != null">
-                is_active = #{isActive},
-            </if>
-            updated_at = NOW()
-        </set>
+    <!-- 自定义查询方法 -->
+    <select id="findById" parameterType="java.lang.Integer" resultMap="RecruitmentCycleResultMap">
+        SELECT * FROM recruitment_cycle
         WHERE cycle_id = #{cycleId}
-    </update>
-
-    <delete id="deleteById">
-        DELETE FROM recruitment_cycle WHERE cycle_id = #{cycleId}
-    </delete>
-
-    <select id="findById" resultMap="RecruitmentCycleResultMap">
-        SELECT * FROM recruitment_cycle WHERE cycle_id = #{cycleId}
     </select>
 
     <select id="findAll" resultMap="RecruitmentCycleResultMap">
-        SELECT * FROM recruitment_cycle ORDER BY created_at DESC
+        SELECT * FROM recruitment_cycle
+        ORDER BY created_at DESC
     </select>
 
-    <select id="findByStatus" resultMap="RecruitmentCycleResultMap">
-        SELECT * FROM recruitment_cycle WHERE status = #{status} ORDER BY created_at DESC
+    <select id="findByStatus" parameterType="java.lang.Integer" resultMap="RecruitmentCycleResultMap">
+        SELECT * FROM recruitment_cycle
+        WHERE status = #{status}
+        ORDER BY created_at DESC
     </select>
 
-    <select id="findByIsActive" resultMap="RecruitmentCycleResultMap">
-        SELECT * FROM recruitment_cycle WHERE is_active = #{isActive} ORDER BY created_at DESC
+    <select id="findByIsActive" parameterType="java.lang.Integer" resultMap="RecruitmentCycleResultMap">
+        SELECT * FROM recruitment_cycle
+        WHERE is_active = #{isActive}
+        ORDER BY created_at DESC
     </select>
 
-    <select id="findByAcademicYear" resultMap="RecruitmentCycleResultMap">
-        SELECT * FROM recruitment_cycle WHERE academic_year = #{academicYear}
+    <select id="findByAcademicYear" parameterType="java.lang.String" resultMap="RecruitmentCycleResultMap">
+        SELECT * FROM recruitment_cycle
+        WHERE academic_year = #{academicYear}
     </select>
-    
-    <!-- 新增方法的实现 -->
-    
-    <delete id="batchDelete">
-        DELETE FROM recruitment_cycle WHERE cycle_id IN
+
+    <delete id="batchDelete" parameterType="java.util.List">
+        DELETE FROM recruitment_cycle
+        WHERE cycle_id IN
         <foreach collection="cycleIds" item="cycleId" open="(" separator="," close=")">
             #{cycleId}
         </foreach>
     </delete>
-    
-    <update id="batchUpdate">
-        UPDATE recruitment_cycle
-        <set>
-            <if test="recruitmentCycles[0].cycleName != null and recruitmentCycles[0].cycleName != ''">
-                cycle_name = CASE cycle_id
-                <foreach collection="recruitmentCycles" item="recruitmentCycle">
-                    <if test="recruitmentCycle.cycleName != null and recruitmentCycle.cycleName != ''">
-                        WHEN #{recruitmentCycle.cycleId} THEN #{recruitmentCycle.cycleName}
-                    </if>
-                </foreach>
-                END,
-            </if>
-            <if test="recruitmentCycles[0].description != null and recruitmentCycles[0].description != ''">
-                description = CASE cycle_id
-                <foreach collection="recruitmentCycles" item="recruitmentCycle">
-                    <if test="recruitmentCycle.description != null and recruitmentCycle.description != ''">
-                        WHEN #{recruitmentCycle.cycleId} THEN #{recruitmentCycle.description}
-                    </if>
-                </foreach>
-                END,
-            </if>
-            <if test="recruitmentCycles[0].startDate != null">
-                start_date = CASE cycle_id
-                <foreach collection="recruitmentCycles" item="recruitmentCycle">
-                    <if test="recruitmentCycle.startDate != null">
-                        WHEN #{recruitmentCycle.cycleId} THEN #{recruitmentCycle.startDate}
-                    </if>
-                </foreach>
-                END,
-            </if>
-            <if test="recruitmentCycles[0].endDate != null">
-                end_date = CASE cycle_id
-                <foreach collection="recruitmentCycles" item="recruitmentCycle">
-                    <if test="recruitmentCycle.endDate != null">
-                        WHEN #{recruitmentCycle.cycleId} THEN #{recruitmentCycle.endDate}
-                    </if>
-                </foreach>
-                END,
-            </if>
-            <if test="recruitmentCycles[0].academicYear != null and recruitmentCycles[0].academicYear != ''">
-                academic_year = CASE cycle_id
-                <foreach collection="recruitmentCycles" item="recruitmentCycle">
-                    <if test="recruitmentCycle.academicYear != null and recruitmentCycle.academicYear != ''">
-                        WHEN #{recruitmentCycle.cycleId} THEN #{recruitmentCycle.academicYear}
-                    </if>
-                </foreach>
-                END,
-            </if>
-            <if test="recruitmentCycles[0].status != null">
-                status = CASE cycle_id
-                <foreach collection="recruitmentCycles" item="recruitmentCycle">
-                    <if test="recruitmentCycle.status != null">
-                        WHEN #{recruitmentCycle.cycleId} THEN #{recruitmentCycle.status}
-                    </if>
-                </foreach>
-                END,
-            </if>
-            <if test="recruitmentCycles[0].isActive != null">
-                is_active = CASE cycle_id
-                <foreach collection="recruitmentCycles" item="recruitmentCycle">
-                    <if test="recruitmentCycle.isActive != null">
-                        WHEN #{recruitmentCycle.cycleId} THEN #{recruitmentCycle.isActive}
-                    </if>
-                </foreach>
-                END,
-            </if>
-            updated_at = NOW()
-        </set>
-        WHERE cycle_id IN
-        <foreach collection="recruitmentCycles" item="recruitmentCycle" open="(" separator="," close=")">
-            #{recruitmentCycle.cycleId}
+
+    <update id="batchUpdate" parameterType="java.util.List">
+        <foreach collection="recruitmentCycles" item="item" separator=";">
+            UPDATE recruitment_cycle
+            <set>
+                <if test="item.cycleName != null">cycle_name = #{item.cycleName},</if>
+                <if test="item.description != null">description = #{item.description},</if>
+                <if test="item.startDate != null">start_date = #{item.startDate},</if>
+                <if test="item.endDate != null">end_date = #{item.endDate},</if>
+                <if test="item.academicYear != null">academic_year = #{item.academicYear},</if>
+                <if test="item.status != null">status = #{item.status},</if>
+                <if test="item.isActive != null">is_active = #{item.isActive},</if>
+                updated_at = NOW()
+            </set>
+            WHERE cycle_id = #{item.cycleId}
         </foreach>
     </update>
-    
+
     <select id="findAllWithPaginationAndSorting" resultMap="RecruitmentCycleResultMap">
         SELECT * FROM recruitment_cycle
-        <if test="sortBy != null and sortBy != ''">
-            ORDER BY ${sortBy} 
-            <if test="sortOrder != null and sortOrder != ''">
+        ORDER BY
+        <choose>
+            <when test="sortBy != null and sortBy != ''">
+                ${sortBy}
+            </when>
+            <otherwise>
+                created_at
+            </otherwise>
+        </choose>
+        <choose>
+            <when test="sortOrder != null and sortOrder != ''">
                 ${sortOrder}
-            </if>
-            <if test="sortOrder == null or sortOrder == ''">
-                ASC
-            </if>
-        </if>
-        <if test="sortBy == null or sortBy == ''">
-            ORDER BY created_at DESC
-        </if>
+            </when>
+            <otherwise>
+                DESC
+            </otherwise>
+        </choose>
         LIMIT #{offset}, #{limit}
     </select>
-    
+
     <select id="findByConditions" resultMap="RecruitmentCycleResultMap">
         SELECT * FROM recruitment_cycle
         <where>
@@ -189,22 +106,27 @@
                 AND is_active = #{isActive}
             </if>
         </where>
-        <if test="sortBy != null and sortBy != ''">
-            ORDER BY ${sortBy} 
-            <if test="sortOrder != null and sortOrder != ''">
+        ORDER BY
+        <choose>
+            <when test="sortBy != null and sortBy != ''">
+                ${sortBy}
+            </when>
+            <otherwise>
+                created_at
+            </otherwise>
+        </choose>
+        <choose>
+            <when test="sortOrder != null and sortOrder != ''">
                 ${sortOrder}
-            </if>
-            <if test="sortOrder == null or sortOrder == ''">
-                ASC
-            </if>
-        </if>
-        <if test="sortBy == null or sortBy == ''">
-            ORDER BY created_at DESC
-        </if>
+            </when>
+            <otherwise>
+                DESC
+            </otherwise>
+        </choose>
         LIMIT #{offset}, #{limit}
     </select>
-    
-    <select id="countByConditions" resultType="long">
+
+    <select id="countByConditions" resultType="java.lang.Long">
         SELECT COUNT(*) FROM recruitment_cycle
         <where>
             <if test="cycleName != null and cycleName != ''">
@@ -221,16 +143,17 @@
             </if>
         </where>
     </select>
-    
+
     <update id="updateStatusBasedOnDate">
-        UPDATE recruitment_cycle 
-        SET status = CASE 
-            WHEN start_date > #{currentDate} THEN 1  <!-- 未开始 -->
-            WHEN start_date &lt;= #{currentDate} AND end_date >= #{currentDate} THEN 2  <!-- 进行中 -->
-            WHEN end_date &lt; #{currentDate} THEN 3  <!-- 已结束 -->
+        UPDATE recruitment_cycle
+        SET status = CASE
+            WHEN #{currentDate} &lt; start_date THEN 1  -- 未开始
+            WHEN #{currentDate} BETWEEN start_date AND end_date THEN 2  -- 进行中
+            WHEN #{currentDate} &gt; end_date THEN 3  -- 已结束
             ELSE status
         END,
         updated_at = NOW()
-        WHERE start_date IS NOT NULL AND end_date IS NOT NULL
+        WHERE is_active = 1
     </update>
+
 </mapper>
