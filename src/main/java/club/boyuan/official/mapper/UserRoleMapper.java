@@ -8,7 +8,7 @@ import org.apache.ibatis.annotations.Mapper;
 /**
  * UserRole的mapper层
  *
- * @author zewan
+ * @author zewang
  * @version 1.0
  * @date 2026-01-22 19:30
  * @since 2026
