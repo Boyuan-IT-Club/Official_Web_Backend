@@ -177,14 +177,6 @@ public class User {
         this.github = github;
     }
 
-    public String getDept() {
-        return dept;
-    }
-
-    public void setDept(String dept) {
-        this.dept = dept;
-    }
-
     public Integer getDeptId() {
         return deptId;
     }
@@ -207,6 +199,14 @@ public class User {
 
     public void setStatus(Integer status) {
         this.status = status;
+    }
+
+    public Integer getIsMember() {
+        return isMember;
+    }
+
+    public void setIsMember(Integer isMember) {
+        this.isMember = isMember;
     }
 
     public Integer getIsDeleted() {
@@ -250,6 +250,6 @@ public class User {
     }
 
     public String toString() {
-        return "User{userId = " + userId + ", username = " + username + ", password = " + password + ", name = " + name + ", email = " + email + ", phone = " + phone + ", major = " + major + ", github = " + github + ", deptId = " + deptId + ", avatar = " + avatar + ", status = " + status + ", isDeleted = " + isDeleted + ", createTime = " + createTime + ", updateTime = " + updateTime + "}";
+        return "User{userId = " + userId + ", username = " + username + ", password = " + password + ", role = " + role + ", name = " + name + ", email = " + email + ", phone = " + phone + ", major = " + major + ", github = " + github + ", dept = " + dept + ", status = " + status + ", isMember = " + isMember + ", avatar = " + avatar + ", isDeleted = " + isDeleted + ", createTime = " + createTime + ", updateTime = " + updateTime + "}";
     }
 }
