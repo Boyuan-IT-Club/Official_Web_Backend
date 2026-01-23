@@ -8,6 +8,9 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * MyBatis-Plus配置类
+ * 
+ * 此配置类用于设置 MyBatis-Plus 的全局插件
+ * 主要功能包括分页插件等
  *
  * @author zewang
  * @version 1.0
@@ -16,16 +19,13 @@ import org.springframework.context.annotation.Configuration;
  */
 @Configuration
 public class MyBatisPlusConfig {
-    
-    /**
-     * 配置MyBatis-Plus拦截器
-     * @return MybatisPlusInterceptor
-     */
+
+    // MybatisPlus在执行分页操作时,会被该拦截器拦截
+    // 拦截器的作用 动态拼接where条件!!!
     @Bean
     public MybatisPlusInterceptor mybatisPlusInterceptor() {
         MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
-        // 添加分页插件
-        interceptor.addInnerInterceptor(new PaginationInnerInterceptor(DbType.MYSQL));
+        interceptor.addInnerInterceptor(new PaginationInnerInterceptor(DbType.MARIADB));
         return interceptor;
     }
 }
