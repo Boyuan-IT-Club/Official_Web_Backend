@@ -19,6 +19,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import club.boyuan.official.entity.Role;
 
 /**
  * 认证控制器
@@ -88,8 +90,8 @@ public class AuthController {
             userDTO.setEmail(registerDTO.getEmail());
             userDTO.setPhone(registerDTO.getPhone());
             userDTO.setName(registerDTO.getName());
-            userDTO.setRole(User.ROLE_USER); // 默认普通用户角色
-            userDTO.setStatus(true); // 默认激活状态
+            // UserDTO已经没有role字段，移除setRole调用
+            userDTO.setStatus(1); // 默认激活状态（Integer类型）
 
             // 注册用户
             User user = userService.register(userDTO);
@@ -241,10 +243,13 @@ public class AuthController {
             // 构建返回数据
             Map<String, Object> data = new HashMap<>();
             data.put("user_id", user.getUserId());
-            data.put("role", user.getRole());
-            // 获取用户角色列表
-            List<String> roles = Collections.singletonList(user.getRole());
+            // 获取用户角色列表，User类已经没有getRole()方法
+            List<String> roles = user.getRoles() != null ? 
+                user.getRoles().stream().map(Role::getRoleCode).collect(Collectors.toList()) : 
+                Collections.emptyList();
             data.put("token", jwtTokenUtil.generateToken(user.getUsername(), user.getUserId(), roles));
+            // 添加角色信息到返回数据
+            data.put("roles", roles);
 
             return ResponseEntity.ok(ResponseMessage.success(data));
         } catch (BusinessException e) {

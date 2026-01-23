@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
+import club.boyuan.official.util.PermissionUtils;
 
 /**
  * 奖项经验控制器
@@ -76,7 +77,7 @@ public class AwardExperienceController {
                 // 未指定用户ID - 拒绝访问
                 logger.warn("创建获奖经历时未指定用户ID，操作者用户ID: {}", currentUser.getUserId());
                 throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
-            } else if (User.ROLE_ADMIN.equals(currentUser.getRole())) {
+            } else if (PermissionUtils.hasPermission(currentUser, "award:manage")) {
                 // 管理员：验证目标用户是否存在
                 User targetUser = userService.getUserById(targetUserId);
                 if (targetUser == null) {
@@ -145,7 +146,7 @@ public class AwardExperienceController {
             }
             
             // 权限检查：管理员可以查看所有，普通用户只能查看自己的
-            if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
+            if (!PermissionUtils.hasPermission(currentUser, "award:manage")) {
                 if (!award.getUserId().equals(currentUser.getUserId())) {
                     logger.warn("用户ID为{}的用户尝试查看其他用户的获奖经历，目标用户ID: {}, 获奖ID: {}", 
                                currentUser.getUserId(), award.getUserId(), id);
@@ -190,7 +191,7 @@ public class AwardExperienceController {
             User currentUser = userService.getUserByUsername(username);
             
             // 权限检查：管理员可以查看所有，普通用户只能查看自己的
-            if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
+            if (!PermissionUtils.hasPermission(currentUser, "award:manage")) {
                 if (!userId.equals(currentUser.getUserId())) {
                     logger.warn("用户ID为{}的用户尝试查看其他用户的获奖经历，目标用户ID: {}", currentUser.getUserId(), userId);
                     throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
@@ -246,7 +247,7 @@ public class AwardExperienceController {
             }
             
             // 权限检查：管理员可以修改所有人的，普通用户只能修改自己的
-            if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
+            if (!PermissionUtils.hasPermission(currentUser, "award:manage")) {
                 if (!originalAward.getUserId().equals(currentUserId)) {
                     logger.warn("用户ID为{}的用户尝试更新其他用户的获奖经历，目标用户ID: {}, 获奖ID: {}", 
                                currentUserId, originalAward.getUserId(), awardExperience.getAwardId());
@@ -304,7 +305,7 @@ public class AwardExperienceController {
             }
 
             // 权限检查：管理员可以删除所有，普通用户只能删除自己的
-            if (!User.ROLE_ADMIN.equals(currentUser.getRole()) && !award.getUserId().equals(currentUser.getUserId())) {
+            if (!PermissionUtils.canAccessUserResource(currentUser, award.getUserId())) {
                 logger.warn("用户ID为{}的用户尝试删除其他用户的获奖经历，目标用户ID: {}, 获奖ID: {}", 
                            currentUser.getUserId(), award.getUserId(), id);
                 throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
