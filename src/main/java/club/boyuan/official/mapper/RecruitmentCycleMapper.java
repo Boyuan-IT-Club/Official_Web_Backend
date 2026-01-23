@@ -1,9 +1,7 @@
 package club.boyuan.official.mapper;
 
 import club.boyuan.official.entity.RecruitmentCycle;
-import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import org.apache.ibatis.annotations.Mapper;
-import org.apache.ibatis.annotations.Param;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;import org.apache.ibatis.annotations.Param;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -11,7 +9,6 @@ import java.util.List;
 /**
  * 招募周期Mapper接口
  */
-@Mapper
 public interface RecruitmentCycleMapper extends BaseMapper<RecruitmentCycle> {
     
     /**

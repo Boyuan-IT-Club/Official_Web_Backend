@@ -1,13 +1,10 @@
 package club.boyuan.official.mapper;
 
 import club.boyuan.official.entity.Resume;
-import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import org.apache.ibatis.annotations.Mapper;
-import org.apache.ibatis.annotations.Param;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 
-@Mapper
 public interface ResumeMapper extends BaseMapper<Resume> {
     
     /**
