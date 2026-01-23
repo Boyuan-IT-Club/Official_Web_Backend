@@ -24,77 +24,25 @@
 
     <!-- 自定义查询方法 -->
     <select id="selectById" parameterType="java.lang.Integer" resultMap="UserResultMap">
-        SELECT user_id,
-               username,
-               password,
-               email,
-               role,
-               name,
-               phone,
-               major,
-               github,
-               dept,
-               avatar,
-               create_time,
-               status,
-               is_member
+        SELECT *
         FROM user
         WHERE user_id = #{userId} AND is_deleted = 0
     </select>
 
     <select id="selectByUsername" parameterType="java.lang.String" resultMap="UserResultMap">
-        SELECT user_id,
-               username,
-               password,
-               email,
-               role,
-               name,
-               phone,
-               major,
-               github,
-               dept,
-               avatar,
-               create_time,
-               status,
-               is_member
+        SELECT *
         FROM user
         WHERE username = #{username} AND is_deleted = 0
     </select>
 
     <select id="selectByEmail" parameterType="java.lang.String" resultMap="UserResultMap">
-        SELECT user_id,
-               username,
-               password,
-               email,
-               role,
-               name,
-               phone,
-               major,
-               github,
-               dept,
-               avatar,
-               create_time,
-               status,
-               is_member
+        SELECT *
         FROM user
         WHERE email = #{email} AND is_deleted = 0
     </select>
 
     <select id="selectByPhone" parameterType="java.lang.String" resultMap="UserResultMap">
-        SELECT user_id,
-               username,
-               password,
-               email,
-               role,
-               name,
-               phone,
-               major,
-               github,
-               dept,
-               avatar,
-               create_time,
-               status,
-               is_member
+        SELECT *
         FROM user
         WHERE phone = #{phone} AND is_deleted = 0
     </select>
@@ -131,20 +79,7 @@
     </delete>
 
     <select id="selectAll" resultMap="UserResultMap">
-        SELECT user_id,
-               username,
-               password,
-               email,
-               role,
-               name,
-               phone,
-               major,
-               github,
-               dept,
-               avatar,
-               create_time,
-               status,
-               is_member
+        SELECT *
         FROM user
         WHERE is_deleted = 0
     </select>
@@ -185,20 +120,7 @@
     </select>
     
     <select id="searchUsers" parameterType="string" resultMap="UserResultMap">
-        SELECT user_id,
-               username,
-               password,
-               email,
-               role,
-               name,
-               phone,
-               major,
-               github,
-               dept,
-               avatar,
-               create_time,
-               status,
-               is_member
+        SELECT *
         FROM user 
         WHERE (username LIKE CONCAT('%', #{keyword}, '%') 
            OR name LIKE CONCAT('%', #{keyword}, '%') 
@@ -240,20 +162,7 @@
     </update>
     
     <select id="selectByIds" resultMap="UserResultMap">
-        SELECT user_id,
-               username,
-               password,
-               email,
-               role,
-               name,
-               phone,
-               major,
-               github,
-               dept,
-               avatar,
-               create_time,
-               status,
-               is_member
+        SELECT *
         FROM user
         WHERE user_id IN
         <foreach collection="userIds" item="userId" open="(" separator="," close=")">
