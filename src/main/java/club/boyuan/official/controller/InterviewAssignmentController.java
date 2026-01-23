@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import club.boyuan.official.util.PermissionUtils;
 
 /**
  * 面试时间分配控制器
@@ -131,7 +132,7 @@ public class InterviewAssignmentController {
      * 验证管理员权限
      */
     private void checkAdminPermission(User user) {
-        if (!User.ROLE_ADMIN.equals(user.getRole())) {
+        if (!PermissionUtils.hasPermission(user, "resume:audit")) {
             throw new BusinessException(BusinessExceptionEnum.USER_ROLE_NOT_AUTHORIZED);
         }
     }

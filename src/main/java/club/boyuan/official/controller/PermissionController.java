@@ -1,12 +1,12 @@
 package club.boyuan.official.controller;
 
 import club.boyuan.official.dto.PermissionDTO;
+import club.boyuan.official.dto.ResponseMessage;
 import club.boyuan.official.entity.Permission;
-import club.boyuan.official.exception.BusinessException;
 import club.boyuan.official.service.PermissionService;
 import lombok.AllArgsConstructor;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -26,6 +26,7 @@ import java.util.List;
 @AllArgsConstructor
 public class PermissionController {
 
+    private static final Logger logger = LoggerFactory.getLogger(PermissionController.class);
     private final PermissionService permissionService;
 
     /**
@@ -35,13 +36,11 @@ public class PermissionController {
      */
     @PostMapping
     @PreAuthorize("hasAuthority('role:assign')")
-    public ResponseEntity<PermissionDTO> createPermission(@Validated @RequestBody PermissionDTO permissionDTO) {
-        try {
-            PermissionDTO createdPermission = permissionService.createPermission(permissionDTO);
-            return new ResponseEntity<>(createdPermission, HttpStatus.CREATED);
-        } catch (BusinessException e) {
-            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
-        }
+    public ResponseMessage<PermissionDTO> createPermission(@Validated @RequestBody PermissionDTO permissionDTO) {
+        logger.info("创建权限: {}", permissionDTO.getName());
+        PermissionDTO createdPermission = permissionService.createPermission(permissionDTO);
+        logger.info("权限创建成功: {}", createdPermission.getPermissionId());
+        return ResponseMessage.success(createdPermission);
     }
 
     /**
@@ -52,14 +51,12 @@ public class PermissionController {
      */
     @PutMapping("/{permissionId}")
     @PreAuthorize("hasAuthority('role:assign')")
-    public ResponseEntity<PermissionDTO> updatePermission(@PathVariable int permissionId, @Validated @RequestBody PermissionDTO permissionDTO) {
-        try {
-            permissionDTO.setPermissionId(permissionId);
-            PermissionDTO updatedPermission = permissionService.updatePermission(permissionDTO);
-            return ResponseEntity.ok(updatedPermission);
-        } catch (BusinessException e) {
-            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
-        }
+    public ResponseMessage<PermissionDTO> updatePermission(@PathVariable int permissionId, @Validated @RequestBody PermissionDTO permissionDTO) {
+        logger.info("更新权限: {}", permissionId);
+        permissionDTO.setPermissionId(permissionId);
+        PermissionDTO updatedPermission = permissionService.updatePermission(permissionDTO);
+        logger.info("权限更新成功: {}", permissionId);
+        return ResponseMessage.success(updatedPermission);
     }
 
     /**
@@ -69,12 +66,15 @@ public class PermissionController {
      */
     @DeleteMapping("/{permissionId}")
     @PreAuthorize("hasAuthority('role:assign')")
-    public ResponseEntity<Void> deletePermission(@PathVariable int permissionId) {
-        try {
-            boolean deleted = permissionService.deletePermission(permissionId);
-            return deleted ? ResponseEntity.ok().build() : ResponseEntity.notFound().build();
-        } catch (BusinessException e) {
-            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+    public ResponseMessage<Void> deletePermission(@PathVariable int permissionId) {
+        logger.info("删除权限: {}", permissionId);
+        boolean deleted = permissionService.deletePermission(permissionId);
+        if (deleted) {
+            logger.info("权限删除成功: {}", permissionId);
+            return ResponseMessage.success();
+        } else {
+            logger.warn("权限删除失败，权限不存在: {}", permissionId);
+            return ResponseMessage.error(404, "权限不存在");
         }
     }
 
@@ -85,13 +85,10 @@ public class PermissionController {
      */
     @GetMapping("/{permissionId}")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<PermissionDTO> getPermissionById(@PathVariable int permissionId) {
-        try {
-            PermissionDTO permissionDTO = permissionService.getPermissionById(permissionId);
-            return ResponseEntity.ok(permissionDTO);
-        } catch (BusinessException e) {
-            return ResponseEntity.notFound().build();
-        }
+    public ResponseMessage<PermissionDTO> getPermissionById(@PathVariable int permissionId) {
+        logger.info("获取权限详情: {}", permissionId);
+        PermissionDTO permissionDTO = permissionService.getPermissionById(permissionId);
+        return ResponseMessage.success(permissionDTO);
     }
 
     /**
@@ -105,18 +102,15 @@ public class PermissionController {
      */
     @GetMapping
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<List<PermissionDTO>> getPermissions(
+    public ResponseMessage<List<PermissionDTO>> getPermissions(
             @RequestParam(required = false, defaultValue = "") String resourceIdentifier,
             @RequestParam(required = false, defaultValue = "") String keyword,
             @RequestParam(required = false, defaultValue = "0") int page,
             @RequestParam(required = false, defaultValue = "10") int size,
             @RequestParam(required = false, defaultValue = "permissionId,asc") String sort) {
-        try {
-            List<PermissionDTO> permissions = permissionService.getPermissions(resourceIdentifier, keyword, page, size, sort);
-            return ResponseEntity.ok(permissions);
-        } catch (BusinessException e) {
-            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
-        }
+        logger.info("获取权限列表，资源标识符: {}, 关键词: {}, 页码: {}, 每页大小: {}, 排序: {}", resourceIdentifier, keyword, page, size, sort);
+        List<PermissionDTO> permissions = permissionService.getPermissions(resourceIdentifier, keyword, page, size, sort);
+        return ResponseMessage.success(permissions);
     }
 
     /**
@@ -125,12 +119,9 @@ public class PermissionController {
      */
     @GetMapping("/all")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<List<PermissionDTO>> getAllPermissions() {
-        try {
-            List<PermissionDTO> permissions = permissionService.getAllPermissions();
-            return ResponseEntity.ok(permissions);
-        } catch (Exception e) {
-            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
-        }
+    public ResponseMessage<List<PermissionDTO>> getAllPermissions() {
+        logger.info("获取所有权限");
+        List<PermissionDTO> permissions = permissionService.getAllPermissions();
+        return ResponseMessage.success(permissions);
     }
 }

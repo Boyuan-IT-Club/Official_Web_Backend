@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.List;
+import club.boyuan.official.util.PermissionUtils;
 
 /**
  * 招募周期Controller
@@ -393,7 +394,7 @@ public class RecruitmentCycleController {
      * 验证管理员权限
      */
     private void checkAdminPermission(User user) {
-        if (!User.ROLE_ADMIN.equals(user.getRole())) {
+        if (!PermissionUtils.hasPermission(user, "cycle:manage")) {
             throw new BusinessException(BusinessExceptionEnum.USER_ROLE_NOT_AUTHORIZED);
         }
     }

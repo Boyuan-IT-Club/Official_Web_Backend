@@ -8,6 +8,7 @@ import club.boyuan.official.exception.BusinessExceptionEnum;
 import club.boyuan.official.service.IGlobalSearchService;
 import club.boyuan.official.service.IUserService;
 import club.boyuan.official.utils.JwtTokenUtil;
+import club.boyuan.official.util.PermissionUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AllArgsConstructor;
 import org.slf4j.Logger;
@@ -69,8 +70,8 @@ public class GlobalSearchController {
                 throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
             }
             
-            // 检查是否为管理员
-            if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
+            // 检查是否有搜索权限
+            if (!PermissionUtils.hasPermission(currentUser, "resume:view")) {
                 logger.warn("用户 {} 尝试访问全局搜索接口，但权限不足", username);
                 throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
             }

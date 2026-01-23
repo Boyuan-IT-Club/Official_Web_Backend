@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
+import club.boyuan.official.util.PermissionUtils;
 
 /**
  * 简历控制器
@@ -83,7 +84,7 @@ public class ResumeController {
             String username = jwtTokenUtil.extractUsername(token);
             User currentUser = userService.getUserByUsername(username);
             
-            if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
+            if (!PermissionUtils.hasPermission(currentUser, "resume:audit")) {
                 logger.warn("用户{}尝试创建字段定义，但权限不足", username);
                 throw new BusinessException(BusinessExceptionEnum.USER_ROLE_NOT_AUTHORIZED);
             }
@@ -117,7 +118,7 @@ public class ResumeController {
             String username = jwtTokenUtil.extractUsername(token);
             User currentUser = userService.getUserByUsername(username);
             
-            if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
+            if (!PermissionUtils.hasPermission(currentUser, "resume:audit")) {
                 logger.warn("用户{}尝试更新字段定义，但权限不足", username);
                 throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
             }
@@ -152,7 +153,7 @@ public class ResumeController {
             String username = jwtTokenUtil.extractUsername(token);
             User currentUser = userService.getUserByUsername(username);
             
-            if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
+            if (!PermissionUtils.hasPermission(currentUser, "resume:audit")) {
                 logger.warn("用户{}尝试批量更新字段定义，但权限不足", username);
                 throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
             }
@@ -186,7 +187,7 @@ public class ResumeController {
             String username = jwtTokenUtil.extractUsername(token);
             User currentUser = userService.getUserByUsername(username);
             
-            if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
+            if (!PermissionUtils.hasPermission(currentUser, "resume:audit")) {
                 logger.warn("用户{}尝试删除字段定义，但权限不足", username);
                 throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
             }
@@ -284,7 +285,7 @@ public class ResumeController {
             String username = jwtTokenUtil.extractUsername(token);
             User currentUser = userService.getUserByUsername(username);
             
-            if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
+            if (!PermissionUtils.hasPermission(currentUser, "resume:view")) {
                 logger.warn("用户{}尝试查看用户{}的简历，但权限不足", username, userId);
                 throw new BusinessException(BusinessExceptionEnum.USER_ROLE_NOT_AUTHORIZED);
             }
@@ -538,7 +539,7 @@ public class ResumeController {
             
             User currentUser = userService.getUserByUsername(username);
             
-            if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
+            if (!PermissionUtils.hasPermission(currentUser, "resume:audit")) {
                 logger.warn("用户{}尝试更新简历状态，但权限不足", username);
                 throw new BusinessException(BusinessExceptionEnum.USER_ROLE_NOT_AUTHORIZED);
             }
@@ -703,7 +704,7 @@ public class ResumeController {
             }
             
             // 检查权限：管理员或简历所有者可以删除
-            if (!User.ROLE_ADMIN.equals(currentUser.getRole()) && !currentUser.getUserId().equals(resume.getUserId())) {
+            if (!PermissionUtils.canAccessUserResource(currentUser, resume.getUserId())) {
                 logger.warn("用户{}尝试删除不属于自己的简历{}", username, resumeId);
                 throw new BusinessException(BusinessExceptionEnum.USER_ROLE_NOT_AUTHORIZED);
             }
@@ -770,7 +771,7 @@ public class ResumeController {
                 }
                 
                 // 权限检查：管理员或简历所有者可以导出
-                if (!User.ROLE_ADMIN.equals(currentUser.getRole()) && !currentUser.getUserId().equals(resumeDTO.getUserId())) {
+                if (!PermissionUtils.canAccessUserResource(currentUser, resumeDTO.getUserId())) {
                     logger.warn("用户{}尝试导出不属于自己的简历{}", username, resumeId);
                     response.sendError(HttpServletResponse.SC_FORBIDDEN, "权限不足");
                     return;
@@ -828,7 +829,7 @@ public class ResumeController {
             }
             User currentUser = userService.getUserByUsername(username);
             // 仅管理员可用
-            if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
+            if (!PermissionUtils.hasPermission(currentUser, "resume:view")) {
                 logger.warn("用户{}尝试条件查询简历，但权限不足", username);
                 throw new BusinessException(BusinessExceptionEnum.USER_ROLE_NOT_AUTHORIZED);
             }
