@@ -49,7 +49,7 @@ spring:
           ssl:
             enable: true
 
-mybatis:
+mybatis-plus:
   mapper-locations: classpath:mapper/*.xml
   type-aliases-package: club.boyuan.official.entity
   configuration:
