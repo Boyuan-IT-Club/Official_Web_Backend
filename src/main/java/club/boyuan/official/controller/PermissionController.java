@@ -37,7 +37,7 @@ public class PermissionController {
     @PostMapping
     @PreAuthorize("hasAuthority('role:assign')")
     public ResponseMessage<PermissionDTO> createPermission(@Validated @RequestBody PermissionDTO permissionDTO) {
-        logger.info("创建权限: {}", permissionDTO.getName());
+        logger.info("创建权限: {}", permissionDTO.getPermissionName());
         PermissionDTO createdPermission = permissionService.createPermission(permissionDTO);
         logger.info("权限创建成功: {}", createdPermission.getPermissionId());
         return ResponseMessage.success(createdPermission);

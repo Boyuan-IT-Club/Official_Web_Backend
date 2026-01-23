@@ -37,7 +37,7 @@ public class DepartmentController {
     @PostMapping
     @PreAuthorize("hasAuthority('dept:manage')")
     public ResponseMessage<DepartmentDTO> createDepartment(@Validated @RequestBody DepartmentDTO departmentDTO) {
-        logger.info("创建部门: {}", departmentDTO.getName());
+        logger.info("创建部门: {}", departmentDTO.getDeptName());
         DepartmentDTO createdDepartment = departmentService.createDepartment(departmentDTO);
         logger.info("部门创建成功: {}", createdDepartment.getDeptId());
         return ResponseMessage.success(createdDepartment);

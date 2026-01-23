@@ -39,7 +39,7 @@ public class RoleController {
     @PostMapping
     @PreAuthorize("hasAuthority('role:assign')")
     public ResponseMessage<RoleDTO> createRole(@Validated @RequestBody RoleDTO roleDTO) {
-        logger.info("创建角色: {}", roleDTO.getName());
+        logger.info("创建角色: {}", roleDTO.getRoleName());
         RoleDTO createdRole = roleService.createRole(roleDTO);
         logger.info("角色创建成功: {}", createdRole.getRoleId());
         return ResponseMessage.success(createdRole);
