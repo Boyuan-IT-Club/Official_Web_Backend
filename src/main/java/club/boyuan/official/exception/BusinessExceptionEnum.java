@@ -30,6 +30,9 @@ public enum BusinessExceptionEnum {
     PHONE_ALREADY_EXISTS(2011, "手机号已存在"),
     PHONE_FORMAT_ERROR(2012, "手机号格式不正确"),
     PASSWORD_NOT_MATCH(2013, "密码不一致"),
+    ROLE_NOT_FOUND(2004, "角色不存在"),
+    PERMISSION_NOT_FOUND(2005, "权限不存在"),
+    DEPARTMENT_NOT_FOUND(2006, "部门不存在"),
     
     // 认证相关异常 (2100-2199)
     AUTHENTICATION_FAILED(2100, "认证失败"),
@@ -92,7 +95,8 @@ public enum BusinessExceptionEnum {
     PARAMETER_VALIDATION_FAILED(5002, "参数校验失败"),
     ILLEGAL_ARGUMENT(5003, "非法参数"),
     NULL_POINTER_EXCEPTION(5004, "空指针异常"),
-    UNSUPPORTED_OPERATION(5005, "不支持的操作");
+    UNSUPPORTED_OPERATION(5005, "不支持的操作"),
+    RESOURCE_CONFLICT(5006, "资源冲突");
     
     private final Integer code;
     private final String message;
