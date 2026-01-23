@@ -65,7 +65,7 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
                 throw new IllegalArgumentException("招募周期不存在");
             }
             
-            recruitmentCycleMapper.update(recruitmentCycle);
+            recruitmentCycleMapper.updateById(recruitmentCycle);
             logger.info("招募周期更新成功，ID: {}", recruitmentCycle.getCycleId());
             return recruitmentCycle;
         } catch (Exception e) {
@@ -193,7 +193,7 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
                 RecruitmentCycleMapper batchMapper = sqlSession.getMapper(RecruitmentCycleMapper.class);
                 
                 for (RecruitmentCycle cycle : recruitmentCycles) {
-                    batchMapper.update(cycle);
+                    batchMapper.updateById(cycle);
                 }
                 
                 sqlSession.commit();

@@ -1,6 +1,8 @@
 package club.boyuan.official.service.impl;
 
 
+import club.boyuan.official.dto.PermissionDTO;
+import club.boyuan.official.dto.RoleDTO;
 import club.boyuan.official.entity.Permission;
 import club.boyuan.official.entity.Role;
 import club.boyuan.official.exception.BusinessException;
@@ -10,13 +12,19 @@ import club.boyuan.official.mapper.RolePermissionMapper;
 import club.boyuan.official.service.RoleService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.baomidou.mybatisplus.core.toolkit.StringUtils;
+//import com.baomidou.mybatisplus.core.toolkit.StringUtils;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.BeanUtils;
+import org.springframework.stereotype.Service;
+
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
-import org.springframework.stereotype.Service;
 
 /**
  * Role的业务层实现
@@ -34,17 +42,21 @@ public class RoleServiceImpl extends ServiceImpl<RoleMapper, Role> implements Ro
     private RolePermissionMapper rolePermissionMapper;
 
     @Override
-    public Role createRole(Role role) throws BusinessException {
+    public RoleDTO createRole(RoleDTO roleDTO) throws BusinessException {
         // 参数校验
-        if (role == null) {
+        if (roleDTO == null) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "角色对象不能为空");
         }
-        if (StringUtils.isBlank(role.getRoleName())) {
+        if (StringUtils.isBlank(roleDTO.getRoleName())) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "角色名称不能为空");
         }
-        if (StringUtils.isBlank(role.getRoleCode())) {
+        if (StringUtils.isBlank(roleDTO.getRoleCode())) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "角色编码不能为空");
         }
+
+        // 转换DTO为实体
+        Role role = new Role();
+        BeanUtils.copyProperties(roleDTO, role);
 
         // 设置默认值
         if (role.getStatus() == null) {
@@ -55,27 +67,41 @@ public class RoleServiceImpl extends ServiceImpl<RoleMapper, Role> implements Ro
         
         // 插入数据
         baseMapper.insert(role);
-        return role;
+        
+        // 转换实体为DTO并返回
+        RoleDTO resultDTO = new RoleDTO();
+        BeanUtils.copyProperties(role, resultDTO);
+        return resultDTO;
     }
     
     @Override
-    public Role updateRole(Role role) throws BusinessException {
-        if (role == null || role.getRoleId() == null) {
+    public RoleDTO updateRole(RoleDTO roleDTO) throws BusinessException {
+        if (roleDTO == null || roleDTO.getRoleId() == null) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "角色ID不能为空");
         }
         
         // 检查角色是否存在
-        Role existingRole = baseMapper.selectById(role.getRoleId());
+        Role existingRole = baseMapper.selectById(roleDTO.getRoleId());
         if (existingRole == null) {
             throw new BusinessException(BusinessExceptionEnum.ROLE_NOT_FOUND, "角色不存在");
         }
         
+        // 转换DTO为实体
+        Role role = new Role();
+        BeanUtils.copyProperties(roleDTO, role);
+        
         // 更新时间
         role.setUpdateTime(LocalDateTime.now());
+        role.setCreateTime(existingRole.getCreateTime()); // 保留创建时间
         
         // 更新数据
         baseMapper.updateById(role);
-        return baseMapper.selectById(role.getRoleId());
+        
+        // 转换实体为DTO并返回
+        Role updatedRole = baseMapper.selectById(role.getRoleId());
+        RoleDTO resultDTO = new RoleDTO();
+        BeanUtils.copyProperties(updatedRole, resultDTO);
+        return resultDTO;
     }
     
     @Override
@@ -101,7 +127,7 @@ public class RoleServiceImpl extends ServiceImpl<RoleMapper, Role> implements Ro
     }
     
     @Override
-    public Role getRoleById(int roleId) throws BusinessException {
+    public RoleDTO getRoleById(int roleId) throws BusinessException {
         if (roleId <= 0) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "角色ID不能为空");
         }
@@ -110,11 +136,15 @@ public class RoleServiceImpl extends ServiceImpl<RoleMapper, Role> implements Ro
         if (role == null) {
             throw new BusinessException(BusinessExceptionEnum.ROLE_NOT_FOUND, "角色不存在");
         }
-        return role;
+        
+        // 转换实体为DTO并返回
+        RoleDTO resultDTO = new RoleDTO();
+        BeanUtils.copyProperties(role, resultDTO);
+        return resultDTO;
     }
     
     @Override
-    public List<Role> getRoles(int status, String keyword,
+    public List<RoleDTO> getRoles(int status, String keyword,
         int page, int size, String sort) throws BusinessException {
         // 创建Lambda查询包装器
         LambdaQueryWrapper<Role> queryWrapper = new LambdaQueryWrapper<>();
@@ -162,18 +192,30 @@ public class RoleServiceImpl extends ServiceImpl<RoleMapper, Role> implements Ro
         Page<Role> pageObj = new Page<>(page, size);
         baseMapper.selectPage(pageObj, queryWrapper);
         
-        return pageObj.getRecords();
+        // 转换实体列表为DTO列表并返回
+        return pageObj.getRecords().stream().map(role -> {
+            RoleDTO roleDTO = new RoleDTO();
+            BeanUtils.copyProperties(role, roleDTO);
+            return roleDTO;
+        }).collect(Collectors.toList());
     }
     
     @Override
-    public List<Role> getAllAvailableRoles() {
-        return baseMapper.selectList(new LambdaQueryWrapper<Role>()
+    public List<RoleDTO> getAllAvailableRoles() {
+        List<Role> roles = baseMapper.selectList(new LambdaQueryWrapper<Role>()
             .eq(Role::getStatus, 1)
             .orderByAsc(Role::getRoleName));
+        
+        // 转换实体列表为DTO列表并返回
+        return roles.stream().map(role -> {
+            RoleDTO roleDTO = new RoleDTO();
+            BeanUtils.copyProperties(role, roleDTO);
+            return roleDTO;
+        }).collect(Collectors.toList());
     }
     
     @Override
-    public List<Permission> getPermissionsByRoleId(int roleId) throws BusinessException {
+    public List<PermissionDTO> getPermissionsByRoleId(int roleId) throws BusinessException {
         if (roleId <= 0) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "角色ID不能为空");
         }
@@ -185,6 +227,13 @@ public class RoleServiceImpl extends ServiceImpl<RoleMapper, Role> implements Ro
         }
         
         // 调用自定义方法查询权限列表
-        return ((RoleMapper) baseMapper).selectPermissionsByRoleId(roleId);
+        List<Permission> permissions = ((RoleMapper) baseMapper).selectPermissionsByRoleId(roleId);
+        
+        // 转换为PermissionDTO列表并返回
+        return permissions.stream().map(permission -> {
+            PermissionDTO permissionDTO = new PermissionDTO();
+            BeanUtils.copyProperties(permission, permissionDTO);
+            return permissionDTO;
+        }).collect(Collectors.toList());
     }
 }

@@ -1,5 +1,6 @@
 package club.boyuan.official.service.impl;
 
+import club.boyuan.official.dto.DepartmentDTO;
 import club.boyuan.official.entity.Department;
 import club.boyuan.official.exception.BusinessException;
 import club.boyuan.official.exception.BusinessExceptionEnum;
@@ -12,10 +13,12 @@ import lombok.AllArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Department的业务层实现
@@ -35,24 +38,28 @@ public class DepartmentServiceImpl extends ServiceImpl<DepartmentMapper, Departm
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public Department createDepartment(Department department) throws BusinessException {
-        if (department == null) {
+    public DepartmentDTO createDepartment(DepartmentDTO departmentDTO) throws BusinessException {
+        if (departmentDTO == null) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "部门对象不能为空");
         }
         
         // 验证必填字段
-        if (StringUtils.isBlank(department.getDeptName())) {
+        if (StringUtils.isBlank(departmentDTO.getDeptName())) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "部门名称不能为空");
         }
         
-        if (StringUtils.isBlank(department.getDeptCode())) {
+        if (StringUtils.isBlank(departmentDTO.getDeptCode())) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "部门编码不能为空");
         }
         
         // 检查部门编码是否已存在
-        if (departmentMapper.selectByDeptCode(department.getDeptCode()) != null) {
+        if (departmentMapper.selectByDeptCode(departmentDTO.getDeptCode()) != null) {
             throw new BusinessException(BusinessExceptionEnum.RESOURCE_CONFLICT, "部门编码已存在");
         }
+        
+        // 转换DTO为实体
+        Department department = new Department();
+        BeanUtils.copyProperties(departmentDTO, department);
         
         // 设置默认值
         if (department.getStatus() == null) {
@@ -62,34 +69,47 @@ public class DepartmentServiceImpl extends ServiceImpl<DepartmentMapper, Departm
         // 保存部门
         departmentMapper.insert(department);
         logger.info("成功创建部门，部门ID: {}, 部门名称: {}", department.getDeptId(), department.getDeptName());
-        return department;
+        
+        // 转换实体为DTO并返回
+        DepartmentDTO resultDTO = new DepartmentDTO();
+        BeanUtils.copyProperties(department, resultDTO);
+        return resultDTO;
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public Department updateDepartment(Department department) throws BusinessException {
-        if (department == null || department.getDeptId() == null) {
+    public DepartmentDTO updateDepartment(DepartmentDTO departmentDTO) throws BusinessException {
+        if (departmentDTO == null || departmentDTO.getDeptId() == null) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "部门ID不能为空");
         }
         
         // 检查部门是否存在
-        Department existingDepartment = departmentMapper.selectById(department.getDeptId());
+        Department existingDepartment = departmentMapper.selectById(departmentDTO.getDeptId());
         if (existingDepartment == null) {
             throw new BusinessException(BusinessExceptionEnum.DEPARTMENT_NOT_FOUND, "部门不存在");
         }
         
         // 如果修改了部门编码，检查新编码是否已存在
-        if (StringUtils.isNotBlank(department.getDeptCode()) && 
-                !department.getDeptCode().equals(existingDepartment.getDeptCode())) {
-            if (departmentMapper.selectByDeptCode(department.getDeptCode()) != null) {
+        if (StringUtils.isNotBlank(departmentDTO.getDeptCode()) && 
+                !departmentDTO.getDeptCode().equals(existingDepartment.getDeptCode())) {
+            if (departmentMapper.selectByDeptCode(departmentDTO.getDeptCode()) != null) {
                 throw new BusinessException(BusinessExceptionEnum.RESOURCE_CONFLICT, "部门编码已存在");
             }
         }
         
+        // 转换DTO为实体
+        Department department = new Department();
+        BeanUtils.copyProperties(departmentDTO, department);
+        
         // 更新部门
         departmentMapper.updateById(department);
         logger.info("成功更新部门，部门ID: {}, 部门名称: {}", department.getDeptId(), department.getDeptName());
-        return departmentMapper.selectById(department.getDeptId());
+        
+        // 转换实体为DTO并返回
+        Department updatedDepartment = departmentMapper.selectById(department.getDeptId());
+        DepartmentDTO resultDTO = new DepartmentDTO();
+        BeanUtils.copyProperties(updatedDepartment, resultDTO);
+        return resultDTO;
     }
 
     @Override
@@ -118,7 +138,7 @@ public class DepartmentServiceImpl extends ServiceImpl<DepartmentMapper, Departm
     }
 
     @Override
-    public Department getDepartmentById(int deptId) throws BusinessException {
+    public DepartmentDTO getDepartmentById(int deptId) throws BusinessException {
         if (deptId <= 0) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "部门ID不能为空");
         }
@@ -127,11 +147,15 @@ public class DepartmentServiceImpl extends ServiceImpl<DepartmentMapper, Departm
         if (department == null) {
             throw new BusinessException(BusinessExceptionEnum.DEPARTMENT_NOT_FOUND, "部门不存在");
         }
-        return department;
+        
+        // 转换实体为DTO并返回
+        DepartmentDTO resultDTO = new DepartmentDTO();
+        BeanUtils.copyProperties(department, resultDTO);
+        return resultDTO;
     }
 
     @Override
-    public Department getDepartmentByCode(String deptCode) throws BusinessException {
+    public DepartmentDTO getDepartmentByCode(String deptCode) throws BusinessException {
         if (StringUtils.isBlank(deptCode)) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "部门编码不能为空");
         }
@@ -140,11 +164,15 @@ public class DepartmentServiceImpl extends ServiceImpl<DepartmentMapper, Departm
         if (department == null) {
             throw new BusinessException(BusinessExceptionEnum.DEPARTMENT_NOT_FOUND, "部门不存在");
         }
-        return department;
+        
+        // 转换实体为DTO并返回
+        DepartmentDTO resultDTO = new DepartmentDTO();
+        BeanUtils.copyProperties(department, resultDTO);
+        return resultDTO;
     }
 
     @Override
-    public List<Department> getDepartments(int status, String keyword, int page, int size, String sort) throws BusinessException {
+    public List<DepartmentDTO> getDepartments(int status, String keyword, int page, int size, String sort) throws BusinessException {
         // 创建Lambda查询包装器
         LambdaQueryWrapper<Department> queryWrapper = new LambdaQueryWrapper<>();
         
@@ -192,13 +220,25 @@ public class DepartmentServiceImpl extends ServiceImpl<DepartmentMapper, Departm
         
         logger.info("查询部门列表成功，状态: {}, 关键字: {}, 页码: {}, 每页大小: {}, 部门数量: {}", 
                 status, keyword, page, size, departments.size());
-        return departments;
+        
+        // 转换实体列表为DTO列表并返回
+        return departments.stream().map(department -> {
+            DepartmentDTO departmentDTO = new DepartmentDTO();
+            BeanUtils.copyProperties(department, departmentDTO);
+            return departmentDTO;
+        }).collect(Collectors.toList());
     }
 
     @Override
-    public List<Department> getEnabledDepartments() throws BusinessException {
+    public List<DepartmentDTO> getEnabledDepartments() throws BusinessException {
         List<Department> departments = departmentMapper.selectEnabledDepartments();
         logger.info("获取所有启用的部门成功，部门数量: {}", departments.size());
-        return departments;
+        
+        // 转换实体列表为DTO列表并返回
+        return departments.stream().map(department -> {
+            DepartmentDTO departmentDTO = new DepartmentDTO();
+            BeanUtils.copyProperties(department, departmentDTO);
+            return departmentDTO;
+        }).collect(Collectors.toList());
     }
 }

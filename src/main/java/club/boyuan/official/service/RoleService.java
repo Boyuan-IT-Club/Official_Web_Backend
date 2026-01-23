@@ -1,6 +1,7 @@
 package club.boyuan.official.service;
 
-
+import club.boyuan.official.dto.PermissionDTO;
+import club.boyuan.official.dto.RoleDTO;
 import club.boyuan.official.entity.Permission;
 import club.boyuan.official.entity.Role;
 import club.boyuan.official.exception.BusinessException;
@@ -16,22 +17,24 @@ import java.util.List;
  * @since 2026
  */
 
+import club.boyuan.official.dto.RoleDTO;
+
 public interface RoleService extends IService<Role> {
    /**
     * 创建角色
-    * @param role 角色对象
-    * @return 创建成功的角色对象
+    * @param roleDTO 角色DTO对象
+    * @return 创建成功的角色DTO
     * @throws BusinessException 业务异常
     */
-   public Role createRole(Role role) throws BusinessException;
+   public RoleDTO createRole(RoleDTO roleDTO) throws BusinessException;
    
    /**
     * 更新角色
-    * @param role 角色对象
-    * @return 更新后的角色对象
+    * @param roleDTO 角色DTO对象
+    * @return 更新后的角色DTO
     * @throws BusinessException 业务异常
     */
-   public Role updateRole(Role role) throws BusinessException;
+   public RoleDTO updateRole(RoleDTO roleDTO) throws BusinessException;
    
    /**
     * 删除角色（逻辑删除）
@@ -44,10 +47,10 @@ public interface RoleService extends IService<Role> {
    /**
     * 根据ID获取角色
     * @param roleId 角色ID
-    * @return 角色对象
+    * @return 角色DTO
     * @throws BusinessException 业务异常
     */
-   public Role getRoleById(int roleId) throws BusinessException;
+   public RoleDTO getRoleById(int roleId) throws BusinessException;
    
    /**
     * 多条件查询角色列表
@@ -56,24 +59,24 @@ public interface RoleService extends IService<Role> {
     * @param page 页码
     * @param size 每页大小
     * @param sort 排序字段
-    * @return 角色列表
+    * @return 角色DTO列表
     * @throws BusinessException 业务异常
     */
-   public List<Role> getRoles(int status, String keyword,
+   public List<RoleDTO> getRoles(int status, String keyword,
        int page, int size, String sort) throws BusinessException; // 多条件查询：status,keyword,page,size,sort
    
    /**
     * 获取所有可用角色
-    * @return 角色列表
+    * @return 角色DTO列表
     */
-   public List<Role> getAllAvailableRoles();
+   public List<RoleDTO> getAllAvailableRoles();
    
    /**
     * 根据角色ID获取权限列表
     * @param roleId 角色ID
-    * @return 权限列表
+    * @return 权限DTO列表
     * @throws BusinessException 业务异常
     */
-   public List<Permission> getPermissionsByRoleId(int roleId) throws BusinessException;
+   public List<PermissionDTO> getPermissionsByRoleId(int roleId) throws BusinessException;
 
 }

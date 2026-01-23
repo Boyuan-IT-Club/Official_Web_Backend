@@ -26,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import club.boyuan.official.util.PermissionUtils;
 
 @Service
 @AllArgsConstructor
@@ -84,8 +85,8 @@ public class UserServiceImpl implements IUserService {
         }
         
         logger.info("开始更新用户信息，用户ID: {}", userDTO.getUserId());
-        logger.debug("更新前的用户信息: username={}, email={}, name={}, phone={}, dept={}", 
-                    user.getUsername(), user.getEmail(), user.getName(), user.getPhone(), user.getDept());
+        logger.debug("更新前的用户信息: username={}, email={}, name={}, phone={}, deptId={}", 
+                    user.getUsername(), user.getEmail(), user.getName(), user.getPhone(), user.getDeptId());
 
         // 如果密码有更新，需要验证密码复杂度并加密
         if (userDTO.getPassword() != null && !userDTO.getPassword().isEmpty()) {
@@ -115,9 +116,9 @@ public class UserServiceImpl implements IUserService {
             user.setPhone(userDTO.getPhone());
             logger.debug("电话更新为: {}", userDTO.getPhone());
         }
-        if (userDTO.getDept() != null) {
-            user.setDept(userDTO.getDept());
-            logger.debug("部门更新为: {}", userDTO.getDept());
+        if (userDTO.getDeptId() != null) {
+            user.setDeptId(userDTO.getDeptId());
+            logger.debug("部门更新为: {}", userDTO.getDeptId());
         }
         if (userDTO.getMajor() != null) {
             user.setMajor(userDTO.getMajor());
@@ -131,18 +132,18 @@ public class UserServiceImpl implements IUserService {
             user.setAvatar(userDTO.getAvatar());
             logger.debug("头像更新为: {}", userDTO.getAvatar());
         }
-        // 允许更新用户角色（用于管理员权限授予）
-        if (userDTO.getRole() != null) {
-            user.setRole(userDTO.getRole());
-            logger.debug("角色更新为: {}", userDTO.getRole());
-        }
+//        // 允许更新用户角色（用于管理员权限授予）
+//        if (userDTO.getRole() != null) {
+//            user.setRole(userDTO.getRole());
+//            logger.debug("角色更新为: {}", userDTO.getRole());
+//        }
         // 不允许通过edit方法修改用户状态
         // user.setStatus(userDTO.getStatus());
 
         userMapper.updateById(user);
         logger.info("成功更新用户信息，用户ID: {}", user.getUserId());
-        logger.debug("更新后的用户信息: username={}, email={}, name={}, phone={}, dept={}", 
-                    user.getUsername(), user.getEmail(), user.getName(), user.getPhone(), user.getDept());
+        logger.debug("更新后的用户信息: username={}, email={}, name={}, phone={}, deptId={}", 
+                    user.getUsername(), user.getEmail(), user.getName(), user.getPhone(), user.getDeptId());
         return user;
     }
 
@@ -165,7 +166,7 @@ public class UserServiceImpl implements IUserService {
     @Override
     public PageResultDTO<User> getUsersByConditions(String role, String dept, String status, Pageable pageable, User currentUser) {
         // 检查权限，管理员才能调用此方法
-        if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
+        if (!PermissionUtils.hasPermission(currentUser, "admin:manage")) {
             throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
         }
         
@@ -206,7 +207,7 @@ public class UserServiceImpl implements IUserService {
         }
         
         // 不允许删除管理员
-        if (User.ROLE_ADMIN.equals(user.getRole())) {
+        if (PermissionUtils.hasAdminRole(user)) {
             logger.warn("删除用户失败，不允许删除管理员用户，用户ID: {}", userId);
             throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
         }
@@ -220,7 +221,9 @@ public class UserServiceImpl implements IUserService {
             }
 
             // 删除用户的所有简历
-            resumeMapper.deleteByUserId(userId);
+            for (Resume resume : resumes) {
+                resumeMapper.deleteById(resume.getResumeId());
+            }
 
             // 删除用户的所有获奖经历
             awardExperienceMapper.deleteAwardsByUserId(userId);
@@ -248,11 +251,11 @@ public class UserServiceImpl implements IUserService {
             throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
         }
         // 不允许修改管理员状态
-        if (User.ROLE_ADMIN.equals(user.getRole())) {
+        if (PermissionUtils.hasAdminRole(user)) {
             throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
         }
-        // 修正类型转换问题
-        user.setStatus("active".equals(status));
+        // 修正类型转换问题，setStatus方法接受Integer类型
+        user.setStatus("active".equals(status) ? 1 : 0);
         int rows = userMapper.updateById(user);
         if (rows <= 0) {
             throw new BusinessException(BusinessExceptionEnum.USER_INFO_UPDATE_FAILED);
@@ -271,11 +274,11 @@ public class UserServiceImpl implements IUserService {
             throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
         }
         // 不允许修改管理员会员状态
-        if (User.ROLE_ADMIN.equals(user.getRole())) {
+        if (PermissionUtils.hasAdminRole(user)) {
             throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
         }
         
-        user.setIsMember(isMember);
+        // User类已经没有isMember字段，移除setIsMember调用
         int rows = userMapper.updateById(user);
         if (rows <= 0) {
             throw new BusinessException(BusinessExceptionEnum.USER_INFO_UPDATE_FAILED);
@@ -302,7 +305,7 @@ public class UserServiceImpl implements IUserService {
                 throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
             }
             // 不允许修改管理员状态
-            if (User.ROLE_ADMIN.equals(user.getRole())) {
+            if (PermissionUtils.hasAdminRole(user)) {
                 throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED, "不允许批量修改管理员状态");
             }
         }
@@ -330,7 +333,7 @@ public class UserServiceImpl implements IUserService {
                 throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
             }
             // 不允许修改管理员信息
-            if (User.ROLE_ADMIN.equals(user.getRole())) {
+            if (PermissionUtils.hasAdminRole(user)) {
                 throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED, "不允许批量修改管理员信息");
             }
         }
@@ -358,7 +361,7 @@ public class UserServiceImpl implements IUserService {
                 throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
             }
             // 不允许修改管理员会员状态
-            if (User.ROLE_ADMIN.equals(user.getRole())) {
+            if (PermissionUtils.hasAdminRole(user)) {
                 throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED, "不允许批量修改管理员会员状态");
             }
         }
@@ -438,7 +441,7 @@ public class UserServiceImpl implements IUserService {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
         }
         // 管理员可以查看所有用户，普通用户只能查看自己
-        if (User.ROLE_ADMIN.equals(currentUser.getRole())) {
+        if (PermissionUtils.hasPermission(currentUser, "admin:manage")) {
             // 移除过多的 debug 日志
             return userMapper.selectAll();
         } else {

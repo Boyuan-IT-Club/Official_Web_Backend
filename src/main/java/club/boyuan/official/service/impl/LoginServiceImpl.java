@@ -13,8 +13,11 @@ import lombok.Setter;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import java.util.Collections;
+import java.util.List;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import club.boyuan.official.entity.Role;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 /**
@@ -136,10 +139,14 @@ public class LoginServiceImpl implements ILoginService {
      */
     private ResponseMessage<?> generateLoginSuccessResponse(User user) {
         // 检查用户是否被冻结
-        if (!user.getStatus()) {
+        if (user.getStatus() != 1) {
             return ResponseMessage.error(403, "账号已被冻结，无法登录");
         }
-        String token = jwtTokenUtil.generateToken(user.getUsername(), user.getUserId(), Collections.singletonList(user.getRole()));
+        // 获取用户角色列表，User类已经没有getRole()方法
+        List<String> roles = user.getRoles() != null ? 
+            user.getRoles().stream().map(Role::getRoleCode).collect(Collectors.toList()) : 
+            Collections.emptyList();
+        String token = jwtTokenUtil.generateToken(user.getUsername(), user.getUserId(), roles);
         return ResponseMessage.success(new TokenVO(token));
     }
 

@@ -1,5 +1,6 @@
 package club.boyuan.official.service;
 
+import club.boyuan.official.dto.DepartmentDTO;
 import club.boyuan.official.entity.Department;
 import club.boyuan.official.exception.BusinessException;
 import com.baomidou.mybatisplus.extension.service.IService;
@@ -17,19 +18,19 @@ import java.util.List;
 public interface DepartmentService extends IService<Department> {
     /**
      * 创建部门
-     * @param department 部门对象
-     * @return 创建成功的部门对象
+     * @param departmentDTO 部门DTO对象
+     * @return 创建成功的部门DTO
      * @throws BusinessException 业务异常
      */
-    Department createDepartment(Department department) throws BusinessException;
+    DepartmentDTO createDepartment(DepartmentDTO departmentDTO) throws BusinessException;
     
     /**
      * 更新部门
-     * @param department 部门对象
-     * @return 更新后的部门对象
+     * @param departmentDTO 部门DTO对象
+     * @return 更新后的部门DTO
      * @throws BusinessException 业务异常
      */
-    Department updateDepartment(Department department) throws BusinessException;
+    DepartmentDTO updateDepartment(DepartmentDTO departmentDTO) throws BusinessException;
     
     /**
      * 删除部门
@@ -42,18 +43,18 @@ public interface DepartmentService extends IService<Department> {
     /**
      * 根据ID获取部门详情
      * @param deptId 部门ID
-     * @return 部门对象
+     * @return 部门DTO
      * @throws BusinessException 业务异常
      */
-    Department getDepartmentById(int deptId) throws BusinessException;
+    DepartmentDTO getDepartmentById(int deptId) throws BusinessException;
     
     /**
      * 根据部门编码获取部门
      * @param deptCode 部门编码
-     * @return 部门对象
+     * @return 部门DTO
      * @throws BusinessException 业务异常
      */
-    Department getDepartmentByCode(String deptCode) throws BusinessException;
+    DepartmentDTO getDepartmentByCode(String deptCode) throws BusinessException;
     
     /**
      * 分页获取部门列表
@@ -62,15 +63,15 @@ public interface DepartmentService extends IService<Department> {
      * @param page 页码
      * @param size 每页大小
      * @param sort 排序字段
-     * @return 部门列表
+     * @return 部门DTO列表
      * @throws BusinessException 业务异常
      */
-    List<Department> getDepartments(int status, String keyword, int page, int size, String sort) throws BusinessException;
+    List<DepartmentDTO> getDepartments(int status, String keyword, int page, int size, String sort) throws BusinessException;
     
     /**
      * 获取所有启用的部门（不分页）
-     * @return 启用的部门列表
+     * @return 启用的部门DTO列表
      * @throws BusinessException 业务异常
      */
-    List<Department> getEnabledDepartments() throws BusinessException;
+    List<DepartmentDTO> getEnabledDepartments() throws BusinessException;
 }

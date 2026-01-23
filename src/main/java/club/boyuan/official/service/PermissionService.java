@@ -1,5 +1,6 @@
 package club.boyuan.official.service;
 
+import club.boyuan.official.dto.PermissionDTO;
 import club.boyuan.official.entity.Permission;
 import club.boyuan.official.exception.BusinessException;
 import com.baomidou.mybatisplus.extension.service.IService;
@@ -17,19 +18,19 @@ import java.util.List;
 public interface PermissionService extends IService<Permission> {
     /**
      * 创建权限
-     * @param permission 权限对象
-     * @return 创建成功的权限对象
+     * @param permissionDTO 权限DTO对象
+     * @return 创建成功的权限DTO
      * @throws BusinessException 业务异常
      */
-    Permission createPermission(Permission permission) throws BusinessException;
+    PermissionDTO createPermission(PermissionDTO permissionDTO) throws BusinessException;
     
     /**
      * 更新权限
-     * @param permission 权限对象
-     * @return 更新后的权限对象
+     * @param permissionDTO 权限DTO对象
+     * @return 更新后的权限DTO
      * @throws BusinessException 业务异常
      */
-    Permission updatePermission(Permission permission) throws BusinessException;
+    PermissionDTO updatePermission(PermissionDTO permissionDTO) throws BusinessException;
     
     /**
      * 删除权限
@@ -42,18 +43,18 @@ public interface PermissionService extends IService<Permission> {
     /**
      * 根据ID获取权限详情
      * @param permissionId 权限ID
-     * @return 权限对象
+     * @return 权限DTO
      * @throws BusinessException 业务异常
      */
-    Permission getPermissionById(int permissionId) throws BusinessException;
+    PermissionDTO getPermissionById(int permissionId) throws BusinessException;
     
     /**
      * 根据权限编码获取权限
      * @param permissionCode 权限编码
-     * @return 权限对象
+     * @return 权限DTO
      * @throws BusinessException 业务异常
      */
-    Permission getPermissionByCode(String permissionCode) throws BusinessException;
+    PermissionDTO getPermissionByCode(String permissionCode) throws BusinessException;
     
     /**
      * 分页获取权限列表
@@ -62,14 +63,14 @@ public interface PermissionService extends IService<Permission> {
      * @param page 页码
      * @param size 每页大小
      * @param sort 排序字段
-     * @return 权限列表
+     * @return 权限DTO列表
      * @throws BusinessException 业务异常
      */
-    List<Permission> getPermissions(String resourceIdentifier, String keyword, int page, int size, String sort) throws BusinessException;
+    List<PermissionDTO> getPermissions(String resourceIdentifier, String keyword, int page, int size, String sort) throws BusinessException;
     
     /**
      * 获取所有权限（不分页）
-     * @return 权限列表
+     * @return 权限DTO列表
      */
-    List<Permission> getAllPermissions();
+    List<PermissionDTO> getAllPermissions();
 }

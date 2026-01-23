@@ -1,5 +1,6 @@
 package club.boyuan.official.service.impl;
 
+import club.boyuan.official.dto.PermissionDTO;
 import club.boyuan.official.entity.Permission;
 import club.boyuan.official.exception.BusinessException;
 import club.boyuan.official.exception.BusinessExceptionEnum;
@@ -12,10 +13,12 @@ import lombok.AllArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Permission的业务层实现
@@ -35,58 +38,75 @@ public class PermissionServiceImpl extends ServiceImpl<PermissionMapper, Permiss
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public Permission createPermission(Permission permission) throws BusinessException {
-        if (permission == null) {
+    public PermissionDTO createPermission(PermissionDTO permissionDTO) throws BusinessException {
+        if (permissionDTO == null) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "权限对象不能为空");
         }
         
         // 验证必填字段
-        if (StringUtils.isBlank(permission.getPermissionName())) {
+        if (StringUtils.isBlank(permissionDTO.getPermissionName())) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "权限名称不能为空");
         }
         
-        if (StringUtils.isBlank(permission.getPermissionCode())) {
+        if (StringUtils.isBlank(permissionDTO.getPermissionCode())) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "权限编码不能为空");
         }
         
         // 检查权限编码是否已存在
         if (permissionMapper.selectOne(new LambdaQueryWrapper<Permission>()
-                .eq(Permission::getPermissionCode, permission.getPermissionCode())) != null) {
+                .eq(Permission::getPermissionCode, permissionDTO.getPermissionCode())) != null) {
             throw new BusinessException(BusinessExceptionEnum.RESOURCE_CONFLICT, "权限编码已存在");
         }
+        
+        // 转换DTO为实体
+        Permission permission = new Permission();
+        BeanUtils.copyProperties(permissionDTO, permission);
         
         // 保存权限
         permissionMapper.insert(permission);
         logger.info("成功创建权限，权限ID: {}, 权限名称: {}", permission.getPermissionId(), permission.getPermissionName());
-        return permission;
+        
+        // 转换实体为DTO并返回
+        PermissionDTO resultDTO = new PermissionDTO();
+        BeanUtils.copyProperties(permission, resultDTO);
+        return resultDTO;
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public Permission updatePermission(Permission permission) throws BusinessException {
-        if (permission == null || permission.getPermissionId() == null) {
+    public PermissionDTO updatePermission(PermissionDTO permissionDTO) throws BusinessException {
+        if (permissionDTO == null || permissionDTO.getPermissionId() == null) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "权限ID不能为空");
         }
         
         // 检查权限是否存在
-        Permission existingPermission = permissionMapper.selectById(permission.getPermissionId());
+        Permission existingPermission = permissionMapper.selectById(permissionDTO.getPermissionId());
         if (existingPermission == null) {
             throw new BusinessException(BusinessExceptionEnum.PERMISSION_NOT_FOUND, "权限不存在");
         }
         
         // 如果修改了权限编码，检查新编码是否已存在
-        if (StringUtils.isNotBlank(permission.getPermissionCode()) && 
-                !permission.getPermissionCode().equals(existingPermission.getPermissionCode())) {
+        if (StringUtils.isNotBlank(permissionDTO.getPermissionCode()) && 
+                !permissionDTO.getPermissionCode().equals(existingPermission.getPermissionCode())) {
             if (permissionMapper.selectOne(new LambdaQueryWrapper<Permission>()
-                    .eq(Permission::getPermissionCode, permission.getPermissionCode())) != null) {
+                    .eq(Permission::getPermissionCode, permissionDTO.getPermissionCode())) != null) {
                 throw new BusinessException(BusinessExceptionEnum.RESOURCE_CONFLICT, "权限编码已存在");
             }
         }
         
+        // 转换DTO为实体
+        Permission permission = new Permission();
+        BeanUtils.copyProperties(permissionDTO, permission);
+        
         // 更新权限
         permissionMapper.updateById(permission);
         logger.info("成功更新权限，权限ID: {}, 权限名称: {}", permission.getPermissionId(), permission.getPermissionName());
-        return permissionMapper.selectById(permission.getPermissionId());
+        
+        // 转换实体为DTO并返回
+        Permission updatedPermission = permissionMapper.selectById(permission.getPermissionId());
+        PermissionDTO resultDTO = new PermissionDTO();
+        BeanUtils.copyProperties(updatedPermission, resultDTO);
+        return resultDTO;
     }
 
     @Override
@@ -112,7 +132,7 @@ public class PermissionServiceImpl extends ServiceImpl<PermissionMapper, Permiss
     }
 
     @Override
-    public Permission getPermissionById(int permissionId) throws BusinessException {
+    public PermissionDTO getPermissionById(int permissionId) throws BusinessException {
         if (permissionId <= 0) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "权限ID不能为空");
         }
@@ -121,11 +141,15 @@ public class PermissionServiceImpl extends ServiceImpl<PermissionMapper, Permiss
         if (permission == null) {
             throw new BusinessException(BusinessExceptionEnum.PERMISSION_NOT_FOUND, "权限不存在");
         }
-        return permission;
+        
+        // 转换实体为DTO并返回
+        PermissionDTO resultDTO = new PermissionDTO();
+        BeanUtils.copyProperties(permission, resultDTO);
+        return resultDTO;
     }
 
     @Override
-    public Permission getPermissionByCode(String permissionCode) throws BusinessException {
+    public PermissionDTO getPermissionByCode(String permissionCode) throws BusinessException {
         if (StringUtils.isBlank(permissionCode)) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "权限编码不能为空");
         }
@@ -135,11 +159,15 @@ public class PermissionServiceImpl extends ServiceImpl<PermissionMapper, Permiss
         if (permission == null) {
             throw new BusinessException(BusinessExceptionEnum.PERMISSION_NOT_FOUND, "权限不存在");
         }
-        return permission;
+        
+        // 转换实体为DTO并返回
+        PermissionDTO resultDTO = new PermissionDTO();
+        BeanUtils.copyProperties(permission, resultDTO);
+        return resultDTO;
     }
 
     @Override
-    public List<Permission> getPermissions(String resourceIdentifier, String keyword, int page, int size, String sort) throws BusinessException {
+    public List<PermissionDTO> getPermissions(String resourceIdentifier, String keyword, int page, int size, String sort) throws BusinessException {
         // 创建Lambda查询包装器
         LambdaQueryWrapper<Permission> queryWrapper = new LambdaQueryWrapper<>();
         
@@ -187,14 +215,26 @@ public class PermissionServiceImpl extends ServiceImpl<PermissionMapper, Permiss
         
         logger.info("查询权限列表成功，资源标识符: {}, 关键字: {}, 页码: {}, 每页大小: {}", 
                 resourceIdentifier, keyword, page, size);
-        return pageObj.getRecords();
+        
+        // 转换实体列表为DTO列表并返回
+        return pageObj.getRecords().stream().map(permission -> {
+            PermissionDTO permissionDTO = new PermissionDTO();
+            BeanUtils.copyProperties(permission, permissionDTO);
+            return permissionDTO;
+        }).collect(Collectors.toList());
     }
 
     @Override
-    public List<Permission> getAllPermissions() {
+    public List<PermissionDTO> getAllPermissions() {
         List<Permission> permissions = permissionMapper.selectList(new LambdaQueryWrapper<Permission>()
                 .orderByAsc(Permission::getPermissionName));
         logger.info("获取所有权限成功，共{}个权限", permissions.size());
-        return permissions;
+        
+        // 转换实体列表为DTO列表并返回
+        return permissions.stream().map(permission -> {
+            PermissionDTO permissionDTO = new PermissionDTO();
+            BeanUtils.copyProperties(permission, permissionDTO);
+            return permissionDTO;
+        }).collect(Collectors.toList());
     }
 }
