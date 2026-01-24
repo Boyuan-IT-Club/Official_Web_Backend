@@ -1,4 +1,4 @@
-package club.boyuan.official.util;
+package club.boyuan.official.utils;
 
 import club.boyuan.official.entity.Permission;
 import club.boyuan.official.entity.Role;
