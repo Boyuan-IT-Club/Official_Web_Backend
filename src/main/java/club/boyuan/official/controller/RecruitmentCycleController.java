@@ -15,6 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -40,13 +41,10 @@ public class RecruitmentCycleController {
      * 创建招募周期（仅管理员）
      */
     @PostMapping
+    @PreAuthorize("hasAuthority('cycle:manage')")
     public ResponseEntity<ResponseMessage<RecruitmentCycle>> createRecruitmentCycle(@RequestBody RecruitmentCycle recruitmentCycle) {
         try {
-            // 验证管理员权限
-            User currentUser = getCurrentUser();
-            checkAdminPermission(currentUser);
-            
-            logger.info("管理员{}创建招募周期", currentUser.getUsername());
+            logger.info("创建招募周期");
             RecruitmentCycle createdCycle = recruitmentCycleService.createRecruitmentCycle(recruitmentCycle);
             return ResponseEntity.ok(new ResponseMessage<>(200, "招募周期创建成功", createdCycle));
         } catch (BusinessException e) {
@@ -65,13 +63,10 @@ public class RecruitmentCycleController {
      * 更新招募周期（仅管理员）
      */
     @PutMapping
+    @PreAuthorize("hasAuthority('cycle:manage')")
     public ResponseEntity<ResponseMessage<RecruitmentCycle>> updateRecruitmentCycle(@RequestBody RecruitmentCycle recruitmentCycle) {
         try {
-            // 验证管理员权限
-            User currentUser = getCurrentUser();
-            checkAdminPermission(currentUser);
-            
-            logger.info("管理员{}更新招募周期，ID: {}", currentUser.getUsername(), recruitmentCycle.getCycleId());
+            logger.info("更新招募周期，ID: {}", recruitmentCycle.getCycleId());
             RecruitmentCycle updatedCycle = recruitmentCycleService.updateRecruitmentCycle(recruitmentCycle);
             return ResponseEntity.ok(new ResponseMessage<>(200, "招募周期更新成功", updatedCycle));
         } catch (BusinessException e) {
@@ -90,13 +85,10 @@ public class RecruitmentCycleController {
      * 删除招募周期（仅管理员）
      */
     @DeleteMapping("/{cycleId}")
+    @PreAuthorize("hasAuthority('cycle:manage')")
     public ResponseEntity<ResponseMessage<String>> deleteRecruitmentCycle(@PathVariable Integer cycleId) {
         try {
-            // 验证管理员权限
-            User currentUser = getCurrentUser();
-            checkAdminPermission(currentUser);
-            
-            logger.info("管理员{}删除招募周期，ID: {}", currentUser.getUsername(), cycleId);
+            logger.info("删除招募周期，ID: {}", cycleId);
             recruitmentCycleService.deleteRecruitmentCycle(cycleId);
             return ResponseEntity.ok(new ResponseMessage<>(200, "招募周期删除成功", "招募周期删除成功"));
         } catch (BusinessException e) {

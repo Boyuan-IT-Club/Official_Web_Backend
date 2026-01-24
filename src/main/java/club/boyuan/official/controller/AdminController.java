@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.data.domain.Pageable;
@@ -102,10 +103,9 @@ public class AdminController {
      * @return 添加结果
      */
     @PostMapping("/users")
+    @PreAuthorize("hasAuthority('admin:manage')")
     public ResponseEntity<ResponseMessage<?>> addUser(@RequestBody UserDTO userDTO) {
         try {
-            checkAdminRole();
-            
             // 检查用户名是否已存在
             User existingUser = userService.getUserByUsername(userDTO.getUsername());
             if (existingUser != null) {
@@ -142,11 +142,9 @@ public class AdminController {
      * @return 操作结果
      */
     @PostMapping("/users/{userId}/grant-admin")
+    @PreAuthorize("hasAuthority('admin:manage')")
     public ResponseEntity<ResponseMessage<?>> grantAdminPermission(@PathVariable Integer userId) {
         try {
-            // 检查管理员权限
-            checkAdminRole();
-            
             // 获取当前登录的管理员信息
             String token = getTokenFromHeader();
             String adminUsername = jwtTokenUtil.extractUsername(token);

@@ -14,6 +14,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -118,25 +120,26 @@ public class AwardExperienceController {
     /**
      * 根据ID获取获奖经历
      * @param id 奖项ID
-     * @param request HTTP请求
      * @return 奖项信息
      */
     @GetMapping("/{id}")
-    public ResponseEntity<ResponseMessage<?>> getAwardById(@PathVariable Integer id, HttpServletRequest request) {
+    public ResponseEntity<ResponseMessage<?>> getAwardById(@PathVariable Integer id) {
         try {
             logger.info("开始获取获奖经历，获奖ID: {}", id);
             
-            // 获取当前登录用户信息
-            String token = request.getHeader("Authorization").substring(7);
-            String username; 
-            try { 
-                username = jwtTokenUtil.extractUsername(token); 
-                logger.debug("从token中提取用户名: {}", username);
-            } catch (Exception e) { 
-                logger.error("解析token时发生异常", e);
-                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED); 
+            // 从SecurityContext获取当前用户信息
+            org.springframework.security.core.Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication == null || !authentication.isAuthenticated()) {
+                logger.warn("未找到认证信息");
+                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
             }
+            
+            String username = authentication.getName();
             User currentUser = userService.getUserByUsername(username);
+            if (currentUser == null) {
+                logger.warn("用户不存在: {}", username);
+                throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
+            }
             
             AwardExperience award = awardExperienceService.getById(id);
             if (award == null) {

@@ -22,6 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -73,23 +74,14 @@ public class ResumeController {
     /**
      * 创建字段定义
      * @param fieldDefinition 字段定义
-     * @param request HTTP请求
      * @return 创建的字段定义
      */
     @PostMapping("/fields")
+    @PreAuthorize("hasAuthority('resume:audit')")
     public ResponseEntity<ResponseMessage<ResumeFieldDefinition>> createFieldDefinition(
-            @RequestBody ResumeFieldDefinition fieldDefinition, HttpServletRequest request) {
+            @RequestBody ResumeFieldDefinition fieldDefinition) {
         try {
-            String token = request.getHeader("Authorization").substring(7);
-            String username = jwtTokenUtil.extractUsername(token);
-            User currentUser = userService.getUserByUsername(username);
-            
-            if (!PermissionUtils.hasPermission(currentUser, "resume:audit")) {
-                logger.warn("用户{}尝试创建字段定义，但权限不足", username);
-                throw new BusinessException(BusinessExceptionEnum.USER_ROLE_NOT_AUTHORIZED);
-            }
-            
-            logger.info("管理员{}创建字段定义", username);
+            logger.info("创建字段定义");
             ResumeFieldDefinition createdField = fieldDefinitionService.createFieldDefinition(fieldDefinition);
             return ResponseEntity.ok(new ResponseMessage<>(200, "字段定义创建成功", createdField));
         } catch (BusinessException e) {
@@ -107,23 +99,14 @@ public class ResumeController {
     /**
      * 更新字段定义
      * @param fieldDefinition 字段定义
-     * @param request HTTP请求
      * @return 更新的字段定义
      */
     @PutMapping("/fields")
+    @PreAuthorize("hasAuthority('resume:audit')")
     public ResponseEntity<ResponseMessage<ResumeFieldDefinition>> updateFieldDefinition(
-            @RequestBody ResumeFieldDefinition fieldDefinition, HttpServletRequest request) {
+            @RequestBody ResumeFieldDefinition fieldDefinition) {
         try {
-            String token = request.getHeader("Authorization").substring(7);
-            String username = jwtTokenUtil.extractUsername(token);
-            User currentUser = userService.getUserByUsername(username);
-            
-            if (!PermissionUtils.hasPermission(currentUser, "resume:audit")) {
-                logger.warn("用户{}尝试更新字段定义，但权限不足", username);
-                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
-            }
-            
-            logger.info("管理员{}更新字段定义，字段ID: {}", username, fieldDefinition.getFieldId());
+            logger.info("更新字段定义，字段ID: {}", fieldDefinition.getFieldId());
             ResumeFieldDefinition updatedField = fieldDefinitionService.updateFieldDefinition(fieldDefinition);
             return ResponseEntity.ok(new ResponseMessage<>(200, "字段定义更新成功", updatedField));
         } catch (BusinessException e) {
@@ -142,23 +125,14 @@ public class ResumeController {
     /**
      * 批量更新字段定义
      * @param fieldDefinitions 字段定义列表
-     * @param request HTTP请求
      * @return 更新的字段定义列表
      */
     @PutMapping("/fields/batch")
+    @PreAuthorize("hasAuthority('resume:audit')")
     public ResponseEntity<ResponseMessage<List<ResumeFieldDefinition>>> batchUpdateFieldDefinitions(
-            @RequestBody List<ResumeFieldDefinition> fieldDefinitions, HttpServletRequest request) {
+            @RequestBody List<ResumeFieldDefinition> fieldDefinitions) {
         try {
-            String token = request.getHeader("Authorization").substring(7);
-            String username = jwtTokenUtil.extractUsername(token);
-            User currentUser = userService.getUserByUsername(username);
-            
-            if (!PermissionUtils.hasPermission(currentUser, "resume:audit")) {
-                logger.warn("用户{}尝试批量更新字段定义，但权限不足", username);
-                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
-            }
-            
-            logger.info("管理员{}批量更新字段定义，字段数量: {}", username, fieldDefinitions.size());
+            logger.info("批量更新字段定义，字段数量: {}", fieldDefinitions.size());
             List<ResumeFieldDefinition> updatedFields = fieldDefinitionService.batchUpdateFieldDefinitions(fieldDefinitions);
             return ResponseEntity.ok(new ResponseMessage<>(200, "字段定义批量更新成功", updatedFields));
         } catch (BusinessException e) {
