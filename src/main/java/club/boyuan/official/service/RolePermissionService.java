@@ -51,6 +51,15 @@ public interface RolePermissionService extends IService<RolePermission> {
     List<Integer> getPermissionIdsByRoleId(int roleId) throws BusinessException;
     
     /**
+     * 为角色添加单个权限
+     * @param roleId 角色ID
+     * @param permissionId 权限ID
+     * @return 是否添加成功
+     * @throws BusinessException 业务异常
+     */
+    boolean addPermission(int roleId, int permissionId) throws BusinessException;
+    
+    /**
      * 查询拥有某个权限的角色列表
      * @param permissionId 权限ID
      * @return 角色列表

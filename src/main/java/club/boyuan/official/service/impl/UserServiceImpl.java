@@ -2,7 +2,6 @@ package club.boyuan.official.service.impl;
 
 import club.boyuan.official.dto.PageResultDTO;
 import club.boyuan.official.dto.UserDTO;
-import club.boyuan.official.entity.AwardExperience;
 import club.boyuan.official.entity.Resume;
 import club.boyuan.official.entity.User;
 import club.boyuan.official.exception.BusinessException;
@@ -18,15 +17,13 @@ import lombok.AllArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import club.boyuan.official.util.PermissionUtils;
+import club.boyuan.official.utils.PermissionUtils;
 
 @Service
 @AllArgsConstructor

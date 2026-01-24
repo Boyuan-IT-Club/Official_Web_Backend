@@ -220,7 +220,7 @@ public class UserRoleServiceImpl extends ServiceImpl<UserRoleMapper, UserRole> i
         }
         
         // 检查用户是否存在
-        List<User> users = userMapper.selectBatchIds(userIds);
+        List<User> users = userMapper.selectByIds(userIds);
         if (users.size() != userIds.size()) {
             throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND, "部分用户不存在");
         }

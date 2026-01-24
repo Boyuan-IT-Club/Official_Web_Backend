@@ -108,6 +108,35 @@ public class RolePermissionServiceImpl extends ServiceImpl<RolePermissionMapper,
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean addPermission(int roleId, int permissionId) throws BusinessException {
+        if (roleId <= 0 || permissionId <= 0) {
+            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "角色ID和权限ID不能为空");
+        }
+
+        // 检查角色是否存在
+        Role role = roleMapper.selectById(roleId);
+        if (role == null) {
+            throw new BusinessException(BusinessExceptionEnum.ROLE_NOT_FOUND, "角色不存在");
+        }
+
+        // 检查权限是否已经存在
+        RolePermission existing = baseMapper.selectOne(new LambdaQueryWrapper<RolePermission>()
+                .eq(RolePermission::getRoleId, roleId)
+                .eq(RolePermission::getPermissionId, permissionId));
+        if (existing != null) {
+            // 权限已存在，返回true表示成功
+            return true;
+        }
+
+        // 添加新的权限关系
+        RolePermission rolePermission = new RolePermission();
+        rolePermission.setRoleId(roleId);
+        rolePermission.setPermissionId(permissionId);
+        return save(rolePermission);
+    }
+
+    @Override
     public List<Role> getRolesByPermissionId(int permissionId) throws BusinessException {
         if (permissionId <= 0) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "权限ID不能为空");
