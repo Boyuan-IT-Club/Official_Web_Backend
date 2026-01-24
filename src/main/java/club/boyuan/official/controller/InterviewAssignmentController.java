@@ -22,10 +22,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Map;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import club.boyuan.official.util.PermissionUtils;
+import club.boyuan.official.utils.PermissionUtils;
 
 /**
  * 面试时间分配控制器

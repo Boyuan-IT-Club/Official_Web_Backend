@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
-import club.boyuan.official.util.PermissionUtils;
+import club.boyuan.official.utils.PermissionUtils;
 
 /**
  * 奖项经验控制器
@@ -45,6 +45,7 @@ public class AwardExperienceController {
      * @return 创建结果
      */
     @PostMapping
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<?>> createAward(@RequestBody AwardExperience awardExperience, HttpServletRequest request) {
         try {
             logger.info("开始创建获奖经历");
@@ -123,6 +124,7 @@ public class AwardExperienceController {
      * @return 奖项信息
      */
     @GetMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<?>> getAwardById(@PathVariable Integer id) {
         try {
             logger.info("开始获取获奖经历，获奖ID: {}", id);
@@ -177,6 +179,7 @@ public class AwardExperienceController {
      * @return 奖项列表
      */
     @GetMapping("/user/{userId}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<?>> getAwardsByUserId(@PathVariable Integer userId, HttpServletRequest request) {
         try {
             logger.info("开始获取用户的所有获奖经历，用户ID: {}", userId);
@@ -222,6 +225,7 @@ public class AwardExperienceController {
      * @return 更新结果
      */
     @PutMapping
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<?>> updateAward(@RequestBody AwardExperience awardExperience, HttpServletRequest request) {
         try {
             logger.info("开始更新获奖经历，获奖ID: {}", awardExperience.getAwardId());
@@ -282,6 +286,7 @@ public class AwardExperienceController {
      * @return 删除结果
      */
     @DeleteMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<?>> deleteAward(@PathVariable Integer id, HttpServletRequest request) {
         try {
             logger.info("开始删除获奖经历，获奖ID: {}", id);

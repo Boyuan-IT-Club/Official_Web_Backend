@@ -2,14 +2,11 @@ package club.boyuan.official.controller;
 
 import club.boyuan.official.dto.GlobalSearchDTO;
 import club.boyuan.official.dto.GlobalSearchResultDTO;
-import club.boyuan.official.entity.User;
 import club.boyuan.official.exception.BusinessException;
 import club.boyuan.official.exception.BusinessExceptionEnum;
 import club.boyuan.official.service.IGlobalSearchService;
 import club.boyuan.official.service.IUserService;
 import club.boyuan.official.utils.JwtTokenUtil;
-import club.boyuan.official.util.PermissionUtils;
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.AllArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

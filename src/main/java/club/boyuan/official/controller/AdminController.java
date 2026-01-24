@@ -23,9 +23,8 @@ import org.springframework.data.web.PageableDefault;
 
 import java.util.HashMap;
 import java.util.List;
-import club.boyuan.official.util.PermissionUtils;
+import club.boyuan.official.utils.PermissionUtils;
 import java.util.Map;
-import org.springframework.web.server.ResponseStatusException;
 import jakarta.servlet.http.HttpServletRequest;
 import club.boyuan.official.utils.JwtTokenUtil;
 
@@ -199,6 +198,7 @@ public class AdminController {
      * 支持分页和条件查询
      */
     @GetMapping("/users")
+    @PreAuthorize("hasAuthority('admin:manage')")
     public ResponseEntity<ResponseMessage<?>> getUsers(
             @RequestParam(required = false) String role,
             @RequestParam(required = false) String dept,
@@ -233,6 +233,7 @@ public class AdminController {
      * @return 更新结果
      */
     @PutMapping("/users/{userId}/status")
+    @PreAuthorize("hasAuthority('admin:manage')")
     public ResponseEntity<ResponseMessage<?>> updateUserStatus(
             @PathVariable Integer userId,
             @RequestBody Map<String, String> statusRequest) {
@@ -270,6 +271,7 @@ public class AdminController {
      * @return 更新结果
      */
     @PutMapping("/users/{userId}/freeze")
+    @PreAuthorize("hasAuthority('admin:manage')")
     public ResponseEntity<ResponseMessage<?>> freezeUser(
             @PathVariable Integer userId,
             @RequestBody Map<String, String> statusRequest) {
@@ -309,6 +311,7 @@ public class AdminController {
      * @return 更新结果
      */
     @PutMapping("/users/{userId}/membership")
+    @PreAuthorize("hasAuthority('admin:manage')")
     public ResponseEntity<ResponseMessage<?>> updateUserMembership(
             @PathVariable Integer userId,
             @RequestBody Map<String, Boolean> membershipRequest) {
@@ -347,6 +350,7 @@ public class AdminController {
      * @return 更新结果
      */
     @PutMapping("/users/batch-status")
+    @PreAuthorize("hasAuthority('admin:manage')")
     public ResponseEntity<ResponseMessage<?>> batchUpdateUserStatus(
             @RequestBody Map<String, Object> statusRequest) {
         try {
@@ -396,6 +400,7 @@ public class AdminController {
      * @return 更新结果
      */
     @PutMapping("/users/batch-dept")
+    @PreAuthorize("hasAuthority('admin:manage')")
     public ResponseEntity<ResponseMessage<?>> batchUpdateUserDept(
             @RequestBody Map<String, Object> deptRequest) {
         try {
@@ -444,6 +449,7 @@ public class AdminController {
      * @return 更新结果
      */
     @PutMapping("/users/batch-membership")
+    @PreAuthorize("hasAuthority('admin:manage')")
     public ResponseEntity<ResponseMessage<?>> batchUpdateUserMembership(
             @RequestBody Map<String, Object> membershipRequest) {
         try {
@@ -493,6 +499,7 @@ public class AdminController {
      * @return 清理结果
      */
     @PostMapping("/cache/clear")
+    @PreAuthorize("hasAuthority('admin:manage')")
     public ResponseEntity<ResponseMessage<?>> clearCache(
             @RequestBody(required = false) Map<String, String> cacheRequest) {
         try {

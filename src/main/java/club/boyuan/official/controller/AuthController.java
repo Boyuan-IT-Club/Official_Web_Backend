@@ -9,6 +9,7 @@ import club.boyuan.official.utils.MessageUtils;
 import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
@@ -268,6 +269,7 @@ public class AuthController {
      * @return 登出结果
      */
     @PostMapping("/logout")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<?>> logout(@RequestHeader("Authorization") String token) {
         try {
             // 移除Bearer前缀

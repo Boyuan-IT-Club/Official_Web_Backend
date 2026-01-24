@@ -55,10 +55,8 @@ public class RolePermissionController {
     @PreAuthorize("hasAuthority('role:assign')")
     public ResponseMessage<Boolean> addPermissionToRole(@PathVariable int roleId, @PathVariable int permissionId) {
         logger.info("为角色添加单个权限，角色ID: {}, 权限ID: {}", roleId, permissionId);
-        // 使用assignPermissions方法添加单个权限
-        List<Integer> permissionIds = List.of(permissionId);
-        boolean result = rolePermissionService.assignPermissions(roleId, permissionIds);
-        logger.info("权限添加成功，角色ID: {}, 权限ID: {}", roleId, permissionId);
+        boolean result = rolePermissionService.addPermission(roleId, permissionId);
+        logger.info("权限添加成功，角色ID: {}, 权限ID: {}, 结果: {}", roleId, permissionId, result);
         return ResponseMessage.success(result);
     }
 

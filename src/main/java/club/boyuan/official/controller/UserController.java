@@ -59,6 +59,7 @@ public class UserController {
      * 上传用户头像
      */
     @PostMapping("/avatar")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage> uploadAvatar(@RequestParam("file") MultipartFile file) {
         try {
             // 检查文件是否为空
@@ -123,6 +124,7 @@ public class UserController {
      * @return 文件存储路径
      */
     @PostMapping("/upload")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage> uploadFile(
             @RequestParam("file") MultipartFile file,
             @RequestParam("uploadPath") String uploadPath) {
@@ -169,6 +171,7 @@ public class UserController {
      * @return 文件存储路径
      */
     @PostMapping("/upload/typed")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage> uploadTypedFile(
             @RequestParam("file") MultipartFile file,
             @RequestParam("uploadPath") String uploadPath,
@@ -209,6 +212,7 @@ public class UserController {
     }
     
     @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage> getCurrentUser() {
         try {
             Integer userId = getAuthenticatedUserId();
@@ -239,6 +243,7 @@ public class UserController {
      * 更新当前用户信息（从token获取ID，支持部分字段更新）
      */
     @PutMapping("/me")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage> updateCurrentUser(@RequestBody Map<String, Object> userInfo) {
         try {
             // 从JWT令牌获取用户ID
@@ -455,6 +460,7 @@ public class UserController {
     //查询
 
     @GetMapping("/{userId}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<?>> get(@PathVariable Integer userId) {
         try {
             User currentUser = getCurrentUserEntity();
@@ -502,6 +508,7 @@ public class UserController {
      * 更新指定用户信息（需传入ID，支持部分字段更新）
      */
     @PutMapping
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage> edit(@RequestBody Map<String, Object> userInfo) {
         try {
             User currentUser = getCurrentUserEntity();

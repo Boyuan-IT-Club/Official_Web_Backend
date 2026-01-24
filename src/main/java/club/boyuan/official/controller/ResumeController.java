@@ -27,8 +27,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
-import club.boyuan.official.util.PermissionUtils;
+import club.boyuan.official.utils.PermissionUtils;
 
 /**
  * 简历控制器
@@ -52,6 +51,7 @@ public class ResumeController {
      * @return 字段定义列表
      */
     @GetMapping("/fields/{cycleId}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<List<ResumeFieldDefinition>>> getFieldDefinitions(
             @PathVariable Integer cycleId) {
         try {
@@ -154,6 +154,7 @@ public class ResumeController {
      * @return 删除结果
      */
     @DeleteMapping("/fields/{fieldId}")
+    @PreAuthorize("hasAuthority('resume:audit')")
     public ResponseEntity<ResponseMessage<String>> deleteFieldDefinition(
             @PathVariable Integer fieldId, HttpServletRequest request) {
         try {
@@ -188,6 +189,7 @@ public class ResumeController {
      * @return 简历信息
      */
     @GetMapping("/cycle/{cycleId}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<?>> getResumeByCycleId(
             @PathVariable Integer cycleId, HttpServletRequest request) {
         try {
@@ -252,6 +254,7 @@ public class ResumeController {
      * @return 简历信息
      */
     @GetMapping("/admin/{userId}/{cycleId}")
+    @PreAuthorize("hasAuthority('resume:view')")
     public ResponseEntity<ResponseMessage<?>> getResumeByUserIdAndCycleId(
             @PathVariable Integer userId, @PathVariable Integer cycleId, HttpServletRequest request) {
         try {
@@ -296,6 +299,7 @@ public class ResumeController {
      * @return 保存结果
      */
     @PostMapping("/cycle/{cycleId}/field-values")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<?>> saveFieldValues(
             @PathVariable Integer cycleId,
             @RequestBody List<ResumeFieldValue> fieldValues,
@@ -358,6 +362,7 @@ public class ResumeController {
      * @return 字段值列表
      */
     @GetMapping("/cycle/{cycleId}/field-values")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<?>> getFieldValues(
             @PathVariable Integer cycleId, HttpServletRequest request) {
         try {
@@ -425,6 +430,7 @@ public class ResumeController {
      * @return 提交的简历
      */
     @PostMapping("/cycle/{cycleId}/submit")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<?>> submitResume(
             @PathVariable Integer cycleId, HttpServletRequest request) {
         try {
@@ -499,6 +505,7 @@ public class ResumeController {
      * @return 更新的简历
      */
     @PutMapping("/{resumeId}/status/{status}")
+    @PreAuthorize("hasAuthority('resume:audit')")
     public ResponseEntity<ResponseMessage<?>> updateResumeStatus(
             @PathVariable Integer resumeId, @PathVariable Integer status, HttpServletRequest request) {
         try {
@@ -574,6 +581,7 @@ public class ResumeController {
      * @return 更新结果
      */
     @PutMapping("/cycle/{cycleId}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<?>> updateResume(
             @PathVariable Integer cycleId,
             @RequestBody List<ResumeFieldValue> fieldValues,
@@ -661,6 +669,7 @@ public class ResumeController {
      * @return 删除结果
      */
     @DeleteMapping("/{resumeId}")
+    @PreAuthorize("hasAuthority('resume:audit')")
     public ResponseEntity<ResponseMessage<String>> deleteResume(
             @PathVariable Integer resumeId, HttpServletRequest request) {
         try {
@@ -716,6 +725,7 @@ public class ResumeController {
      * @param response HTTP响应
      */
     @GetMapping("/export/pdf/{resumeId}")
+    @PreAuthorize("hasAuthority('resume:view')")
     public void exportResumeToPdf(
             @PathVariable Integer resumeId,
             HttpServletRequest request,
@@ -784,6 +794,7 @@ public class ResumeController {
      * 支持按姓名、专业、期望部门、招募周期、状态等多条件组合查询
      */
     @GetMapping("/search")
+    @PreAuthorize("hasAuthority('resume:view')")
     public ResponseEntity<ResponseMessage<?>> queryResumes(
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String major,

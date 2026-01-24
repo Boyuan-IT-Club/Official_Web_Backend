@@ -3,15 +3,16 @@ package club.boyuan.official.controller;
 import club.boyuan.official.dto.ResponseMessage;
 import club.boyuan.official.entity.Role;
 import club.boyuan.official.entity.User;
+import club.boyuan.official.service.IUserService;
 import club.boyuan.official.service.UserRoleService;
+import club.boyuan.official.utils.JwtTokenUtil;
 import lombok.AllArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 
 /**
@@ -29,6 +30,8 @@ public class UserRoleController {
 
     private static final Logger logger = LoggerFactory.getLogger(UserRoleController.class);
     private final UserRoleService userRoleService;
+    private final IUserService userService;
+    private final JwtTokenUtil jwtTokenUtil;
 
     /**
      * 为用户分配角色
@@ -49,31 +52,33 @@ public class UserRoleController {
      * 为用户添加单个角色
      * @param userId 用户ID
      * @param roleId 角色ID
-     * @return 用户角色关系
+     * @return 更新后的角色列表
      */
     @PostMapping("/{userId}/roles/{roleId}")
     @PreAuthorize("hasAuthority('role:assign')")
-    public ResponseMessage<Void> addRoleToUser(@PathVariable int userId, @PathVariable int roleId) {
+    public ResponseMessage<List<Role>> addRoleToUser(@PathVariable int userId, @PathVariable int roleId) {
         logger.info("为用户添加单个角色，用户ID: {}, 角色ID: {}", userId, roleId);
         userRoleService.addRoleToUser(userId, roleId);
         logger.info("角色添加成功，用户ID: {}, 角色ID: {}", userId, roleId);
-        return ResponseMessage.success();
+        List<Role> roles = userRoleService.getRolesByUserId(userId);
+        return ResponseMessage.success(roles);
     }
 
     /**
      * 从用户移除角色
      * @param userId 用户ID
      * @param roleId 角色ID
-     * @return 成功响应
+     * @return 更新后的角色列表
      */
     @DeleteMapping("/{userId}/roles/{roleId}")
     @PreAuthorize("hasAuthority('role:assign')")
-    public ResponseMessage<Void> removeRoleFromUser(@PathVariable int userId, @PathVariable int roleId) {
+    public ResponseMessage<List<Role>> removeRoleFromUser(@PathVariable int userId, @PathVariable int roleId) {
         logger.info("从用户移除角色，用户ID: {}, 角色ID: {}", userId, roleId);
         boolean removed = userRoleService.removeRoleFromUser(userId, roleId);
         if (removed) {
             logger.info("角色移除成功，用户ID: {}, 角色ID: {}", userId, roleId);
-            return ResponseMessage.success();
+            List<Role> roles = userRoleService.getRolesByUserId(userId);
+            return ResponseMessage.success(roles);
         } else {
             logger.warn("角色移除失败，用户ID: {}, 角色ID: {}", userId, roleId);
             return ResponseMessage.error(404, "用户角色关系不存在");
@@ -99,12 +104,41 @@ public class UserRoleController {
      */
     @GetMapping("/me/roles")
     @PreAuthorize("isAuthenticated()")
-    public ResponseMessage<List<Role>> getCurrentUserRoles() {
+    public ResponseMessage<List<Role>> getCurrentUserRoles(HttpServletRequest request) {
         logger.info("获取当前用户角色列表");
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        User currentUser = (User) authentication.getPrincipal();
-        List<Role> roles = userRoleService.getRolesByUserId(currentUser.getUserId());
-        return ResponseMessage.success(roles);
+        
+        // 从请求头获取Authorization令牌
+        String authorizationHeader = request.getHeader("Authorization");
+        if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
+            logger.warn("未找到有效的Authorization头");
+            return ResponseMessage.error(401, "未授权");
+        }
+        
+        // 提取令牌
+        String token = authorizationHeader.substring(7);
+        
+        // 使用JwtTokenUtil提取用户名
+        try {
+            String username = jwtTokenUtil.extractUsername(token);
+            if (username == null) {
+                logger.warn("无法从令牌中提取用户名");
+                return ResponseMessage.error(401, "未授权");
+            }
+            
+            // 查询用户信息
+            User currentUser = userService.getUserByUsername(username);
+            if (currentUser == null) {
+                logger.warn("用户不存在: {}", username);
+                return ResponseMessage.error(404, "用户不存在");
+            }
+            
+            // 获取用户角色列表
+            List<Role> roles = userRoleService.getRolesByUserId(currentUser.getUserId());
+            return ResponseMessage.success(roles);
+        } catch (Exception e) {
+            logger.error("获取当前用户角色列表失败", e);
+            return ResponseMessage.error(401, "未授权");
+        }
     }
 
     /**
