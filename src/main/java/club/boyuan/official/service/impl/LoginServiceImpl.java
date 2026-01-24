@@ -18,6 +18,7 @@ import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import club.boyuan.official.entity.Role;
+import club.boyuan.official.entity.Permission;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 /**
@@ -146,7 +147,18 @@ public class LoginServiceImpl implements ILoginService {
         List<String> roles = user.getRoles() != null ? 
             user.getRoles().stream().map(Role::getRoleCode).collect(Collectors.toList()) : 
             Collections.emptyList();
-        String token = jwtTokenUtil.generateToken(user.getUsername(), user.getUserId(), roles);
+        
+        // 获取用户权限列表
+        List<String> permissions = user.getRoles() != null ? 
+            user.getRoles().stream()
+                .filter(role -> role.getPermissions() != null)
+                .flatMap(role -> role.getPermissions().stream())
+                .map(Permission::getPermissionCode)
+                .distinct()
+                .collect(Collectors.toList()) : 
+            Collections.emptyList();
+        
+        String token = jwtTokenUtil.generateToken(user.getUsername(), user.getUserId(), roles, permissions);
         return ResponseMessage.success(new TokenVO(token));
     }
 
