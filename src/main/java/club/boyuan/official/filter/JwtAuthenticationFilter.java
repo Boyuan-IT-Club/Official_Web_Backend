@@ -87,11 +87,20 @@ public class JwtAuthenticationFilter implements Filter {
                 if (roles == null) {
                     roles = new ArrayList<>();
                 }
+                
+                // 从claims中获取权限信息
+                List<String> permissions = (List<String>) claims.get("permissions");
+                if (permissions == null) {
+                    permissions = new ArrayList<>();
+                }
 
-                // 转换角色为Spring Security权限
+                // 转换角色和权限为Spring Security权限
                 Collection<GrantedAuthority> authorities = new ArrayList<>();
                 for (String role : roles) {
                     authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
+                }
+                for (String permission : permissions) {
+                    authorities.add(new SimpleGrantedAuthority(permission));
                 }
 
                 // 创建认证对象并设置权限
