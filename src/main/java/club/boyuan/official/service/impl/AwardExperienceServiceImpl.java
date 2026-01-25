@@ -26,7 +26,7 @@ public class AwardExperienceServiceImpl implements IAwardExperienceService {
         logger.debug("获奖经历详情: awardName={}, awardTime={}, description={}", 
                     awardExperience.getAwardName(), awardExperience.getAwardTime(), awardExperience.getDescription());
         
-        int result = awardExperienceMapper.save(awardExperience);
+        int result = awardExperienceMapper.insert(awardExperience);
         if (result <= 0) {
             logger.error("创建获奖经历失败，用户ID: {}", awardExperience.getUserId());
             throw new BusinessException(BusinessExceptionEnum.SYSTEM_ERROR);
@@ -68,7 +68,7 @@ public class AwardExperienceServiceImpl implements IAwardExperienceService {
             throw new BusinessException(BusinessExceptionEnum.AWARD_EXPERIENCE_NOT_FOUND);
         }
         
-        int result = awardExperienceMapper.update(awardExperience);
+        int result = awardExperienceMapper.updateById(awardExperience);
         if (result <= 0) {
             logger.error("更新获奖经历失败，获奖ID: {}", awardExperience.getAwardId());
             throw new BusinessException(BusinessExceptionEnum.SYSTEM_ERROR);

@@ -1,63 +1,63 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="club.boyuan.official.mapper.AwardExperienceMapper">
 
-    <select id="findById" resultType="club.boyuan.official.entity.AwardExperience">
-        SELECT * FROM award_experience WHERE award_id = #{id}
+    <!-- 结果映射 -->
+    <resultMap id="AwardExperienceResultMap" type="club.boyuan.official.entity.AwardExperience">
+        <id property="awardId" column="award_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="awardName" column="award_name"/>
+        <result property="awardTime" column="award_time"/>
+        <result property="description" column="description"/>
+    </resultMap>
+
+    <!-- 自定义查询方法 -->
+    <select id="selectById" parameterType="java.lang.Integer" resultMap="AwardExperienceResultMap">
+        SELECT award_id, user_id, award_name, award_time, description
+        FROM award_experience
+        WHERE award_id = #{awardId}
     </select>
 
-    <select id="selectById" resultType="club.boyuan.official.entity.AwardExperience">
-        SELECT * FROM award_experience WHERE award_id = #{awardId}
+    <select id="findByUserId" parameterType="java.lang.Integer" resultMap="AwardExperienceResultMap">
+        SELECT award_id, user_id, award_name, award_time, description
+        FROM award_experience
+        WHERE user_id = #{userId}
+        ORDER BY award_time DESC
     </select>
 
-    <select id="existsById" resultType="boolean">
-        SELECT EXISTS(SELECT 1 FROM award_experience WHERE award_id = #{id})
+    <select id="selectByUserId" parameterType="java.lang.Integer" resultMap="AwardExperienceResultMap">
+        SELECT award_id, user_id, award_name, award_time, description
+        FROM award_experience
+        WHERE user_id = #{userId}
+        ORDER BY award_time DESC
     </select>
-
-    <select id="findByUserId" resultType="club.boyuan.official.entity.AwardExperience">
-        SELECT * FROM award_experience WHERE user_id = #{userId}
-    </select>
-
-    <select id="selectByUserId" resultType="club.boyuan.official.entity.AwardExperience">
-        SELECT * FROM award_experience WHERE user_id = #{userId}
-    </select>
-
-    <insert id="save" parameterType="club.boyuan.official.entity.AwardExperience" useGeneratedKeys="true" keyProperty="awardId">
-        INSERT INTO award_experience(user_id, award_name, award_time, description)
-        VALUES(#{userId}, #{awardName}, #{awardTime}, #{description})
-    </insert>
 
     <update id="update" parameterType="club.boyuan.official.entity.AwardExperience">
         UPDATE award_experience
         <set>
-            <if test="awardName != null and awardName != ''">
-                award_name = #{awardName},
-            </if>
-            <if test="awardTime != null">
-                award_time = #{awardTime},
-            </if>
-            <if test="description != null">
-                description = #{description},
-            </if>
+            <if test="userId != null">user_id = #{userId},</if>
+            <if test="awardName != null">award_name = #{awardName},</if>
+            <if test="awardTime != null">award_time = #{awardTime},</if>
+            <if test="description != null">description = #{description},</if>
         </set>
         WHERE award_id = #{awardId}
     </update>
 
-    <delete id="deleteById">
-        DELETE
-        FROM award_experience
+    <delete id="deleteById" parameterType="java.lang.Integer">
+        DELETE FROM award_experience
         WHERE award_id = #{id}
     </delete>
 
-    <delete id="deleteAwardsByUserId">
-        DELETE
-        FROM award_experience
+    <delete id="deleteAwardsByUserId" parameterType="java.lang.Integer">
+        DELETE FROM award_experience
         WHERE user_id = #{userId}
     </delete>
 
-    <select id="searchAwards" resultType="club.boyuan.official.entity.AwardExperience">
-        SELECT * FROM award_experience WHERE award_name LIKE CONCAT('%', #{keyword}, '%')
-        OR description LIKE CONCAT('%', #{keyword}, '%')
+    <select id="searchAwards" parameterType="string" resultMap="AwardExperienceResultMap">
+        SELECT award_id, user_id, award_name, award_time, description
+        FROM award_experience
+        WHERE award_name LIKE CONCAT('%', #{keyword}, '%')
+           OR description LIKE CONCAT('%', #{keyword}, '%')
         LIMIT 20
     </select>
 

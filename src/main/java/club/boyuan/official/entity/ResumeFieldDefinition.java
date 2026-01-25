@@ -1,41 +1,56 @@
 package club.boyuan.official.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "resume_field_definition")
+@TableName("resume_field_definition") // MyBatis-Plus 表映射注解
 public class ResumeFieldDefinition {
     @Id
+    @TableId(value = "field_id", type = IdType.AUTO) // MyBatis-Plus 主键映射，指定自增策略
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "field_id")
     private Integer fieldId;
 
     @Column(name = "cycle_id", nullable = false)
+    @TableField("cycle_id") // MyBatis-Plus 字段映射
     private Integer cycleId;
 
     @Column(name = "field_key", nullable = false)
+    @TableField("field_key")
     private String fieldKey;
 
     @Column(name = "field_label", nullable = false)
+    @TableField("field_label")
     private String fieldLabel;
 
     @Column(name = "is_required", columnDefinition = "BOOLEAN DEFAULT FALSE")
+    @TableField("is_required")
     private Boolean isRequired;
 
     @Column(name = "sort_order", columnDefinition = "INT DEFAULT 0")
+    @TableField("sort_order")
     private Integer sortOrder;
 
     @Column(name = "is_active", columnDefinition = "BOOLEAN DEFAULT TRUE")
+    @TableField("is_active")
     private Boolean isActive;
 
     @Column(name = "created_at", columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField(value = "created_at", fill = FieldFill.INSERT) // 自动填充创建时间
     private LocalDateTime createdAt;
 
     @Column(name = "updated_at", columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField(value = "updated_at", fill = FieldFill.INSERT_UPDATE) // 自动填充更新时间
     private LocalDateTime updatedAt;
 
     // 构造函数

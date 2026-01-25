@@ -1,6 +1,7 @@
 package club.boyuan.official.mapper;
 
 import club.boyuan.official.entity.User;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.springframework.data.domain.Pageable;
@@ -8,7 +9,7 @@ import org.springframework.data.domain.Pageable;
 import java.util.List;
 
 @Mapper
-public interface UserMapper {
+public interface UserMapper extends BaseMapper<User> {
     
     User selectById(Integer userId);
 
@@ -17,8 +18,6 @@ public interface UserMapper {
     User selectByEmail(String email);
 
     User selectByPhone(String phone);
-
-    int insert(User user);
 
     int updateById(User user);
 

@@ -1,13 +1,11 @@
 package club.boyuan.official.mapper;
 
 import club.boyuan.official.entity.Resume;
-import org.apache.ibatis.annotations.Mapper;
-import org.apache.ibatis.annotations.Param;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 
-@Mapper
-public interface ResumeMapper {
+public interface ResumeMapper extends BaseMapper<Resume> {
     
     /**
      * 根据用户ID和招聘年份ID查询简历
@@ -37,34 +35,6 @@ public interface ResumeMapper {
      * @return 简历列表
      */
     List<Resume> findByCycleId(@Param("cycleId") Integer cycleId);
-    
-    /**
-     * 插入简历
-     * @param resume 简历实体
-     * @return 影响行数
-     */
-    int insert(Resume resume);
-    
-    /**
-     * 更新简历
-     * @param resume 简历实体
-     * @return 影响行数
-     */
-    int update(Resume resume);
-    
-    /**
-     * 删除简历
-     * @param resumeId 简历ID
-     * @return 影响行数
-     */
-    int deleteById(Integer resumeId);
-    
-    /**
-     * 根据用户ID删除简历
-     * @param userId 用户ID
-     * @return 影响行数
-     */
-    int deleteByUserId(Integer userId);
     
     /**
      * 多条件查询简历列表

@@ -1,5 +1,10 @@
 package club.boyuan.official.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.FieldFill;
 import jakarta.persistence.*;
 
 import java.time.LocalDate;
@@ -7,23 +12,29 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 
 @Entity
 @Table(name = "award_experience")
+@TableName("award_experience") // MyBatis-Plus 表映射注解
 public class AwardExperience {
     @Id
+    @TableId(value = "award_id", type = IdType.AUTO) // MyBatis-Plus 主键映射，指定自增策略
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "award_id")
     private Integer awardId;
 
     @Column(name = "user_id", nullable = false)
+    @TableField("user_id") // MyBatis-Plus 字段映射
     private Integer userId;
 
     @Column(name = "award_name", nullable = false)
+    @TableField("award_name")
     private String awardName;
 
     @Column(name = "award_time", nullable = false)
     @JsonFormat(pattern = "yyyy-MM-dd")
+    @TableField("award_time")
     private LocalDate awardTime;
 
     @Column(name = "description", columnDefinition = "TEXT")
+    @TableField("description")
     private String description;
 
     // 构造函数

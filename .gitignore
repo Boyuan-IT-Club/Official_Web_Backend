@@ -40,3 +40,5 @@ build/
 .env.local
 .env.*.local
 !*.template
+.trae
+文档

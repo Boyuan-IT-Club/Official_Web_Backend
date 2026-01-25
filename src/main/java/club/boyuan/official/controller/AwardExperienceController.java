@@ -14,11 +14,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
+import club.boyuan.official.utils.PermissionUtils;
 
 /**
  * 奖项经验控制器
@@ -42,6 +45,7 @@ public class AwardExperienceController {
      * @return 创建结果
      */
     @PostMapping
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<?>> createAward(@RequestBody AwardExperience awardExperience, HttpServletRequest request) {
         try {
             logger.info("开始创建获奖经历");
@@ -76,7 +80,7 @@ public class AwardExperienceController {
                 // 未指定用户ID - 拒绝访问
                 logger.warn("创建获奖经历时未指定用户ID，操作者用户ID: {}", currentUser.getUserId());
                 throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
-            } else if (User.ROLE_ADMIN.equals(currentUser.getRole())) {
+            } else if (PermissionUtils.hasPermission(currentUser, "award:manage")) {
                 // 管理员：验证目标用户是否存在
                 User targetUser = userService.getUserById(targetUserId);
                 if (targetUser == null) {
@@ -117,25 +121,27 @@ public class AwardExperienceController {
     /**
      * 根据ID获取获奖经历
      * @param id 奖项ID
-     * @param request HTTP请求
      * @return 奖项信息
      */
     @GetMapping("/{id}")
-    public ResponseEntity<ResponseMessage<?>> getAwardById(@PathVariable Integer id, HttpServletRequest request) {
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ResponseMessage<?>> getAwardById(@PathVariable Integer id) {
         try {
             logger.info("开始获取获奖经历，获奖ID: {}", id);
             
-            // 获取当前登录用户信息
-            String token = request.getHeader("Authorization").substring(7);
-            String username; 
-            try { 
-                username = jwtTokenUtil.extractUsername(token); 
-                logger.debug("从token中提取用户名: {}", username);
-            } catch (Exception e) { 
-                logger.error("解析token时发生异常", e);
-                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED); 
+            // 从SecurityContext获取当前用户信息
+            org.springframework.security.core.Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication == null || !authentication.isAuthenticated()) {
+                logger.warn("未找到认证信息");
+                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
             }
+            
+            String username = authentication.getName();
             User currentUser = userService.getUserByUsername(username);
+            if (currentUser == null) {
+                logger.warn("用户不存在: {}", username);
+                throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
+            }
             
             AwardExperience award = awardExperienceService.getById(id);
             if (award == null) {
@@ -145,7 +151,7 @@ public class AwardExperienceController {
             }
             
             // 权限检查：管理员可以查看所有，普通用户只能查看自己的
-            if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
+            if (!PermissionUtils.hasPermission(currentUser, "award:manage")) {
                 if (!award.getUserId().equals(currentUser.getUserId())) {
                     logger.warn("用户ID为{}的用户尝试查看其他用户的获奖经历，目标用户ID: {}, 获奖ID: {}", 
                                currentUser.getUserId(), award.getUserId(), id);
@@ -173,6 +179,7 @@ public class AwardExperienceController {
      * @return 奖项列表
      */
     @GetMapping("/user/{userId}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<?>> getAwardsByUserId(@PathVariable Integer userId, HttpServletRequest request) {
         try {
             logger.info("开始获取用户的所有获奖经历，用户ID: {}", userId);
@@ -190,7 +197,7 @@ public class AwardExperienceController {
             User currentUser = userService.getUserByUsername(username);
             
             // 权限检查：管理员可以查看所有，普通用户只能查看自己的
-            if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
+            if (!PermissionUtils.hasPermission(currentUser, "award:manage")) {
                 if (!userId.equals(currentUser.getUserId())) {
                     logger.warn("用户ID为{}的用户尝试查看其他用户的获奖经历，目标用户ID: {}", currentUser.getUserId(), userId);
                     throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
@@ -218,6 +225,7 @@ public class AwardExperienceController {
      * @return 更新结果
      */
     @PutMapping
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<?>> updateAward(@RequestBody AwardExperience awardExperience, HttpServletRequest request) {
         try {
             logger.info("开始更新获奖经历，获奖ID: {}", awardExperience.getAwardId());
@@ -246,7 +254,7 @@ public class AwardExperienceController {
             }
             
             // 权限检查：管理员可以修改所有人的，普通用户只能修改自己的
-            if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
+            if (!PermissionUtils.hasPermission(currentUser, "award:manage")) {
                 if (!originalAward.getUserId().equals(currentUserId)) {
                     logger.warn("用户ID为{}的用户尝试更新其他用户的获奖经历，目标用户ID: {}, 获奖ID: {}", 
                                currentUserId, originalAward.getUserId(), awardExperience.getAwardId());
@@ -278,6 +286,7 @@ public class AwardExperienceController {
      * @return 删除结果
      */
     @DeleteMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<?>> deleteAward(@PathVariable Integer id, HttpServletRequest request) {
         try {
             logger.info("开始删除获奖经历，获奖ID: {}", id);
@@ -304,7 +313,7 @@ public class AwardExperienceController {
             }
 
             // 权限检查：管理员可以删除所有，普通用户只能删除自己的
-            if (!User.ROLE_ADMIN.equals(currentUser.getRole()) && !award.getUserId().equals(currentUser.getUserId())) {
+            if (!PermissionUtils.canAccessUserResource(currentUser, award.getUserId())) {
                 logger.warn("用户ID为{}的用户尝试删除其他用户的获奖经历，目标用户ID: {}, 获奖ID: {}", 
                            currentUser.getUserId(), award.getUserId(), id);
                 throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
