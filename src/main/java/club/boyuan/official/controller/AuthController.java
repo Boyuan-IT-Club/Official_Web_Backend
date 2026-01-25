@@ -4,6 +4,7 @@ import club.boyuan.official.dto.*;
 import club.boyuan.official.entity.User;
 import club.boyuan.official.service.ILoginService;
 import club.boyuan.official.service.IUserService;
+import club.boyuan.official.service.impl.LoginServiceImpl.TokenVO;
 import club.boyuan.official.utils.JwtTokenUtil;
 import club.boyuan.official.utils.MessageUtils;
 import lombok.AllArgsConstructor;
@@ -245,12 +246,15 @@ public class AuthController {
             Map<String, Object> data = new HashMap<>();
             data.put("user_id", user.getUserId());
             // 获取用户角色列表，User类已经没有getRole()方法
-            List<String> roles = user.getRoles() != null ? 
-                user.getRoles().stream().map(Role::getRoleCode).collect(Collectors.toList()) : 
-                Collections.emptyList();
-            data.put("token", jwtTokenUtil.generateToken(user.getUsername(), user.getUserId(), roles));
+
+            TokenVO tokenVO = (TokenVO) response.getData();
+            String token = tokenVO.getToken();
+
+            List<String> roleNames = jwtTokenUtil.extractRoleNames(token);
+            List<String> permissionCodes = jwtTokenUtil.extractPermissionCodes(token);
+            data.put("token", token);
             // 添加角色信息到返回数据
-            data.put("roles", roles);
+            data.put("roleNames", roleNames);
 
             return ResponseEntity.ok(ResponseMessage.success(data));
         } catch (BusinessException e) {

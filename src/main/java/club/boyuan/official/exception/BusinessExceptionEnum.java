@@ -30,9 +30,9 @@ public enum BusinessExceptionEnum {
     PHONE_ALREADY_EXISTS(2011, "手机号已存在"),
     PHONE_FORMAT_ERROR(2012, "手机号格式不正确"),
     PASSWORD_NOT_MATCH(2013, "密码不一致"),
-    ROLE_NOT_FOUND(2004, "角色不存在"),
-    PERMISSION_NOT_FOUND(2005, "权限不存在"),
-    DEPARTMENT_NOT_FOUND(2006, "部门不存在"),
+    ROLE_NOT_FOUND(2014, "角色不存在"),
+    PERMISSION_NOT_FOUND(2015, "权限不存在"),
+    DEPARTMENT_NOT_FOUND(2016, "部门不存在"),
     
     // 认证相关异常 (2100-2199)
     AUTHENTICATION_FAILED(2100, "认证失败"),

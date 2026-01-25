@@ -6,13 +6,19 @@ import club.boyuan.official.entity.User;
 import club.boyuan.official.service.ILoginService;
 import club.boyuan.official.service.IUserService;
 import club.boyuan.official.service.IVerificationCodeService;
+import club.boyuan.official.service.PermissionService;
+import club.boyuan.official.service.RolePermissionService;
+import club.boyuan.official.service.UserRoleService;
 import club.boyuan.official.utils.JwtTokenUtil;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Set;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
-import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
@@ -33,6 +39,21 @@ public class LoginServiceImpl implements ILoginService {
      * 用户服务，用于获取用户信息
      */
     private final IUserService userService;
+
+    /**
+     * 用户角色服务，用于获取用户和角色信息
+     */
+    private final UserRoleService userRoleService;
+
+    /**
+     * 角色权限服务，用于获取角色和权限信息
+     */
+    private final RolePermissionService rolePermissionService;
+
+    /**
+     * 权限服务，用于获取权限信息
+     */
+    private final PermissionService permissionService;
 
     /**
      * JWT工具类，用于生成和验证令牌
@@ -143,22 +164,29 @@ public class LoginServiceImpl implements ILoginService {
         if (user.getStatus() != 1) {
             return ResponseMessage.error(403, "账号已被冻结，无法登录");
         }
-        // 获取用户角色列表，User类已经没有getRole()方法
-        List<String> roles = user.getRoles() != null ? 
-            user.getRoles().stream().map(Role::getRoleCode).collect(Collectors.toList()) : 
-            Collections.emptyList();
+        // 获取用户角色列表
+        List<Role> roles = userRoleService.getRolesByUserId(user.getUserId());
+        List<String> roleNames = roles.stream()
+            .map(Role::getRoleName)
+            .collect(Collectors.toList());
         
         // 获取用户权限列表
-        List<String> permissions = user.getRoles() != null ? 
-            user.getRoles().stream()
-                .filter(role -> role.getPermissions() != null)
-                .flatMap(role -> role.getPermissions().stream())
-                .map(Permission::getPermissionCode)
-                .distinct()
-                .collect(Collectors.toList()) : 
-            Collections.emptyList();
-        
-        String token = jwtTokenUtil.generateToken(user.getUsername(), user.getUserId(), roles, permissions);
+        List<Integer> permissionIds = new ArrayList<>();
+        for (Role role : roles) {
+            permissionIds.addAll(rolePermissionService
+                .getPermissionIdsByRoleId(role.getRoleId()));
+        }
+        // 将权限id去重，转换为权限码
+        List<String> permissionCodes = permissionIds.stream()
+            .distinct() // 去重
+            .map(code -> permissionService
+                .getPermissionById(code)
+                .getPermissionCode())
+            .collect(Collectors.toList());
+
+        user.setRoles(roles);
+
+        String token = jwtTokenUtil.generateToken(user.getUsername(), user.getUserId(), roleNames, permissionCodes);
         return ResponseMessage.success(new TokenVO(token));
     }
 

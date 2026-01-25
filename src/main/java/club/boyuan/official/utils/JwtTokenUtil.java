@@ -49,9 +49,19 @@ public class JwtTokenUtil {
         return extractClaim(token, claims -> claims.get("roles", List.class));
     }
 
+    // 从令牌中提取角色名
+    public List<String> extractRoleNames(String token) {
+        return extractClaim(token, claims -> claims.get("roleNames", List.class));
+    }
+
     // 从令牌中提取权限
     public List<String> extractPermissions(String token) {
         return extractClaim(token, claims -> claims.get("permissions", List.class));
+    }
+
+    // 从令牌中提取权限码
+    public List<String> extractPermissionCodes(String token) {
+        return extractClaim(token, claims -> claims.get("permissionCodes", List.class));
     }
 
     // 从令牌中提取过期时间
@@ -88,11 +98,11 @@ public class JwtTokenUtil {
         return generateToken(username, userId, roles, null);
     }
 
-    public String generateToken(String username, Integer userId, List<String> roles, List<String> permissions) {
+    public String generateToken(String username, Integer userId, List<String> roleNames, List<String> permissionCodes) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);
-        claims.put("roles", roles);
-        claims.put("permissions", permissions);
+        claims.put("roleNames", roleNames);
+        claims.put("permissionCodes", permissionCodes);
         return createToken(claims, username);
     }
 
