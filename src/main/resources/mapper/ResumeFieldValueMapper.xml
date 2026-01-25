@@ -2,72 +2,62 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="club.boyuan.official.mapper.ResumeFieldValueMapper">
 
-    <resultMap id="ResumeFieldValueResultMap" type="club.boyuan.official.entity.ResumeFieldValue">
-        <id property="valueId" column="value_id"/>
-        <result property="resumeId" column="resume_id"/>
-        <result property="fieldId" column="field_id"/>
-        <result property="fieldValue" column="field_value"/>
-        <result property="createdAt" column="created_at"/>
-        <result property="updatedAt" column="updated_at"/>
+    <resultMap id="ResumeFieldValueMap" type="club.boyuan.official.entity.ResumeFieldValue">
+        <id column="value_id" property="valueId"/>
+        <result column="resume_id" property="resumeId"/>
+        <result column="field_id" property="fieldId"/>
+        <result column="field_value" property="fieldValue"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
     </resultMap>
 
-    <select id="findByResumeIdAndFieldId" resultMap="ResumeFieldValueResultMap">
+    <!-- 自定义查询方法 -->
+    <select id="findByResumeId" parameterType="java.lang.Integer" resultMap="ResumeFieldValueMap">
+        SELECT * FROM resume_field_value
+        WHERE resume_id = #{resumeId}
+    </select>
+
+    <select id="findByResumeIdAndFieldId" resultMap="ResumeFieldValueMap">
         SELECT * FROM resume_field_value
         WHERE resume_id = #{resumeId} AND field_id = #{fieldId}
     </select>
 
-    <select id="findByResumeId" resultMap="ResumeFieldValueResultMap">
-        SELECT * FROM resume_field_value
-        WHERE resume_id = #{resumeId}
-        ORDER BY value_id
-    </select>
-
-    <insert id="insert" useGeneratedKeys="true" keyProperty="valueId">
-        INSERT INTO resume_field_value (resume_id, field_id, field_value, created_at, updated_at)
-        VALUES (#{resumeId}, #{fieldId}, #{fieldValue}, NOW(), NOW())
-    </insert>
-
-    <insert id="batchInsert">
+    <insert id="batchInsert" parameterType="java.util.List">
         INSERT INTO resume_field_value (resume_id, field_id, field_value, created_at, updated_at)
         VALUES
-        <foreach collection="fieldValues" item="fieldValue" separator=",">
-            (#{fieldValue.resumeId}, #{fieldValue.fieldId}, #{fieldValue.fieldValue}, NOW(), NOW())
+        <foreach collection="fieldValues" item="item" separator=",">
+            (#{item.resumeId}, #{item.fieldId}, #{item.fieldValue}, NOW(), NOW())
         </foreach>
     </insert>
 
-    <update id="batchUpdate">
+    <update id="update" parameterType="club.boyuan.official.entity.ResumeFieldValue">
         UPDATE resume_field_value
-        SET field_value = CASE value_id
-        <foreach collection="fieldValues" item="fieldValue">
-            WHEN #{fieldValue.valueId} THEN #{fieldValue.fieldValue}
-        </foreach>
-        END,
-        updated_at = NOW()
-        WHERE value_id IN
-        <foreach collection="fieldValues" item="fieldValue" open="(" separator="," close=")">
-            #{fieldValue.valueId}
-        </foreach>
-    </update>
-
-    <update id="update">
-        UPDATE resume_field_value
-        SET field_value = #{fieldValue}, updated_at = NOW()
+        <set>
+            <if test="fieldValue != null">field_value = #{fieldValue},</if>
+            <if test="fieldValue != null">updated_at = NOW(),</if>
+        </set>
         WHERE value_id = #{valueId}
     </update>
 
-    <delete id="deleteByResumeId">
+    <update id="batchUpdate" parameterType="java.util.List">
+        <foreach collection="fieldValues" item="item" separator=";">
+            UPDATE resume_field_value
+            <set>
+                <if test="item.fieldValue != null">field_value = #{item.fieldValue},</if>
+                updated_at = NOW()
+            </set>
+            WHERE value_id = #{item.valueId}
+        </foreach>
+    </update>
+
+    <delete id="deleteByResumeId" parameterType="java.lang.Integer">
         DELETE FROM resume_field_value
         WHERE resume_id = #{resumeId}
     </delete>
 
-    <delete id="deleteByFieldId">
+    <delete id="deleteByFieldId" parameterType="java.lang.Integer">
         DELETE FROM resume_field_value
         WHERE field_id = #{fieldId}
-    </delete>
-
-    <delete id="deleteById">
-        DELETE FROM resume_field_value
-        WHERE value_id = #{valueId}
     </delete>
 
 </mapper>

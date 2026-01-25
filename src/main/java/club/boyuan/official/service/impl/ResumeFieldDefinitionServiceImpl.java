@@ -120,7 +120,8 @@ public class ResumeFieldDefinitionServiceImpl implements IResumeFieldDefinitionS
                 fieldDefinition.getFieldId(), fieldDefinition.getFieldKey());
         try {
             fieldDefinition.setUpdatedAt(LocalDateTime.now());
-            resumeFieldDefinitionMapper.update(fieldDefinition);
+            // 使用MyBatis-Plus的updateById方法根据ID更新实体
+            resumeFieldDefinitionMapper.updateById(fieldDefinition);
             
             // 清除相关缓存
             clearCacheByFieldId(fieldDefinition.getFieldId());
@@ -142,7 +143,7 @@ public class ResumeFieldDefinitionServiceImpl implements IResumeFieldDefinitionS
             // 批量更新字段定义
             for (ResumeFieldDefinition fieldDefinition : fieldDefinitions) {
                 fieldDefinition.setUpdatedAt(LocalDateTime.now());
-                batchMapper.update(fieldDefinition);
+                batchMapper.updateById(fieldDefinition);
                 
                 // 清除相关缓存
                 clearCacheByFieldId(fieldDefinition.getFieldId());

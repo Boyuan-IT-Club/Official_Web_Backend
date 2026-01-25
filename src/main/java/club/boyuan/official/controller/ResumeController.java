@@ -22,11 +22,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
+import club.boyuan.official.utils.PermissionUtils;
 
 /**
  * 简历控制器
@@ -50,6 +51,7 @@ public class ResumeController {
      * @return 字段定义列表
      */
     @GetMapping("/fields/{cycleId}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<List<ResumeFieldDefinition>>> getFieldDefinitions(
             @PathVariable Integer cycleId) {
         try {
@@ -72,23 +74,14 @@ public class ResumeController {
     /**
      * 创建字段定义
      * @param fieldDefinition 字段定义
-     * @param request HTTP请求
      * @return 创建的字段定义
      */
     @PostMapping("/fields")
+    @PreAuthorize("hasAuthority('resume:audit')")
     public ResponseEntity<ResponseMessage<ResumeFieldDefinition>> createFieldDefinition(
-            @RequestBody ResumeFieldDefinition fieldDefinition, HttpServletRequest request) {
+            @RequestBody ResumeFieldDefinition fieldDefinition) {
         try {
-            String token = request.getHeader("Authorization").substring(7);
-            String username = jwtTokenUtil.extractUsername(token);
-            User currentUser = userService.getUserByUsername(username);
-            
-            if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
-                logger.warn("用户{}尝试创建字段定义，但权限不足", username);
-                throw new BusinessException(BusinessExceptionEnum.USER_ROLE_NOT_AUTHORIZED);
-            }
-            
-            logger.info("管理员{}创建字段定义", username);
+            logger.info("创建字段定义");
             ResumeFieldDefinition createdField = fieldDefinitionService.createFieldDefinition(fieldDefinition);
             return ResponseEntity.ok(new ResponseMessage<>(200, "字段定义创建成功", createdField));
         } catch (BusinessException e) {
@@ -106,23 +99,14 @@ public class ResumeController {
     /**
      * 更新字段定义
      * @param fieldDefinition 字段定义
-     * @param request HTTP请求
      * @return 更新的字段定义
      */
     @PutMapping("/fields")
+    @PreAuthorize("hasAuthority('resume:audit')")
     public ResponseEntity<ResponseMessage<ResumeFieldDefinition>> updateFieldDefinition(
-            @RequestBody ResumeFieldDefinition fieldDefinition, HttpServletRequest request) {
+            @RequestBody ResumeFieldDefinition fieldDefinition) {
         try {
-            String token = request.getHeader("Authorization").substring(7);
-            String username = jwtTokenUtil.extractUsername(token);
-            User currentUser = userService.getUserByUsername(username);
-            
-            if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
-                logger.warn("用户{}尝试更新字段定义，但权限不足", username);
-                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
-            }
-            
-            logger.info("管理员{}更新字段定义，字段ID: {}", username, fieldDefinition.getFieldId());
+            logger.info("更新字段定义，字段ID: {}", fieldDefinition.getFieldId());
             ResumeFieldDefinition updatedField = fieldDefinitionService.updateFieldDefinition(fieldDefinition);
             return ResponseEntity.ok(new ResponseMessage<>(200, "字段定义更新成功", updatedField));
         } catch (BusinessException e) {
@@ -141,23 +125,14 @@ public class ResumeController {
     /**
      * 批量更新字段定义
      * @param fieldDefinitions 字段定义列表
-     * @param request HTTP请求
      * @return 更新的字段定义列表
      */
     @PutMapping("/fields/batch")
+    @PreAuthorize("hasAuthority('resume:audit')")
     public ResponseEntity<ResponseMessage<List<ResumeFieldDefinition>>> batchUpdateFieldDefinitions(
-            @RequestBody List<ResumeFieldDefinition> fieldDefinitions, HttpServletRequest request) {
+            @RequestBody List<ResumeFieldDefinition> fieldDefinitions) {
         try {
-            String token = request.getHeader("Authorization").substring(7);
-            String username = jwtTokenUtil.extractUsername(token);
-            User currentUser = userService.getUserByUsername(username);
-            
-            if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
-                logger.warn("用户{}尝试批量更新字段定义，但权限不足", username);
-                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
-            }
-            
-            logger.info("管理员{}批量更新字段定义，字段数量: {}", username, fieldDefinitions.size());
+            logger.info("批量更新字段定义，字段数量: {}", fieldDefinitions.size());
             List<ResumeFieldDefinition> updatedFields = fieldDefinitionService.batchUpdateFieldDefinitions(fieldDefinitions);
             return ResponseEntity.ok(new ResponseMessage<>(200, "字段定义批量更新成功", updatedFields));
         } catch (BusinessException e) {
@@ -179,6 +154,7 @@ public class ResumeController {
      * @return 删除结果
      */
     @DeleteMapping("/fields/{fieldId}")
+    @PreAuthorize("hasAuthority('resume:audit')")
     public ResponseEntity<ResponseMessage<String>> deleteFieldDefinition(
             @PathVariable Integer fieldId, HttpServletRequest request) {
         try {
@@ -186,7 +162,7 @@ public class ResumeController {
             String username = jwtTokenUtil.extractUsername(token);
             User currentUser = userService.getUserByUsername(username);
             
-            if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
+            if (!PermissionUtils.hasPermission(currentUser, "resume:audit")) {
                 logger.warn("用户{}尝试删除字段定义，但权限不足", username);
                 throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
             }
@@ -213,6 +189,7 @@ public class ResumeController {
      * @return 简历信息
      */
     @GetMapping("/cycle/{cycleId}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<?>> getResumeByCycleId(
             @PathVariable Integer cycleId, HttpServletRequest request) {
         try {
@@ -277,6 +254,7 @@ public class ResumeController {
      * @return 简历信息
      */
     @GetMapping("/admin/{userId}/{cycleId}")
+    @PreAuthorize("hasAuthority('resume:view')")
     public ResponseEntity<ResponseMessage<?>> getResumeByUserIdAndCycleId(
             @PathVariable Integer userId, @PathVariable Integer cycleId, HttpServletRequest request) {
         try {
@@ -284,7 +262,7 @@ public class ResumeController {
             String username = jwtTokenUtil.extractUsername(token);
             User currentUser = userService.getUserByUsername(username);
             
-            if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
+            if (!PermissionUtils.hasPermission(currentUser, "resume:view")) {
                 logger.warn("用户{}尝试查看用户{}的简历，但权限不足", username, userId);
                 throw new BusinessException(BusinessExceptionEnum.USER_ROLE_NOT_AUTHORIZED);
             }
@@ -321,6 +299,7 @@ public class ResumeController {
      * @return 保存结果
      */
     @PostMapping("/cycle/{cycleId}/field-values")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<?>> saveFieldValues(
             @PathVariable Integer cycleId,
             @RequestBody List<ResumeFieldValue> fieldValues,
@@ -383,6 +362,7 @@ public class ResumeController {
      * @return 字段值列表
      */
     @GetMapping("/cycle/{cycleId}/field-values")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<?>> getFieldValues(
             @PathVariable Integer cycleId, HttpServletRequest request) {
         try {
@@ -450,6 +430,7 @@ public class ResumeController {
      * @return 提交的简历
      */
     @PostMapping("/cycle/{cycleId}/submit")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<?>> submitResume(
             @PathVariable Integer cycleId, HttpServletRequest request) {
         try {
@@ -524,6 +505,7 @@ public class ResumeController {
      * @return 更新的简历
      */
     @PutMapping("/{resumeId}/status/{status}")
+    @PreAuthorize("hasAuthority('resume:audit')")
     public ResponseEntity<ResponseMessage<?>> updateResumeStatus(
             @PathVariable Integer resumeId, @PathVariable Integer status, HttpServletRequest request) {
         try {
@@ -538,7 +520,7 @@ public class ResumeController {
             
             User currentUser = userService.getUserByUsername(username);
             
-            if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
+            if (!PermissionUtils.hasPermission(currentUser, "resume:audit")) {
                 logger.warn("用户{}尝试更新简历状态，但权限不足", username);
                 throw new BusinessException(BusinessExceptionEnum.USER_ROLE_NOT_AUTHORIZED);
             }
@@ -599,6 +581,7 @@ public class ResumeController {
      * @return 更新结果
      */
     @PutMapping("/cycle/{cycleId}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<?>> updateResume(
             @PathVariable Integer cycleId,
             @RequestBody List<ResumeFieldValue> fieldValues,
@@ -686,6 +669,7 @@ public class ResumeController {
      * @return 删除结果
      */
     @DeleteMapping("/{resumeId}")
+    @PreAuthorize("hasAuthority('resume:audit')")
     public ResponseEntity<ResponseMessage<String>> deleteResume(
             @PathVariable Integer resumeId, HttpServletRequest request) {
         try {
@@ -703,7 +687,7 @@ public class ResumeController {
             }
             
             // 检查权限：管理员或简历所有者可以删除
-            if (!User.ROLE_ADMIN.equals(currentUser.getRole()) && !currentUser.getUserId().equals(resume.getUserId())) {
+            if (!PermissionUtils.canAccessUserResource(currentUser, resume.getUserId())) {
                 logger.warn("用户{}尝试删除不属于自己的简历{}", username, resumeId);
                 throw new BusinessException(BusinessExceptionEnum.USER_ROLE_NOT_AUTHORIZED);
             }
@@ -741,6 +725,7 @@ public class ResumeController {
      * @param response HTTP响应
      */
     @GetMapping("/export/pdf/{resumeId}")
+    @PreAuthorize("hasAuthority('resume:view')")
     public void exportResumeToPdf(
             @PathVariable Integer resumeId,
             HttpServletRequest request,
@@ -770,7 +755,7 @@ public class ResumeController {
                 }
                 
                 // 权限检查：管理员或简历所有者可以导出
-                if (!User.ROLE_ADMIN.equals(currentUser.getRole()) && !currentUser.getUserId().equals(resumeDTO.getUserId())) {
+                if (!PermissionUtils.canAccessUserResource(currentUser, resumeDTO.getUserId())) {
                     logger.warn("用户{}尝试导出不属于自己的简历{}", username, resumeId);
                     response.sendError(HttpServletResponse.SC_FORBIDDEN, "权限不足");
                     return;
@@ -809,6 +794,7 @@ public class ResumeController {
      * 支持按姓名、专业、期望部门、招募周期、状态等多条件组合查询
      */
     @GetMapping("/search")
+    @PreAuthorize("hasAuthority('resume:view')")
     public ResponseEntity<ResponseMessage<?>> queryResumes(
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String major,
@@ -828,7 +814,7 @@ public class ResumeController {
             }
             User currentUser = userService.getUserByUsername(username);
             // 仅管理员可用
-            if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
+            if (!PermissionUtils.hasPermission(currentUser, "resume:view")) {
                 logger.warn("用户{}尝试条件查询简历，但权限不足", username);
                 throw new BusinessException(BusinessExceptionEnum.USER_ROLE_NOT_AUTHORIZED);
             }

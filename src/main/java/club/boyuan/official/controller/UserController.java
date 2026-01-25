@@ -2,6 +2,7 @@ package club.boyuan.official.controller;
 import club.boyuan.official.dto.ResponseMessage;
 import club.boyuan.official.dto.UserDTO;
 import club.boyuan.official.entity.AwardExperience;
+import club.boyuan.official.entity.Role;
 import club.boyuan.official.entity.User;
 import club.boyuan.official.exception.BusinessException;
 import club.boyuan.official.exception.BusinessExceptionEnum;
@@ -19,6 +20,7 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -57,6 +59,7 @@ public class UserController {
      * 上传用户头像
      */
     @PostMapping("/avatar")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage> uploadAvatar(@RequestParam("file") MultipartFile file) {
         try {
             // 检查文件是否为空
@@ -121,6 +124,7 @@ public class UserController {
      * @return 文件存储路径
      */
     @PostMapping("/upload")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage> uploadFile(
             @RequestParam("file") MultipartFile file,
             @RequestParam("uploadPath") String uploadPath) {
@@ -167,6 +171,7 @@ public class UserController {
      * @return 文件存储路径
      */
     @PostMapping("/upload/typed")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage> uploadTypedFile(
             @RequestParam("file") MultipartFile file,
             @RequestParam("uploadPath") String uploadPath,
@@ -207,6 +212,7 @@ public class UserController {
     }
     
     @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage> getCurrentUser() {
         try {
             Integer userId = getAuthenticatedUserId();
@@ -237,6 +243,7 @@ public class UserController {
      * 更新当前用户信息（从token获取ID，支持部分字段更新）
      */
     @PutMapping("/me")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage> updateCurrentUser(@RequestBody Map<String, Object> userInfo) {
         try {
             // 从JWT令牌获取用户ID
@@ -277,9 +284,9 @@ public class UserController {
                 existingUser.setGithub((String) userInfo.get("github"));
                 logger.debug("更新GitHub地址为: {}", userInfo.get("github"));
             }
-            if (userInfo.containsKey("dept") && userInfo.get("dept") != null) {
-                existingUser.setDept((String) userInfo.get("dept"));
-                logger.debug("更新部门为: {}", userInfo.get("dept"));
+            if (userInfo.containsKey("deptId") && userInfo.get("deptId") != null) {
+                existingUser.setDeptId((Integer) userInfo.get("deptId"));
+                logger.debug("更新部门ID为: {}", userInfo.get("deptId"));
             }
             // 不允许通过此接口更新status和isMember字段
             // if (userInfo.containsKey("status")) {
@@ -325,6 +332,7 @@ public class UserController {
      * @param request HTTP请求
      * @param response HTTP响应
      */
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/export/excel")
     public void exportUsersToExcel(HttpServletRequest request, HttpServletResponse response) {
         try {
@@ -342,7 +350,7 @@ public class UserController {
                 User currentUser = userService.getUserByUsername(username);
                 
                 // 仅管理员可用
-                if (!User.ROLE_ADMIN.equals(currentUser.getRole())) {
+                if (!hasAdminRole(currentUser)) {
                     logger.warn("用户{}尝试导出用户数据为Excel，但权限不足", username);
                     response.sendError(HttpServletResponse.SC_FORBIDDEN, "权限不足");
                     return;
@@ -420,14 +428,21 @@ public class UserController {
 
 
     // 验证管理员权限
-    private void checkAdminPermission(User user) {
-        if (!User.ROLE_ADMIN.equals(user.getRole())) {
-            throw new IllegalArgumentException("操作权限不足，需要管理员权限");
+    private boolean hasAdminRole(User user) {
+        if (user.getRoles() == null) {
+            return false;
         }
+        for (Role role : user.getRoles()) {
+            if ("ROLE_ADMIN".equals(role.getRoleName())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     //Restful风格
     //增加
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
       public ResponseEntity<ResponseMessage<User>> add(@Validated @RequestBody UserDTO user){
         try {
@@ -445,11 +460,13 @@ public class UserController {
     //查询
 
     @GetMapping("/{userId}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<?>> get(@PathVariable Integer userId) {
         try {
             User currentUser = getCurrentUserEntity();
             // 管理员可以查看所有用户，普通用户只能查看自己
-            if (!User.ROLE_ADMIN.equals(currentUser.getRole()) && !currentUser.getUserId().equals(userId)) {
+            if (!hasAdminRole(currentUser) && !currentUser.getUserId().equals(userId)) {
+                logger.warn("用户ID为{}的用户尝试查看其他用户信息，权限不足", currentUser.getUserId());
                 throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
             }
             User userNew = userService.getUserById(userId);
@@ -472,6 +489,7 @@ public class UserController {
     }
 
     //删除
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{userId}")
     public ResponseEntity<ResponseMessage<Void>> delete(@PathVariable Integer userId) {
         try {
@@ -490,6 +508,7 @@ public class UserController {
      * 更新指定用户信息（需传入ID，支持部分字段更新）
      */
     @PutMapping
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage> edit(@RequestBody Map<String, Object> userInfo) {
         try {
             User currentUser = getCurrentUserEntity();
@@ -505,7 +524,7 @@ public class UserController {
             }
 
             // 管理员可以更新所有用户，普通用户只能更新自己
-            if (!User.ROLE_ADMIN.equals(currentUser.getRole()) && !currentUser.getUserId().equals(targetUserId)) {
+            if (!hasAdminRole(currentUser) && !currentUser.getUserId().equals(targetUserId)) {
                 logger.warn("用户ID为{}的用户尝试更新其他用户信息，权限不足", currentUser.getUserId());
                 throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
             }
@@ -525,7 +544,7 @@ public class UserController {
             }
             // 只有管理员可以通过此接口修改密码
             if (userInfo.containsKey("password") && userInfo.get("password") != null) {
-                if (User.ROLE_ADMIN.equals(currentUser.getRole())) {
+                if (hasAdminRole(currentUser)) {
                     existingUser.setPassword((String) userInfo.get("password"));
                     logger.debug("管理员更新用户密码，目标用户ID: {}", targetUserId);
                 } else {
@@ -536,15 +555,10 @@ public class UserController {
                 existingUser.setEmail((String) userInfo.get("email"));
                 logger.debug("更新邮箱为: {}", userInfo.get("email"));
             }
-            if (userInfo.containsKey("role") && userInfo.get("role") != null) {
-                // 只有管理员可以修改角色
-                if (User.ROLE_ADMIN.equals(currentUser.getRole())) {
-                    existingUser.setRole((String) userInfo.get("role"));
-                    logger.debug("更新角色为: {}", userInfo.get("role"));
-                } else {
-                    logger.warn("非管理员用户尝试更新角色，用户ID: {}", currentUser.getUserId());
-                    throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
-                }
+            // 移除旧的role字段处理，角色现在通过user_role表管理
+            if (userInfo.containsKey("role")) {
+                logger.warn("尝试更新废弃的role字段，用户ID: {}", currentUser.getUserId());
+                userInfo.remove("role");
             }
             if (userInfo.containsKey("name") && userInfo.get("name") != null) {
                 existingUser.setName((String) userInfo.get("name"));
@@ -562,17 +576,18 @@ public class UserController {
                 existingUser.setGithub((String) userInfo.get("github"));
                 logger.debug("更新GitHub地址为: {}", userInfo.get("github"));
             }
-            if (userInfo.containsKey("dept") && userInfo.get("dept") != null) {
-                existingUser.setDept((String) userInfo.get("dept"));
-                logger.debug("更新部门为: {}", userInfo.get("dept"));
+            if (userInfo.containsKey("deptId") && userInfo.get("deptId") != null) {
+                existingUser.setDeptId((Integer) userInfo.get("deptId"));
+                logger.debug("更新部门ID为: {}", userInfo.get("deptId"));
             }
             if (userInfo.containsKey("status") && userInfo.get("status") != null) {
-                existingUser.setStatus((Boolean) userInfo.get("status"));
+                existingUser.setStatus((Integer) userInfo.get("status"));
                 logger.debug("更新状态为: {}", userInfo.get("status"));
             }
-            if (userInfo.containsKey("isMember") && userInfo.get("isMember") != null) {
-                existingUser.setIsMember((Boolean) userInfo.get("isMember"));
-                logger.debug("更新会员状态为: {}", userInfo.get("isMember"));
+            // 移除isMember字段处理，User实体中没有该字段
+            if (userInfo.containsKey("isMember")) {
+                logger.warn("尝试更新不存在的isMember字段，用户ID: {}", currentUser.getUserId());
+                userInfo.remove("isMember");
             }
 
             UserDTO userDTO = new UserDTO();

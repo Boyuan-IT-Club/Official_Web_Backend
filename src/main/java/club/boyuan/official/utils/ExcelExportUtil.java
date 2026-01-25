@@ -10,11 +10,12 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-import java.util.ArrayList;
 import java.util.stream.Collectors;
+import club.boyuan.official.entity.Role;
 
 /**
  * Excel导出工具类
@@ -96,19 +97,26 @@ public class ExcelExportUtil {
                     cell6.setCellStyle(dataStyle);
                     
                     Cell cell7 = row.createCell(7);
-                    cell7.setCellValue(user.getDept() != null ? user.getDept() : "");
+                    // user.getDept() 改为 user.getDeptId()，并转换为字符串
+                    cell7.setCellValue(user.getDeptId() != null ? String.valueOf(user.getDeptId()) : "");
                     cell7.setCellStyle(dataStyle);
                     
                     Cell cell8 = row.createCell(8);
-                    cell8.setCellValue(user.getRole() != null ? user.getRole() : "");
+                    // User类已经没有getRole()方法，获取用户角色列表
+                    String roles = user.getRoles() != null ? 
+                        user.getRoles().stream().map(Role::getRoleName).collect(Collectors.joining(", ")) : 
+                        "";
+                    cell8.setCellValue(roles);
                     cell8.setCellStyle(dataStyle);
                     
                     Cell cell9 = row.createCell(9);
-                    cell9.setCellValue(user.getStatus() != null ? (user.getStatus() ? "激活" : "冻结") : "未知");
+                    // user.getStatus() 返回Integer类型，1表示激活，其他表示冻结
+                    cell9.setCellValue(user.getStatus() != null ? (user.getStatus() == 1 ? "激活" : "冻结") : "未知");
                     cell9.setCellStyle(dataStyle);
                     
                     Cell cell10 = row.createCell(10);
-                    cell10.setCellValue(user.getIsMember() != null ? (user.getIsMember() ? "是" : "否") : "未知");
+                    // User类已经没有isMember字段，移除相关代码
+                    cell10.setCellValue("未知");
                     cell10.setCellStyle(dataStyle);
                     
                     Cell cell11 = row.createCell(11);

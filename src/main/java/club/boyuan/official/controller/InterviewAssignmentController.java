@@ -19,11 +19,12 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Map;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import club.boyuan.official.utils.PermissionUtils;
 
 /**
  * 面试时间分配控制器
@@ -42,19 +43,14 @@ public class InterviewAssignmentController {
     /**
      * 为指定招募周期自动分配面试时间（仅管理员）
      * @param cycleId 招募周期ID
-     * @param request HTTP请求
      * @return 面试时间分配结果
      */
     @PostMapping("/assign/{cycleId}")
+    @PreAuthorize("hasAuthority('resume:audit')")
     public ResponseEntity<ResponseMessage<InterviewAssignmentResultDTO>> assignInterviews(
-            @PathVariable Integer cycleId,
-            HttpServletRequest request) {
+            @PathVariable Integer cycleId) {
         try {
-            // 验证管理员权限
-            User currentUser = getCurrentUser(request);
-            checkAdminPermission(currentUser);
-            
-            logger.info("管理员 {} 开始为招募周期 ID {} 分配面试时间", currentUser.getUsername(), cycleId);
+            logger.info("开始为招募周期 ID {} 分配面试时间", cycleId);
             
             // 执行面试时间分配
             InterviewAssignmentResultDTO result = interviewAssignmentService.assignInterviews(cycleId);
@@ -79,13 +75,10 @@ public class InterviewAssignmentController {
      * 将指定招募周期的面试分配结果导出为Excel（仅管理员）
      */
     @GetMapping("/assign/{cycleId}/export")
+    @PreAuthorize("hasAuthority('resume:audit')")
     public ResponseEntity<byte[]> exportAssignedInterviews(
-            @PathVariable Integer cycleId,
-            HttpServletRequest request) {
+            @PathVariable Integer cycleId) {
         try {
-            User currentUser = getCurrentUser(request);
-            checkAdminPermission(currentUser);
-
             InterviewAssignmentResultDTO result = interviewAssignmentService.assignInterviews(cycleId);
             byte[] data = ExcelExportUtil.exportInterviewAssignmentsToExcel(result);
 
@@ -131,7 +124,7 @@ public class InterviewAssignmentController {
      * 验证管理员权限
      */
     private void checkAdminPermission(User user) {
-        if (!User.ROLE_ADMIN.equals(user.getRole())) {
+        if (!PermissionUtils.hasPermission(user, "resume:audit")) {
             throw new BusinessException(BusinessExceptionEnum.USER_ROLE_NOT_AUTHORIZED);
         }
     }

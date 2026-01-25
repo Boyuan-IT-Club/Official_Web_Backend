@@ -1,5 +1,10 @@
 package club.boyuan.official.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
 import java.time.LocalDate;
@@ -11,27 +16,34 @@ import java.time.LocalDateTime;
  */
 @Entity
 @Table(name = "recruitment_cycle")
+@TableName("recruitment_cycle") // MyBatis-Plus 表映射注解
 public class RecruitmentCycle {
     @Id
+    @TableId(value = "cycle_id", type = IdType.AUTO) // MyBatis-Plus 主键映射，指定自增策略
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "cycle_id")
     private Integer cycleId;
 
     @Column(name = "cycle_name", nullable = false)
+    @TableField("cycle_name") // MyBatis-Plus 字段映射
     private String cycleName;
 
     @Column(name = "description", columnDefinition = "TEXT")
+    @TableField("description")
     private String description;
 
     @Column(name = "start_date", nullable = false)
     @JsonFormat(pattern = "yyyy-MM-dd")
+    @TableField("start_date")
     private LocalDate startDate;
 
     @Column(name = "end_date", nullable = false)
     @JsonFormat(pattern = "yyyy-MM-dd")
+    @TableField("end_date")
     private LocalDate endDate;
 
     @Column(name = "academic_year", nullable = false)
+    @TableField("academic_year")
     private String academicYear;
 
     /**
@@ -42,6 +54,7 @@ public class RecruitmentCycle {
      * 4 - 已关闭
      */
     @Column(name = "status", nullable = false, columnDefinition = "TINYINT DEFAULT 1")
+    @TableField("status")
     private Integer status;
 
     /**
@@ -50,14 +63,17 @@ public class RecruitmentCycle {
      * 1 - 启用
      */
     @Column(name = "is_active", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 1")
+    @TableField("is_active")
     private Integer isActive;
 
     @Column(name = "created_at", columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField(value = "created_at", fill = FieldFill.INSERT) // 自动填充创建时间
     private LocalDateTime createdAt;
 
     @Column(name = "updated_at", columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField(value = "updated_at", fill = FieldFill.INSERT_UPDATE) // 自动填充更新时间
     private LocalDateTime updatedAt;
 
     // 构造函数

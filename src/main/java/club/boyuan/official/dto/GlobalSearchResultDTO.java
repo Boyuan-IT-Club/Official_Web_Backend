@@ -39,7 +39,7 @@ public class GlobalSearchResultDTO {
         private String name;
         private String email;
         private String phone;
-        private String dept;
+        private Integer deptId;
 
         public UserSearchResult() {}
 
@@ -49,7 +49,7 @@ public class GlobalSearchResultDTO {
             this.name = user.getName();
             this.email = user.getEmail();
             this.phone = user.getPhone();
-            this.dept = user.getDept();
+            this.deptId = user.getDeptId();
         }
 
         // Getters and Setters
@@ -93,12 +93,12 @@ public class GlobalSearchResultDTO {
             this.phone = phone;
         }
 
-        public String getDept() {
-            return dept;
+        public Integer getDeptId() {
+            return deptId;
         }
 
-        public void setDept(String dept) {
-            this.dept = dept;
+        public void setDeptId(Integer deptId) {
+            this.deptId = deptId;
         }
     }
 

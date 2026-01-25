@@ -1,13 +1,13 @@
 package club.boyuan.official.mapper;
 
 import club.boyuan.official.entity.ResumeFieldDefinition;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
-import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 
 @Mapper
-public interface ResumeFieldDefinitionMapper {
+public interface ResumeFieldDefinitionMapper extends BaseMapper<ResumeFieldDefinition> {
     
     /**
      * 根据招聘年份ID查询字段定义列表
@@ -22,26 +22,4 @@ public interface ResumeFieldDefinitionMapper {
      * @return 字段定义
      */
     ResumeFieldDefinition findById(Integer fieldId);
-    
-    /**
-     * 插入字段定义
-     * @param fieldDefinition 字段定义实体
-     * @return 影响行数
-     */
-    int insert(ResumeFieldDefinition fieldDefinition);
-    
-    /**
-     * 更新字段定义
-     * @param fieldDefinition 字段定义实体
-     * @return 影响行数
-     */
-    int update(ResumeFieldDefinition fieldDefinition);
-    
-    
-    /**
-     * 删除字段定义
-     * @param fieldId 字段ID
-     * @return 影响行数
-     */
-    int deleteById(Integer fieldId);
 }

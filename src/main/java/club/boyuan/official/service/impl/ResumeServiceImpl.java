@@ -96,7 +96,7 @@ public class ResumeServiceImpl implements IResumeService {
         logger.info("更新简历，简历ID: {}", resume.getResumeId());
         try {
             Resume oldResume = resumeMapper.findById(resume.getResumeId());
-            resumeMapper.update(resume);
+            resumeMapper.updateById(resume);
             // 清除相关缓存
             if (oldResume != null) {
                 clearCacheByCycleId(oldResume.getCycleId());
@@ -138,7 +138,7 @@ public class ResumeServiceImpl implements IResumeService {
             if (resume != null) {
                 resume.setStatus(2); // 设置为已提交状态
                 resume.setSubmittedAt(LocalDateTime.now());
-                resumeMapper.update(resume);
+                resumeMapper.updateById(resume);
                 // 清除相关缓存
                 clearCacheByCycleId(resume.getCycleId());
             }
