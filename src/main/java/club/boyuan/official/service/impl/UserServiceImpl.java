@@ -18,6 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -162,10 +163,7 @@ public class UserServiceImpl implements IUserService {
 
     @Override
     public PageResultDTO<User> getUsersByConditions(String role, String dept, String status, Pageable pageable, User currentUser) {
-        // 检查权限，管理员才能调用此方法
-        if (!PermissionUtils.hasPermission(currentUser, "admin:manage")) {
-            throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
-        }
+        // 权限检查由调用方的 @PreAuthorize 注解统一管理
         
         // 查询总记录数
         long totalElements = userMapper.countByRoleAndDeptAndStatus(role, dept, status);
@@ -438,7 +436,14 @@ public class UserServiceImpl implements IUserService {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
         }
         // 管理员可以查看所有用户，普通用户只能查看自己
-        if (PermissionUtils.hasPermission(currentUser, "admin:manage")) {
+        boolean hasManagePermission = false;
+        if (SecurityContextHolder.getContext().getAuthentication() != null) {
+            hasManagePermission = SecurityContextHolder.getContext().getAuthentication()
+                    .getAuthorities().stream()
+                    .anyMatch(auth -> "admin:manage".equals(auth.getAuthority()));
+        }
+        
+        if (hasManagePermission) {
             // 移除过多的 debug 日志
             return userMapper.selectAll();
         } else {
