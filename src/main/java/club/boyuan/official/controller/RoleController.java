@@ -5,10 +5,13 @@ import club.boyuan.official.dto.PermissionDTO;
 import club.boyuan.official.dto.ResponseMessage;
 import club.boyuan.official.entity.Permission;
 import club.boyuan.official.entity.Role;
+import club.boyuan.official.exception.BusinessException;
 import club.boyuan.official.service.RoleService;
 import lombok.AllArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -38,11 +41,21 @@ public class RoleController {
      */
     @PostMapping
     @PreAuthorize("hasAuthority('role:assign')")
-    public ResponseMessage<RoleDTO> createRole(@Validated @RequestBody RoleDTO roleDTO) {
-        logger.info("创建角色: {}", roleDTO.getRoleName());
-        RoleDTO createdRole = roleService.createRole(roleDTO);
-        logger.info("角色创建成功: {}", createdRole.getRoleId());
-        return ResponseMessage.success(createdRole);
+    public ResponseEntity<ResponseMessage<RoleDTO>> createRole(@Validated @RequestBody RoleDTO roleDTO) {
+        try {
+            logger.info("创建角色: {}", roleDTO.getRoleName());
+            RoleDTO createdRole = roleService.createRole(roleDTO);
+            logger.info("角色创建成功: {}", createdRole.getRoleId());
+            return ResponseEntity.ok(ResponseMessage.success(createdRole));
+        } catch (BusinessException e) {
+            logger.error("创建角色失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("创建角色时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
     }
 
     /**
@@ -53,12 +66,22 @@ public class RoleController {
      */
     @PutMapping("/{roleId}")
     @PreAuthorize("hasAuthority('role:assign')")
-    public ResponseMessage<RoleDTO> updateRole(@PathVariable int roleId, @Validated @RequestBody RoleDTO roleDTO) {
-        logger.info("更新角色: {}", roleId);
-        roleDTO.setRoleId(roleId);
-        RoleDTO updatedRole = roleService.updateRole(roleDTO);
-        logger.info("角色更新成功: {}", roleId);
-        return ResponseMessage.success(updatedRole);
+    public ResponseEntity<ResponseMessage<RoleDTO>> updateRole(@PathVariable int roleId, @Validated @RequestBody RoleDTO roleDTO) {
+        try {
+            logger.info("更新角色: {}", roleId);
+            roleDTO.setRoleId(roleId);
+            RoleDTO updatedRole = roleService.updateRole(roleDTO);
+            logger.info("角色更新成功: {}", roleId);
+            return ResponseEntity.ok(ResponseMessage.success(updatedRole));
+        } catch (BusinessException e) {
+            logger.error("更新角色失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("更新角色时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
     }
 
     /**
@@ -68,15 +91,26 @@ public class RoleController {
      */
     @DeleteMapping("/{roleId}")
     @PreAuthorize("hasAuthority('role:assign')")
-    public ResponseMessage<Void> deleteRole(@PathVariable int roleId) {
-        logger.info("删除角色: {}", roleId);
-        boolean deleted = roleService.deleteRole(roleId);
-        if (deleted) {
-            logger.info("角色删除成功: {}", roleId);
-            return ResponseMessage.success();
-        } else {
-            logger.warn("角色删除失败，角色不存在: {}", roleId);
-            return ResponseMessage.error(404, "角色不存在");
+    public ResponseEntity<ResponseMessage<Void>> deleteRole(@PathVariable int roleId) {
+        try {
+            logger.info("删除角色: {}", roleId);
+            boolean deleted = roleService.deleteRole(roleId);
+            if (deleted) {
+                logger.info("角色删除成功: {}", roleId);
+                return ResponseEntity.ok(ResponseMessage.success());
+            } else {
+                logger.warn("角色删除失败，角色不存在: {}", roleId);
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ResponseMessage.error(404, "角色不存在"));
+            }
+        } catch (BusinessException e) {
+            logger.error("删除角色失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("删除角色时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
         }
     }
 
@@ -87,10 +121,20 @@ public class RoleController {
      */
     @GetMapping("/{roleId}")
     @PreAuthorize("isAuthenticated()")
-    public ResponseMessage<RoleDTO> getRoleById(@PathVariable int roleId) {
-        logger.info("获取角色详情: {}", roleId);
-        RoleDTO roleDTO = roleService.getRoleById(roleId);
-        return ResponseMessage.success(roleDTO);
+    public ResponseEntity<ResponseMessage<RoleDTO>> getRoleById(@PathVariable int roleId) {
+        try {
+            logger.info("获取角色详情: {}", roleId);
+            RoleDTO roleDTO = roleService.getRoleById(roleId);
+            return ResponseEntity.ok(ResponseMessage.success(roleDTO));
+        } catch (BusinessException e) {
+            logger.error("获取角色详情失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("获取角色详情时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
     }
 
     /**
@@ -104,15 +148,25 @@ public class RoleController {
      */
     @GetMapping
     @PreAuthorize("isAuthenticated()")
-    public ResponseMessage<List<RoleDTO>> getRoles(
+    public ResponseEntity<ResponseMessage<List<RoleDTO>>> getRoles(
             @RequestParam(required = false, defaultValue = "0") int status,
             @RequestParam(required = false, defaultValue = "") String keyword,
             @RequestParam(required = false, defaultValue = "0") int page,
             @RequestParam(required = false, defaultValue = "10") int size,
             @RequestParam(required = false, defaultValue = "roleId,asc") String sort) {
-        logger.info("获取角色列表，状态: {}, 关键词: {}, 页码: {}, 每页大小: {}, 排序: {}", status, keyword, page, size, sort);
-        List<RoleDTO> roles = roleService.getRoles(status, keyword, page, size, sort);
-        return ResponseMessage.success(roles);
+        try {
+            logger.info("获取角色列表，状态: {}, 关键词: {}, 页码: {}, 每页大小: {}, 排序: {}", status, keyword, page, size, sort);
+            List<RoleDTO> roles = roleService.getRoles(status, keyword, page, size, sort);
+            return ResponseEntity.ok(ResponseMessage.success(roles));
+        } catch (BusinessException e) {
+            logger.error("获取角色列表失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("获取角色列表时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
     }
 
     /**
@@ -121,10 +175,16 @@ public class RoleController {
      */
     @GetMapping("/available")
     @PreAuthorize("isAuthenticated()")
-    public ResponseMessage<List<RoleDTO>> getAllAvailableRoles() {
-        logger.info("获取所有启用的角色");
-        List<RoleDTO> roles = roleService.getAllAvailableRoles();
-        return ResponseMessage.success(roles);
+    public ResponseEntity<ResponseMessage<List<RoleDTO>>> getAllAvailableRoles() {
+        try {
+            logger.info("获取所有启用的角色");
+            List<RoleDTO> roles = roleService.getAllAvailableRoles();
+            return ResponseEntity.ok(ResponseMessage.success(roles));
+        } catch (Exception e) {
+            logger.error("获取启用角色列表时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
     }
 
     /**
@@ -134,9 +194,19 @@ public class RoleController {
      */
     @GetMapping("/{roleId}/permissions")
     @PreAuthorize("isAuthenticated()")
-    public ResponseMessage<List<PermissionDTO>> getPermissionsByRoleId(@PathVariable int roleId) {
-        logger.info("获取角色权限列表: {}", roleId);
-        List<PermissionDTO> permissions = roleService.getPermissionsByRoleId(roleId);
-        return ResponseMessage.success(permissions);
+    public ResponseEntity<ResponseMessage<List<PermissionDTO>>> getPermissionsByRoleId(@PathVariable int roleId) {
+        try {
+            logger.info("获取角色权限列表: {}", roleId);
+            List<PermissionDTO> permissions = roleService.getPermissionsByRoleId(roleId);
+            return ResponseEntity.ok(ResponseMessage.success(permissions));
+        } catch (BusinessException e) {
+            logger.error("获取角色权限列表失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("获取角色权限列表时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
     }
 }

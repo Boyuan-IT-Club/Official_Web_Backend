@@ -3,12 +3,15 @@ package club.boyuan.official.controller;
 import club.boyuan.official.dto.ResponseMessage;
 import club.boyuan.official.entity.Role;
 import club.boyuan.official.entity.User;
+import club.boyuan.official.exception.BusinessException;
 import club.boyuan.official.service.IUserService;
 import club.boyuan.official.service.UserRoleService;
 import club.boyuan.official.utils.JwtTokenUtil;
 import lombok.AllArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -41,11 +44,21 @@ public class UserRoleController {
      */
     @PostMapping
     @PreAuthorize("hasAuthority('role:assign')")
-    public ResponseMessage<List<Role>> assignRoles(@RequestParam int userId, @RequestParam List<Integer> roleIds) {
-        logger.info("为用户分配角色，用户ID: {}, 角色IDs: {}", userId, roleIds);
-        List<Role> roles = userRoleService.assignRoles(userId, roleIds);
-        logger.info("角色分配成功，用户ID: {}", userId);
-        return ResponseMessage.success(roles);
+    public ResponseEntity<ResponseMessage<List<Role>>> assignRoles(@RequestParam int userId, @RequestParam List<Integer> roleIds) {
+        try {
+            logger.info("为用户分配角色，用户ID: {}, 角色IDs: {}", userId, roleIds);
+            List<Role> roles = userRoleService.assignRoles(userId, roleIds);
+            logger.info("角色分配成功，用户ID: {}", userId);
+            return ResponseEntity.ok(ResponseMessage.success(roles));
+        } catch (BusinessException e) {
+            logger.error("为用户分配角色失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("为用户分配角色时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
     }
 
     /**
@@ -56,12 +69,22 @@ public class UserRoleController {
      */
     @PostMapping("/{userId}/roles/{roleId}")
     @PreAuthorize("hasAuthority('role:assign')")
-    public ResponseMessage<List<Role>> addRoleToUser(@PathVariable int userId, @PathVariable int roleId) {
-        logger.info("为用户添加单个角色，用户ID: {}, 角色ID: {}", userId, roleId);
-        userRoleService.addRoleToUser(userId, roleId);
-        logger.info("角色添加成功，用户ID: {}, 角色ID: {}", userId, roleId);
-        List<Role> roles = userRoleService.getRolesByUserId(userId);
-        return ResponseMessage.success(roles);
+    public ResponseEntity<ResponseMessage<List<Role>>> addRoleToUser(@PathVariable int userId, @PathVariable int roleId) {
+        try {
+            logger.info("为用户添加单个角色，用户ID: {}, 角色ID: {}", userId, roleId);
+            userRoleService.addRoleToUser(userId, roleId);
+            logger.info("角色添加成功，用户ID: {}, 角色ID: {}", userId, roleId);
+            List<Role> roles = userRoleService.getRolesByUserId(userId);
+            return ResponseEntity.ok(ResponseMessage.success(roles));
+        } catch (BusinessException e) {
+            logger.error("为用户添加角色失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("为用户添加角色时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
     }
 
     /**
@@ -72,16 +95,27 @@ public class UserRoleController {
      */
     @DeleteMapping("/{userId}/roles/{roleId}")
     @PreAuthorize("hasAuthority('role:assign')")
-    public ResponseMessage<List<Role>> removeRoleFromUser(@PathVariable int userId, @PathVariable int roleId) {
-        logger.info("从用户移除角色，用户ID: {}, 角色ID: {}", userId, roleId);
-        boolean removed = userRoleService.removeRoleFromUser(userId, roleId);
-        if (removed) {
-            logger.info("角色移除成功，用户ID: {}, 角色ID: {}", userId, roleId);
-            List<Role> roles = userRoleService.getRolesByUserId(userId);
-            return ResponseMessage.success(roles);
-        } else {
-            logger.warn("角色移除失败，用户ID: {}, 角色ID: {}", userId, roleId);
-            return ResponseMessage.error(404, "用户角色关系不存在");
+    public ResponseEntity<ResponseMessage<List<Role>>> removeRoleFromUser(@PathVariable int userId, @PathVariable int roleId) {
+        try {
+            logger.info("从用户移除角色，用户ID: {}, 角色ID: {}", userId, roleId);
+            boolean removed = userRoleService.removeRoleFromUser(userId, roleId);
+            if (removed) {
+                logger.info("角色移除成功，用户ID: {}, 角色ID: {}", userId, roleId);
+                List<Role> roles = userRoleService.getRolesByUserId(userId);
+                return ResponseEntity.ok(ResponseMessage.success(roles));
+            } else {
+                logger.warn("角色移除失败，用户ID: {}, 角色ID: {}", userId, roleId);
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ResponseMessage.error(404, "用户角色关系不存在"));
+            }
+        } catch (BusinessException e) {
+            logger.error("从用户移除角色失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("从用户移除角色时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
         }
     }
 
@@ -92,10 +126,20 @@ public class UserRoleController {
      */
     @GetMapping("/{userId}/roles")
     @PreAuthorize("isAuthenticated()")
-    public ResponseMessage<List<Role>> getRolesByUserId(@PathVariable int userId) {
-        logger.info("获取用户角色列表，用户ID: {}", userId);
-        List<Role> roles = userRoleService.getRolesByUserId(userId);
-        return ResponseMessage.success(roles);
+    public ResponseEntity<ResponseMessage<List<Role>>> getRolesByUserId(@PathVariable int userId) {
+        try {
+            logger.info("获取用户角色列表，用户ID: {}", userId);
+            List<Role> roles = userRoleService.getRolesByUserId(userId);
+            return ResponseEntity.ok(ResponseMessage.success(roles));
+        } catch (BusinessException e) {
+            logger.error("获取用户角色列表失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("获取用户角色列表时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
     }
 
     /**
@@ -104,40 +148,48 @@ public class UserRoleController {
      */
     @GetMapping("/me/roles")
     @PreAuthorize("isAuthenticated()")
-    public ResponseMessage<List<Role>> getCurrentUserRoles(HttpServletRequest request) {
-        logger.info("获取当前用户角色列表");
-        
-        // 从请求头获取Authorization令牌
-        String authorizationHeader = request.getHeader("Authorization");
-        if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
-            logger.warn("未找到有效的Authorization头");
-            return ResponseMessage.error(401, "未授权");
-        }
-        
-        // 提取令牌
-        String token = authorizationHeader.substring(7);
-        
-        // 使用JwtTokenUtil提取用户名
+    public ResponseEntity<ResponseMessage<List<Role>>> getCurrentUserRoles(HttpServletRequest request) {
         try {
+            logger.info("获取当前用户角色列表");
+            
+            // 从请求头获取Authorization令牌
+            String authorizationHeader = request.getHeader("Authorization");
+            if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
+                logger.warn("未找到有效的Authorization头");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(ResponseMessage.error(401, "未授权"));
+            }
+            
+            // 提取令牌
+            String token = authorizationHeader.substring(7);
+            
+            // 使用JwtTokenUtil提取用户名
             String username = jwtTokenUtil.extractUsername(token);
             if (username == null) {
                 logger.warn("无法从令牌中提取用户名");
-                return ResponseMessage.error(401, "未授权");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(ResponseMessage.error(401, "未授权"));
             }
             
             // 查询用户信息
             User currentUser = userService.getUserByUsername(username);
             if (currentUser == null) {
                 logger.warn("用户不存在: {}", username);
-                return ResponseMessage.error(404, "用户不存在");
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ResponseMessage.error(404, "用户不存在"));
             }
             
             // 获取用户角色列表
             List<Role> roles = userRoleService.getRolesByUserId(currentUser.getUserId());
-            return ResponseMessage.success(roles);
+            return ResponseEntity.ok(ResponseMessage.success(roles));
+        } catch (BusinessException e) {
+            logger.error("获取当前用户角色列表失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         } catch (Exception e) {
-            logger.error("获取当前用户角色列表失败", e);
-            return ResponseMessage.error(401, "未授权");
+            logger.error("获取当前用户角色列表时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
         }
     }
 
@@ -150,12 +202,22 @@ public class UserRoleController {
      */
     @GetMapping("/role/{roleId}/users")
     @PreAuthorize("hasAuthority('role:assign')")
-    public ResponseMessage<List<User>> getUsersByRoleId(@PathVariable int roleId, 
+    public ResponseEntity<ResponseMessage<List<User>>> getUsersByRoleId(@PathVariable int roleId, 
                                                        @RequestParam(required = false, defaultValue = "0") int page,
                                                        @RequestParam(required = false, defaultValue = "10") int size) {
-        logger.info("获取拥有指定角色的用户列表，角色ID: {}, 页码: {}, 每页大小: {}", roleId, page, size);
-        List<User> users = userRoleService.getUsersByRoleId(roleId, page, size);
-        return ResponseMessage.success(users);
+        try {
+            logger.info("获取拥有指定角色的用户列表，角色ID: {}, 页码: {}, 每页大小: {}", roleId, page, size);
+            List<User> users = userRoleService.getUsersByRoleId(roleId, page, size);
+            return ResponseEntity.ok(ResponseMessage.success(users));
+        } catch (BusinessException e) {
+            logger.error("获取拥有指定角色的用户列表失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("获取拥有指定角色的用户列表时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
     }
 
     /**
@@ -166,10 +228,20 @@ public class UserRoleController {
      */
     @PostMapping("/batch")
     @PreAuthorize("hasAuthority('role:assign')")
-    public ResponseMessage<Integer> batchAssignRoles(@RequestParam List<Integer> userIds, @RequestParam List<Integer> roleIds) {
-        logger.info("批量分配角色给多个用户，用户IDs: {}, 角色IDs: {}", userIds, roleIds);
-        int count = userRoleService.batchAssignRoles(userIds, roleIds);
-        logger.info("批量角色分配成功，分配用户数量: {}", count);
-        return ResponseMessage.success(count);
+    public ResponseEntity<ResponseMessage<Integer>> batchAssignRoles(@RequestParam List<Integer> userIds, @RequestParam List<Integer> roleIds) {
+        try {
+            logger.info("批量分配角色给多个用户，用户IDs: {}, 角色IDs: {}", userIds, roleIds);
+            int count = userRoleService.batchAssignRoles(userIds, roleIds);
+            logger.info("批量角色分配成功，分配用户数量: {}", count);
+            return ResponseEntity.ok(ResponseMessage.success(count));
+        } catch (BusinessException e) {
+            logger.error("批量分配角色给多个用户失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("批量分配角色给多个用户时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
     }
 }
