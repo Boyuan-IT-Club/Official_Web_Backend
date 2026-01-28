@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import javax.naming.AuthenticationException;
-import org.springframework.security.access.AccessDeniedException;
+import java.nio.file.AccessDeniedException;
 
 /**
  * 全局异常处理器
@@ -109,7 +109,7 @@ public class GlobalExceptionHandler {
      * @param ex 权限异常
      * @return 统一响应格式
      */
-    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ResponseMessage<?>> handleAccessDeniedException(AccessDeniedException ex) {
         logger.warn("权限异常: {}", ex.getMessage());
         ResponseMessage<?> response = new ResponseMessage<>(
