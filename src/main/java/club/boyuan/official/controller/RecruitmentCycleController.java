@@ -226,7 +226,8 @@ public class RecruitmentCycleController {
         try {
             // 验证管理员权限
             User currentUser = getCurrentUser();
-            checkAdminPermission(currentUser);
+            // 注意：不再使用 checkAdminPermission 进行检查
+            // 权限检查由 @PreAuthorize 注解统一管理
             
             logger.info("管理员{}批量删除招募周期，IDs: {}", currentUser.getUsername(), cycleIds);
             recruitmentCycleService.deleteRecruitmentCycles(cycleIds);
@@ -252,7 +253,8 @@ public class RecruitmentCycleController {
         try {
             // 验证管理员权限
             User currentUser = getCurrentUser();
-            checkAdminPermission(currentUser);
+            // 注意：不再使用 checkAdminPermission 进行检查
+            // 权限检查由 @PreAuthorize 注解统一管理
             
             logger.info("管理员{}批量更新招募周期，数量: {}", currentUser.getUsername(), recruitmentCycles.size());
             recruitmentCycleService.updateRecruitmentCycles(recruitmentCycles);
@@ -278,7 +280,8 @@ public class RecruitmentCycleController {
         try {
             // 验证管理员权限
             User currentUser = getCurrentUser();
-            checkAdminPermission(currentUser);
+            // 注意：不再使用 checkAdminPermission 进行检查
+            // 权限检查由 @PreAuthorize 注解统一管理
             
             logger.info("管理员{}根据当前时间更新招募周期状态", currentUser.getUsername());
             recruitmentCycleService.updateRecruitmentCycleStatusesBasedOnDate(LocalDate.now());

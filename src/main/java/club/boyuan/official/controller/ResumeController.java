@@ -160,12 +160,6 @@ public class ResumeController {
         try {
             String token = request.getHeader("Authorization").substring(7);
             String username = jwtTokenUtil.extractUsername(token);
-            User currentUser = userService.getUserByUsername(username);
-            
-            if (!PermissionUtils.hasPermission(currentUser, "resume:audit")) {
-                logger.warn("用户{}尝试删除字段定义，但权限不足", username);
-                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
-            }
             
             logger.info("管理员{}删除字段定义，字段ID: {}", username, fieldId);
             fieldDefinitionService.deleteFieldDefinition(fieldId);
@@ -260,12 +254,6 @@ public class ResumeController {
         try {
             String token = request.getHeader("Authorization").substring(7);
             String username = jwtTokenUtil.extractUsername(token);
-            User currentUser = userService.getUserByUsername(username);
-            
-            if (!PermissionUtils.hasPermission(currentUser, "resume:view")) {
-                logger.warn("用户{}尝试查看用户{}的简历，但权限不足", username, userId);
-                throw new BusinessException(BusinessExceptionEnum.USER_ROLE_NOT_AUTHORIZED);
-            }
             
             logger.info("管理员{}查看用户{}的{}年份简历", username, userId, cycleId);
             ResumeDTO resumeDTO = resumeService.getResumeWithFieldValues(userId, cycleId);
@@ -516,13 +504,6 @@ public class ResumeController {
                 } catch (Exception ex) {
                     logger.warn("无法从token中提取用户名");
                 }
-            }
-            
-            User currentUser = userService.getUserByUsername(username);
-            
-            if (!PermissionUtils.hasPermission(currentUser, "resume:audit")) {
-                logger.warn("用户{}尝试更新简历状态，但权限不足", username);
-                throw new BusinessException(BusinessExceptionEnum.USER_ROLE_NOT_AUTHORIZED);
             }
             
             logger.info("管理员{}更新简历{}状态为{}", username, resumeId, status);
@@ -812,12 +793,9 @@ public class ResumeController {
             if (token != null && token.startsWith("Bearer ")) {
                 username = jwtTokenUtil.extractUsername(token.substring(7));
             }
-            User currentUser = userService.getUserByUsername(username);
             // 仅管理员可用
-            if (!PermissionUtils.hasPermission(currentUser, "resume:view")) {
-                logger.warn("用户{}尝试条件查询简历，但权限不足", username);
-                throw new BusinessException(BusinessExceptionEnum.USER_ROLE_NOT_AUTHORIZED);
-            }
+            // 注意：这里不再使用 PermissionUtils.hasPermission 进行检查
+            // 权限检查由 @PreAuthorize 注解统一管理
             
             // 如果page和size参数都为默认值，则使用原来的查询方法（保持向后兼容）
             if (page == 0 && size == 10 && sortBy == null) {

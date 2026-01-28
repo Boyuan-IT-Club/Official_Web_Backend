@@ -4,10 +4,13 @@ import club.boyuan.official.dto.ResponseMessage;
 import club.boyuan.official.entity.Permission;
 import club.boyuan.official.entity.Role;
 import club.boyuan.official.entity.RolePermission;
+import club.boyuan.official.exception.BusinessException;
 import club.boyuan.official.service.RolePermissionService;
 import lombok.AllArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -38,11 +41,21 @@ public class RolePermissionController {
      */
     @PostMapping
     @PreAuthorize("hasAuthority('role:assign')")
-    public ResponseMessage<Boolean> assignPermissions(@RequestParam int roleId, @RequestParam List<Integer> permissionIds) {
-        logger.info("为角色分配权限，角色ID: {}, 权限IDs: {}", roleId, permissionIds);
-        boolean result = rolePermissionService.assignPermissions(roleId, permissionIds);
-        logger.info("权限分配成功，角色ID: {}", roleId);
-        return ResponseMessage.success(result);
+    public ResponseEntity<ResponseMessage<Boolean>> assignPermissions(@RequestParam int roleId, @RequestParam List<Integer> permissionIds) {
+        try {
+            logger.info("为角色分配权限，角色ID: {}, 权限IDs: {}", roleId, permissionIds);
+            boolean result = rolePermissionService.assignPermissions(roleId, permissionIds);
+            logger.info("权限分配成功，角色ID: {}", roleId);
+            return ResponseEntity.ok(ResponseMessage.success(result));
+        } catch (BusinessException e) {
+            logger.error("为角色分配权限失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("为角色分配权限时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
     }
 
     /**
@@ -53,11 +66,21 @@ public class RolePermissionController {
      */
     @PostMapping("/{roleId}/permissions/{permissionId}")
     @PreAuthorize("hasAuthority('role:assign')")
-    public ResponseMessage<Boolean> addPermissionToRole(@PathVariable int roleId, @PathVariable int permissionId) {
-        logger.info("为角色添加单个权限，角色ID: {}, 权限ID: {}", roleId, permissionId);
-        boolean result = rolePermissionService.addPermission(roleId, permissionId);
-        logger.info("权限添加成功，角色ID: {}, 权限ID: {}, 结果: {}", roleId, permissionId, result);
-        return ResponseMessage.success(result);
+    public ResponseEntity<ResponseMessage<Boolean>> addPermissionToRole(@PathVariable int roleId, @PathVariable int permissionId) {
+        try {
+            logger.info("为角色添加单个权限，角色ID: {}, 权限ID: {}", roleId, permissionId);
+            boolean result = rolePermissionService.addPermission(roleId, permissionId);
+            logger.info("权限添加成功，角色ID: {}, 权限ID: {}, 结果: {}", roleId, permissionId, result);
+            return ResponseEntity.ok(ResponseMessage.success(result));
+        } catch (BusinessException e) {
+            logger.error("为角色添加单个权限失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("为角色添加单个权限时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
     }
 
     /**
@@ -68,13 +91,23 @@ public class RolePermissionController {
      */
     @DeleteMapping("/{roleId}/permissions/{permissionId}")
     @PreAuthorize("hasAuthority('role:assign')")
-    public ResponseMessage<Boolean> removePermissionFromRole(@PathVariable int roleId, @PathVariable int permissionId) {
-        logger.info("从角色移除权限，角色ID: {}, 权限ID: {}", roleId, permissionId);
-        // 使用removePermissions方法移除单个权限
-        List<Integer> permissionIds = List.of(permissionId);
-        boolean result = rolePermissionService.removePermissions(roleId, permissionIds);
-        logger.info("权限移除成功，角色ID: {}, 权限ID: {}", roleId, permissionId);
-        return ResponseMessage.success(result);
+    public ResponseEntity<ResponseMessage<Boolean>> removePermissionFromRole(@PathVariable int roleId, @PathVariable int permissionId) {
+        try {
+            logger.info("从角色移除权限，角色ID: {}, 权限ID: {}", roleId, permissionId);
+            // 使用removePermissions方法移除单个权限
+            List<Integer> permissionIds = List.of(permissionId);
+            boolean result = rolePermissionService.removePermissions(roleId, permissionIds);
+            logger.info("权限移除成功，角色ID: {}, 权限ID: {}", roleId, permissionId);
+            return ResponseEntity.ok(ResponseMessage.success(result));
+        } catch (BusinessException e) {
+            logger.error("从角色移除权限失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("从角色移除权限时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
     }
 
     /**
@@ -84,10 +117,20 @@ public class RolePermissionController {
      */
     @GetMapping("/{roleId}/permissions")
     @PreAuthorize("isAuthenticated()")
-    public ResponseMessage<List<Integer>> getPermissionsByRoleId(@PathVariable int roleId) {
-        logger.info("获取角色权限ID列表，角色ID: {}", roleId);
-        List<Integer> permissionIds = rolePermissionService.getPermissionIdsByRoleId(roleId);
-        return ResponseMessage.success(permissionIds);
+    public ResponseEntity<ResponseMessage<List<Integer>>> getPermissionsByRoleId(@PathVariable int roleId) {
+        try {
+            logger.info("获取角色权限ID列表，角色ID: {}", roleId);
+            List<Integer> permissionIds = rolePermissionService.getPermissionIdsByRoleId(roleId);
+            return ResponseEntity.ok(ResponseMessage.success(permissionIds));
+        } catch (BusinessException e) {
+            logger.error("获取角色权限ID列表失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("获取角色权限ID列表时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
     }
 
     /**
@@ -97,10 +140,20 @@ public class RolePermissionController {
      */
     @GetMapping("/permission/{permissionId}/roles")
     @PreAuthorize("hasAuthority('role:assign')")
-    public ResponseMessage<List<Role>> getRolesByPermissionId(@PathVariable int permissionId) {
-        logger.info("获取拥有指定权限的角色列表，权限ID: {}", permissionId);
-        List<Role> roles = rolePermissionService.getRolesByPermissionId(permissionId);
-        return ResponseMessage.success(roles);
+    public ResponseEntity<ResponseMessage<List<Role>>> getRolesByPermissionId(@PathVariable int permissionId) {
+        try {
+            logger.info("获取拥有指定权限的角色列表，权限ID: {}", permissionId);
+            List<Role> roles = rolePermissionService.getRolesByPermissionId(permissionId);
+            return ResponseEntity.ok(ResponseMessage.success(roles));
+        } catch (BusinessException e) {
+            logger.error("获取拥有指定权限的角色列表失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("获取拥有指定权限的角色列表时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
     }
 
     /**
@@ -111,20 +164,30 @@ public class RolePermissionController {
      */
     @PostMapping("/batch")
     @PreAuthorize("hasAuthority('role:assign')")
-    public ResponseMessage<Boolean> batchAssignPermissions(@RequestParam List<Integer> roleIds, @RequestParam List<Integer> permissionIds) {
-        logger.info("批量分配权限给多个角色，角色IDs: {}, 权限IDs: {}", roleIds, permissionIds);
-        // 构建RolePermission对象列表
-        List<RolePermission> rolePermissions = new ArrayList<>();
-        for (Integer roleId : roleIds) {
-            for (Integer permissionId : permissionIds) {
-                RolePermission rolePermission = new RolePermission();
-                rolePermission.setRoleId(roleId);
-                rolePermission.setPermissionId(permissionId);
-                rolePermissions.add(rolePermission);
+    public ResponseEntity<ResponseMessage<Boolean>> batchAssignPermissions(@RequestParam List<Integer> roleIds, @RequestParam List<Integer> permissionIds) {
+        try {
+            logger.info("批量分配权限给多个角色，角色IDs: {}, 权限IDs: {}", roleIds, permissionIds);
+            // 构建RolePermission对象列表
+            List<RolePermission> rolePermissions = new ArrayList<>();
+            for (Integer roleId : roleIds) {
+                for (Integer permissionId : permissionIds) {
+                    RolePermission rolePermission = new RolePermission();
+                    rolePermission.setRoleId(roleId);
+                    rolePermission.setPermissionId(permissionId);
+                    rolePermissions.add(rolePermission);
+                }
             }
+            boolean result = rolePermissionService.batchAssignPermissions(rolePermissions);
+            logger.info("批量权限分配成功");
+            return ResponseEntity.ok(ResponseMessage.success(result));
+        } catch (BusinessException e) {
+            logger.error("批量分配权限失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("批量分配权限时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
         }
-        boolean result = rolePermissionService.batchAssignPermissions(rolePermissions);
-        logger.info("批量权限分配成功");
-        return ResponseMessage.success(result);
     }
 }

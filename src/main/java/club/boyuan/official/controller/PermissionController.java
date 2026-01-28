@@ -3,10 +3,13 @@ package club.boyuan.official.controller;
 import club.boyuan.official.dto.PermissionDTO;
 import club.boyuan.official.dto.ResponseMessage;
 import club.boyuan.official.entity.Permission;
+import club.boyuan.official.exception.BusinessException;
 import club.boyuan.official.service.PermissionService;
 import lombok.AllArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -36,11 +39,21 @@ public class PermissionController {
      */
     @PostMapping
     @PreAuthorize("hasAuthority('role:assign')")
-    public ResponseMessage<PermissionDTO> createPermission(@Validated @RequestBody PermissionDTO permissionDTO) {
-        logger.info("创建权限: {}", permissionDTO.getPermissionName());
-        PermissionDTO createdPermission = permissionService.createPermission(permissionDTO);
-        logger.info("权限创建成功: {}", createdPermission.getPermissionId());
-        return ResponseMessage.success(createdPermission);
+    public ResponseEntity<ResponseMessage<PermissionDTO>> createPermission(@Validated @RequestBody PermissionDTO permissionDTO) {
+        try {
+            logger.info("创建权限: {}", permissionDTO.getPermissionName());
+            PermissionDTO createdPermission = permissionService.createPermission(permissionDTO);
+            logger.info("权限创建成功: {}", createdPermission.getPermissionId());
+            return ResponseEntity.ok(ResponseMessage.success(createdPermission));
+        } catch (BusinessException e) {
+            logger.error("创建权限失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("创建权限时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
     }
 
     /**
@@ -51,12 +64,22 @@ public class PermissionController {
      */
     @PutMapping("/{permissionId}")
     @PreAuthorize("hasAuthority('role:assign')")
-    public ResponseMessage<PermissionDTO> updatePermission(@PathVariable int permissionId, @Validated @RequestBody PermissionDTO permissionDTO) {
-        logger.info("更新权限: {}", permissionId);
-        permissionDTO.setPermissionId(permissionId);
-        PermissionDTO updatedPermission = permissionService.updatePermission(permissionDTO);
-        logger.info("权限更新成功: {}", permissionId);
-        return ResponseMessage.success(updatedPermission);
+    public ResponseEntity<ResponseMessage<PermissionDTO>> updatePermission(@PathVariable int permissionId, @Validated @RequestBody PermissionDTO permissionDTO) {
+        try {
+            logger.info("更新权限: {}", permissionId);
+            permissionDTO.setPermissionId(permissionId);
+            PermissionDTO updatedPermission = permissionService.updatePermission(permissionDTO);
+            logger.info("权限更新成功: {}", permissionId);
+            return ResponseEntity.ok(ResponseMessage.success(updatedPermission));
+        } catch (BusinessException e) {
+            logger.error("更新权限失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("更新权限时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
     }
 
     /**
@@ -66,15 +89,26 @@ public class PermissionController {
      */
     @DeleteMapping("/{permissionId}")
     @PreAuthorize("hasAuthority('role:assign')")
-    public ResponseMessage<Void> deletePermission(@PathVariable int permissionId) {
-        logger.info("删除权限: {}", permissionId);
-        boolean deleted = permissionService.deletePermission(permissionId);
-        if (deleted) {
-            logger.info("权限删除成功: {}", permissionId);
-            return ResponseMessage.success();
-        } else {
-            logger.warn("权限删除失败，权限不存在: {}", permissionId);
-            return ResponseMessage.error(404, "权限不存在");
+    public ResponseEntity<ResponseMessage<Void>> deletePermission(@PathVariable int permissionId) {
+        try {
+            logger.info("删除权限: {}", permissionId);
+            boolean deleted = permissionService.deletePermission(permissionId);
+            if (deleted) {
+                logger.info("权限删除成功: {}", permissionId);
+                return ResponseEntity.ok(ResponseMessage.success());
+            } else {
+                logger.warn("权限删除失败，权限不存在: {}", permissionId);
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ResponseMessage.error(404, "权限不存在"));
+            }
+        } catch (BusinessException e) {
+            logger.error("删除权限失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("删除权限时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
         }
     }
 
@@ -85,10 +119,20 @@ public class PermissionController {
      */
     @GetMapping("/{permissionId}")
     @PreAuthorize("isAuthenticated()")
-    public ResponseMessage<PermissionDTO> getPermissionById(@PathVariable int permissionId) {
-        logger.info("获取权限详情: {}", permissionId);
-        PermissionDTO permissionDTO = permissionService.getPermissionById(permissionId);
-        return ResponseMessage.success(permissionDTO);
+    public ResponseEntity<ResponseMessage<PermissionDTO>> getPermissionById(@PathVariable int permissionId) {
+        try {
+            logger.info("获取权限详情: {}", permissionId);
+            PermissionDTO permissionDTO = permissionService.getPermissionById(permissionId);
+            return ResponseEntity.ok(ResponseMessage.success(permissionDTO));
+        } catch (BusinessException e) {
+            logger.error("获取权限详情失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("获取权限详情时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
     }
 
     /**
@@ -102,15 +146,25 @@ public class PermissionController {
      */
     @GetMapping
     @PreAuthorize("isAuthenticated()")
-    public ResponseMessage<List<PermissionDTO>> getPermissions(
+    public ResponseEntity<ResponseMessage<List<PermissionDTO>>> getPermissions(
             @RequestParam(required = false, defaultValue = "") String resourceIdentifier,
             @RequestParam(required = false, defaultValue = "") String keyword,
             @RequestParam(required = false, defaultValue = "0") int page,
             @RequestParam(required = false, defaultValue = "10") int size,
             @RequestParam(required = false, defaultValue = "permissionId,asc") String sort) {
-        logger.info("获取权限列表，资源标识符: {}, 关键词: {}, 页码: {}, 每页大小: {}, 排序: {}", resourceIdentifier, keyword, page, size, sort);
-        List<PermissionDTO> permissions = permissionService.getPermissions(resourceIdentifier, keyword, page, size, sort);
-        return ResponseMessage.success(permissions);
+        try {
+            logger.info("获取权限列表，资源标识符: {}, 关键词: {}, 页码: {}, 每页大小: {}, 排序: {}", resourceIdentifier, keyword, page, size, sort);
+            List<PermissionDTO> permissions = permissionService.getPermissions(resourceIdentifier, keyword, page, size, sort);
+            return ResponseEntity.ok(ResponseMessage.success(permissions));
+        } catch (BusinessException e) {
+            logger.error("获取权限列表失败: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("获取权限列表时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
     }
 
     /**
@@ -119,9 +173,15 @@ public class PermissionController {
      */
     @GetMapping("/all")
     @PreAuthorize("isAuthenticated()")
-    public ResponseMessage<List<PermissionDTO>> getAllPermissions() {
-        logger.info("获取所有权限");
-        List<PermissionDTO> permissions = permissionService.getAllPermissions();
-        return ResponseMessage.success(permissions);
+    public ResponseEntity<ResponseMessage<List<PermissionDTO>>> getAllPermissions() {
+        try {
+            logger.info("获取所有权限");
+            List<PermissionDTO> permissions = permissionService.getAllPermissions();
+            return ResponseEntity.ok(ResponseMessage.success(permissions));
+        } catch (Exception e) {
+            logger.error("获取所有权限时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
     }
 }

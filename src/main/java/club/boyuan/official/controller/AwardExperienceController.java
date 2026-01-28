@@ -80,21 +80,31 @@ public class AwardExperienceController {
                 // 未指定用户ID - 拒绝访问
                 logger.warn("创建获奖经历时未指定用户ID，操作者用户ID: {}", currentUser.getUserId());
                 throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
-            } else if (PermissionUtils.hasPermission(currentUser, "award:manage")) {
-                // 管理员：验证目标用户是否存在
-                User targetUser = userService.getUserById(targetUserId);
-                if (targetUser == null) {
-                    logger.warn("管理员尝试为不存在的用户创建获奖经历，目标用户ID: {}", targetUserId);
-                    throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
-                }
-                logger.debug("管理员为用户ID为{}的用户创建获奖经历", targetUserId);
             } else {
-                // 普通用户：只能为自己创建获奖经历
-                if (!targetUserId.equals(currentUser.getUserId())) {
-                    logger.warn("用户ID为{}的用户尝试为其他用户创建获奖经历，目标用户ID: {}", currentUser.getUserId(), targetUserId);
-                    throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
+                // 检查当前用户是否具有 award:manage 权限
+                boolean hasManagePermission = false;
+                if (SecurityContextHolder.getContext().getAuthentication() != null) {
+                    hasManagePermission = SecurityContextHolder.getContext().getAuthentication()
+                            .getAuthorities().stream()
+                            .anyMatch(auth -> "award:manage".equals(auth.getAuthority()));
                 }
-                logger.debug("用户为自己创建获奖经历，用户ID: {}", currentUser.getUserId());
+                
+                if (hasManagePermission) {
+                    // 管理员：验证目标用户是否存在
+                    User targetUser = userService.getUserById(targetUserId);
+                    if (targetUser == null) {
+                        logger.warn("管理员尝试为不存在的用户创建获奖经历，目标用户ID: {}", targetUserId);
+                        throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
+                    }
+                    logger.debug("管理员为用户ID为{}的用户创建获奖经历", targetUserId);
+                } else {
+                    // 普通用户：只能为自己创建获奖经历
+                    if (!targetUserId.equals(currentUser.getUserId())) {
+                        logger.warn("用户ID为{}的用户尝试为其他用户创建获奖经历，目标用户ID: {}", currentUser.getUserId(), targetUserId);
+                        throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
+                    }
+                    logger.debug("用户为自己创建获奖经历，用户ID: {}", currentUser.getUserId());
+                }
             }
 
             // 设置获奖经历的用户ID
@@ -151,7 +161,11 @@ public class AwardExperienceController {
             }
             
             // 权限检查：管理员可以查看所有，普通用户只能查看自己的
-            if (!PermissionUtils.hasPermission(currentUser, "award:manage")) {
+            boolean hasManagePermission = SecurityContextHolder.getContext().getAuthentication()
+                    .getAuthorities().stream()
+                    .anyMatch(auth -> "award:manage".equals(auth.getAuthority()));
+            
+            if (!hasManagePermission) {
                 if (!award.getUserId().equals(currentUser.getUserId())) {
                     logger.warn("用户ID为{}的用户尝试查看其他用户的获奖经历，目标用户ID: {}, 获奖ID: {}", 
                                currentUser.getUserId(), award.getUserId(), id);
@@ -197,7 +211,11 @@ public class AwardExperienceController {
             User currentUser = userService.getUserByUsername(username);
             
             // 权限检查：管理员可以查看所有，普通用户只能查看自己的
-            if (!PermissionUtils.hasPermission(currentUser, "award:manage")) {
+            boolean hasManagePermission = SecurityContextHolder.getContext().getAuthentication()
+                    .getAuthorities().stream()
+                    .anyMatch(auth -> "award:manage".equals(auth.getAuthority()));
+            
+            if (!hasManagePermission) {
                 if (!userId.equals(currentUser.getUserId())) {
                     logger.warn("用户ID为{}的用户尝试查看其他用户的获奖经历，目标用户ID: {}", currentUser.getUserId(), userId);
                     throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
@@ -254,7 +272,11 @@ public class AwardExperienceController {
             }
             
             // 权限检查：管理员可以修改所有人的，普通用户只能修改自己的
-            if (!PermissionUtils.hasPermission(currentUser, "award:manage")) {
+            boolean hasManagePermission = SecurityContextHolder.getContext().getAuthentication()
+                    .getAuthorities().stream()
+                    .anyMatch(auth -> "award:manage".equals(auth.getAuthority()));
+            
+            if (!hasManagePermission) {
                 if (!originalAward.getUserId().equals(currentUserId)) {
                     logger.warn("用户ID为{}的用户尝试更新其他用户的获奖经历，目标用户ID: {}, 获奖ID: {}", 
                                currentUserId, originalAward.getUserId(), awardExperience.getAwardId());

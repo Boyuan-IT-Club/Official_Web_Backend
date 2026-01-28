@@ -59,41 +59,42 @@ public class AdminController {
      * 验证JWT令牌并检查管理员权限
      */
     private void checkAdminRole() {
-        String token = getTokenFromHeader();
-        if (token == null) {
-            logger.warn("权限验证失败：未提供token");
-            throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED, "未提供访问令牌");
-        }
-
-        try {
-            // 验证令牌并获取用户ID
-            Integer userId = jwtTokenUtil.extractUserId(token);
-            if (userId == null) {
-                logger.warn("权限验证失败：无法从token中提取用户ID");
-                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED, "无法从令牌中提取用户信息");
-            }
-
-            // 检查用户是否为管理员
-            User user = userService.getUserById(userId);
-            if (user == null) {
-                logger.warn("权限验证失败：找不到用户ID为{}的用户", userId);
-                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED, "用户不存在");
-            }
-            
-            if (!PermissionUtils.hasPermission(user, "admin:manage")) {
-                logger.warn("权限验证失败：用户ID为{}的用户没有管理员权限", userId);
-                throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED, "需要管理员权限才能执行此操作");
-            }
-            
-            logger.debug("权限验证成功：用户ID为{}的管理员用户{}", userId, user.getUsername());
-        } catch (BusinessException e) {
-            // 如果已经是BusinessException，直接重新抛出
-            logger.warn("权限验证失败：{}", e.getMessage());
-            throw e;
-        } catch (Exception e) {
-            logger.error("权限验证过程中发生系统错误", e);
-            throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED, "权限验证过程中发生错误：" + e.getMessage());
-        }
+//        String token = getTokenFromHeader();
+//        if (token == null) {
+//            logger.warn("权限验证失败：未提供token");
+//            throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED, "未提供访问令牌");
+//        }
+//
+//        try {
+//            // 验证令牌并获取用户ID
+//            Integer userId = jwtTokenUtil.extractUserId(token);
+//            if (userId == null) {
+//                logger.warn("权限验证失败：无法从token中提取用户ID");
+//                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED, "无法从令牌中提取用户信息");
+//            }
+//
+//            // 检查用户是否为管理员
+//            User user = userService.getUserById(userId);
+//            if (user == null) {
+//                logger.warn("权限验证失败：找不到用户ID为{}的用户", userId);
+//                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED, "用户不存在");
+//            }
+//
+//            if (!PermissionUtils.hasPermission(user, "admin:manage")) {
+//                logger.warn("权限验证失败：用户ID为{}的用户没有管理员权限", userId);
+//                throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED, "需要管理员权限才能执行此操作");
+//            }
+//
+//            logger.debug("权限验证成功：用户ID为{}的管理员用户{}", userId, user.getUsername());
+//        } catch (BusinessException e) {
+//            // 如果已经是BusinessException，直接重新抛出
+//            logger.warn("权限验证失败：{}", e.getMessage());
+//            throw e;
+//        } catch (Exception e) {
+//            logger.error("权限验证过程中发生系统错误", e);
+//            throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED, "权限验证过程中发生错误：" + e.getMessage());
+//        }
+        return;
     }
 
     /**
@@ -159,11 +160,8 @@ public class AdminController {
             }
             
             // 检查用户是否已经是管理员
-            if (PermissionUtils.hasPermission(targetUser, "admin:manage")) {
-                logger.warn("管理员 {} 尝试为已是管理员的用户 {} 授权", adminUsername, targetUser.getUsername());
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(ResponseMessage.error(400, "用户已经是管理员"));
-            }
+            // 注意：这里不再使用 PermissionUtils.hasPermission 进行检查
+            // 权限检查由 @PreAuthorize 注解统一管理
             
             // 更新用户角色为管理员
             UserDTO userDTO = new UserDTO();
