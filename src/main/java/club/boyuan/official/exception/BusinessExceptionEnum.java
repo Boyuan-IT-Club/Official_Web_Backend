@@ -96,8 +96,15 @@ public enum BusinessExceptionEnum {
     ILLEGAL_ARGUMENT(5003, "非法参数"),
     NULL_POINTER_EXCEPTION(5004, "空指针异常"),
     UNSUPPORTED_OPERATION(5005, "不支持的操作"),
-    RESOURCE_CONFLICT(5006, "资源冲突");
-    
+    RESOURCE_CONFLICT(5006, "资源冲突"),
+
+    // 活动相关异常 (7000-7099)
+    ACTIVITY_NOT_FOUND(7001, "活动不存在"),
+    ACTIVITY_CREATE_FAILED(7002, "创建活动失败"),
+    ACTIVITY_UPDATE_FAILED(7003, "更新活动失败"),
+    ACTIVITY_DELETE_FAILED(7004, "删除活动失败");
+
+
     private final Integer code;
     private final String message;
 }
