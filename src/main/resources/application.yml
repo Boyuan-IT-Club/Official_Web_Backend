@@ -36,10 +36,10 @@ spring:
           max-idle: 8
           min-idle: 0
   mail:
-    host: ${MAIL_HOST}
-    port: ${MAIL_PORT}
-    username: ${MAIL_USERNAME}
-    password: ${MAIL_PASSWORD}
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
     properties:
       mail:
         smtp:
@@ -49,6 +49,7 @@ spring:
           ssl:
             enable: true
 
+
 mybatis-plus:
   mapper-locations: classpath:mapper/*.xml
   type-aliases-package: club.boyuan.official.entity
@@ -56,7 +57,7 @@ mybatis-plus:
     mapUnderscoreToCamelCase: true
 
 jwt:
-  secret: ${JWT_SECRET}
+  secret: ${JWT_SECRET:}
   expiration: ${JWT_EXPIRATION:86400000}
 
 server:
@@ -64,5 +65,5 @@ server:
 
 # 短信服务配置
 sms:
-  access-key: ${SMS_ACCESS_KEY}
-  secret-key: ${SMS_SECRET_KEY}
+  access-key: ${SMS_ACCESS_KEY:}
+  secret-key: ${SMS_SECRET_KEY:}
