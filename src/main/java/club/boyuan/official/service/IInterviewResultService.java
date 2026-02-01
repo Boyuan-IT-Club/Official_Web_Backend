@@ -1,7 +1,10 @@
 package club.boyuan.official.service;
 
+import club.boyuan.official.dto.SendNotificationsRequestDTO;
+import club.boyuan.official.dto.SendNotificationsResponseDTO;
 import club.boyuan.official.entity.InterviewResult;
 import com.baomidou.mybatisplus.extension.service.IService;
+import jakarta.validation.Valid;
 
 /**
  * <p>
@@ -13,4 +16,5 @@ import com.baomidou.mybatisplus.extension.service.IService;
  */
 public interface IInterviewResultService extends IService<InterviewResult> {
 
+    SendNotificationsResponseDTO sendNotifications(@Valid SendNotificationsRequestDTO requestDTO);
 }
