@@ -1,5 +1,6 @@
 package club.boyuan.official.service.impl;
 
+import club.boyuan.official.dto.InterviewResultResponseDTO;
 import club.boyuan.official.dto.SendNotificationsRequestDTO;
 import club.boyuan.official.dto.SendNotificationsResponseDTO;
 import club.boyuan.official.entity.InterviewResult;
@@ -8,6 +9,7 @@ import club.boyuan.official.mapper.InterviewResultMapper;
 import club.boyuan.official.service.IInterviewResultService;
 import club.boyuan.official.service.IUserService;
 import club.boyuan.official.utils.MessageUtils;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -91,6 +93,19 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
         return responseDTO;
 
     }
+
+    @Override
+    public List<InterviewResultResponseDTO> list(Integer cycleId, String name, String decision, String department, Integer page, Integer size) {
+
+        //构建查询对象
+        LambdaQueryWrapper<InterviewResult> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper
+                .eq(InterviewResult::getCycleId, cycleId)
+                .like(name != null, InterviewResult::getName, name)
+                .like(decision != null, InterviewResult::getDecision, decision)
+                .like(department != null, InterviewResult::getAssignedDeptId, department);
+    }
+
     //sms尚未开通，短信通知功能留白
     private Boolean sendSmsNotifaction(User user, InterviewResult interviewResult, String customMessage) {
         return false;
