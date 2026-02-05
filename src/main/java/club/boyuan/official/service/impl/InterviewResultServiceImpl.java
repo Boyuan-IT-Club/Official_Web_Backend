@@ -10,6 +10,7 @@ import club.boyuan.official.service.IInterviewResultService;
 import club.boyuan.official.service.IUserService;
 import club.boyuan.official.utils.MessageUtils;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -95,15 +96,16 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
     }
 
     @Override
-    public List<InterviewResultResponseDTO> list(Integer cycleId, String name, String decision, String department, Integer page, Integer size) {
+    public InterviewResultResponseDTO list(Integer cycleId, String name, String decision, String department, Integer page, Integer size) {
 
         //构建查询对象
-        LambdaQueryWrapper<InterviewResult> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper
-                .eq(InterviewResult::getCycleId, cycleId)
-                .like(name != null, InterviewResult::getName, name)
-                .like(decision != null, InterviewResult::getDecision, decision)
-                .like(department != null, InterviewResult::getAssignedDeptId, department);
+        Page<InterviewResult> pageInfo = new Page<>(page, size);
+        Page<InterviewResult> resultPage = baseMapper.selectResultPage(pageInfo, cycleId, name, decision, department);
+        InterviewResultResponseDTO responseDTO = new InterviewResultResponseDTO();
+        responseDTO.setTotal(resultPage.getTotal());
+        responseDTO.setInterviewResults(resultPage.getRecords());
+        return responseDTO;
+
     }
 
     //sms尚未开通，短信通知功能留白
