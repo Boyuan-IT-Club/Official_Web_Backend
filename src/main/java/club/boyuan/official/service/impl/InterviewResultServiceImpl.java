@@ -1,6 +1,7 @@
 package club.boyuan.official.service.impl;
 
 import club.boyuan.official.dto.InterviewResultResponseDTO;
+import club.boyuan.official.dto.InterviewResultSaveDTO;
 import club.boyuan.official.dto.SendNotificationsRequestDTO;
 import club.boyuan.official.dto.SendNotificationsResponseDTO;
 import club.boyuan.official.entity.InterviewResult;
@@ -10,11 +11,15 @@ import club.boyuan.official.service.IInterviewResultService;
 import club.boyuan.official.service.IUserService;
 import club.boyuan.official.utils.MessageUtils;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.security.SecurityProperties;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -105,6 +110,44 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
         responseDTO.setTotal(resultPage.getTotal());
         responseDTO.setInterviewResults(resultPage.getRecords());
         return responseDTO;
+
+    }
+
+    @Override
+    public InterviewResult update(Integer resultId, InterviewResultSaveDTO interviewResult) {
+        //从 Spring Security 获取userId
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        Integer userId = null;
+
+        if (authentication != null) {
+            Object principal = authentication.getPrincipal();
+
+            if (principal instanceof String) {
+                // 如果是用户名，需要查询用户ID
+                String username = (String) principal;
+                User user = userService.getUserByUsername(username);
+                userId = user != null ? user.getUserId() : null;
+            } else if (principal instanceof UserDetails) {
+                // 如果是UserDetails，获取用户名再查询
+                String username = ((UserDetails) principal).getUsername();
+                User user = userService.getUserByUsername(username);
+                userId = user != null ? user.getUserId() : null;
+            }
+        }
+
+        if (userId != null) {
+            interviewResult.setDecisionBy(userId);
+        }
+
+        //构建更新对象
+        LambdaUpdateWrapper<InterviewResult> updateWrapper = new LambdaUpdateWrapper<>();
+        updateWrapper
+                .eq(InterviewResult::getResultId, resultId)
+                .set(interviewResult.getDecision()!=null, InterviewResult::getDecision, interviewResult.getDecision())
+                .set(interviewResult.getAssignedDeptId()!=null, InterviewResult::getAssignedDeptId, interviewResult.getAssignedDeptId())
+                .set(InterviewResult::getDecisionBy, interviewResult.getDecisionBy());
+        this.update(updateWrapper);
+        return this.getById(resultId);
 
     }
 

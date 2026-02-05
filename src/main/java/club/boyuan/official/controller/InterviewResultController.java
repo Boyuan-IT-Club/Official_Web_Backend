@@ -1,10 +1,7 @@
 package club.boyuan.official.controller;
 
 
-import club.boyuan.official.dto.InterviewResultResponseDTO;
-import club.boyuan.official.dto.ResponseMessage;
-import club.boyuan.official.dto.SendNotificationsRequestDTO;
-import club.boyuan.official.dto.SendNotificationsResponseDTO;
+import club.boyuan.official.dto.*;
 import club.boyuan.official.entity.InterviewResult;
 import club.boyuan.official.service.IInterviewResultService;
 import jakarta.validation.Valid;
@@ -65,5 +62,19 @@ public class InterviewResultController {
                     .body(ResponseMessage.error(400, "获取面试结果列表失败"));
         }
 
+    }
+
+    @PutMapping("/update/{resultId}")
+    public ResponseEntity<ResponseMessage<InterviewResult>> update(@PathVariable Integer resultId,
+                                                                   @Valid @RequestBody InterviewResultSaveDTO interviewResult) {
+        try {
+            log.info("更新面试结果");
+            InterviewResult result = interviewResultService.update(resultId, interviewResult);
+            return ResponseEntity.ok(ResponseMessage.success(result));
+        } catch (Exception e) {
+            log.error("更新面试结果失败", e);
+            return ResponseEntity.badRequest()
+                    .body(ResponseMessage.error(400, "更新面试结果失败"));
+        }
     }
 }
