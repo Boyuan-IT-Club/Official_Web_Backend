@@ -9,9 +9,9 @@ services:
     ports:
       - "${MYSQL_PORT:-3306}:${MYSQL_PORT:-3306}"
     volumes:
-      - /home/boyuan-official/official/volumes/mysql_data:/var/lib/mysql
+      - ./volumes/mysql_data:/var/lib/mysql
       - ./mysql/conf:/etc/mysql/conf.d
-      - /home/boyuan-official/official/db:/docker-entrypoint-initdb.d:ro
+      - ./db:/docker-entrypoint-initdb.d:ro
     restart: always
     networks:
       - official-network
@@ -23,7 +23,7 @@ services:
     ports:
       - "${REDIS_PORT:-6379}:${REDIS_PORT:-6379}"
     volumes:
-      - /home/boyuan-official/official/volumes/redis_data:/data
+      - ./volumes/redis_data:/data
     restart: always
     networks:
       - official-network
@@ -34,8 +34,8 @@ services:
     ports:
       - "${APP_PORT:-8080}:8080"
     volumes:
-      - /home/boyuan-official/official/volumes/uploads:/official/uploads
-      - /home/boyuan-official/official/logs:/official/logs
+      - ./volumes/uploads:/official/uploads
+      - ./volumes/logs:/official/logs
     environment:
       - DB_USERNAME=root
       - DB_PASSWORD=${DB_ROOT_PASSWORD:-root}

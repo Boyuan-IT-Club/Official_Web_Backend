@@ -13,6 +13,7 @@ import club.boyuan.official.mapper.UserMapper;
 import club.boyuan.official.service.IUserService;
 import club.boyuan.official.utils.JwtTokenUtil;
 import club.boyuan.official.utils.PasswordValidator;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.AllArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,7 +29,7 @@ import club.boyuan.official.utils.PermissionUtils;
 
 @Service
 @AllArgsConstructor
-public class UserServiceImpl implements IUserService {
+public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUserService  {
 
     private static final Logger logger = LoggerFactory.getLogger(UserServiceImpl.class);
 

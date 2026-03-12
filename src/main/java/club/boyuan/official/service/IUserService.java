@@ -4,11 +4,12 @@ import club.boyuan.official.dto.PageResultDTO;
 import club.boyuan.official.dto.UserDTO;
 import club.boyuan.official.entity.User;
 import club.boyuan.official.exception.BusinessException;
+import com.baomidou.mybatisplus.extension.service.IService;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 
-public interface IUserService {
+public interface IUserService extends IService<User> {
     /*增加用户*/
     User add(UserDTO user);
     User getUserById(Integer userId);

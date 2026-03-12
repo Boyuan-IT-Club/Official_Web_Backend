@@ -75,34 +75,60 @@ CREATE TABLE `award_experience`
 -- Records of award_experience
 -- ----------------------------
 
--- ----------------------------
--- Table structure for user
--- ----------------------------
+-- ========================================
+-- 部门表 (DEPARTMENT)
+-- ========================================
+DROP TABLE IF EXISTS `department`;
+CREATE TABLE `department`
+(
+    `dept_id`      int                                                           NOT NULL AUTO_INCREMENT COMMENT '部门ID',
+    `dept_name`    varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci  NOT NULL COMMENT '部门名称',
+    `dept_code`    varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci  NOT NULL COMMENT '部门编码',
+    `description`  varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '部门描述',
+    `status`       tinyint(1)                                                    NOT NULL DEFAULT 1 COMMENT '部门状态：0(禁用), 1(启用)',
+    `create_time`  timestamp                                                     NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time`  timestamp                                                     NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`dept_id`) USING BTREE,
+    UNIQUE INDEX `uk_dept_code` (`dept_code` ASC) USING BTREE COMMENT '部门编码唯一索引',
+    INDEX `idx_status` (`status` ASC) USING BTREE COMMENT '部门状态索引'
+) ENGINE = InnoDB
+  AUTO_INCREMENT = 1
+  CHARACTER SET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci
+  ROW_FORMAT = DYNAMIC COMMENT = '部门表';
+
+-- ========================================
+-- 用户表 (USER)
+-- ========================================
 DROP TABLE IF EXISTS `user`;
 CREATE TABLE `user`
 (
-    `user_id`     int                                                           NOT NULL AUTO_INCREMENT,
-    `username`    varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-    `password`    varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-    `role`        varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-    `name`        varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
-    `email`       varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-    `phone`       varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
-    `major`       varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '专业',
+    `user_id`     int                                                           NOT NULL AUTO_INCREMENT COMMENT '用户ID',
+    `username`    varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci  NOT NULL COMMENT '用户名',
+    `password`    varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '密码(加密存储)',
+    `name`        varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci  NULL DEFAULT NULL COMMENT '真实姓名',
+    `email`       varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '邮箱地址',
+    `phone`       varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci  NULL DEFAULT NULL COMMENT '手机号码',
+    `major`       varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '专业',
     `github`      varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT 'GitHub地址',
-    `dept`        varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
-    `create_time` timestamp                                                     NULL DEFAULT CURRENT_TIMESTAMP,
-    `status`      tinyint(1)                                                    NULL DEFAULT 0,
-    `is_member`   tinyint(1)                                                    NULL DEFAULT 0,
-    `avatar`      varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+    `dept_id`     int                                                           NULL DEFAULT NULL COMMENT '所属部门ID',
+    `avatar`      varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '头像URL',
+    `status`      tinyint(1)                                                    NOT NULL DEFAULT 1 COMMENT '用户状态：0(禁用), 1(启用)',
+    `is_deleted`  tinyint(1)                                                    NOT NULL DEFAULT 0 COMMENT '删除标记：0(未删除), 1(已删除)',
+    `create_time` timestamp                                                     NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` timestamp                                                     NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`user_id`) USING BTREE,
-    UNIQUE INDEX `username` (`username` ASC) USING BTREE,
-    UNIQUE INDEX `email` (`email` ASC) USING BTREE
+    UNIQUE INDEX `uk_username` (`username` ASC) USING BTREE COMMENT '用户名唯一索引',
+    UNIQUE INDEX `uk_email` (`email` ASC) USING BTREE COMMENT '邮箱唯一索引',
+    INDEX `idx_dept_id` (`dept_id` ASC) USING BTREE COMMENT '部门ID索引',
+    INDEX `idx_status` (`status` ASC) USING BTREE COMMENT '用户状态索引',
+    INDEX `idx_create_time` (`create_time` ASC) USING BTREE COMMENT '创建时间索引',
+    CONSTRAINT `fk_user_dept` FOREIGN KEY (`dept_id`) REFERENCES `department` (`dept_id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE = InnoDB
-  AUTO_INCREMENT = 4
+  AUTO_INCREMENT = 1
   CHARACTER SET = utf8mb4
   COLLATE = utf8mb4_unicode_ci
-  ROW_FORMAT = Dynamic;
+  ROW_FORMAT = DYNAMIC COMMENT = '用户表';
 
 -- ----------------------------
 -- Records of user
@@ -120,6 +146,95 @@ VALUES (3, 'hucongyu', '$2a$10$UfOo2mtqbSKOA3yB4F4Ci.54uoNzvFMW2VznfkpXKraHL.e9V
         '10245101417@stu.ecnu.edu.cn', '13136397281', '软件工程', '', '技术部',
         '2025-08-15 14:57:57', 1, 1, '/uploads/avatars/hucongyu.jpg');
 
+
+-- ========================================
+-- 角色表 (ROLE)
+-- ========================================
+DROP TABLE IF EXISTS `role`;
+CREATE TABLE `role`
+(
+    `role_id`      int                                                           NOT NULL AUTO_INCREMENT COMMENT '角色ID',
+    `role_name`    varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci  NOT NULL COMMENT '角色名称',
+    `role_code`    varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci  NOT NULL COMMENT '角色编码',
+    `description`  varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '角色描述',
+    `status`       tinyint(1)                                                    NOT NULL DEFAULT 1 COMMENT '角色状态：0(禁用), 1(启用)',
+    `create_time`  timestamp                                                     NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time`  timestamp                                                     NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`role_id`) USING BTREE,
+    UNIQUE INDEX `uk_role_code` (`role_code` ASC) USING BTREE COMMENT '角色编码唯一索引',
+    INDEX `idx_status` (`status` ASC) USING BTREE COMMENT '角色状态索引'
+) ENGINE = InnoDB
+  AUTO_INCREMENT = 1
+  CHARACTER SET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci
+  ROW_FORMAT = DYNAMIC COMMENT = '角色表';
+
+-- ========================================
+-- 权限表 (PERMISSION)
+-- ========================================
+DROP TABLE IF EXISTS `permission`;
+CREATE TABLE `permission`
+(
+    `permission_id`       int                                                           NOT NULL AUTO_INCREMENT COMMENT '权限ID',
+    `permission_name`     varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '权限名称',
+    `permission_code`     varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '权限编码',
+    `resource_identifier` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '资源标识符',
+    `description`         varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '权限描述',
+    `create_time`         timestamp                                                     NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time`         timestamp                                                     NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`permission_id`) USING BTREE,
+    UNIQUE INDEX `uk_permission_code` (`permission_code` ASC) USING BTREE COMMENT '权限编码唯一索引',
+    INDEX `idx_resource_identifier` (`resource_identifier` ASC) USING BTREE COMMENT '资源标识符索引'
+) ENGINE = InnoDB
+  AUTO_INCREMENT = 1
+  CHARACTER SET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci
+  ROW_FORMAT = DYNAMIC COMMENT = '权限表';
+
+-- ========================================
+-- 5. 用户角色关联表 (USER_ROLE)
+-- ========================================
+DROP TABLE IF EXISTS `user_role`;
+CREATE TABLE `user_role`
+(
+    `user_role_id` int       NOT NULL AUTO_INCREMENT COMMENT '用户角色关联ID',
+    `user_id`      int       NOT NULL COMMENT '用户ID',
+    `role_id`      int       NOT NULL COMMENT '角色ID',
+    `create_time`  timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`user_role_id`) USING BTREE,
+    UNIQUE INDEX `uk_user_role` (`user_id`, `role_id`) USING BTREE COMMENT '用户角色联合唯一索引',
+    INDEX `idx_user_id` (`user_id` ASC) USING BTREE COMMENT '用户ID索引',
+    INDEX `idx_role_id` (`role_id` ASC) USING BTREE COMMENT '角色ID索引',
+    CONSTRAINT `fk_ur_user` FOREIGN KEY (`user_id`) REFERENCES `user` (`user_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT `fk_ur_role` FOREIGN KEY (`role_id`) REFERENCES `role` (`role_id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE = InnoDB
+  AUTO_INCREMENT = 1
+  CHARACTER SET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci
+  ROW_FORMAT = DYNAMIC COMMENT = '用户角色关联表';
+
+-- ========================================
+-- 6. 角色权限关联表 (ROLE_PERMISSION)
+-- ========================================
+DROP TABLE IF EXISTS `role_permission`;
+CREATE TABLE `role_permission`
+(
+    `role_permission_id` int       NOT NULL AUTO_INCREMENT COMMENT '角色权限关联ID',
+    `role_id`            int       NOT NULL COMMENT '角色ID',
+    `permission_id`      int       NOT NULL COMMENT '权限ID',
+    `create_time`        timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`role_permission_id`) USING BTREE,
+    UNIQUE INDEX `uk_role_permission` (`role_id`, `permission_id`) USING BTREE COMMENT '角色权限联合唯一索引',
+    INDEX `idx_role_id` (`role_id` ASC) USING BTREE COMMENT '角色ID索引',
+    INDEX `idx_permission_id` (`permission_id` ASC) USING BTREE COMMENT '权限ID索引',
+    CONSTRAINT `fk_rp_role` FOREIGN KEY (`role_id`) REFERENCES `role` (`role_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT `fk_rp_permission` FOREIGN KEY (`permission_id`) REFERENCES `permission` (`permission_id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE = InnoDB
+  AUTO_INCREMENT = 1
+  CHARACTER SET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci
+  ROW_FORMAT = DYNAMIC COMMENT = '角色权限关联表';
+
 -- ----------------------------
 -- Table structure for resume
 -- ----------------------------
@@ -131,6 +246,7 @@ CREATE TABLE `resume`
     `cycle_id`     int       NOT NULL,
     `status`       tinyint   NOT NULL DEFAULT 1 COMMENT '简历状态: 1(草稿), 2(已提交), 3(评审中), 4(通过), 5(未通过)',
     `submitted_at` timestamp NULL     DEFAULT NULL COMMENT '提交时间',
+    `resume_score` int       NOT NULL DEFAULT 0 COMMENT '简历得分',
     `created_at`   timestamp NULL     DEFAULT CURRENT_TIMESTAMP,
     `updated_at`   timestamp NULL     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`resume_id`) USING BTREE,
@@ -251,6 +367,90 @@ CREATE TABLE `resume_field_value`
   COLLATE = utf8mb4_unicode_ci
   ROW_FORMAT = Dynamic;
 
+-- ========================================
+-- 面试时段配置表 (INTERVIEW_SLOT)
+-- ========================================
+DROP TABLE IF EXISTS `interview_slot`;
+CREATE TABLE `interview_slot` (
+                                  `slot_id` int NOT NULL AUTO_INCREMENT COMMENT '分配ID',
+                                  `cycle_id` int NOT NULL COMMENT '招募活动ID',
+                                  `interview_date` date NOT NULL COMMENT '面试日期',
+                                  `start_time` time NOT NULL COMMENT '开始时间',
+                                  `end_time` time NOT NULL COMMENT '结束时间',
+                                  `location` varchar(255) NOT NULL COMMENT '面试地点',
+                                  `interview_type` tinyint NOT NULL DEFAULT 1 COMMENT '面试类型：1(线下面试), 2(线上面试)',
+                                  `meeting_link` varchar(500) NULL COMMENT '会议链接（线上面试用）',
+                                  `max_capacity` int NOT NULL DEFAULT 10 COMMENT '最大容量',
+                                  `current_occupied` int NOT NULL DEFAULT 0 COMMENT '当前已占用人数',
+                                  `feishu_table_url` varchar(255) DEFAULT NULL COMMENT '飞书多维表格URL',
+                                  `status` tinyint NOT NULL DEFAULT 1 COMMENT '状态：1(可用), 2(已满), 3(关闭)',
+                                  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+                                  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                                  PRIMARY KEY (`slot_id`),
+                                  INDEX `idx_cycle_date` (`cycle_id`, `interview_date`),
+                                  INDEX `idx_status` (`status`),
+                                  CONSTRAINT `fk_slot_cycle` FOREIGN KEY (`cycle_id`)
+                                      REFERENCES `recruitment_cycle` (`cycle_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='面试时段配置表';
+
+
+-- ========================================
+-- 面试安排表 (INTERVIEW_SCHEDULE)
+-- ========================================
+DROP TABLE IF EXISTS `interview_schedule`;
+CREATE TABLE `interview_schedule` (
+                                      `schedule_id` int NOT NULL AUTO_INCREMENT COMMENT '面试安排ID',
+                                      `resume_id` int NOT NULL COMMENT '简历ID',
+                                      `user_id` int NOT NULL COMMENT '用户ID',
+                                      `cycle_id` int NOT NULL COMMENT '招募活动ID',
+                                      `slot_id` int NOT NULL COMMENT '分配ID',
+                                      `interview_time`   datetime NULL COMMENT '分配的面试具体时间',
+                                      `status` tinyint NOT NULL DEFAULT 0 COMMENT '状态：0（未安排），1(已安排), 2(已取消)',
+                                      `notes` text NULL COMMENT '安排备注',
+                                      `sync_status` tinyint NOT NULL DEFAULT 0 COMMENT '同步飞书状态：0(未同步), 1(已同步)',
+                                      `notif_status` tinyint NOT NULL DEFAULT 0 COMMENT '通知状态：0(未通知), 1(已通知)',
+                                      `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+                                      `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                                      PRIMARY KEY (`schedule_id`),
+                                      UNIQUE INDEX `uk_resume_cycle` (`resume_id`, `cycle_id`),
+                                      INDEX `idx_slot_id` (`slot_id`),
+                                      INDEX `idx_status` (`status`),
+                                      CONSTRAINT `fk_schedule_slot` FOREIGN KEY (`slot_id`)
+                                          REFERENCES `interview_slot` (`slot_id`) ON DELETE CASCADE,
+                                      CONSTRAINT `fk_schedule_resume` FOREIGN KEY (`resume_id`)
+                                          REFERENCES `resume` (`resume_id`) ON DELETE CASCADE,
+                                      CONSTRAINT `fk_schedule_user` FOREIGN KEY (`user_id`)
+                                          REFERENCES `user` (`user_id`) ON DELETE CASCADE,
+                                      CONSTRAINT `fk_schedule_cycle` FOREIGN KEY (`cycle_id`)
+                                          REFERENCES `recruitment_cycle` (`cycle_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='面试安排表';
+
+
+
+
+
+-- ========================================
+-- 面试结果表 (INTERVIEW_RESULT)
+-- ========================================
+DROP TABLE IF EXISTS `interview_result`;
+CREATE TABLE `interview_result` (
+                                    `result_id` int NOT NULL AUTO_INCREMENT COMMENT '结果ID',
+                                    `schedule_id` int NOT NULL COMMENT '面试安排ID',
+                                    `user_id` int NOT NULL COMMENT '用户ID',
+                                    `decision` tinyint NOT NULL DEFAULT 0 COMMENT '最终决定：0(待定), 1(通过), 2(不通过), 3(待调剂)',
+                                    `assigned_dept_id` int NULL COMMENT '实际分配部门ID',
+                                    `decision_by` int NULL COMMENT '决定人ID',
+                                    `decision_at` timestamp NULL COMMENT '决定时间',
+                                    `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+                                    `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                                    PRIMARY KEY (`result_id`),
+                                    UNIQUE INDEX `uk_schedule` (`schedule_id`),
+                                    INDEX `idx_decision` (`decision`),
+                                    CONSTRAINT `fk_result_schedule` FOREIGN KEY (`schedule_id`) REFERENCES `interview_schedule` (`schedule_id`) ON DELETE CASCADE,
+                                    CONSTRAINT `fk_result_user` FOREIGN KEY (`user_id`) REFERENCES `user` (`user_id`),
+                                    CONSTRAINT `fk_result_assigned_dept` FOREIGN KEY (`assigned_dept_id`) REFERENCES `department` (`dept_id`),
+                                    CONSTRAINT `fk_result_decision_by` FOREIGN KEY (`decision_by`) REFERENCES `user` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='面试结果表';
 -- ----------------------------
 -- Records of resume_field_value
 -- ----------------------------

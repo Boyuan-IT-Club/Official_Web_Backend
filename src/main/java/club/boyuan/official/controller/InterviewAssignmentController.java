@@ -33,13 +33,13 @@ import club.boyuan.official.utils.PermissionUtils;
 @RequestMapping("/api/interviews")
 @AllArgsConstructor
 public class InterviewAssignmentController {
-    
+
     private static final Logger logger = LoggerFactory.getLogger(InterviewAssignmentController.class);
-    
+
     private final IInterviewAssignmentService interviewAssignmentService;
     private final IUserService userService;
     private final JwtTokenUtil jwtTokenUtil;
-    
+
     /**
      * 为指定招募周期自动分配面试时间（仅管理员）
      * @param cycleId 招募周期ID
@@ -51,13 +51,13 @@ public class InterviewAssignmentController {
             @PathVariable Integer cycleId) {
         try {
             logger.info("开始为招募周期 ID {} 分配面试时间", cycleId);
-            
+
             // 执行面试时间分配
             InterviewAssignmentResultDTO result = interviewAssignmentService.assignInterviews(cycleId);
-            
-            logger.info("面试时间分配完成，已分配 {} 人，未分配 {} 人", 
+
+            logger.info("面试时间分配完成，已分配 {} 人，未分配 {} 人",
                     result.getAssignedInterviews().size(), result.getUnassignedUsers().size());
-            
+
             return ResponseEntity.ok(new ResponseMessage<>(200, "面试时间分配成功", result));
         } catch (BusinessException e) {
             logger.warn("面试时间分配业务异常，错误码: {}，错误信息: {}", e.getCode(), e.getMessage());
@@ -66,7 +66,7 @@ public class InterviewAssignmentController {
         } catch (Exception e) {
             logger.error("面试时间分配系统异常，招募周期ID: {}", cycleId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), 
+                    .body(new ResponseMessage<>(BusinessExceptionEnum.SYSTEM_ERROR.getCode(),
                             "面试时间分配失败: " + e.getMessage(), null));
         }
     }
@@ -97,7 +97,7 @@ public class InterviewAssignmentController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
-    
+
     /**
      * 从请求中获取当前用户信息
      */
@@ -106,7 +106,7 @@ public class InterviewAssignmentController {
         if (bearerToken == null || !bearerToken.startsWith("Bearer ")) {
             throw new BusinessException(BusinessExceptionEnum.JWT_VERIFICATION_FAILED);
         }
-        
+
         try {
             String token = bearerToken.substring(7);
             String username = jwtTokenUtil.extractUsername(token);
@@ -119,7 +119,7 @@ public class InterviewAssignmentController {
             throw new BusinessException(BusinessExceptionEnum.JWT_VERIFICATION_FAILED);
         }
     }
-    
+
     /**
      * 验证管理员权限
      */
