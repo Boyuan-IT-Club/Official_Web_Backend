@@ -118,7 +118,6 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
         //从 Spring Security 获取userId
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         Integer userId = null;
-
         if (authentication != null) {
             Object principal = authentication.getPrincipal();
 
@@ -134,7 +133,6 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
                 userId = user != null ? user.getUserId() : null;
             }
         }
-
         if (userId != null) {
             interviewResult.setDecisionBy(userId);
         }

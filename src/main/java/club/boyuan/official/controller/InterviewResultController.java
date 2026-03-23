@@ -77,4 +77,18 @@ public class InterviewResultController {
                     .body(ResponseMessage.error(400, "更新面试结果失败"));
         }
     }
+
+    //根据resultId获取面试结果
+    @GetMapping("/get/{resultId}")
+    public ResponseEntity<ResponseMessage<InterviewResult>> get(@PathVariable Integer resultId) {
+        try {
+            log.info("获取面试结果");
+            InterviewResult result = interviewResultService.getById(resultId);
+            return ResponseEntity.ok(ResponseMessage.success(result));
+        } catch (Exception e) {
+            log.error("获取面试结果失败", e);
+            return ResponseEntity.badRequest()
+                    .body(ResponseMessage.error(400, "获取面试结果失败"));
+        }
+    }
 }
