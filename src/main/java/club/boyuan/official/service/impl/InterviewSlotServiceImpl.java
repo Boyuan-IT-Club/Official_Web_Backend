@@ -12,6 +12,8 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 /**
  * <p>
  * 面试时段配置表 服务实现类
@@ -86,5 +88,32 @@ public class InterviewSlotServiceImpl extends ServiceImpl<InterviewSlotMapper, I
         responseDTO.setList(resultPage.getRecords());
         return responseDTO;
 
+    }
+
+    //获取status为可用的时间段
+    @Override
+    public List<InterviewSlot> getAvailableSlotsByCycleId(Integer cycleId) {
+        LambdaQueryWrapper<InterviewSlot> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper
+                .eq(InterviewSlot::getCycleId, cycleId)
+                .eq(InterviewSlot::getStatus, 1)  // 状态为可用
+                .orderByAsc(InterviewSlot::getInterviewDate)
+                .orderByAsc(InterviewSlot::getStartTime)
+                .orderByAsc(InterviewSlot::getEndTime);
+
+        return this.list(queryWrapper);
+    }
+
+    //获取所有时间段
+    @Override
+    public List<InterviewSlot> getAllSlotsByCycleId(Integer cycleId) {
+        LambdaQueryWrapper<InterviewSlot> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper
+                .eq(InterviewSlot::getCycleId, cycleId)
+                .orderByAsc(InterviewSlot::getInterviewDate)
+                .orderByAsc(InterviewSlot::getStartTime)
+                .orderByAsc(InterviewSlot::getEndTime);
+
+        return this.list(queryWrapper);
     }
 }

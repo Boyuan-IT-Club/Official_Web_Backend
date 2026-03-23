@@ -49,7 +49,7 @@ public class InterviewAssignmentServiceImpl implements IInterviewAssignmentServi
     private static final int INTERVIEW_DURATION = 10; // 面试时长10分钟
 
     @Override
-    public InterviewAssignmentResultDTO assignInterviews(Integer cycleId) {
+    public InterviewAssignmentResultDTO   assignInterviews(Integer cycleId) {
         logger.info("开始为招募周期ID {} 分配面试时间", cycleId);
 
         // 获取招募周期信息

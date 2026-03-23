@@ -1,5 +1,6 @@
 package club.boyuan.official.service;
 
+import club.boyuan.official.dto.AutoAssignInterviewResponseDTO;
 import club.boyuan.official.entity.InterviewSchedule;
 import com.baomidou.mybatisplus.extension.service.IService;
 
@@ -13,4 +14,11 @@ import com.baomidou.mybatisplus.extension.service.IService;
  */
 public interface IInterviewScheduleService extends IService<InterviewSchedule> {
 
+    /**
+     * 一键分配面试成员面试时间地点（按招募周期）
+     * 
+     * @param cycleId  分配请求参数
+     * @return 分配结果
+     */
+    AutoAssignInterviewResponseDTO autoAssignInterviews(Integer cycleId);
 }

@@ -2,4 +2,38 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="club.boyuan.official.mapper.InterviewResultMapper">
 
+    <select id="selectResultPage" resultType="club.boyuan.official.entity.InterviewResult">
+        SELECT
+        ir.result_id,
+        ir.schedule_id,
+        ir.user_id,
+        ir.decision,
+        ir.assigned_dept_id,
+        ir.decision_by,
+        ir.decision_at,
+        ir.created_at,
+        ir.updated_at,
+        isc.cycle_id,
+        u.name as user_name,
+        d.dept_name as department_name
+        FROM interview_result ir
+        LEFT JOIN interview_schedule isc ON ir.schedule_id = isc.schedule_id
+        LEFT JOIN user u ON ir.user_id = u.user_id
+        LEFT JOIN department d ON ir.assigned_dept_id = d.dept_id
+        <where>
+            <if test="cycleId != null">
+                AND isc.cycle_id = #{cycleId}
+            </if>
+            <if test="name != null and name != ''">
+                AND u.name LIKE CONCAT('%', #{name}, '%')
+            </if>
+            <if test="decision != null">
+                AND ir.decision = #{decision}
+            </if>
+            <if test="department != null and department != ''">
+                AND d.name LIKE CONCAT('%', #{department}, '%')
+            </if>
+        </where>
+        ORDER BY ir.created_at DESC
+    </select>
 </mapper>

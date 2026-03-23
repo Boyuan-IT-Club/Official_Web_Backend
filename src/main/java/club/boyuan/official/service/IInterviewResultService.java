@@ -1,6 +1,7 @@
 package club.boyuan.official.service;
 
 import club.boyuan.official.dto.InterviewResultResponseDTO;
+import club.boyuan.official.dto.InterviewResultSaveDTO;
 import club.boyuan.official.dto.SendNotificationsRequestDTO;
 import club.boyuan.official.dto.SendNotificationsResponseDTO;
 import club.boyuan.official.entity.InterviewResult;
@@ -21,5 +22,7 @@ public interface IInterviewResultService extends IService<InterviewResult> {
 
     SendNotificationsResponseDTO sendNotifications(@Valid SendNotificationsRequestDTO requestDTO);
 
-    List<InterviewResultResponseDTO> list(Integer cycleId, String name, String decision, String department, Integer page, Integer size);
+    InterviewResultResponseDTO list(Integer cycleId, String name, String decision, String department, Integer page, Integer size);
+
+    InterviewResult update(Integer resultId, @Valid InterviewResultSaveDTO interviewResult);
 }
