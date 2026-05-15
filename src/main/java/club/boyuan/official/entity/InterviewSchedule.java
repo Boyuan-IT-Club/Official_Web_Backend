@@ -39,12 +39,6 @@ public class InterviewSchedule implements Serializable {
     private Integer resumeId;
 
     /**
-     * 用户ID
-     */
-    @TableField("user_id")
-    private Integer userId;
-
-    /**
      * 招募活动ID
      */
     @TableField("cycle_id")

@@ -302,7 +302,6 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
 
                 InterviewSchedule schedule = new InterviewSchedule()
                         .setResumeId(resume.getResumeId())
-                        .setUserId(user.getUserId())
                         .setCycleId(resume.getCycleId())
                         .setSlotId(slotId)
                         .setInterviewTime(interviewDateTime)
@@ -1028,7 +1027,6 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
                         // 创建面试安排实体
                         InterviewSchedule schedule = new InterviewSchedule()
                                 .setResumeId(resume.getResumeId())
-                                .setUserId(user.getUserId())
                                 .setCycleId(resume.getCycleId())
                                 .setSlotId(slotId)
                                 .setInterviewTime(assignedSlot)
