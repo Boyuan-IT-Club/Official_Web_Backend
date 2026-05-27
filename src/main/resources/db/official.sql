@@ -444,7 +444,7 @@ CREATE TABLE `interview_slot` (
                                   `interview_date` date NOT NULL COMMENT '面试日期',
                                   `start_time` time NOT NULL COMMENT '开始时间',
                                   `end_time` time NOT NULL COMMENT '结束时间',
-                                  `location` varchar(255) NOT NULL COMMENT '面试地点',
+                                  `location` varchar(255) COMMENT '面试地点',
                                   `interview_type` tinyint NOT NULL DEFAULT 1 COMMENT '面试类型：1(线下面试), 2(线上面试)',
                                   `meeting_link` varchar(500) NULL COMMENT '会议链接（线上面试用）',
                                   `max_capacity` int NOT NULL DEFAULT 10 COMMENT '最大容量',

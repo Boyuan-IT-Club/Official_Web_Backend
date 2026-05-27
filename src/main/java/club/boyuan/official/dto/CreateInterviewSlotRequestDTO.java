@@ -28,7 +28,6 @@ public class CreateInterviewSlotRequestDTO {
     @NotNull(message = "结束时间不能为空")
     private LocalTime endTime;
 
-    @NotNull(message = "面试地点不能为空")
     private String location;
 
     @NotNull(message = "面试类型不能为空")

@@ -28,6 +28,19 @@ services:
     networks:
       - official-network
 
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: ${PROJECT_NAME:-official}-rabbitmq
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+    restart: always
+    networks:
+      - official-network
+
   official:
     image: ${DOCKERHUB_USERNAME:-boyuanclub}/official-core-api:latest  # 使用Docker Hub镜像
     container_name: ${PROJECT_NAME:-official}-app
@@ -47,6 +60,10 @@ services:
       - MAIL_PORT=${MAIL_PORT:-465}
       - MAIL_USERNAME=${MAIL_USERNAME:-notify@boyuan.club}
       - MAIL_PASSWORD=${MAIL_PASSWORD:-12bGmEWjvyRDjzxE}
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USERNAME=${RABBITMQ_USERNAME:-guest}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-guest}
       - SERVER_PORT=8080
       # 添加中文环境支持
       - LANG=zh_CN.UTF-8
@@ -58,6 +75,7 @@ services:
     depends_on:
       - mysql
       - redis
+      - rabbitmq
     networks:
       - official-network
 

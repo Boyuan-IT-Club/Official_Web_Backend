@@ -6,10 +6,12 @@ import club.boyuan.official.dto.UpdateInterviewSlotDTO;
 import club.boyuan.official.entity.InterviewSlot;
 import club.boyuan.official.mapper.InterviewSlotMapper;
 import club.boyuan.official.service.IInterviewSlotService;
+import club.boyuan.official.service.InterviewSlotInventoryService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -23,7 +25,10 @@ import java.util.List;
  * @since 2026-01-28
  */
 @Service
+@RequiredArgsConstructor
 public class InterviewSlotServiceImpl extends ServiceImpl<InterviewSlotMapper, InterviewSlot> implements IInterviewSlotService {
+
+    private final InterviewSlotInventoryService slotInventoryService;
 
     @Override
     public InterviewSlot createInterviewSlot(CreateInterviewSlotRequestDTO requestDTO) {
@@ -44,6 +49,7 @@ public class InterviewSlotServiceImpl extends ServiceImpl<InterviewSlotMapper, I
                 .setStatus(1) //初始状态可用
                 .setCurrentOccupied(0); //占用0
         this.save(interviewSlot);
+        slotInventoryService.syncRemainCacheFromDb(interviewSlot.getSlotId());
         return interviewSlot;
     }
 
@@ -64,6 +70,7 @@ public class InterviewSlotServiceImpl extends ServiceImpl<InterviewSlotMapper, I
                 .set(requestDTO.getFeishuTableUrl()!= null, InterviewSlot::getFeishuTableUrl, requestDTO.getFeishuTableUrl());
 
         this.update(updateWrapper);
+        slotInventoryService.syncRemainCacheFromDb(slotId);
         return this.getById(slotId);
     }
 
