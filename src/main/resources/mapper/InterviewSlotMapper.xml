@@ -2,4 +2,51 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="club.boyuan.official.mapper.InterviewSlotMapper">
 
+    <select id="selectByIdForUpdate" resultType="club.boyuan.official.entity.InterviewSlot">
+        SELECT slot_id,
+               cycle_id,
+               interview_date,
+               start_time,
+               end_time,
+               location,
+               interview_type,
+               meeting_link,
+               max_capacity,
+               current_occupied,
+               feishu_table_url,
+               status,
+               created_at,
+               updated_at
+        FROM interview_slot
+        WHERE slot_id = #{slotId}
+        FOR UPDATE
+    </select>
+
+    <!-- 单条 SQL 占坑 + 刷新 status，避免先读后写 -->
+    <update id="occupyOneIfAvailable">
+        UPDATE interview_slot
+        SET current_occupied = current_occupied + 1,
+            status = CASE
+                         WHEN status = 3 THEN 3
+                         WHEN (current_occupied + 1) >= max_capacity THEN 2
+                         ELSE 1
+                END,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE slot_id = #{slotId}
+          AND status != 3
+          AND current_occupied &lt; max_capacity
+    </update>
+
+    <update id="releaseOne">
+        UPDATE interview_slot
+        SET current_occupied = GREATEST(current_occupied - 1, 0),
+            status = CASE
+                         WHEN status = 3 THEN 3
+                         WHEN GREATEST(current_occupied - 1, 0) >= max_capacity THEN 2
+                         ELSE 1
+                END,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE slot_id = #{slotId}
+    </update>
+
 </mapper>

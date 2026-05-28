@@ -6,6 +6,7 @@ import club.boyuan.official.service.ILoginService;
 import club.boyuan.official.service.IUserService;
 import club.boyuan.official.service.impl.LoginServiceImpl.TokenVO;
 import club.boyuan.official.utils.JwtTokenUtil;
+import club.boyuan.official.messaging.EmailVerificationProducer;
 import club.boyuan.official.utils.MessageUtils;
 import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -40,6 +41,8 @@ public class AuthController {
     private final JwtTokenUtil jwtTokenUtil;
 
     private final MessageUtils messageUtils;
+
+    private final EmailVerificationProducer emailVerificationProducer;
 
     /**
      * 用户注册接口
@@ -132,12 +135,12 @@ public class AuthController {
             if (!email.endsWith("@stu.ecnu.edu.cn")) {
                 throw new BusinessException(BusinessExceptionEnum.INVALID_EMAIL_FORMAT);
             }
-            // 使用工具类发送邮箱验证码
+            // 生成验证码并写入 Redis（校验仍以 Redis 为准）
             String code = loginService.generateVerificationCode("email");
             loginService.saveVerificationCode(email, code, 300);
-            String content = "您的验证码是：" + code + "，有效期5分钟";
-            messageUtils.sendEmail(email, "邮箱验证码", content);
-            return ResponseEntity.ok(ResponseMessage.success());
+            // 投递到 RabbitMQ，由消费者异步发信，避免 SMTP 阻塞 HTTP 请求
+            emailVerificationProducer.publish(email, code);
+            return ResponseEntity.ok(new ResponseMessage<>(200, "验证码已发送，请查收邮箱", null));
         } catch (BusinessException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(ResponseMessage.error(e.getCode(), e.getMessage()));

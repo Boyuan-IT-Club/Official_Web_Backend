@@ -40,14 +40,20 @@ spring:
     port: ${MAIL_PORT:}
     username: ${MAIL_USERNAME:}
     password: ${MAIL_PASSWORD:}
-    properties:
-      mail:
-        smtp:
-          auth: true
-          starttls:
-            enable: true
-          ssl:
-            enable: true
+    # 587/465 加密参数由 MailSenderConfig 按端口自动设置
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:root}
+    password: ${RABBITMQ_PASSWORD:root}
+    listener:
+      simple:
+        acknowledge-mode: auto
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 2000ms
+          multiplier: 2
 
 
 mybatis-plus:
@@ -55,6 +61,59 @@ mybatis-plus:
   type-aliases-package: club.boyuan.official.entity
   configuration:
     mapUnderscoreToCamelCase: true
+
+booking:
+  seckill:
+    enabled: true
+    user-lock-ttl-seconds: 600
+    request-status-ttl-hours: 24
+
+# 应用层网关限流（Redis 滑动窗口），在请求进入 Controller 前拦截
+rate-limit:
+  enabled: true
+  rules:
+    - name: auth-send-email
+      pattern: /api/auth/send-email-code
+      method: POST
+      limit: 5
+      window-seconds: 60
+      key-type: IP
+    - name: auth-send-sms
+      pattern: /api/auth/send-sms-code
+      method: POST
+      limit: 5
+      window-seconds: 60
+      key-type: IP
+    - name: auth-login
+      pattern: /api/auth/login
+      method: POST
+      limit: 20
+      window-seconds: 60
+      key-type: IP
+    - name: auth-register
+      pattern: /api/auth/register
+      method: POST
+      limit: 3
+      window-seconds: 3600
+      key-type: IP
+    - name: booking-seckill
+      pattern: /api/interview/booking/seckill
+      method: POST
+      limit: 10
+      window-seconds: 60
+      key-type: USER
+    - name: booking-create
+      pattern: /api/interview/booking
+      method: POST
+      limit: 10
+      window-seconds: 60
+      key-type: USER
+    - name: booking-list-segments
+      pattern: /api/interview/booking/cycles/*/segments
+      method: GET
+      limit: 60
+      window-seconds: 60
+      key-type: USER
 
 jwt:
   secret: ${JWT_SECRET:}

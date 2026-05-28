@@ -16,18 +16,9 @@ spring:
     open-in-view: false
   mail:
     host: ${MAIL_HOST}
-    port: ${MAIL_PORT}
+    port: ${MAIL_PORT:465}
     username: ${MAIL_USERNAME}
     password: ${MAIL_PASSWORD}
-    properties:
-      mail:
-        smtp:
-          auth: true
-          starttls:
-            enable: true
-            required: true
-          socketFactory:
-            class: javax.net.ssl.SSLSocketFactory
   data:
     redis:
       host: redis

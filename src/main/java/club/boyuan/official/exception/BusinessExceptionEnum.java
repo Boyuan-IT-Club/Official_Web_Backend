@@ -98,6 +98,19 @@ public enum BusinessExceptionEnum {
     UNSUPPORTED_OPERATION(5005, "不支持的操作"),
     RESOURCE_CONFLICT(5006, "资源冲突"),
 
+    // 面试预约相关异常 (3400-3499)
+    INTERVIEW_SLOT_NOT_FOUND(3401, "面试时段不存在"),
+    INTERVIEW_SLOT_FULL(3402, "该面试时段已满"),
+    INTERVIEW_SLOT_CLOSED(3403, "该面试时段已关闭"),
+    INTERVIEW_SLOT_CYCLE_MISMATCH(3404, "面试时段与招募周期不匹配"),
+    INTERVIEW_BOOKING_NOT_FOUND(3405, "面试预约不存在"),
+    INTERVIEW_BOOKING_FORBIDDEN(3406, "无权操作该面试预约"),
+    RESUME_NOT_SUBMITTED_FOR_BOOKING(3407, "请先提交简历后再预约面试"),
+    INTERVIEW_BOOKING_PROCESSING(3408, "您在本周期已有预约正在处理中，请稍后再试"),
+    INTERVIEW_BOOKING_REQUEST_NOT_FOUND(3409, "预约请求不存在或已过期"),
+    INTERVIEW_SECKILL_DISABLED(3410, "秒杀预约模式未开启"),
+    TOO_MANY_REQUESTS(4291, "请求过于频繁，请稍后再试"),
+
     // 活动相关异常 (7000-7099)
     ACTIVITY_NOT_FOUND(7001, "活动不存在"),
     ACTIVITY_CREATE_FAILED(7002, "创建活动失败"),
