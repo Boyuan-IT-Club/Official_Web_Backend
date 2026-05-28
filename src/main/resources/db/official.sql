@@ -512,6 +512,24 @@ CREATE TABLE `interview_result` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='面试结果表';
 
 -- ========================================
+-- 面试通知发送记录 (INTERVIEW_NOTIFICATION_LOG)
+-- ========================================
+DROP TABLE IF EXISTS `interview_notification_log`;
+CREATE TABLE `interview_notification_log` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '记录ID',
+    `notification_type` varchar(32) NOT NULL COMMENT '通知类型',
+    `schedule_id` int NULL COMMENT '面试安排ID',
+    `result_id` int NULL COMMENT '面试结果ID',
+    `recipient_email` varchar(255) NOT NULL COMMENT '收件人邮箱',
+    `sent_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '发送时间',
+    PRIMARY KEY (`id`),
+    UNIQUE INDEX `uk_type_schedule` (`notification_type`, `schedule_id`),
+    UNIQUE INDEX `uk_type_result` (`notification_type`, `result_id`),
+    INDEX `idx_schedule_id` (`schedule_id`),
+    INDEX `idx_result_id` (`result_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='面试通知发送记录';
+
+-- ========================================
 -- 社团活动表 (ACTIVITY)
 -- ========================================
 DROP TABLE IF EXISTS `activity`;

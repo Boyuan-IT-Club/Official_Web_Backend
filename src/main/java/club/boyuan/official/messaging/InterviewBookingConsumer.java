@@ -5,6 +5,7 @@ import club.boyuan.official.dto.InterviewBookingDTO;
 import club.boyuan.official.entity.User;
 import club.boyuan.official.service.IUserService;
 import club.boyuan.official.service.InterviewBookingSeckillService;
+import club.boyuan.official.service.InterviewNotificationService;
 import club.boyuan.official.service.impl.InterviewBookingAsyncPersistenceService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,8 +26,7 @@ public class InterviewBookingConsumer {
 
     private final InterviewBookingAsyncPersistenceService persistenceService;
     private final InterviewBookingSeckillService seckillService;
-    private final InterviewBookingProducer bookingProducer;
-    private final IUserService userService;
+    private final InterviewNotificationService interviewNotificationService;
     private final StringRedisTemplate stringRedisTemplate;
 
     @RabbitListener(queues = RabbitMQConfig.INTERVIEW_BOOKING_QUEUE)
@@ -57,7 +57,7 @@ public class InterviewBookingConsumer {
             }
 
             seckillService.markRequestSuccess(message.getRequestId(), booking);
-            publishNotification(message, booking);
+            interviewNotificationService.enqueueBookingSuccess(booking.getScheduleId(), message.getRequestId());
         } catch (Exception e) {
             log.error("预约落库异常 requestId={}", message.getRequestId(), e);
             stringRedisTemplate.delete(processedKey);
@@ -68,20 +68,5 @@ public class InterviewBookingConsumer {
                     message.getUserId(),
                     message.getCycleId());
         }
-    }
-
-    private void publishNotification(InterviewBookingMessage message, InterviewBookingDTO booking) {
-        User user = userService.getUserById(message.getUserId());
-        String email = user != null ? user.getEmail() : null;
-        String name = user != null ? user.getName() : null;
-        bookingProducer.publishNotification(new InterviewBookingNotificationMessage(
-                message.getRequestId(),
-                message.getUserId(),
-                booking.getScheduleId(),
-                message.getCycleId(),
-                message.getSlotId(),
-                email,
-                name
-        ));
     }
 }

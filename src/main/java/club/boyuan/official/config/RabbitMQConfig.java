@@ -23,8 +23,11 @@ public class RabbitMQConfig {
     /** 面试预约异步落库 */
     public static final String INTERVIEW_BOOKING_QUEUE = "official.interview.booking.persist";
 
-    /** 预约成功通知（邮件等） */
+    /** 预约成功通知（邮件等，旧队列，保留兼容） */
     public static final String INTERVIEW_BOOKING_NOTIFICATION_QUEUE = "official.interview.booking.notification";
+
+    /** 面试通知（预约成功、提醒、录取/未录取） */
+    public static final String INTERVIEW_NOTIFICATION_QUEUE = "official.interview.notification";
 
     @Bean
     public Queue emailVerificationQueue() {
@@ -39,6 +42,11 @@ public class RabbitMQConfig {
     @Bean
     public Queue interviewBookingNotificationQueue() {
         return QueueBuilder.durable(INTERVIEW_BOOKING_NOTIFICATION_QUEUE).build();
+    }
+
+    @Bean
+    public Queue interviewNotificationQueue() {
+        return QueueBuilder.durable(INTERVIEW_NOTIFICATION_QUEUE).build();
     }
 
     /**
