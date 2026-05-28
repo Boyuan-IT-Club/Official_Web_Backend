@@ -29,6 +29,9 @@ public class RabbitMQConfig {
     /** 面试通知（预约成功、提醒、录取/未录取） */
     public static final String INTERVIEW_NOTIFICATION_QUEUE = "official.interview.notification";
 
+    /** 飞书多维表格异步同步 */
+    public static final String FEISHU_SYNC_QUEUE = "official.feishu.sync";
+
     @Bean
     public Queue emailVerificationQueue() {
         return QueueBuilder.durable(EMAIL_VERIFICATION_QUEUE).build();
@@ -47,6 +50,11 @@ public class RabbitMQConfig {
     @Bean
     public Queue interviewNotificationQueue() {
         return QueueBuilder.durable(INTERVIEW_NOTIFICATION_QUEUE).build();
+    }
+
+    @Bean
+    public Queue feishuSyncQueue() {
+        return QueueBuilder.durable(FEISHU_SYNC_QUEUE).build();
     }
 
     /**

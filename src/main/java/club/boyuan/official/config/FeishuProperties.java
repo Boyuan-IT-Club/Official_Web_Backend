@@ -23,4 +23,13 @@ public class FeishuProperties {
 
     /** 单次 batch_create 最大条数（飞书上限 500） */
     private int batchSize = 100;
+
+    /** 并行写入飞书的多地点（桶）并发数，注意飞书 API 频率限制 */
+    private int parallelBucketConcurrency = 3;
+
+    /** 任务状态在 Redis 中的保留天数 */
+    private int taskTtlDays = 7;
+
+    /** 消费端抢占锁 TTL（小时），防止进程崩溃后永久无法重试 */
+    private int taskLockTtlHours = 24;
 }

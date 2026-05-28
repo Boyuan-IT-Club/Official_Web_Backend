@@ -6,12 +6,14 @@ import club.boyuan.official.entity.ResumeFieldValue;
 import club.boyuan.official.mapper.ResumeFieldDefinitionMapper;
 import club.boyuan.official.service.IResumeService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -30,6 +32,7 @@ public class ResumeFieldReader {
 
     private final IResumeService resumeService;
     private final ResumeFieldDefinitionMapper fieldDefinitionMapper;
+    private final club.boyuan.official.mapper.ResumeFieldValueMapper resumeFieldValueMapper;
     private final ObjectMapper objectMapper;
 
     public ResumeSnapshot readSnapshot(Resume resume, Integer cycleId) {
@@ -55,6 +58,78 @@ public class ResumeFieldReader {
             }
         }
 
+        return new ResumeSnapshot(
+                nullToEmpty(getByKey(keyToFieldId, valueByFieldId, "name")),
+                firstDept,
+                secondDept,
+                formatIntendedDepartments(firstDept, secondDept),
+                nullToEmpty(getByKey(keyToFieldId, valueByFieldId, "grade")),
+                nullToEmpty(getByKey(keyToFieldId, valueByFieldId, "major")),
+                nullToEmpty(getByKey(keyToFieldId, valueByFieldId, "self_introduction")),
+                resume.getResumeScore() == null ? 0 : resume.getResumeScore()
+        );
+    }
+
+    /**
+     * 批量读取简历快照，避免导入时 N+1 查询。
+     */
+    public Map<Integer, ResumeSnapshot> readSnapshots(Collection<Resume> resumes, Integer cycleId) {
+        if (resumes == null || resumes.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<String, Integer> keyToFieldId = loadFieldIdMap(cycleId);
+        List<Integer> resumeIds = resumes.stream()
+                .map(Resume::getResumeId)
+                .filter(id -> id != null)
+                .distinct()
+                .toList();
+        if (resumeIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        LambdaQueryWrapper<club.boyuan.official.entity.ResumeFieldValue> wrapper = new LambdaQueryWrapper<>();
+        wrapper.in(club.boyuan.official.entity.ResumeFieldValue::getResumeId, resumeIds);
+        List<club.boyuan.official.entity.ResumeFieldValue> allValues = resumeFieldValueMapper.selectList(wrapper);
+
+        Map<Integer, Map<Integer, String>> valuesByResumeId = new HashMap<>();
+        for (club.boyuan.official.entity.ResumeFieldValue value : allValues) {
+            if (value.getResumeId() == null || value.getFieldId() == null) {
+                continue;
+            }
+            valuesByResumeId
+                    .computeIfAbsent(value.getResumeId(), k -> new HashMap<>())
+                    .putIfAbsent(value.getFieldId(), value.getFieldValue());
+        }
+
+        Map<Integer, ResumeSnapshot> result = new HashMap<>();
+        for (Resume resume : resumes) {
+            if (resume == null || resume.getResumeId() == null) {
+                continue;
+            }
+            Map<Integer, String> valueByFieldId = valuesByResumeId.getOrDefault(resume.getResumeId(), Map.of());
+            result.put(resume.getResumeId(), buildSnapshot(resume, keyToFieldId, valueByFieldId));
+        }
+        return result;
+    }
+
+    private ResumeSnapshot buildSnapshot(Resume resume,
+                                         Map<String, Integer> keyToFieldId,
+                                         Map<Integer, String> valueByFieldId) {
+        if (resume == null) {
+            return ResumeSnapshot.empty();
+        }
+        String firstDept = "";
+        String secondDept = "";
+        String deptRaw = getByKey(keyToFieldId, valueByFieldId, "expected_departments");
+        if (StringUtils.hasText(deptRaw)) {
+            List<String> depts = parseDepartments(deptRaw);
+            if (!depts.isEmpty()) {
+                firstDept = depts.get(0);
+            }
+            if (depts.size() > 1) {
+                secondDept = depts.get(1);
+            }
+        }
         return new ResumeSnapshot(
                 nullToEmpty(getByKey(keyToFieldId, valueByFieldId, "name")),
                 firstDept,

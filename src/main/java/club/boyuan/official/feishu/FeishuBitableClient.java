@@ -39,6 +39,13 @@ public class FeishuBitableClient {
         }
     }
 
+    /**
+     * 向指定多维表格批量新增行（仅 append，不更新已有 record_id）。
+     *
+     * @param tableUrl 飞书表格分享链接，解析出 appToken + tableId
+     * @param rows     每行是「列名 → 值」，见 {@link FeishuBitableColumns}
+     * @return 成功写入条数
+     */
     public int batchCreateRecords(String tableUrl, List<Map<String, Object>> rows) {
         if (rows == null || rows.isEmpty()) {
             return 0;
@@ -47,6 +54,7 @@ public class FeishuBitableClient {
         FeishuTableUrlParser.ParsedTable parsed = FeishuTableUrlParser.parse(tableUrl);
         String token = getTenantAccessToken();
 
+        // 飞书单次 batch_create 上限 500，按配置分批请求
         int imported = 0;
         int batchSize = Math.max(1, Math.min(feishuProperties.getBatchSize(), 500));
         for (int i = 0; i < rows.size(); i += batchSize) {
@@ -93,6 +101,7 @@ public class FeishuBitableClient {
         }
     }
 
+    /** 企业自建应用 tenant_access_token，内存缓存并在过期前 60s 刷新。 */
     private String getTenantAccessToken() {
         CachedToken current = cachedToken.get();
         if (current != null && current.valid()) {

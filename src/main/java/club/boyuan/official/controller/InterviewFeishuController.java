@@ -1,7 +1,8 @@
 package club.boyuan.official.controller;
 
+import club.boyuan.official.dto.FeishuSyncTaskStatusDTO;
+import club.boyuan.official.dto.FeishuSyncTaskSubmitDTO;
 import club.boyuan.official.dto.ImportFeishuRequestDTO;
-import club.boyuan.official.dto.ImportFeishuResponseDTO;
 import club.boyuan.official.dto.ResponseMessage;
 import club.boyuan.official.service.InterviewFeishuImportService;
 import jakarta.validation.Valid;
@@ -9,13 +10,21 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 面试安排与飞书多维表格同步。
+ * 飞书同步 HTTP 入口（仅两个接口）。
+ *
+ * <pre>
+ * POST /import              → InterviewFeishuImportService.submitImportTask
+ * GET  /import/tasks/{id}   → InterviewFeishuImportService.getImportTaskStatus（前端轮询）
+ * </pre>
+ * 实际写飞书不在本 Controller 线程，而在 MQ → FeishuSyncConsumer → FeishuImportExecutor。
  */
 @RestController
 @RequestMapping("/api/interview/feishu")
@@ -26,19 +35,26 @@ public class InterviewFeishuController {
     private final InterviewFeishuImportService feishuImportService;
 
     /**
-     * 将面试安排按「面试地点」分组导入对应飞书多维表格，按面试时间升序写入行。
-     * <p>
-     * 表格列名须预先创建并与 {@link club.boyuan.official.feishu.FeishuBitableColumns} 一致
-     * （姓名、意向部门、年级、专业、自我介绍、三类问题、面试评价、简历评分、预选、是否调剂、记录人）。
-     * 飞书表格 URL 配置在 {@code interview_slot.feishu_table_url}，或在请求体中传入 {@code feishuTableUrl}。
+     * 提交飞书导入任务：立即返回 taskId，实际导入由 MQ 消费者并行执行。
      */
     @PostMapping("/import")
     @PreAuthorize("hasAuthority('resume:audit')")
-    public ResponseEntity<ResponseMessage<ImportFeishuResponseDTO>> importSchedules(
+    public ResponseEntity<ResponseMessage<FeishuSyncTaskSubmitDTO>> submitImport(
             @Valid @RequestBody ImportFeishuRequestDTO request) {
-        log.info("飞书导入面试安排 cycleId={}, slotId={}, forceUpdate={}",
+        log.info("提交飞书导入任务 cycleId={}, slotId={}, forceUpdate={}",
                 request.getCycleId(), request.getSlotId(), request.getForceUpdate());
-        ImportFeishuResponseDTO result = feishuImportService.importSchedules(request);
+        FeishuSyncTaskSubmitDTO result = feishuImportService.submitImportTask(request);
         return ResponseEntity.ok(ResponseMessage.success(result));
+    }
+
+    /**
+     * 查询飞书导入任务进度与结果（轮询）。
+     */
+    @GetMapping("/import/tasks/{taskId}")
+    @PreAuthorize("hasAuthority('resume:audit')")
+    public ResponseEntity<ResponseMessage<FeishuSyncTaskStatusDTO>> getImportTask(
+            @PathVariable Long taskId) {
+        FeishuSyncTaskStatusDTO status = feishuImportService.getImportTaskStatus(taskId);
+        return ResponseEntity.ok(ResponseMessage.success(status));
     }
 }
