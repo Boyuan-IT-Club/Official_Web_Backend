@@ -119,6 +119,23 @@ jwt:
   secret: ${JWT_SECRET:}
   expiration: ${JWT_EXPIRATION:86400000}
 
+# 飞书开放平台（多维表格导入）
+feishu:
+  app-id: ${FEISHU_APP_ID:}
+  app-secret: ${FEISHU_APP_SECRET:}
+  api-base-url: ${FEISHU_API_BASE_URL:https://open.feishu.cn}
+  batch-size: ${FEISHU_BATCH_SIZE:100}
+  parallel-bucket-concurrency: ${FEISHU_PARALLEL_BUCKET_CONCURRENCY:3}
+  task-ttl-days: ${FEISHU_TASK_TTL_DAYS:7}
+  task-lock-ttl-hours: ${FEISHU_TASK_LOCK_TTL_HOURS:24}
+
+# 面试邮件通知（预约成功、定时提醒、录取/未录取）
+interview:
+  notification:
+    enabled: true
+    eve-reminder-cron: "0 0 12 * * ?"
+    day-reminder-cron: "0 0 8 * * ?"
+
 server:
   port: 8080
 

@@ -39,6 +39,10 @@ public class Resume {
     @TableField("status")
     private Integer status;
 
+    @Column(name = "resume_score", columnDefinition = "INT DEFAULT 0")
+    @TableField("resume_score")
+    private Integer resumeScore;
+
     @Column(name = "submitted_at")
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @TableField("submitted_at")
@@ -95,6 +99,14 @@ public class Resume {
 
     public void setStatus(Integer status) {
         this.status = status;
+    }
+
+    public Integer getResumeScore() {
+        return resumeScore;
+    }
+
+    public void setResumeScore(Integer resumeScore) {
+        this.resumeScore = resumeScore;
     }
 
     public LocalDateTime getSubmittedAt() {

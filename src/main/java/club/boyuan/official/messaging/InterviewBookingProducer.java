@@ -18,10 +18,4 @@ public class InterviewBookingProducer {
         log.info("预约落库消息已投递 requestId={}, userId={}, slotId={}",
                 message.getRequestId(), message.getUserId(), message.getSlotId());
     }
-
-    public void publishNotification(InterviewBookingNotificationMessage message) {
-        rabbitTemplate.convertAndSend(RabbitMQConfig.INTERVIEW_BOOKING_NOTIFICATION_QUEUE, message);
-        log.info("预约通知消息已投递 requestId={}, scheduleId={}",
-                message.getRequestId(), message.getScheduleId());
-    }
 }

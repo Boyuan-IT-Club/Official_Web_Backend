@@ -9,22 +9,21 @@ import club.boyuan.official.entity.User;
 import club.boyuan.official.mapper.InterviewResultMapper;
 import club.boyuan.official.service.IInterviewResultService;
 import club.boyuan.official.service.IUserService;
-import club.boyuan.official.utils.MessageUtils;
+import club.boyuan.official.service.InterviewNotificationService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.security.SecurityProperties;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Logger;
 
 /**
  * <p>
@@ -41,7 +40,7 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
     @Autowired
     private IUserService userService;
     @Autowired
-    private MessageUtils messageUtils;
+    private InterviewNotificationService interviewNotificationService;
     @Override
     public SendNotificationsResponseDTO sendNotifications(SendNotificationsRequestDTO requestDTO) {
         List<Integer> resultIds = requestDTO.getResultIds();
@@ -73,7 +72,7 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
                 Boolean sent = false;
                 switch (notificationType.toLowerCase()){
                     case "email":
-                        sent = sendEmailNotifaction(user,interviewResult,customMessage);
+                        sent = sendEmailNotification(interviewResult, customMessage);
                         break;
                     case "sms":
                         sent = sendSmsNotifaction(user,interviewResult,customMessage);
@@ -154,21 +153,19 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
         return false;
     }
 
-    private Boolean sendEmailNotifaction(User user, InterviewResult interviewResult, String customMessage) {
-        try{
-            String email = user.getEmail();
-            //判断邮箱状态
-            if(email == null || email.isEmpty()){
-                log.warn("用户{}的邮箱为空，无法发送邮件", user.getUsername());
+    private Boolean sendEmailNotification(InterviewResult interviewResult, String customMessage) {
+        try {
+            Integer decision = interviewResult.getDecision();
+            if (!StringUtils.hasText(customMessage)
+                    && (decision == null || (decision != 1 && decision != 2))) {
+                log.warn("结果 decision={} 无自定义正文且不支持自动邮件，resultId={}",
+                        decision, interviewResult.getResultId());
                 return false;
             }
-            //校验邮箱格式
-            messageUtils.validateEmail(email);
-            messageUtils.sendEmail(email, "博远信息技术社面试结果通知", customMessage);
-            log.info("用户{}的邮箱发送成功", user.getUsername());
+            interviewNotificationService.enqueueResultNotification(interviewResult.getResultId(), customMessage);
             return true;
-        }catch (Exception e){
-            log.error("用户{}的邮箱发送失败", user.getUsername(), e);
+        } catch (Exception e) {
+            log.error("投递结果通知失败 resultId={}", interviewResult.getResultId(), e);
             return false;
         }
     }
