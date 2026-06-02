@@ -4,7 +4,9 @@ info:
   description: |
     博远信息技术社官网后端面试模块的完整 API 接口文档。
 
-    **面试预约（与简历解耦）**：学生按 `InterviewSlot` 选择大时段（`interviewDate` + 24 小时制 `startTime`/`endTime`）；已约/共计用 `currentOccupied`/`maxCapacity`，约满时 `fullyBooked=true`。预约写入 `InterviewSchedule`；成功占坑后按 `(endTime - startTime) / maxCapacity` 均分并写入精确 `interviewTime`。默认开启秒杀模式（Lua 预扣 + MQ 异步落库），可通过 `POST /api/interview/booking/seckill` 或轮询 `GET /api/interview/booking/requests/{requestId}` 获取结果。`location` 可为 null。
+    **面试预约（与简历解耦）**：学生按 `InterviewSlot` 选择大时段（`interviewDate` + 24 小时制 `startTime`/`endTime`）；已约/共计用 `currentOccupied`/`maxCapacity`，约满时 `fullyBooked=true`。预约写入 `InterviewSchedule`；成功占坑后按 `(endTime - startTime) / maxCapacity` 均分并写入精确 `interviewTime`。默认开启秒杀模式（Lua 预扣 + Outbox/MQ 异步落库 + 消费端 Redis 幂等与失败回滚），推荐 `GET /api/interview/booking/requests/{requestId}/stream`（SSE）获取结果，轮询 `GET .../requests/{requestId}` 作兜底。`location` 可为 null。
+
+    **飞书多维表格导入（异步）**：`POST /api/interview/feishu/import` 立即返回 `taskId`（任务状态存 Redis，Outbox/MQ 异步执行）；推荐 `GET /api/interview/feishu/import/tasks/{taskId}/stream`（SSE）推送进度，轮询 `GET .../tasks/{taskId}` 作兜底。按面试地点分桶并行写入各 `feishu_table_url`。
   version: 1.0.0
 tags:
   - name: 登录注册页
@@ -6751,6 +6753,42 @@ paths:
           description: requestId 不存在或已过期（3409）
       security:
         - bearer: []
+  /api/interview/booking/requests/{requestId}/stream:
+    get:
+      summary: SSE 订阅秒杀预约结果
+      deprecated: false
+      description: |
+        `text/event-stream`，事件名 `status`，data 为 `InterviewBookingAsyncResult` JSON。
+        连接建立时先推送当前状态；终态 `SUCCESS`/`FAILED` 后服务端关闭连接。
+        多实例通过 Redis Pub/Sub 广播。
+      tags:
+        - 面试预约（学生）
+        - interview-booking
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          example: Bearer {{token}}
+          schema:
+            type: string
+            default: Bearer {{token}}
+      responses:
+        '200':
+          description: SSE 流
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '403':
+          description: 无权查看他人 requestId
+        '404':
+          description: requestId 不存在或已过期
+      security:
+        - bearer: []
   /api/interview/booking/my:
     get:
       summary: 查询本人在指定周期的面试预约
@@ -7334,21 +7372,24 @@ paths:
       security: []
   /api/interview/feishu/import:
     post:
-      summary: 将面试安排导入飞书多维表格
+      summary: 提交飞书导入任务（异步）
       deprecated: false
       description: |
-        按 **面试地点**（`interview_slot.location`）分组，将有效预约写入对应飞书多维表格（`feishu_table_url`）。
-        行按 **面试时间** 升序排列。
+        创建导入任务并投递 RabbitMQ，**立即返回** `taskId` 与初始状态 `PENDING`；实际写飞书在消费者中执行。
 
-        **从官网简历导入**：姓名、意向部门（第一/第二志愿合并，第二可为空）、年级、专业、自我介绍、简历评分。
-        **留空待面试官填写**：第一类问题、第二类问题、第三类问题、面试评价、预选、是否调剂、记录人。
+        请使用 `GET /api/interview/feishu/import/tasks/{taskId}` 轮询，直至终态：
+        `SUCCESS`（全部成功）、`PARTIAL_SUCCESS`（部分成功）、`FAILED`（失败）。
 
-        导入顺序仍按系统内 **面试时间** 升序排列，但表格中无「面试时间」列。
+        导入逻辑（与消费者内 `FeishuImportExecutor` 一致）：
+        - 按 **面试地点**（`interview_slot.location`）分桶，写入对应 `feishu_table_url`
+        - 桶内按 **面试时间** 升序；多地点桶 **并行** 调用飞书 `batch_create`
+        - 默认仅 `sync_status=0`；`forceUpdate=true` 时包含已同步记录（**追加行**，不删旧数据）
 
-        表格列名须预先创建，与后端常量一致（见 `FeishuBitableColumns`）。
-        鉴权使用飞书开放平台 **App ID / App Secret**（环境变量 `FEISHU_APP_ID`、`FEISHU_APP_SECRET`），请勿使用个人账号密码。
+        **从官网简历导入**：姓名、意向部门、年级、专业、自我介绍、简历评分等（见 `FeishuBitableColumns`）。
+        **留空待面试官填写**：三类问题、面试评价、预选、调剂、记录人等。
 
-        默认仅导入 `sync_status=0` 的记录；`forceUpdate=true` 时包含已同步记录（追加写入，不删旧行）。
+        鉴权：飞书开放平台 `FEISHU_APP_ID` / `FEISHU_APP_SECRET`。
+        权限：`resume:audit`。
       tags:
         - 面试关联飞书模块
         - feishu-integration
@@ -7368,18 +7409,96 @@ paths:
         required: true
       responses:
         '200':
-          description: 数据导入飞书成功
+          description: 任务已创建并已投递 MQ
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ImportFeishuResponse'
+                $ref: '#/components/schemas/ResponseMessageFeishuSyncTaskSubmit'
           headers: {}
+      security: []
+  /api/interview/feishu/import/tasks/{taskId}:
+    get:
+      summary: 查询飞书导入任务状态（轮询）
+      deprecated: false
+      description: |
+        读取 Redis 中的任务状态与汇总结果。`status=RUNNING` 时继续轮询；
+        终态后 `data.result` 含按地点分组的明细（`locations`）。
+
+        权限：`resume:audit`。
+      tags:
+        - 面试关联飞书模块
+        - feishu-integration
+      parameters:
+        - name: taskId
+          in: path
+          description: 提交导入时返回的任务 ID
+          required: true
+          schema:
+            type: integer
+            format: int64
+            example: 1
+        - name: Authorization
+          in: header
+          description: ''
+          example: Bearer {{token}}
+          schema:
+            type: string
+            default: Bearer {{token}}
+      responses:
+        '200':
+          description: 查询成功（任务存在）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseMessageFeishuSyncTaskStatus'
+          headers: {}
+        '400':
+          description: 任务不存在或已过期（Redis TTL 默认 7 天）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+          headers: {}
+      security: []
+  /api/interview/feishu/import/tasks/{taskId}/stream:
+    get:
+      summary: SSE 订阅飞书导入任务进度
+      deprecated: false
+      description: |
+        `text/event-stream`，事件名 `status`，data 为 `FeishuSyncTaskStatus` JSON。
+        终态 `SUCCESS` / `PARTIAL_SUCCESS` / `FAILED` 后连接关闭。权限 `resume:audit`。
+      tags:
+        - 面试关联飞书模块
+        - feishu-integration
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: Authorization
+          in: header
+          example: Bearer {{token}}
+          schema:
+            type: string
+            default: Bearer {{token}}
+      responses:
+        '200':
+          description: SSE 流
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '400':
+          description: 任务不存在或已过期
       security: []
   /api/interview/feishu/export-results:
     post:
       summary: 从飞书表格导出录取结果合并到官网
-      deprecated: false
-      description: 从飞书表格导出录取结果并合并到官网系统
+      deprecated: true
+      description: |
+        **当前后端未实现此接口**，保留文档条目仅供规划。请使用面试结果模块相关 API 维护录取数据。
       tags:
         - 面试关联飞书模块
         - feishu-integration
@@ -9535,10 +9654,160 @@ components:
           example: https://example.feishu.cn/table
         forceUpdate:
           type: boolean
-          description: 是否强制覆盖已有数据
+          description: 为 true 时包含已同步记录（sync_status=1），飞书侧追加行，不删除旧行
           example: false
+    FeishuSyncTaskSubmit:
+      type: object
+      description: 提交导入任务后的即时响应 data
+      required:
+        - taskId
+        - status
+      properties:
+        taskId:
+          type: integer
+          format: int64
+          description: 任务 ID，用于轮询
+          example: 42
+        status:
+          type: string
+          description: 初始一般为 PENDING
+          enum:
+            - PENDING
+          example: PENDING
+    FeishuSyncTaskStatusEnum:
+      type: string
+      description: 任务状态（Redis）
+      enum:
+        - PENDING
+        - RUNNING
+        - SUCCESS
+        - PARTIAL_SUCCESS
+        - FAILED
+    FeishuLocationImportResult:
+      type: object
+      description: 单个面试地点（桶）的导入结果
+      properties:
+        location:
+          type: string
+          description: 地点键（slot.location 或线上面试等）
+          example: 理科大楼 B201
+        tableUrl:
+          type: string
+          description: 使用的飞书多维表格 URL
+          example: https://example.feishu.cn/base/xxx?table=yyy
+        importedCount:
+          type: integer
+          description: 该地点成功写入条数
+          example: 5
+        failedCount:
+          type: integer
+          description: 该地点失败条数
+          example: 0
+        message:
+          type: string
+          description: 该地点导入说明
+          example: 导入成功
+    ImportFeishuImportResult:
+      type: object
+      description: 导入完成后的汇总结果（出现在任务 status 的 result 字段）
+      properties:
+        importedCount:
+          type: integer
+          description: 总导入成功条数
+          example: 10
+        failedCount:
+          type: integer
+          description: 总失败条数
+          example: 0
+        skippedCount:
+          type: integer
+          description: 跳过条数（缺 slot、未配置 feishu_table_url 等）
+          example: 0
+        locations:
+          type: array
+          description: 按面试地点分组的导入结果
+          items:
+            $ref: '#/components/schemas/FeishuLocationImportResult'
+    FeishuSyncTaskStatus:
+      type: object
+      description: 轮询接口返回的 data
+      required:
+        - taskId
+        - status
+      properties:
+        taskId:
+          type: integer
+          format: int64
+          example: 42
+        status:
+          $ref: '#/components/schemas/FeishuSyncTaskStatusEnum'
+        importedCount:
+          type: integer
+          description: 汇总成功条数（终态时有值）
+          example: 10
+        failedCount:
+          type: integer
+          description: 汇总失败条数
+          example: 0
+        skippedCount:
+          type: integer
+          description: 跳过条数
+          example: 1
+        errorMessage:
+          type: string
+          description: 失败时的错误信息
+          nullable: true
+        result:
+          $ref: '#/components/schemas/ImportFeishuImportResult'
+          description: 终态时的按地点明细；RUNNING 时可能为空
+        createdAt:
+          type: string
+          format: date-time
+          description: 任务创建时间
+        startedAt:
+          type: string
+          format: date-time
+          description: 开始执行时间
+          nullable: true
+        finishedAt:
+          type: string
+          format: date-time
+          description: 结束时间
+          nullable: true
+    ResponseMessageFeishuSyncTaskSubmit:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: 操作成功
+        data:
+          $ref: '#/components/schemas/FeishuSyncTaskSubmit'
+      required:
+        - code
+        - message
+        - data
+    ResponseMessageFeishuSyncTaskStatus:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: 操作成功
+        data:
+          $ref: '#/components/schemas/FeishuSyncTaskStatus'
+      required:
+        - code
+        - message
+        - data
     ImportFeishuResponse:
       type: object
+      description: 已废弃命名，请使用 ResponseMessageFeishuSyncTaskSubmit / ResponseMessageFeishuSyncTaskStatus
+      deprecated: true
       properties:
         code:
           type: integer
@@ -9549,37 +9818,7 @@ components:
           description: 响应消息
           example: 操作成功
         data:
-          type: object
-          properties:
-            importedCount:
-              type: integer
-              description: 总导入成功条数
-              example: 10
-            failedCount:
-              type: integer
-              description: 总失败条数
-              example: 0
-            skippedCount:
-              type: integer
-              description: 跳过条数（未配置表格 URL 等）
-              example: 0
-            locations:
-              type: array
-              description: 按面试地点分组的导入结果
-              items:
-                type: object
-                properties:
-                  location:
-                    type: string
-                    example: 理科大楼 B201
-                  tableUrl:
-                    type: string
-                  importedCount:
-                    type: integer
-                  failedCount:
-                    type: integer
-                  message:
-                    type: string
+          $ref: '#/components/schemas/ImportFeishuImportResult'
     ExportResultsRequest:
       type: object
       required:

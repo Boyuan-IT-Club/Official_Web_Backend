@@ -7,10 +7,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
-import org.springframework.web.client.RestClient;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -20,7 +18,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * 飞书多维表格 API 客户端（tenant_access_token + batch_create）。
+ * 飞书多维表格 API 客户端（鉴权缓存 + 分页读取 + 批量新增/更新，带重试与熔断）。
  */
 @Component
 @RequiredArgsConstructor
@@ -29,7 +27,7 @@ public class FeishuBitableClient {
 
     private final FeishuProperties feishuProperties;
     private final ObjectMapper objectMapper;
-    private final RestClient restClient = RestClient.create();
+    private final FeishuApiInvoker feishuApiInvoker;
 
     private final AtomicReference<CachedToken> cachedToken = new AtomicReference<>();
 
@@ -39,32 +37,124 @@ public class FeishuBitableClient {
         }
     }
 
+    public record RecordUpdate(String recordId, Map<String, Object> fields) {
+    }
+
     /**
-     * 向指定多维表格批量新增行（仅 append，不更新已有 record_id）。
-     *
-     * @param tableUrl 飞书表格分享链接，解析出 appToken + tableId
-     * @param rows     每行是「列名 → 值」，见 {@link FeishuBitableColumns}
-     * @return 成功写入条数
+     * 分页读取多维表格全部记录（用于从飞书导入平台）。
      */
-    public int batchCreateRecords(String tableUrl, List<Map<String, Object>> rows) {
+    public List<FeishuBitableRecord> listAllRecords(String tableUrl) {
+        ensureConfigured();
+        FeishuTableUrlParser.ParsedTable parsed = FeishuTableUrlParser.parse(tableUrl);
+        String token = getTenantAccessToken();
+
+        List<FeishuBitableRecord> all = new ArrayList<>();
+        String pageToken = null;
+        int pageSize = Math.max(1, Math.min(feishuProperties.getListPageSize(), 500));
+        do {
+            PageSlice slice = listRecordsPage(parsed, token, pageSize, pageToken);
+            all.addAll(slice.records());
+            pageToken = slice.hasMore() ? slice.nextPageToken() : null;
+        } while (pageToken != null);
+
+        return all;
+    }
+
+    private record PageSlice(List<FeishuBitableRecord> records, boolean hasMore, String nextPageToken) {
+    }
+
+    private PageSlice listRecordsPage(
+            FeishuTableUrlParser.ParsedTable parsed,
+            String token,
+            int pageSize,
+            String pageToken) {
+        StringBuilder url = new StringBuilder(feishuProperties.getApiBaseUrl())
+                .append("/open-apis/bitable/v1/apps/").append(parsed.appToken())
+                .append("/tables/").append(parsed.tableId())
+                .append("/records?page_size=").append(pageSize);
+        if (StringUtils.hasText(pageToken)) {
+            url.append("&page_token=").append(pageToken);
+        }
+
+        String responseBody = feishuApiInvoker.get(url.toString(), token);
+        return parseListPage(responseBody);
+    }
+
+    private PageSlice parseListPage(String responseBody) {
+        try {
+            JsonNode root = objectMapper.readTree(responseBody);
+            int code = root.path("code").asInt(-1);
+            if (code != 0) {
+                String msg = root.path("msg").asText("未知错误");
+                log.error("飞书 list records 失败 code={}, msg={}", code, msg);
+                throw new BusinessException(BusinessExceptionEnum.FEISHU_IMPORT_FAILED, msg);
+            }
+            JsonNode data = root.path("data");
+            List<FeishuBitableRecord> records = new ArrayList<>();
+            for (JsonNode item : data.path("items")) {
+                String recordId = item.path("record_id").asText(null);
+                JsonNode fields = item.path("fields");
+                records.add(FeishuBitableRecordParser.parse(recordId, fields));
+            }
+            boolean hasMore = data.path("has_more").asBoolean(false);
+            String next = data.path("page_token").asText(null);
+            return new PageSlice(records, hasMore, next);
+        } catch (BusinessException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            log.error("解析飞书 list records 响应失败", ex);
+            throw new BusinessException(BusinessExceptionEnum.FEISHU_IMPORT_FAILED, "飞书 API 响应解析失败");
+        }
+    }
+
+    /**
+     * 批量新增行，返回与入参顺序一致的 record_id 列表。
+     */
+    public FeishuBatchWriteResult batchCreateRecords(String tableUrl, List<Map<String, Object>> rows) {
         if (rows == null || rows.isEmpty()) {
-            return 0;
+            return new FeishuBatchWriteResult(0, List.of());
         }
         ensureConfigured();
         FeishuTableUrlParser.ParsedTable parsed = FeishuTableUrlParser.parse(tableUrl);
         String token = getTenantAccessToken();
 
-        // 飞书单次 batch_create 上限 500，按配置分批请求
-        int imported = 0;
+        List<String> allRecordIds = new ArrayList<>();
+        int total = 0;
         int batchSize = Math.max(1, Math.min(feishuProperties.getBatchSize(), 500));
         for (int i = 0; i < rows.size(); i += batchSize) {
             List<Map<String, Object>> chunk = rows.subList(i, Math.min(i + batchSize, rows.size()));
-            imported += doBatchCreate(parsed, token, chunk);
+            FeishuBatchWriteResult chunkResult = doBatchCreate(parsed, token, chunk);
+            total += chunkResult.count();
+            allRecordIds.addAll(chunkResult.recordIds());
         }
-        return imported;
+        return new FeishuBatchWriteResult(total, allRecordIds);
     }
 
-    private int doBatchCreate(FeishuTableUrlParser.ParsedTable parsed, String token, List<Map<String, Object>> chunk) {
+    /**
+     * 按 record_id 批量更新已有行。
+     */
+    public FeishuBatchWriteResult batchUpdateRecords(String tableUrl, List<RecordUpdate> updates) {
+        if (updates == null || updates.isEmpty()) {
+            return new FeishuBatchWriteResult(0, List.of());
+        }
+        ensureConfigured();
+        FeishuTableUrlParser.ParsedTable parsed = FeishuTableUrlParser.parse(tableUrl);
+        String token = getTenantAccessToken();
+
+        List<String> allRecordIds = new ArrayList<>();
+        int total = 0;
+        int batchSize = Math.max(1, Math.min(feishuProperties.getBatchSize(), 500));
+        for (int i = 0; i < updates.size(); i += batchSize) {
+            List<RecordUpdate> chunk = updates.subList(i, Math.min(i + batchSize, updates.size()));
+            FeishuBatchWriteResult chunkResult = doBatchUpdate(parsed, token, chunk);
+            total += chunkResult.count();
+            allRecordIds.addAll(chunkResult.recordIds());
+        }
+        return new FeishuBatchWriteResult(total, allRecordIds);
+    }
+
+    private FeishuBatchWriteResult doBatchCreate(
+            FeishuTableUrlParser.ParsedTable parsed, String token, List<Map<String, Object>> chunk) {
         List<Map<String, Object>> records = new ArrayList<>(chunk.size());
         for (Map<String, Object> fields : chunk) {
             records.add(Map.of("fields", fields));
@@ -76,32 +166,56 @@ public class FeishuBitableClient {
                 + "/tables/" + parsed.tableId()
                 + "/records/batch_create";
 
-        String responseBody = restClient.post()
-                .uri(url)
-                .contentType(MediaType.APPLICATION_JSON)
-                .header("Authorization", "Bearer " + token)
-                .body(body)
-                .retrieve()
-                .body(String.class);
+        String responseBody = feishuApiInvoker.postJson(url, token, body);
+        return parseWriteResponse(responseBody, chunk.size());
+    }
 
+    private FeishuBatchWriteResult doBatchUpdate(
+            FeishuTableUrlParser.ParsedTable parsed, String token, List<RecordUpdate> chunk) {
+        List<Map<String, Object>> records = new ArrayList<>(chunk.size());
+        for (RecordUpdate update : chunk) {
+            Map<String, Object> record = new HashMap<>();
+            record.put("record_id", update.recordId());
+            record.put("fields", update.fields());
+            records.add(record);
+        }
+        Map<String, Object> body = Map.of("records", records);
+
+        String url = feishuProperties.getApiBaseUrl()
+                + "/open-apis/bitable/v1/apps/" + parsed.appToken()
+                + "/tables/" + parsed.tableId()
+                + "/records/batch_update";
+
+        String responseBody = feishuApiInvoker.postJson(url, token, body);
+        return parseWriteResponse(responseBody, chunk.size());
+    }
+
+    private FeishuBatchWriteResult parseWriteResponse(String responseBody, int fallbackCount) {
         try {
             JsonNode root = objectMapper.readTree(responseBody);
             int code = root.path("code").asInt(-1);
             if (code != 0) {
                 String msg = root.path("msg").asText("未知错误");
-                log.error("飞书 batch_create 失败 code={}, msg={}, body={}", code, msg, responseBody);
+                log.error("飞书 batch 写入失败 code={}, msg={}", code, msg);
                 throw new BusinessException(BusinessExceptionEnum.FEISHU_IMPORT_FAILED, msg);
             }
-            return chunk.size();
+            List<String> recordIds = new ArrayList<>();
+            for (JsonNode item : root.path("data").path("records")) {
+                String id = item.path("record_id").asText(null);
+                if (StringUtils.hasText(id)) {
+                    recordIds.add(id);
+                }
+            }
+            int count = recordIds.isEmpty() ? fallbackCount : recordIds.size();
+            return new FeishuBatchWriteResult(count, recordIds);
         } catch (BusinessException ex) {
             throw ex;
         } catch (Exception ex) {
-            log.error("解析飞书 batch_create 响应失败", ex);
+            log.error("解析飞书 batch 写入响应失败", ex);
             throw new BusinessException(BusinessExceptionEnum.FEISHU_IMPORT_FAILED, "飞书 API 响应解析失败");
         }
     }
 
-    /** 企业自建应用 tenant_access_token，内存缓存并在过期前 60s 刷新。 */
     private String getTenantAccessToken() {
         CachedToken current = cachedToken.get();
         if (current != null && current.valid()) {
@@ -117,13 +231,7 @@ public class FeishuBitableClient {
                     "app_id", feishuProperties.getAppId(),
                     "app_secret", feishuProperties.getAppSecret());
 
-            String responseBody = restClient.post()
-                    .uri(url)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(body)
-                    .retrieve()
-                    .body(String.class);
-
+            String responseBody = feishuApiInvoker.postJson(url, null, body);
             try {
                 JsonNode root = objectMapper.readTree(responseBody);
                 if (root.path("code").asInt(-1) != 0) {

@@ -5,6 +5,7 @@ import club.boyuan.official.dto.ResumeDTO;
 import club.boyuan.official.dto.ResumeFieldValueDTO;
 import club.boyuan.official.dto.SimpleResumeFieldDTO;
 import club.boyuan.official.entity.Resume;
+import club.boyuan.official.entity.ResumeFieldDefinition;
 import club.boyuan.official.entity.ResumeFieldValue;
 import club.boyuan.official.exception.BusinessException;
 import club.boyuan.official.exception.BusinessExceptionEnum;
@@ -228,14 +229,12 @@ public class ResumeServiceImpl implements IResumeService {
                 dto.setCreatedAt(fieldValue.getCreatedAt());
                 dto.setUpdatedAt(fieldValue.getUpdatedAt());
                 
-                // 获取并设置字段标签
                 if (fieldValue.getFieldId() != null) {
-                    var fieldDefinition = fieldDefinitionService.getFieldDefinitionById(fieldValue.getFieldId());
-                    if (fieldDefinition != null) {
-                        dto.setFieldLabel(fieldDefinition.getFieldLabel());
-                    }
+                    ResumeFieldDefinition fieldDefinition =
+                            fieldDefinitionService.getFieldDefinitionById(fieldValue.getFieldId());
+                    applyFieldDefinitionToValueDto(dto, fieldDefinition);
                 }
-                
+
                 return dto;
             }).collect(Collectors.toList());
         } catch (Exception e) {
@@ -415,14 +414,11 @@ public class ResumeServiceImpl implements IResumeService {
             List<ResumeFieldValue> fieldValues = resumeFieldValueMapper.findByResumeId(resumeId);
             
             return fieldValues.stream().map(fieldValue -> {
-                String fieldLabel = "";
+                ResumeFieldDefinition fieldDefinition = null;
                 if (fieldValue.getFieldId() != null) {
-                    var fieldDefinition = fieldDefinitionService.getFieldDefinitionById(fieldValue.getFieldId());
-                    if (fieldDefinition != null) {
-                        fieldLabel = fieldDefinition.getFieldLabel();
-                    }
+                    fieldDefinition = fieldDefinitionService.getFieldDefinitionById(fieldValue.getFieldId());
                 }
-                return new SimpleResumeFieldDTO(fieldValue.getFieldId(), fieldLabel, fieldValue.getFieldValue());
+                return toSimpleResumeFieldDTO(fieldValue, fieldDefinition);
             }).collect(Collectors.toList());
         } catch (Exception e) {
             logger.error("获取简化版字段信息失败，简历ID: {}", resumeId, e);
@@ -430,6 +426,32 @@ public class ResumeServiceImpl implements IResumeService {
         }
     }
     
+    private void applyFieldDefinitionToValueDto(ResumeFieldValueDTO dto, ResumeFieldDefinition fieldDefinition) {
+        if (fieldDefinition == null) {
+            return;
+        }
+        dto.setFieldKey(fieldDefinition.getFieldKey());
+        dto.setFieldLabel(fieldDefinition.getFieldLabel());
+        dto.setFieldType(fieldDefinition.getFieldType());
+        dto.setPlaceholder(fieldDefinition.getPlaceholder());
+    }
+
+    private SimpleResumeFieldDTO toSimpleResumeFieldDTO(ResumeFieldValue fieldValue,
+                                                        ResumeFieldDefinition fieldDefinition) {
+        String fieldKey = fieldDefinition != null ? fieldDefinition.getFieldKey() : null;
+        String fieldLabel = fieldDefinition != null ? fieldDefinition.getFieldLabel() : "";
+        String fieldType = fieldDefinition != null ? fieldDefinition.getFieldType() : null;
+        String placeholder = fieldDefinition != null ? fieldDefinition.getPlaceholder() : null;
+        return new SimpleResumeFieldDTO(
+                fieldValue.getFieldId(),
+                fieldKey,
+                fieldLabel,
+                fieldType,
+                placeholder,
+                fieldValue.getFieldValue()
+        );
+    }
+
     @Override
     public List<Resume> getAllResumesByCycleId(Integer cycleId) {
         logger.debug("获取招募周期 {} 下的所有简历", cycleId);

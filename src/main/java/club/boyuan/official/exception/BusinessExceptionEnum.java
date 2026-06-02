@@ -119,6 +119,7 @@ public enum BusinessExceptionEnum {
     FEISHU_NO_SCHEDULES(3505, "没有可导入的面试安排"),
     FEISHU_IMPORT_FAILED(3506, "飞书导入失败"),
     FEISHU_SYNC_TASK_NOT_FOUND(3507, "飞书同步任务不存在"),
+    FEISHU_TABLE_EMPTY(3508, "飞书表格无数据"),
 
     // 活动相关异常 (7000-7099)
     ACTIVITY_NOT_FOUND(7001, "活动不存在"),

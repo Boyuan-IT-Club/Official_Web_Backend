@@ -55,6 +55,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authz -> authz
                         // 允许公开访问的接口
                         .requestMatchers("/api/auth/**", "/api/health", "/api/health/**", "/health").permitAll()
+                        .requestMatchers("/actuator/health", "/actuator/prometheus").permitAll()
                         .requestMatchers("/api/public/**").permitAll()
                         // 允许访问上传的文件
                         .requestMatchers("/uploads/**").permitAll()

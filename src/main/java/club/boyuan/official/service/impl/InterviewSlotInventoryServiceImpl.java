@@ -5,7 +5,7 @@ import club.boyuan.official.mapper.InterviewSlotMapper;
 import club.boyuan.official.service.InterviewSlotInventoryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,7 +25,8 @@ public class InterviewSlotInventoryServiceImpl implements InterviewSlotInventory
     private static final long REDIS_TTL_HOURS = 24;
 
     private final InterviewSlotMapper interviewSlotMapper;
-    private final RedisTemplate<String, Object> redisTemplate;
+    /** 与 Lua 脚本共用纯字符串，避免 Jackson 序列化导致 GET/tonumber 失败 */
+    private final StringRedisTemplate stringRedisTemplate;
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY, rollbackFor = Exception.class)
@@ -100,13 +101,14 @@ public class InterviewSlotInventoryServiceImpl implements InterviewSlotInventory
     public void syncRemainCacheFromDb(Integer slotId) {
         InterviewSlot slot = interviewSlotMapper.selectById(slotId);
         if (slot == null) {
-            redisTemplate.delete(redisKey(slotId));
+            stringRedisTemplate.delete(redisKey(slotId));
             return;
         }
         int max = slot.getMaxCapacity() == null ? 0 : slot.getMaxCapacity();
         int occupied = slot.getCurrentOccupied() == null ? 0 : slot.getCurrentOccupied();
         long remain = Math.max(0L, (long) max - occupied);
-        redisTemplate.opsForValue().set(redisKey(slotId), remain, REDIS_TTL_HOURS, TimeUnit.HOURS);
+        stringRedisTemplate.opsForValue().set(
+                redisKey(slotId), String.valueOf(remain), REDIS_TTL_HOURS, TimeUnit.HOURS);
     }
 
     private boolean doTryOccupy(Integer slotId) {
@@ -147,37 +149,30 @@ public class InterviewSlotInventoryServiceImpl implements InterviewSlotInventory
     }
 
     private boolean fastRejectByRedis(Integer slotId) {
-        Object cached = redisTemplate.opsForValue().get(redisKey(slotId));
+        String cached = stringRedisTemplate.opsForValue().get(redisKey(slotId));
         if (cached == null) {
             return false;
         }
-        return parseLong(cached) <= 0;
+        return Long.parseLong(cached) <= 0;
     }
 
     private void decrementRedisRemain(Integer slotId) {
         String key = redisKey(slotId);
-        if (Boolean.TRUE.equals(redisTemplate.hasKey(key))) {
-            Long remain = redisTemplate.opsForValue().decrement(key);
+        if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(key))) {
+            Long remain = stringRedisTemplate.opsForValue().decrement(key);
             if (remain != null && remain < 0) {
-                redisTemplate.opsForValue().set(key, 0L, REDIS_TTL_HOURS, TimeUnit.HOURS);
+                stringRedisTemplate.opsForValue().set(key, "0", REDIS_TTL_HOURS, TimeUnit.HOURS);
             }
         }
     }
 
     private void incrementRedisRemain(Integer slotId) {
         String key = redisKey(slotId);
-        if (Boolean.TRUE.equals(redisTemplate.hasKey(key))) {
-            redisTemplate.opsForValue().increment(key);
+        if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(key))) {
+            stringRedisTemplate.opsForValue().increment(key);
         } else {
             syncRemainCacheFromDb(slotId);
         }
-    }
-
-    private long parseLong(Object value) {
-        if (value instanceof Number number) {
-            return number.longValue();
-        }
-        return Long.parseLong(String.valueOf(value));
     }
 
     private String redisKey(Integer slotId) {

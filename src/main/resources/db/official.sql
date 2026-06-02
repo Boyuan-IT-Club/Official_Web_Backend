@@ -473,6 +473,7 @@ CREATE TABLE `interview_schedule` (
                                       `status` tinyint NOT NULL DEFAULT 0 COMMENT '状态：0（未安排），1(已安排), 2(已取消)',
                                       `notes` text NULL COMMENT '安排备注',
                                       `sync_status` tinyint NOT NULL DEFAULT 0 COMMENT '同步飞书状态：0(未同步), 1(已同步)',
+                                      `feishu_record_id` varchar(64) DEFAULT NULL COMMENT '飞书多维表格行 record_id',
                                       `notif_status` tinyint NOT NULL DEFAULT 0 COMMENT '通知状态：0(未通知), 1(已通知)',
                                       `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
                                       `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -575,5 +576,24 @@ CREATE TABLE `recruitment_tips` (
 -- ----------------------------
 -- Records of resume_field_value
 -- ----------------------------
+
+-- ========================================
+-- 事务发件箱（Transactional Outbox，与 Flyway V2 一致）
+-- ========================================
+CREATE TABLE IF NOT EXISTS message_outbox (
+    id              BIGINT       NOT NULL AUTO_INCREMENT,
+    aggregate_type  VARCHAR(64)  NOT NULL COMMENT '聚合类型，如 INTERVIEW_BOOKING',
+    aggregate_id    VARCHAR(128) NOT NULL COMMENT '业务幂等键，如预约请求号、飞书任务号',
+    event_type      VARCHAR(64)  NOT NULL COMMENT '事件类型',
+    payload         JSON         NOT NULL COMMENT '消息体 JSON',
+    status          TINYINT      NOT NULL DEFAULT 0 COMMENT '0=PENDING 1=SENT 2=FAILED',
+    retry_count     INT          NOT NULL DEFAULT 0,
+    last_error      VARCHAR(512) NULL,
+    created_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    sent_at         DATETIME     NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_outbox_event (aggregate_type, aggregate_id, event_type),
+    KEY idx_outbox_status_created (status, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='事务发件箱';
 
 SET FOREIGN_KEY_CHECKS = 1;

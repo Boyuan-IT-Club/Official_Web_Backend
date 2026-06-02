@@ -31,6 +31,14 @@ public class ResumeFieldDefinition {
     @TableField("field_label")
     private String fieldLabel;
 
+    @Column(name = "field_type")
+    @TableField("field_type")
+    private String fieldType;
+
+    @Column(name = "placeholder")
+    @TableField("placeholder")
+    private String placeholder;
+
     @Column(name = "is_required", columnDefinition = "BOOLEAN DEFAULT FALSE")
     @TableField("is_required")
     private Boolean isRequired;
@@ -94,6 +102,22 @@ public class ResumeFieldDefinition {
 
     public void setFieldLabel(String fieldLabel) {
         this.fieldLabel = fieldLabel;
+    }
+
+    public String getFieldType() {
+        return fieldType;
+    }
+
+    public void setFieldType(String fieldType) {
+        this.fieldType = fieldType;
+    }
+
+    public String getPlaceholder() {
+        return placeholder;
+    }
+
+    public void setPlaceholder(String placeholder) {
+        this.placeholder = placeholder;
     }
 
     public Boolean getIsRequired() {
