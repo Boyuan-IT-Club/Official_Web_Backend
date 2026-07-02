@@ -2,11 +2,15 @@ package club.boyuan.official.utils;
 
 import club.boyuan.official.exception.BusinessException;
 import club.boyuan.official.exception.BusinessExceptionEnum;
+import jakarta.mail.internet.MimeMessage;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Value;
+
+import java.nio.charset.StandardCharsets;
 import java.util.regex.Pattern;
 import club.boyuan.official.service.SmsService;
 
@@ -64,6 +68,27 @@ public class MessageUtils {
         message.setSubject(subject);
         message.setText(content);
         mailSender.send(message);
+    }
+
+    /**
+     * 发送 HTML 邮件。
+     * @param to 收件人邮箱
+     * @param subject 邮件主题
+     * @param htmlContent HTML 邮件内容
+     */
+    public void sendHtmlEmail(String to, String subject, String htmlContent) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(
+                    message, false, StandardCharsets.UTF_8.name());
+            helper.setFrom(fromEmail);
+            helper.setTo(to);
+            helper.setSubject(subject);
+            helper.setText(htmlContent, true);
+            mailSender.send(message);
+        } catch (Exception e) {
+            throw new RuntimeException("发送 HTML 邮件失败", e);
+        }
     }
 
     /**

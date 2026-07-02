@@ -4,7 +4,7 @@ info:
   description: |
     博远信息技术社官网后端面试模块的完整 API 接口文档。
 
-    **面试预约（与简历解耦）**：学生按 `InterviewSlot` 选择大时段（`interviewDate` + 24 小时制 `startTime`/`endTime`）；已约/共计用 `currentOccupied`/`maxCapacity`，约满时 `fullyBooked=true`。预约写入 `InterviewSchedule`；成功占坑后按 `(endTime - startTime) / maxCapacity` 均分并写入精确 `interviewTime`。默认开启秒杀模式（Lua 预扣 + Outbox/MQ 异步落库 + 消费端 Redis 幂等与失败回滚），推荐 `GET /api/interview/booking/requests/{requestId}/stream`（SSE）获取结果，轮询 `GET .../requests/{requestId}` 作兜底。`location` 可为 null。
+    **面试预约（按志愿部门分配）**：学生可提交一个或多个候选 `InterviewSlot` 大时段（`slotId` 或 `slotIds`）。后端读取简历 `expected_departments`，优先在候选时段中匹配 `interview_slot.dept_id` 对应的第一/第二志愿部门；匹配不到时使用共享/调剂场（`dept_id=null`）或候选时段中其它有容量的 slot。最终只生成一条 `InterviewSchedule`，并写入 `preferredSlotIds`、`assignedDeptId`、最终 `slotId` 和按容量均分后的精确 `interviewTime`。秒杀链路仍只支持单个 `slotId`。
 
     **飞书多维表格双向同步（异步）**：
     - **平台 → 飞书（PUSH）**：`POST /api/interview/feishu/import`，将 `interview_schedule`（`sync_status=0`）及关联简历字段写入飞书；按 `interview_slot.location` 分桶，并行写入各 `feishu_table_url`。
@@ -6679,7 +6679,7 @@ paths:
       description: |
         返回指定招募周期下可预约的面试时段列表，结构与实体 **`InterviewSlot`** 一致（`slotId`、`interviewDate`、`startTime`、`endTime` 等为 **24 小时制** `HH:mm:ss`）。
 
-        **已约/共计**：使用 `currentOccupied` / `maxCapacity`（如 `7/30`）。`fullyBooked=true` 或 `status=2` 时不可再预约。`location` 可为 null（线上面试等场景）。
+        **已约/共计**：使用 `currentOccupied` / `maxCapacity`（如 `7/30`）。`fullyBooked=true` 或 `status=2` 时不可再预约。`location` 可为 null（线上面试等场景）。`deptId` 表示该时段/面试场归属部门，null 表示共享/调剂场。
 
         列表查询时会预热 Redis 剩余名额缓存。预约成功后精确 `interviewTime` 在占坑时自动写入（均分大时段），无需单独切分接口。
       tags:
@@ -6719,14 +6719,20 @@ paths:
         - bearer: []
   /api/interview/booking:
     post:
-      summary: 预约某一面试时间段（创建或覆盖）
+      summary: 提交一个或多个候选面试时段（创建或覆盖）
       deprecated: false
       description: |
         同一用户在同一 `cycleId` 下仅保留一条有效预约（`uk_resume_cycle`）。
 
-        **同步模式**（`booking.seckill.enabled=false`）：DB 原子占坑后立即返回 `InterviewBooking`，含自动分配的 `interviewTime`。
+        请求可传单个 `slotId`（兼容旧格式），也可传 `slotIds` 数组提交多个候选时段。后端按简历志愿部门选择最终 slot：
+        1. 优先匹配候选 slot 中 `deptId` 等于第一志愿部门的时段；
+        2. 再匹配第二志愿等后续志愿；
+        3. 再匹配 `deptId=null` 的共享/调剂场；
+        4. 最后在候选时段中调剂到任意有容量的 slot。
 
-        **秒杀模式**（默认 `booking.seckill.enabled=true`）：Redis Lua 预扣 → MQ 异步落库 → 通常返回 **202** 及 `requestId`（`status=PENDING`），客户端轮询 `GET /api/interview/booking/requests/{requestId}`。若同 slot 已有效预约或幂等命中已完成记录，可返回 **200** 及完整 `InterviewBooking`。
+        **同步模式**（`booking.seckill.enabled=false`，或提交多个候选 `slotIds`）：DB 原子占坑后立即返回 `InterviewBooking`，含最终 `slotId`、`preferredSlotIds`、`assignedDeptId` 和自动分配的 `interviewTime`。
+
+        **秒杀模式**（默认 `booking.seckill.enabled=true`）：仅在提交单个 `slotId` 时生效。Redis Lua 预扣 → MQ 异步落库 → 通常返回 **202** 及 `requestId`（`status=PENDING`），客户端轮询 `GET /api/interview/booking/requests/{requestId}`。若同 slot 已有效预约或幂等命中已完成记录，可返回 **200** 及完整 `InterviewBooking`。
 
         精确 `interviewTime` = 大时段开始时间 + `(endTime-startTime)/maxCapacity × (占坑序号-1)`。
 
@@ -6782,10 +6788,10 @@ paths:
       summary: 秒杀预约（支持异步受理）
       deprecated: false
       description: |
-        与 `POST /api/interview/booking` 在秒杀开启时行为一致。通常走异步链路并返回 **202 Accepted**；
+        与 `POST /api/interview/booking` 在秒杀开启且只提交单个 `slotId` 时行为一致。通常走异步链路并返回 **202 Accepted**；
         若已存在同一时段有效预约或幂等命中已完成记录，可直接返回 **200** 及 `SUCCESS` 结果（`data.booking` 含预约详情）。
         流程：Lua 预扣 Redis 库存 → 写 PENDING 状态 → RabbitMQ 落库 → 异步邮件通知（大时段信息）。
-        支持请求头 `Idempotency-Key`。
+        支持请求头 `Idempotency-Key`。本接口不支持多个候选 `slotIds`；多候选预约请使用 `POST /api/interview/booking`。
       tags:
         - 面试预约（学生）
         - interview-booking
@@ -6932,10 +6938,10 @@ paths:
         - bearer: []
   /api/interview/booking/{bookingId}:
     put:
-      summary: 改期（更换已预约的时间段）
+      summary: 改期（重新提交一个或多个候选时间段）
       deprecated: false
       description: |
-        路径参数 `bookingId` 即 `interview_schedule.schedule_id`。改期时更换为另一条未约满的 `slotId`，并**重新分配**精确 `interviewTime`（按新时段容量均分）。
+        路径参数 `bookingId` 即 `interview_schedule.schedule_id`。改期时可提交单个 `slotId` 或多个候选 `slotIds`，后端重新按志愿部门选择最终 slot，并**重新分配**精确 `interviewTime`（按新时段容量均分）。
       tags:
         - 面试预约（学生）
         - interview-booking
@@ -8989,6 +8995,20 @@ components:
           type: integer
           description: 外键，关联 interview_slot.slot_id
           example: 55
+        preferredSlotIds:
+          type: array
+          description: 学生提交的候选面试时段 ID 列表；后端最终只会占用其中一个 slot
+          items:
+            type: integer
+          example:
+            - 55
+            - 56
+            - 60
+        assignedDeptId:
+          type: integer
+          nullable: true
+          description: 本次最终安排按哪个志愿部门分配；为空表示未匹配到明确部门或仅按共享场调剂
+          example: 3
         interviewTime:
           type: string
           format: date-time
@@ -9029,7 +9049,13 @@ components:
       type: object
       required:
         - cycleId
-        - slotId
+      anyOf:
+        - required:
+            - slotId
+        - required:
+            - slotIds
+      description: |
+        `slotId` 与 `slotIds` 二选一。只传 `slotId` 为旧格式；传 `slotIds` 可提交多个候选时段，后端按简历志愿部门分配最终面试时间地点。
       properties:
         cycleId:
           type: integer
@@ -9037,8 +9063,19 @@ components:
           example: 2
         slotId:
           type: integer
-          description: 选中的面试时段 ID，对应 interview_slot.slot_id
+          nullable: true
+          description: 单个候选面试时段 ID，对应 interview_slot.slot_id；秒杀预约只支持该字段
           example: 55
+        slotIds:
+          type: array
+          nullable: true
+          description: 多个候选面试时段 ID；普通预约接口会按志愿部门从中选择最终 slot
+          items:
+            type: integer
+          example:
+            - 55
+            - 56
+            - 60
         notes:
           type: string
           nullable: true
@@ -9046,13 +9083,29 @@ components:
 
     UpdateInterviewBookingRequest:
       type: object
-      required:
-        - slotId
+      anyOf:
+        - required:
+            - slotId
+        - required:
+            - slotIds
+      description: |
+        `slotId` 与 `slotIds` 二选一。传多个 `slotIds` 时，后端重新按志愿部门分配最终 slot。
       properties:
         slotId:
           type: integer
-          description: 改约到的新 slot_id（须未约满）
+          nullable: true
+          description: 改约到的单个候选 slot_id
           example: 56
+        slotIds:
+          type: array
+          nullable: true
+          description: 改期候选 slot_id 列表
+          items:
+            type: integer
+          example:
+            - 56
+            - 60
+            - 61
         notes:
           type: string
           nullable: true
@@ -9085,6 +9138,11 @@ components:
               type: string
               nullable: true
               description: 来自 InterviewSlot.location，可为空
+            slotDeptId:
+              type: integer
+              nullable: true
+              description: 来自 InterviewSlot.deptId；为空表示共享/调剂面试场
+              example: 3
             interviewType:
               type: integer
               description: 来自 InterviewSlot，1-线下 2-线上
@@ -9300,6 +9358,11 @@ components:
           nullable: true
           description: 面试地点（可为空，如纯线上面试）
           example: 计算机楼301室
+        deptId:
+          type: integer
+          nullable: true
+          description: 归属部门 ID；为空表示共享/调剂面试场
+          example: 3
         interviewType:
           type: integer
           description: 面试类型：1-线下面试，2-线上面试
@@ -9341,6 +9404,11 @@ components:
           nullable: true
           description: 面试地点（可选）
           example: 计算机楼401室
+        deptId:
+          type: integer
+          nullable: true
+          description: 归属部门 ID；传 null 或不传表示共享/调剂面试场
+          example: 3
         interviewType:
           type: integer
           description: 面试类型：1-线下面试，2-线上面试
@@ -9413,6 +9481,11 @@ components:
           nullable: true
           description: 面试地点（可为空，如纯线上面试）
           example: 计算机楼301室
+        deptId:
+          type: integer
+          nullable: true
+          description: 归属部门 ID；为空表示共享/调剂面试场
+          example: 3
         interviewType:
           type: integer
           description: 面试类型：1-线下面试，2-线上面试

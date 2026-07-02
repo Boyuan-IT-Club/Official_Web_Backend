@@ -19,6 +19,11 @@ public class UpdateInterviewSlotDTO {
 
     private String location;
 
+    /**
+     * 该面试场归属部门；为空表示共享/调剂面试场。
+     */
+    private Integer deptId;
+
     private Integer interviewType; // 1-线下面试，2-线上面试
 
     private String meetingLink; // 会议链接，线上面试用

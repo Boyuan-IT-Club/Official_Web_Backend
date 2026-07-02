@@ -64,6 +64,8 @@ public class InterviewBookingAsyncPersistenceService {
                 return null;
             }
             schedule.setSlotId(message.getSlotId())
+                    .setPreferredSlotIds(singleSlotJson(message.getSlotId()))
+                    .setAssignedDeptId(slotAfterOccupy.getDeptId())
                     .setInterviewTime(fineInterviewTime)
                     .setStatus(SCHEDULE_STATUS_ACTIVE)
                     .setNotes(message.getNotes())
@@ -75,6 +77,8 @@ public class InterviewBookingAsyncPersistenceService {
                     .setResumeId(message.getResumeId())
                     .setCycleId(message.getCycleId())
                     .setSlotId(message.getSlotId())
+                    .setPreferredSlotIds(singleSlotJson(message.getSlotId()))
+                    .setAssignedDeptId(slotAfterOccupy.getDeptId())
                     .setInterviewTime(fineInterviewTime)
                     .setStatus(SCHEDULE_STATUS_ACTIVE)
                     .setNotes(message.getNotes())
@@ -160,6 +164,8 @@ public class InterviewBookingAsyncPersistenceService {
                     continue;
                 }
                 schedule.setSlotId(slotId)
+                        .setPreferredSlotIds(singleSlotJson(slotId))
+                        .setAssignedDeptId(slot.getDeptId())
                         .setInterviewTime(fineInterviewTime)
                         .setStatus(SCHEDULE_STATUS_ACTIVE)
                         .setNotes(message.getNotes())
@@ -171,6 +177,8 @@ public class InterviewBookingAsyncPersistenceService {
                         .setResumeId(message.getResumeId())
                         .setCycleId(message.getCycleId())
                         .setSlotId(slotId)
+                        .setPreferredSlotIds(singleSlotJson(slotId))
+                        .setAssignedDeptId(slot.getDeptId())
                         .setInterviewTime(fineInterviewTime)
                         .setStatus(SCHEDULE_STATUS_ACTIVE)
                         .setNotes(message.getNotes())
@@ -207,5 +215,9 @@ public class InterviewBookingAsyncPersistenceService {
         }
         log.info("批量落库成功 slotId={}, 批量大小={}, 成功={}", slotId, messages.size(), pendingByRequestId.size());
         return result;
+    }
+
+    private String singleSlotJson(Integer slotId) {
+        return slotId == null ? "[]" : "[" + slotId + "]";
     }
 }

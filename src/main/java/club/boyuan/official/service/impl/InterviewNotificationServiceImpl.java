@@ -152,7 +152,7 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
         InterviewBookingDTO booking = InterviewBookingDTO.from(schedule, slot);
 
         String subject = InterviewNotificationEmailBuilder.subject(type);
-        String body = InterviewNotificationEmailBuilder.body(type, name, booking, null);
+        String body = InterviewNotificationEmailBuilder.htmlBody(type, name, booking, null);
         sendAndLog(type, scheduleId, null, email, subject, body, schedule, message.getRequestId());
     }
 
@@ -205,8 +205,8 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
                 ? InterviewNotificationEmailBuilder.subject(effectiveType)
                 : "【博远信息技术社】面试结果通知";
         String body = templated
-                ? InterviewNotificationEmailBuilder.body(effectiveType, name, booking, departmentName)
-                : message.getCustomBody();
+                ? InterviewNotificationEmailBuilder.htmlBody(effectiveType, name, booking, departmentName)
+                : InterviewNotificationEmailBuilder.customHtmlBody(name, message.getCustomBody(), booking);
 
         sendAndLog(effectiveType, result.getScheduleId(), resultId, email, subject, body, schedule, null);
     }
@@ -252,7 +252,7 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
             return;
         }
         try {
-            messageUtils.sendEmail(email, subject, body);
+            messageUtils.sendHtmlEmail(email, subject, body);
             if (schedule != null && type == InterviewNotificationType.BOOKING_SUCCESS) {
                 schedule.setNotifStatus(1);
                 interviewScheduleService.updateById(schedule);

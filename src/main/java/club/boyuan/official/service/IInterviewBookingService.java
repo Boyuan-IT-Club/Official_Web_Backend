@@ -7,7 +7,8 @@ import java.util.List;
 /**
  * 学生面试时段预约服务。
  * <p>
- * 预约粒度为 {@code interview_slot} 大时段；成功预约后按容量均分写入 {@code interview_schedule.interview_time}。
+ * 学生可提交一个或多个 {@code interview_slot} 大时段；服务端按志愿部门选择最终 slot，
+ * 成功预约后按最终 slot 容量均分写入 {@code interview_schedule.interview_time}。
  */
 public interface IInterviewBookingService {
 
@@ -19,14 +20,14 @@ public interface IInterviewBookingService {
     List<InterviewBookableSlotDTO> listBookableSlots(Integer userId, Integer cycleId, boolean resumeSubmittedOnly);
 
     /**
-     * 创建或更新预约：无记录则新建；有记录则改约或复用已取消记录。
+     * 创建或更新预约：无记录则新建；有记录则按新的候选时段重新分配或复用已取消记录。
      */
     InterviewBookingDTO createOrUpdateBooking(Integer userId, CreateInterviewBookingRequestDTO request);
 
     /** 查询用户在某周期的有效预约，无则返回 null */
     InterviewBookingDTO getMyBooking(Integer userId, Integer cycleId);
 
-    /** 改期到新的 slotId（bookingId = scheduleId） */
+    /** 改期到新的一个或多个候选 slot（bookingId = scheduleId） */
     InterviewBookingDTO rescheduleBooking(Integer userId, Integer scheduleId, UpdateInterviewBookingRequestDTO request);
 
     /** 取消预约并释放 slot 占用 */

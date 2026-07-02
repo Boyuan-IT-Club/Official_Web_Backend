@@ -9,6 +9,7 @@
                start_time,
                end_time,
                location,
+               dept_id,
                interview_type,
                meeting_link,
                max_capacity,

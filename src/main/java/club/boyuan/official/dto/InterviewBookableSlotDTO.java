@@ -24,6 +24,7 @@ public class InterviewBookableSlotDTO {
     private LocalTime endTime;
 
     private String location;
+    private Integer deptId;
     private Integer interviewType;
     private String meetingLink;
     private Integer maxCapacity;
@@ -47,6 +48,7 @@ public class InterviewBookableSlotDTO {
         dto.setStartTime(slot.getStartTime());
         dto.setEndTime(slot.getEndTime());
         dto.setLocation(slot.getLocation());
+        dto.setDeptId(slot.getDeptId());
         dto.setInterviewType(slot.getInterviewType());
         dto.setMeetingLink(slot.getMeetingLink());
         dto.setMaxCapacity(slot.getMaxCapacity());
