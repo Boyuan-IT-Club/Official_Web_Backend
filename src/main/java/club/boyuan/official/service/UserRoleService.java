@@ -51,6 +51,11 @@ public interface UserRoleService extends IService<UserRole> {
      * @throws BusinessException 业务异常
      */
     List<Role> getRolesByUserId(int userId) throws BusinessException;
+
+    /**
+     * 登录鉴权专用：加载用户角色，跳过「用户是否存在」的额外查询（调用方已持有 User）。
+     */
+    List<Role> getRolesByUserIdForAuth(int userId);
     
     /**
      * 获取拥有指定角色的用户列表

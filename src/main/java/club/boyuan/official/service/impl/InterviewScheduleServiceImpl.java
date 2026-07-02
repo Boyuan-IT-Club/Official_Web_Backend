@@ -253,22 +253,17 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
 
             boolean assigned = false;
             for (String preferredTime : candidate.preferredTimes) {
-                InterviewSlot selectedSlot = null;
-                for (InterviewSlot slot : availableSlots) {
-                    int remaining = remainingCapacityBySlotId.getOrDefault(slot.getSlotId(), 0);
-                    if (remaining <= 0) {
-                        continue;
-                    }
-                    if (isPreferredTimeMatchSlot(slot, preferredTime, sortedInterviewDates)) {
-                        selectedSlot = slot;
-                        break; // availableSlots 默认已按时间正序
-                    }
-                }
-
-                if (selectedSlot == null) {
+                SlotSelection selection = selectSlotForCandidate(
+                        preferredTime,
+                        candidate.preferredDepartments,
+                        availableSlots,
+                        sortedInterviewDates,
+                        remainingCapacityBySlotId);
+                if (selection == null) {
                     continue;
                 }
 
+                InterviewSlot selectedSlot = selection.slot();
                 Integer slotId = selectedSlot.getSlotId();
                 int remaining = remainingCapacityBySlotId.getOrDefault(slotId, 0);
                 if (remaining <= 0) {
@@ -294,22 +289,28 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
                 detail.setInterviewTime(interviewDateTime);
                 detail.setLocation(location);
                 detail.setPeriod(period);
-                detail.setDepartment(candidate.firstDepartment);
+                detail.setDepartment(selection.assignedDepartment());
                 detail.setClassroom(location);
                 detail.setPreferredDepartments(getFormattedPreferredDepartments(user.getUserId(), userPreferredDepartments));
                 detail.setPreferredTimes(String.join(", ", candidate.preferredTimes));
                 assignmentDetails.add(detail);
 
+                String notePrefix = selection.adjusted() ? "自动分配(调剂)" : "自动分配";
                 InterviewSchedule schedule = new InterviewSchedule()
                         .setResumeId(resume.getResumeId())
                         .setCycleId(resume.getCycleId())
                         .setSlotId(slotId)
                         .setInterviewTime(interviewDateTime)
                         .setStatus(1)
-                        .setNotes("自动分配 - " + period + " - " + location)
+                        .setNotes(notePrefix + " - " + period + " - " + location)
                         .setSyncStatus(0)
                         .setNotifStatus(0);
                 schedulesToSave.add(schedule);
+
+                if (selection.adjusted()) {
+                    log.info("用户 {} 志愿部门无法满足，已调剂至 {} ({})",
+                            user.getUsername(), location, selection.assignedDepartment());
+                }
 
                 assigned = true;
                 break;
@@ -378,6 +379,108 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
         response.setAssignmentTime(LocalDateTime.now());
 
         return response;
+    }
+
+    /**
+     * 为候选人选择面试时段：优先匹配志愿部门对应的面试场，无法满足时再调剂到其他地点。
+     */
+    private SlotSelection selectSlotForCandidate(
+            String preferredTime,
+            List<String> preferredDepartments,
+            List<InterviewSlot> availableSlots,
+            List<LocalDate> sortedInterviewDates,
+            Map<Integer, Integer> remainingCapacityBySlotId) {
+        if (preferredTime == null || preferredTime.isBlank()) {
+            return null;
+        }
+
+        // 第一、第二志愿部门优先
+        if (preferredDepartments != null) {
+            for (String department : preferredDepartments) {
+                if (department == null || department.isBlank()) {
+                    continue;
+                }
+                InterviewSlot slot = findFirstAvailableSlot(
+                        preferredTime, department, true, availableSlots, sortedInterviewDates, remainingCapacityBySlotId);
+                if (slot != null) {
+                    return new SlotSelection(slot, department.trim(), false);
+                }
+            }
+        }
+
+        // 调剂：时间匹配即可，地点不限
+        InterviewSlot fallbackSlot = findFirstAvailableSlot(
+                preferredTime, null, false, availableSlots, sortedInterviewDates, remainingCapacityBySlotId);
+        if (fallbackSlot == null) {
+            return null;
+        }
+        String assignedDept = resolveDepartmentFromSlotLocation(fallbackSlot.getLocation());
+        return new SlotSelection(fallbackSlot, assignedDept, true);
+    }
+
+    private InterviewSlot findFirstAvailableSlot(
+            String preferredTime,
+            String department,
+            boolean requireDepartmentMatch,
+            List<InterviewSlot> availableSlots,
+            List<LocalDate> sortedInterviewDates,
+            Map<Integer, Integer> remainingCapacityBySlotId) {
+        for (InterviewSlot slot : availableSlots) {
+            int remaining = remainingCapacityBySlotId.getOrDefault(slot.getSlotId(), 0);
+            if (remaining <= 0) {
+                continue;
+            }
+            if (!isPreferredTimeMatchSlot(slot, preferredTime, sortedInterviewDates)) {
+                continue;
+            }
+            if (requireDepartmentMatch && !slotMatchesDepartment(slot, department)) {
+                continue;
+            }
+            return slot;
+        }
+        return null;
+    }
+
+    /**
+     * 判断面试地点是否对应某志愿部门（如「技术部面试场」↔「技术部」）。
+     */
+    private boolean slotMatchesDepartment(InterviewSlot slot, String department) {
+        if (slot == null || department == null || department.isBlank()) {
+            return false;
+        }
+        String location = slot.getLocation();
+        if (location == null || location.isBlank()) {
+            return false;
+        }
+        String dept = department.trim();
+        String loc = location.trim();
+        if (loc.contains(dept)) {
+            return true;
+        }
+        // 兼容「媒体部」↔「综合媒体面试场」等：去掉「部」后做子串匹配
+        if (dept.endsWith("部") && dept.length() > 1) {
+            String deptCore = dept.substring(0, dept.length() - 1);
+            return loc.contains(deptCore);
+        }
+        return false;
+    }
+
+    /**
+     * 从面试地点反推部门名（如「技术部面试场」→「技术部」）。
+     */
+    private String resolveDepartmentFromSlotLocation(String location) {
+        if (location == null || location.isBlank()) {
+            return "未知部门";
+        }
+        String loc = location.trim();
+        int idx = loc.indexOf("面试场");
+        if (idx > 0) {
+            return loc.substring(0, idx);
+        }
+        return loc;
+    }
+
+    private record SlotSelection(InterviewSlot slot, String assignedDepartment, boolean adjusted) {
     }
 
     /**

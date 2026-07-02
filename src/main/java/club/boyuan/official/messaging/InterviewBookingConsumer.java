@@ -15,6 +15,9 @@ import org.springframework.stereotype.Component;
 import club.boyuan.official.seckill.InterviewBookingLuaInventoryService;
 import club.boyuan.official.seckill.InterviewBookingRedisKeys;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -22,6 +25,9 @@ import java.util.concurrent.TimeUnit;
  * <p>幂等：{@code processed:{requestId}} Redis SETNX，重复消息直接跳过。
  * 失败：删除 processed 标记并调用 {@link InterviewBookingSeckillService#markRequestFailed}，
  * 内部通过 {@code rollback_remain.lua} 回滚库存，避免超卖。
+ * <p>批量消费（最多100条/200ms，见 {@code bookingBatchContainerFactory}）：把同一批消息交给
+ * {@link InterviewBookingAsyncPersistenceService#persistBatch} 在一次事务里完成，降低秒杀高峰期
+ * interview_slot 行锁的排队等待；幂等校验与成功/失败回写仍按消息逐条处理，语义与单条消费一致。
  */
 @Slf4j
 @Component
@@ -34,45 +40,59 @@ public class InterviewBookingConsumer {
     private final InterviewNotificationService interviewNotificationService;
     private final StringRedisTemplate stringRedisTemplate;
 
-    @RabbitListener(queues = RabbitMQConfig.INTERVIEW_BOOKING_QUEUE)
-    public void handlePersist(InterviewBookingMessage message) {
-        if (message == null || message.getRequestId() == null) {
-            log.warn("无效预约落库消息，已忽略");
+    @RabbitListener(queues = RabbitMQConfig.INTERVIEW_BOOKING_QUEUE, containerFactory = "bookingBatchContainerFactory")
+    public void handlePersist(List<InterviewBookingMessage> messages) {
+        if (messages == null || messages.isEmpty()) {
             return;
         }
 
-        String processedKey = InterviewBookingRedisKeys.processed(message.getRequestId());
-        Boolean first = stringRedisTemplate.opsForValue().setIfAbsent(processedKey, "1", 24, TimeUnit.HOURS);
-        if (Boolean.FALSE.equals(first)) {
-            log.info("预约消息已处理过，跳过 requestId={}", message.getRequestId());
+        List<InterviewBookingMessage> toProcess = new ArrayList<>(messages.size());
+        for (InterviewBookingMessage message : messages) {
+            if (message == null || message.getRequestId() == null) {
+                log.warn("无效预约落库消息，已忽略");
+                continue;
+            }
+            String processedKey = InterviewBookingRedisKeys.processed(message.getRequestId());
+            Boolean first = stringRedisTemplate.opsForValue().setIfAbsent(processedKey, "1", 24, TimeUnit.HOURS);
+            if (Boolean.FALSE.equals(first)) {
+                log.info("预约消息已处理过，跳过 requestId={}", message.getRequestId());
+                continue;
+            }
+            toProcess.add(message);
+        }
+        if (toProcess.isEmpty()) {
             return;
         }
 
         try {
-            InterviewBookingDTO booking = persistenceService.persist(message);
-            if (booking == null) {
-                stringRedisTemplate.delete(processedKey);
+            Map<String, InterviewBookingDTO> results = persistenceService.persistBatch(toProcess);
+            for (InterviewBookingMessage message : toProcess) {
+                InterviewBookingDTO booking = results.get(message.getRequestId());
+                if (booking == null) {
+                    stringRedisTemplate.delete(InterviewBookingRedisKeys.processed(message.getRequestId()));
+                    seckillService.markRequestFailed(
+                            message.getRequestId(),
+                            "名额已满或落库失败",
+                            message.getSlotId(),
+                            message.getUserId(),
+                            message.getCycleId());
+                    continue;
+                }
+                seckillService.markRequestSuccess(message.getRequestId(), booking);
+                luaInventoryService.clearUserCycleLock(message.getUserId(), message.getCycleId());
+                interviewNotificationService.enqueueBookingSuccess(booking.getScheduleId(), message.getRequestId());
+            }
+        } catch (Exception e) {
+            log.error("批量预约落库异常，批量大小={}", toProcess.size(), e);
+            for (InterviewBookingMessage message : toProcess) {
+                stringRedisTemplate.delete(InterviewBookingRedisKeys.processed(message.getRequestId()));
                 seckillService.markRequestFailed(
                         message.getRequestId(),
-                        "名额已满或落库失败",
+                        "系统繁忙，请稍后重试",
                         message.getSlotId(),
                         message.getUserId(),
                         message.getCycleId());
-                return;
             }
-
-            seckillService.markRequestSuccess(message.getRequestId(), booking);
-            luaInventoryService.clearUserCycleLock(message.getUserId(), message.getCycleId());
-            interviewNotificationService.enqueueBookingSuccess(booking.getScheduleId(), message.getRequestId());
-        } catch (Exception e) {
-            log.error("预约落库异常 requestId={}", message.getRequestId(), e);
-            stringRedisTemplate.delete(processedKey);
-            seckillService.markRequestFailed(
-                    message.getRequestId(),
-                    "系统繁忙，请稍后重试",
-                    message.getSlotId(),
-                    message.getUserId(),
-                    message.getCycleId());
         }
     }
 }

@@ -16,6 +16,8 @@ public class EmailVerificationMessage implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
+    /** 消息唯一 ID，用于消费幂等 */
+    private String messageId;
     private String email;
     private String code;
 }

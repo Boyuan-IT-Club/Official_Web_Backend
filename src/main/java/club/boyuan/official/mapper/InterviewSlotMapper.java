@@ -22,6 +22,12 @@ public interface InterviewSlotMapper extends BaseMapper<InterviewSlot> {
      */
     int occupyOneIfAvailable(@Param("slotId") Integer slotId);
 
+    /**
+     * 批量占用 {@code delta} 个名额（调用方需已通过 {@link #selectByIdForUpdate} 锁住该行并确认余量充足）。
+     * @return 影响行数，1 表示成功
+     */
+    int occupyBatch(@Param("slotId") Integer slotId, @Param("delta") int delta);
+
     /** 释放 1 个名额（不低于 0），并刷新 status */
     int releaseOne(@Param("slotId") Integer slotId);
 }

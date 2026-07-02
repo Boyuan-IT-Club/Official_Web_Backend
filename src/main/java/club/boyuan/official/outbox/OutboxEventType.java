@@ -6,5 +6,7 @@ package club.boyuan.official.outbox;
 public enum OutboxEventType {
 
     INTERVIEW_BOOKING_PERSIST,
-    FEISHU_SYNC
+    FEISHU_SYNC,
+    INTERVIEW_NOTIFICATION,
+    EMAIL_VERIFICATION
 }

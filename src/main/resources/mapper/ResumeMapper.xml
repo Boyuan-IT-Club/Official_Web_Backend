@@ -7,11 +7,59 @@
         <result property="userId" column="user_id"/>
         <result property="cycleId" column="cycle_id"/>
         <result property="status" column="status"/>
+        <result property="resumeScore" column="resume_score"/>
+        <result property="submittedAt" column="submitted_at"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
     </resultMap>
 
-    <!-- 自定义查询方法 -->
+    <sql id="resumeQueryWhere">
+        <where>
+            <if test="name != null and name != ''">
+                AND (
+                    u.name LIKE CONCAT('%', #{name}, '%')
+                    OR EXISTS (
+                        SELECT 1 FROM resume_field_value rv
+                        JOIN resume_field_definition rf ON rv.field_id = rf.field_id
+                        WHERE rv.resume_id = r.resume_id
+                        AND rf.field_key = 'name'
+                        AND rv.field_value LIKE CONCAT('%', #{name}, '%')
+                    )
+                )
+            </if>
+            <if test="major != null and major != ''">
+                AND (
+                    u.major LIKE CONCAT('%', #{major}, '%')
+                    OR EXISTS (
+                        SELECT 1 FROM resume_field_value rv
+                        JOIN resume_field_definition rf ON rv.field_id = rf.field_id
+                        WHERE rv.resume_id = r.resume_id
+                        AND rf.field_key = 'major'
+                        AND rv.field_value LIKE CONCAT('%', #{major}, '%')
+                    )
+                )
+            </if>
+            <if test="expectedDepartment != null and expectedDepartment != ''">
+                AND EXISTS (
+                    SELECT 1 FROM resume_field_value rv
+                    JOIN resume_field_definition rf ON rv.field_id = rf.field_id
+                    WHERE rv.resume_id = r.resume_id
+                    AND rf.field_key = 'expected_departments'
+                    AND rv.field_value LIKE CONCAT('%', #{expectedDepartment}, '%')
+                )
+            </if>
+            <if test="cycleId != null">
+                AND r.cycle_id = #{cycleId}
+            </if>
+            <if test="status != null and status != ''">
+                AND r.status IN
+                <foreach item="item" index="index" collection="status.split(',')" open="(" separator="," close=")">
+                    #{item}
+                </foreach>
+            </if>
+        </where>
+    </sql>
+
     <select id="findByUserIdAndCycleId" resultMap="ResumeResultMap">
         SELECT * FROM resume
         WHERE user_id = #{userId} AND cycle_id = #{cycleId}
@@ -37,116 +85,22 @@
     <select id="queryResumes" resultMap="ResumeResultMap">
         SELECT r.* FROM resume r
         LEFT JOIN user u ON r.user_id = u.user_id
-        <where>
-            <if test="name != null and name != ''">
-                AND u.name LIKE CONCAT('%', #{name}, '%')
-            </if>
-            <if test="major != null and major != ''">
-                AND u.major LIKE CONCAT('%', #{major}, '%')
-            </if>
-            <if test="expectedDepartment != null and expectedDepartment != ''">
-                <!-- 在这里需要根据实际需求调整，因为期望部门可能存储在简历字段值中 -->
-                AND EXISTS (
-                    SELECT 1 FROM resume_field_value rv
-                    JOIN resume_field_definition rf ON rv.field_id = rf.field_id
-                    WHERE rv.resume_id = r.resume_id
-                    AND rf.field_label = '期望部门'
-                    AND rv.field_value LIKE CONCAT('%', #{expectedDepartment}, '%')
-                )
-            </if>
-            <if test="cycleId != null">
-                AND r.cycle_id = #{cycleId}
-            </if>
-            <if test="status != null and status != ''">
-                AND r.status IN
-                <foreach item="item" index="index" collection="status.split(',')" open="(" separator="," close=")">
-                    #{item}
-                </foreach>
-            </if>
-        </where>
+        <include refid="resumeQueryWhere"/>
         ORDER BY r.created_at DESC
     </select>
 
     <select id="queryResumesWithPagination" resultMap="ResumeResultMap">
         SELECT r.* FROM resume r
         LEFT JOIN user u ON r.user_id = u.user_id
-        <where>
-            <if test="name != null and name != ''">
-                AND u.name LIKE CONCAT('%', #{name}, '%')
-            </if>
-            <if test="major != null and major != ''">
-                AND u.major LIKE CONCAT('%', #{major}, '%')
-            </if>
-            <if test="expectedDepartment != null and expectedDepartment != ''">
-                <!-- 在这里需要根据实际需求调整，因为期望部门可能存储在简历字段值中 -->
-                AND EXISTS (
-                    SELECT 1 FROM resume_field_value rv
-                    JOIN resume_field_definition rf ON rv.field_id = rf.field_id
-                    WHERE rv.resume_id = r.resume_id
-                    AND rf.field_label = '期望部门'
-                    AND rv.field_value LIKE CONCAT('%', #{expectedDepartment}, '%')
-                )
-            </if>
-            <if test="cycleId != null">
-                AND r.cycle_id = #{cycleId}
-            </if>
-            <if test="status != null and status != ''">
-                AND r.status IN
-                <foreach item="item" index="index" collection="status.split(',')" open="(" separator="," close=")">
-                    #{item}
-                </foreach>
-            </if>
-        </where>
-        ORDER BY
-        <choose>
-            <when test="sortBy != null and sortBy != ''">
-                ${sortBy}
-            </when>
-            <otherwise>
-                r.created_at
-            </otherwise>
-        </choose>
-        <choose>
-            <when test="sortOrder != null and sortOrder != ''">
-                ${sortOrder}
-            </when>
-            <otherwise>
-                DESC
-            </otherwise>
-        </choose>
+        <include refid="resumeQueryWhere"/>
+        ORDER BY ${sortBy} ${sortOrder}
         LIMIT #{offset}, #{limit}
     </select>
 
     <select id="countResumes" resultType="java.lang.Integer">
         SELECT COUNT(r.resume_id) FROM resume r
         LEFT JOIN user u ON r.user_id = u.user_id
-        <where>
-            <if test="name != null and name != ''">
-                AND u.name LIKE CONCAT('%', #{name}, '%')
-            </if>
-            <if test="major != null and major != ''">
-                AND u.major LIKE CONCAT('%', #{major}, '%')
-            </if>
-            <if test="expectedDepartment != null and expectedDepartment != ''">
-                <!-- 在这里需要根据实际需求调整，因为期望部门可能存储在简历字段值中 -->
-                AND EXISTS (
-                    SELECT 1 FROM resume_field_value rv
-                    JOIN resume_field_definition rf ON rv.field_id = rf.field_id
-                    WHERE rv.resume_id = r.resume_id
-                    AND rf.field_label = '期望部门'
-                    AND rv.field_value LIKE CONCAT('%', #{expectedDepartment}, '%')
-                )
-            </if>
-            <if test="cycleId != null">
-                AND r.cycle_id = #{cycleId}
-            </if>
-            <if test="status != null and status != ''">
-                AND r.status IN
-                <foreach item="item" index="index" collection="status.split(',')" open="(" separator="," close=")">
-                    #{item}
-                </foreach>
-            </if>
-        </where>
+        <include refid="resumeQueryWhere"/>
     </select>
 
 </mapper>

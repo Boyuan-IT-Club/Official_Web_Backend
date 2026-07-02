@@ -13,10 +13,7 @@ import club.boyuan.official.exception.BusinessException;
 import club.boyuan.official.exception.BusinessExceptionEnum;
 import club.boyuan.official.messaging.BookingOperationType;
 import club.boyuan.official.messaging.InterviewBookingMessage;
-import club.boyuan.official.messaging.InterviewBookingProducer;
-import club.boyuan.official.outbox.MessageOutboxService;
-import club.boyuan.official.outbox.OutboxAggregateType;
-import club.boyuan.official.outbox.OutboxEventType;
+import club.boyuan.official.messaging.ReliableMessagePublisher;
 import club.boyuan.official.seckill.*;
 import club.boyuan.official.service.*;
 import club.boyuan.official.sse.AsyncTaskChannel;
@@ -48,8 +45,7 @@ public class InterviewBookingSeckillServiceImpl implements InterviewBookingSecki
     private final InterviewBookingSeckillProperties seckillProperties;
     private final InterviewBookingLuaInventoryService luaInventoryService;
     private final InterviewSlotInventoryService slotInventoryService;
-    private final InterviewBookingProducer bookingProducer;
-    private final MessageOutboxService messageOutboxService;
+    private final ReliableMessagePublisher reliableMessagePublisher;
     private final AsyncTaskSseHub asyncTaskSseHub;
     private final IResumeService resumeService;
     private final IRecruitmentCycleService recruitmentCycleService;
@@ -151,15 +147,7 @@ public class InterviewBookingSeckillServiceImpl implements InterviewBookingSecki
     }
 
     private void enqueueBookingPersistMessage(String requestId, InterviewBookingMessage message) {
-        if (messageOutboxService.isEnabled()) {
-            messageOutboxService.enqueue(
-                    OutboxEventType.INTERVIEW_BOOKING_PERSIST,
-                    OutboxAggregateType.INTERVIEW_BOOKING,
-                    requestId,
-                    message);
-        } else {
-            bookingProducer.publishPersist(message);
-        }
+        reliableMessagePublisher.publishBookingPersist(message);
     }
 
     @Override

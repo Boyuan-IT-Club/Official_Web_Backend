@@ -13,6 +13,9 @@ import club.boyuan.official.mapper.ResumeFieldValueMapper;
 import club.boyuan.official.mapper.ResumeMapper;
 import club.boyuan.official.service.IResumeFieldDefinitionService;
 import club.boyuan.official.service.IResumeService;
+import club.boyuan.official.service.ResumeQuerySort;
+import club.boyuan.official.service.ResumeSubmitValidator;
+import club.boyuan.official.utils.RedisScanUtils;
 import lombok.AllArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,8 +24,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -30,14 +36,15 @@ import java.util.stream.Collectors;
 @Service
 @AllArgsConstructor
 public class ResumeServiceImpl implements IResumeService {
-    
+
     private static final Logger logger = LoggerFactory.getLogger(ResumeServiceImpl.class);
-    
+
     private final ResumeMapper resumeMapper;
     private final ResumeFieldValueMapper resumeFieldValueMapper;
     private final IResumeFieldDefinitionService fieldDefinitionService;
     private final RedisTemplate<String, Object> redisTemplate;
-    
+    private final ResumeSubmitValidator resumeSubmitValidator;
+
     // Redis缓存键前缀
     private static final String RESUME_CACHE_PREFIX = "resumes:cycle:";
     private static final String QUERY_RESUME_CACHE_PREFIX = "resumes:query:";
@@ -53,7 +60,7 @@ public class ResumeServiceImpl implements IResumeService {
             throw new BusinessException(BusinessExceptionEnum.RESUME_QUERY_FAILED);
         }
     }
-    
+
     @Override
     public Resume getResumeById(Integer resumeId) {
         logger.debug("根据ID{}查询简历", resumeId);
@@ -64,7 +71,7 @@ public class ResumeServiceImpl implements IResumeService {
             throw new BusinessException(BusinessExceptionEnum.RESUME_QUERY_FAILED);
         }
     }
-    
+
     @Override
     public List<Resume> getResumesByUserId(Integer userId) {
         logger.debug("查询用户{}的所有简历", userId);
@@ -75,7 +82,7 @@ public class ResumeServiceImpl implements IResumeService {
             throw new BusinessException(BusinessExceptionEnum.RESUME_QUERY_FAILED);
         }
     }
-    
+
     @Override
     @Transactional
     public Resume createResume(Resume resume) {
@@ -90,7 +97,7 @@ public class ResumeServiceImpl implements IResumeService {
             throw new BusinessException(BusinessExceptionEnum.RESUME_CREATE_FAILED);
         }
     }
-    
+
     @Override
     @Transactional
     public Resume updateResume(Resume resume) {
@@ -108,7 +115,7 @@ public class ResumeServiceImpl implements IResumeService {
             throw new BusinessException(BusinessExceptionEnum.RESUME_UPDATE_FAILED);
         }
     }
-    
+
     @Override
     @Transactional
     public void deleteResume(Integer resumeId) {
@@ -129,70 +136,101 @@ public class ResumeServiceImpl implements IResumeService {
             throw new BusinessException(BusinessExceptionEnum.RESUME_DELETE_FAILED);
         }
     }
-    
+
     @Override
     @Transactional
     public Resume submitResume(Integer resumeId) {
         logger.info("提交简历，简历ID: {}", resumeId);
         try {
             Resume resume = resumeMapper.findById(resumeId);
-            if (resume != null) {
-                resume.setStatus(2); // 设置为已提交状态
-                resume.setSubmittedAt(LocalDateTime.now());
-                resumeMapper.updateById(resume);
-                // 清除相关缓存
-                clearCacheByCycleId(resume.getCycleId());
+            if (resume == null) {
+                throw new BusinessException(BusinessExceptionEnum.RESUME_NOT_FOUND);
             }
+            resumeSubmitValidator.assertDraftEditable(resume.getStatus());
+            List<ResumeFieldValue> fieldValues = resumeFieldValueMapper.findByResumeId(resumeId);
+            resumeSubmitValidator.validateRequiredFields(resumeId, resume.getCycleId(), fieldValues);
+
+            resume.setStatus(2);
+            resume.setSubmittedAt(LocalDateTime.now());
+            resumeMapper.updateById(resume);
+            clearCacheByCycleId(resume.getCycleId());
             return resume;
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
             logger.error("提交简历失败，简历ID: {}", resumeId, e);
-            throw new BusinessException(BusinessExceptionEnum.RESUME_SUBMIT_FAILED, e.getMessage() != null ? e.getMessage() : "提交简历失败");
+            throw new BusinessException(BusinessExceptionEnum.RESUME_SUBMIT_FAILED,
+                    e.getMessage() != null ? e.getMessage() : "提交简历失败");
         }
     }
-    
+
+    @Override
+    @Transactional
+    public Resume updateResumeScore(Integer resumeId, Integer score) {
+        logger.info("更新简历分数，resumeId={}, score={}", resumeId, score);
+        if (score == null || score < 0 || score > 100) {
+            throw new BusinessException(BusinessExceptionEnum.RESUME_SCORE_INVALID);
+        }
+        Resume resume = resumeMapper.findById(resumeId);
+        if (resume == null) {
+            throw new BusinessException(BusinessExceptionEnum.RESUME_NOT_FOUND);
+        }
+        resume.setResumeScore(score);
+        resumeMapper.updateById(resume);
+        clearCacheByCycleId(resume.getCycleId());
+        return resume;
+    }
+
     @Override
     @Transactional
     public void saveFieldValues(List<ResumeFieldValue> fieldValues) {
         logger.info("保存简历字段值，数量: {}", fieldValues.size());
         try {
+            if (fieldValues == null || fieldValues.isEmpty()) {
+                return;
+            }
+
+            Integer resumeId = fieldValues.get(0).getResumeId();
+            Resume editableResume = resumeId != null ? resumeMapper.findById(resumeId) : null;
+            if (editableResume != null) {
+                resumeSubmitValidator.assertDraftEditable(editableResume.getStatus());
+            }
+
             List<ResumeFieldValue> toInsert = new ArrayList<>();
             List<ResumeFieldValue> toUpdate = new ArrayList<>();
-            
-            Integer cycleId = null;
-            
+
+            Integer cycleId = editableResume != null ? editableResume.getCycleId() : null;
+
             for (ResumeFieldValue fieldValue : fieldValues) {
                 ResumeFieldValue existingValue = resumeFieldValueMapper.findByResumeIdAndFieldId(
                         fieldValue.getResumeId(), fieldValue.getFieldId());
                 if (existingValue != null) {
-                    // 更新已存在的字段值
                     existingValue.setFieldValue(fieldValue.getFieldValue());
                     toUpdate.add(existingValue);
                 } else {
-                    // 插入新的字段值
                     toInsert.add(fieldValue);
                 }
-                
-                // 获取cycleId用于清除缓存
-                if (cycleId == null) {
+
+                if (cycleId == null && fieldValue.getResumeId() != null) {
                     Resume resume = resumeMapper.findById(fieldValue.getResumeId());
                     if (resume != null) {
                         cycleId = resume.getCycleId();
                     }
                 }
             }
-            
+
             // 批量插入新字段值
             if (!toInsert.isEmpty()) {
                 logger.debug("批量插入{}个新字段值", toInsert.size());
                 resumeFieldValueMapper.batchInsert(toInsert);
             }
-            
+
             // 批量更新已存在的字段值
             if (!toUpdate.isEmpty()) {
                 logger.debug("批量更新{}个字段值", toUpdate.size());
                 resumeFieldValueMapper.batchUpdate(toUpdate);
             }
-            
+
             // 清除相关缓存
             if (cycleId != null) {
                 clearCacheByCycleId(cycleId);
@@ -202,7 +240,7 @@ public class ResumeServiceImpl implements IResumeService {
             throw new BusinessException(BusinessExceptionEnum.RESUME_FIELD_VALUE_SAVE_FAILED, e.getMessage() != null ? e.getMessage() : "保存简历字段值失败");
         }
     }
-    
+
     @Override
     public List<ResumeFieldValue> getFieldValuesByResumeId(Integer resumeId) {
         logger.debug("根据简历ID{}获取字段值", resumeId);
@@ -213,13 +251,13 @@ public class ResumeServiceImpl implements IResumeService {
             throw new BusinessException(BusinessExceptionEnum.DATABASE_QUERY_FAILED);
         }
     }
-    
+
     @Override
     public List<ResumeFieldValueDTO> getFieldValuesWithDefinitionsByResumeId(Integer resumeId) {
         logger.debug("根据简历ID{}获取字段值及定义信息", resumeId);
         try {
             List<ResumeFieldValue> fieldValues = resumeFieldValueMapper.findByResumeId(resumeId);
-            
+
             return fieldValues.stream().map(fieldValue -> {
                 ResumeFieldValueDTO dto = new ResumeFieldValueDTO();
                 dto.setValueId(fieldValue.getValueId());
@@ -228,7 +266,7 @@ public class ResumeServiceImpl implements IResumeService {
                 dto.setFieldValue(fieldValue.getFieldValue());
                 dto.setCreatedAt(fieldValue.getCreatedAt());
                 dto.setUpdatedAt(fieldValue.getUpdatedAt());
-                
+
                 if (fieldValue.getFieldId() != null) {
                     ResumeFieldDefinition fieldDefinition =
                             fieldDefinitionService.getFieldDefinitionById(fieldValue.getFieldId());
@@ -247,12 +285,12 @@ public class ResumeServiceImpl implements IResumeService {
     public List<ResumeDTO> queryResumes(String name, String major, String expectedDepartment, Integer cycleId, String status) {
         logger.info("条件查询简历：name={}, major={}, expectedDepartment={}, cycleId={}, status={}", name, major, expectedDepartment, cycleId, status);
         // 构建缓存键
-        String cacheKey = QUERY_RESUME_CACHE_PREFIX + "name:" + (name != null ? name : "") 
+        String cacheKey = QUERY_RESUME_CACHE_PREFIX + "name:" + (name != null ? name : "")
                 + ":major:" + (major != null ? major : "")
                 + ":expectedDepartment:" + (expectedDepartment != null ? expectedDepartment : "")
-                + ":cycleId:" + (cycleId != null ? cycleId : "") 
+                + ":cycleId:" + (cycleId != null ? cycleId : "")
                 + ":status:" + (status != null ? status : "");
-        
+
         try {
             // 尝试从缓存中获取
             List<ResumeDTO> cachedResult = (List<ResumeDTO>) redisTemplate.opsForValue().get(cacheKey);
@@ -260,29 +298,15 @@ public class ResumeServiceImpl implements IResumeService {
                 logger.debug("从缓存中获取条件查询简历结果，缓存键: {}", cacheKey);
                 return cachedResult;
             }
-            
+
             // 缓存未命中，从数据库查询
             List<Resume> resumes = resumeMapper.queryResumes(name, major, expectedDepartment, cycleId, status);
-            List<ResumeDTO> result = new ArrayList<>();
-            for (Resume resume : resumes) {
-                ResumeDTO dto = new ResumeDTO();
-                dto.setResumeId(resume.getResumeId());
-                dto.setUserId(resume.getUserId());
-                dto.setCycleId(resume.getCycleId());
-                dto.setStatus(resume.getStatus());
-                dto.setSubmittedAt(resume.getSubmittedAt());
-                dto.setCreatedAt(resume.getCreatedAt());
-                dto.setUpdatedAt(resume.getUpdatedAt());
-                // 可选：添加简化字段信息
-                List<SimpleResumeFieldDTO> simpleFields = getSimpleFieldValuesByResumeId(resume.getResumeId());
-                dto.setSimpleFields(simpleFields);
-                result.add(dto);
-            }
-            
+            List<ResumeDTO> result = toResumeDtoList(resumes);
+
             // 将结果存入缓存
             redisTemplate.opsForValue().set(cacheKey, result, CACHE_EXPIRE_TIME, TimeUnit.SECONDS);
             logger.debug("将条件查询简历结果存入缓存，缓存键: {}", cacheKey);
-            
+
             return result;
         } catch (Exception e) {
             logger.error("条件查询简历失败", e);
@@ -293,55 +317,42 @@ public class ResumeServiceImpl implements IResumeService {
     @Override
     public PageResultDTO<ResumeDTO> queryResumesWithPagination(String name, String major, String expectedDepartment, Integer cycleId, String status, int page, int size, String sortBy, String sortOrder) {
         logger.info("分页条件查询简历：name={}, major={}, expectedDepartment={}, cycleId={}, status={}, page={}, size={}, sortBy={}, sortOrder={}", name, major, expectedDepartment, cycleId, status, page, size, sortBy, sortOrder);
-        
+
         try {
             // 参数校验
             if (page < 0) page = 0;
             if (size <= 0) size = 10;
             if (size > 100) size = 100; // 限制最大分页大小
-            
+
             // 计算偏移量
             int offset = page * size;
-            
-            // 查询总数
+
+            String safeSortBy = ResumeQuerySort.resolveSortBy(sortBy);
+            String safeSortOrder = ResumeQuerySort.resolveSortOrder(sortOrder);
+
             int totalElements = resumeMapper.countResumes(name, major, expectedDepartment, cycleId, status);
-            
-            // 查询数据
-            List<Resume> resumes = resumeMapper.queryResumesWithPagination(name, major, expectedDepartment, cycleId, status, offset, size, sortBy, sortOrder);
-            
-            // 转换为DTO
-            List<ResumeDTO> result = new ArrayList<>();
-            for (Resume resume : resumes) {
-                ResumeDTO dto = new ResumeDTO();
-                dto.setResumeId(resume.getResumeId());
-                dto.setUserId(resume.getUserId());
-                dto.setCycleId(resume.getCycleId());
-                dto.setStatus(resume.getStatus());
-                dto.setSubmittedAt(resume.getSubmittedAt());
-                dto.setCreatedAt(resume.getCreatedAt());
-                dto.setUpdatedAt(resume.getUpdatedAt());
-                // 可选：添加简化字段信息
-                List<SimpleResumeFieldDTO> simpleFields = getSimpleFieldValuesByResumeId(resume.getResumeId());
-                dto.setSimpleFields(simpleFields);
-                result.add(dto);
-            }
-            
+
+            List<Resume> resumes = resumeMapper.queryResumesWithPagination(
+                    name, major, expectedDepartment, cycleId, status, offset, size, safeSortBy, safeSortOrder);
+
+            List<ResumeDTO> result = toResumeDtoList(resumes);
+
             // 计算分页信息
             int totalPages = (int) Math.ceil((double) totalElements / size);
             boolean first = page == 0;
             boolean last = page >= totalPages - 1;
-            
+
             PageResultDTO<ResumeDTO> pageResult = new PageResultDTO<>(result, totalElements, totalPages, page, size, first, last);
-            
+
             logger.info("分页条件查询简历完成：总记录数={}, 总页数={}, 当前页={}, 当前记录数={}", totalElements, totalPages, page, result.size());
-            
+
             return pageResult;
         } catch (Exception e) {
             logger.error("分页条件查询简历失败", e);
             throw new BusinessException(BusinessExceptionEnum.RESUME_QUERY_FAILED);
         }
     }
-    
+
     @Override
     public ResumeDTO getResumeWithFieldValues(Integer userId, Integer cycleId) {
         logger.debug("获取用户{}在{}年的简历及字段值", userId, cycleId);
@@ -351,28 +362,20 @@ public class ResumeServiceImpl implements IResumeService {
             if (resume == null) {
                 return null;
             }
-            
+
             // 构造ResumeDTO
-            ResumeDTO resumeDTO = new ResumeDTO();
-            resumeDTO.setResumeId(resume.getResumeId());
-            resumeDTO.setUserId(resume.getUserId());
-            resumeDTO.setCycleId(resume.getCycleId());
-            resumeDTO.setStatus(resume.getStatus());
-            resumeDTO.setSubmittedAt(resume.getSubmittedAt());
-            resumeDTO.setCreatedAt(resume.getCreatedAt());
-            resumeDTO.setUpdatedAt(resume.getUpdatedAt());
-            
-            // 获取简化版字段信息（仅包含字段标签和字段值）
+            ResumeDTO resumeDTO = toResumeDto(resume);
+
             List<SimpleResumeFieldDTO> simpleFields = getSimpleFieldValuesByResumeId(resume.getResumeId());
             resumeDTO.setSimpleFields(simpleFields);
-            
+
             return resumeDTO;
         } catch (Exception e) {
             logger.error("获取用户简历及字段值失败，用户ID: {}，年份: {}", userId, cycleId, e);
             throw new BusinessException(BusinessExceptionEnum.RESUME_QUERY_FAILED);
         }
     }
-    
+
     @Override
     public ResumeDTO getResumeWithFieldValuesById(Integer resumeId) {
         logger.debug("根据简历ID{}获取简历及字段值", resumeId);
@@ -382,28 +385,75 @@ public class ResumeServiceImpl implements IResumeService {
             if (resume == null) {
                 return null;
             }
-            
+
             // 构造ResumeDTO
-            ResumeDTO resumeDTO = new ResumeDTO();
-            resumeDTO.setResumeId(resume.getResumeId());
-            resumeDTO.setUserId(resume.getUserId());
-            resumeDTO.setCycleId(resume.getCycleId());
-            resumeDTO.setStatus(resume.getStatus());
-            resumeDTO.setSubmittedAt(resume.getSubmittedAt());
-            resumeDTO.setCreatedAt(resume.getCreatedAt());
-            resumeDTO.setUpdatedAt(resume.getUpdatedAt());
-            
-            // 获取简化版字段信息（仅包含字段标签和字段值）
+            ResumeDTO resumeDTO = toResumeDto(resume);
+
             List<SimpleResumeFieldDTO> simpleFields = getSimpleFieldValuesByResumeId(resume.getResumeId());
             resumeDTO.setSimpleFields(simpleFields);
-            
+
             return resumeDTO;
         } catch (Exception e) {
             logger.error("根据简历ID获取简历及字段值失败，简历ID: {}", resumeId, e);
             throw new BusinessException(BusinessExceptionEnum.RESUME_QUERY_FAILED);
         }
     }
-    
+
+    private ResumeDTO toResumeDto(Resume resume) {
+        ResumeDTO dto = new ResumeDTO();
+        dto.setResumeId(resume.getResumeId());
+        dto.setUserId(resume.getUserId());
+        dto.setCycleId(resume.getCycleId());
+        dto.setStatus(resume.getStatus());
+        dto.setResumeScore(resume.getResumeScore());
+        dto.setSubmittedAt(resume.getSubmittedAt());
+        dto.setCreatedAt(resume.getCreatedAt());
+        dto.setUpdatedAt(resume.getUpdatedAt());
+        return dto;
+    }
+
+    private List<ResumeDTO> toResumeDtoList(List<Resume> resumes) {
+        if (resumes == null || resumes.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<Integer> resumeIds = resumes.stream()
+                .map(Resume::getResumeId)
+                .filter(Objects::nonNull)
+                .toList();
+        List<ResumeFieldValue> allValues = resumeFieldValueMapper.findByResumeIds(resumeIds);
+        Map<Integer, List<ResumeFieldValue>> valuesByResumeId = allValues.stream()
+                .collect(Collectors.groupingBy(ResumeFieldValue::getResumeId));
+
+        Set<Integer> cycleIds = resumes.stream()
+                .map(Resume::getCycleId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Integer, Map<Integer, ResumeFieldDefinition>> definitionsByCycle = loadDefinitionMaps(cycleIds);
+
+        List<ResumeDTO> result = new ArrayList<>(resumes.size());
+        for (Resume resume : resumes) {
+            ResumeDTO dto = toResumeDto(resume);
+            Map<Integer, ResumeFieldDefinition> definitionMap =
+                    definitionsByCycle.getOrDefault(resume.getCycleId(), Map.of());
+            List<ResumeFieldValue> fieldValues = valuesByResumeId.getOrDefault(resume.getResumeId(), List.of());
+            dto.setSimpleFields(fieldValues.stream()
+                    .map(value -> toSimpleResumeFieldDTO(value, definitionMap.get(value.getFieldId())))
+                    .collect(Collectors.toList()));
+            result.add(dto);
+        }
+        return result;
+    }
+
+    private Map<Integer, Map<Integer, ResumeFieldDefinition>> loadDefinitionMaps(Set<Integer> cycleIds) {
+        Map<Integer, Map<Integer, ResumeFieldDefinition>> result = new HashMap<>();
+        for (Integer cycleId : cycleIds) {
+            List<ResumeFieldDefinition> definitions = fieldDefinitionService.getFieldDefinitionsByCycleId(cycleId);
+            result.put(cycleId, definitions.stream()
+                    .collect(Collectors.toMap(ResumeFieldDefinition::getFieldId, d -> d, (a, b) -> a)));
+        }
+        return result;
+    }
+
     /**
      * 根据简历ID获取简化版字段信息（仅包含字段标签和字段值）
      * @param resumeId 简历ID
@@ -412,7 +462,7 @@ public class ResumeServiceImpl implements IResumeService {
     private List<SimpleResumeFieldDTO> getSimpleFieldValuesByResumeId(Integer resumeId) {
         try {
             List<ResumeFieldValue> fieldValues = resumeFieldValueMapper.findByResumeId(resumeId);
-            
+
             return fieldValues.stream().map(fieldValue -> {
                 ResumeFieldDefinition fieldDefinition = null;
                 if (fieldValue.getFieldId() != null) {
@@ -425,7 +475,7 @@ public class ResumeServiceImpl implements IResumeService {
             throw new BusinessException(BusinessExceptionEnum.DATABASE_QUERY_FAILED);
         }
     }
-    
+
     private void applyFieldDefinitionToValueDto(ResumeFieldValueDTO dto, ResumeFieldDefinition fieldDefinition) {
         if (fieldDefinition == null) {
             return;
@@ -456,7 +506,7 @@ public class ResumeServiceImpl implements IResumeService {
     public List<Resume> getAllResumesByCycleId(Integer cycleId) {
         logger.debug("获取招募周期 {} 下的所有简历", cycleId);
         String cacheKey = RESUME_CACHE_PREFIX + cycleId;
-        
+
         try {
             // 尝试从缓存中获取
             List<Resume> cachedResumes = (List<Resume>) redisTemplate.opsForValue().get(cacheKey);
@@ -464,21 +514,21 @@ public class ResumeServiceImpl implements IResumeService {
                 logger.debug("从缓存中获取招募周期 {} 下的所有简历", cycleId);
                 return cachedResumes;
             }
-            
+
             // 缓存未命中，从数据库查询
             List<Resume> resumes = resumeMapper.findByCycleId(cycleId);
-            
+
             // 将结果存入缓存
             redisTemplate.opsForValue().set(cacheKey, resumes, CACHE_EXPIRE_TIME, TimeUnit.SECONDS);
             logger.debug("将招募周期 {} 下的所有简历存入缓存", cycleId);
-            
+
             return resumes;
         } catch (Exception e) {
             logger.error("获取招募周期下的所有简历失败，招募周期ID: {}", cycleId, e);
             throw new BusinessException(BusinessExceptionEnum.RESUME_QUERY_FAILED);
         }
     }
-    
+
     /**
      * 清除指定招募周期的简历缓存
      * @param cycleId 招募周期ID
@@ -487,21 +537,10 @@ public class ResumeServiceImpl implements IResumeService {
         if (cycleId != null) {
             String cacheKey = RESUME_CACHE_PREFIX + cycleId;
             redisTemplate.delete(cacheKey);
-            
-            // 清除查询缓存 - 使用模式匹配清除所有相关的查询缓存
-            String queryPattern = QUERY_RESUME_CACHE_PREFIX + "*:cycleId:" + cycleId + ":*";
-            Set<String> keys = redisTemplate.keys(queryPattern);
-            if (keys != null && !keys.isEmpty()) {
-                redisTemplate.delete(keys);
-            }
-            
-            // 清除不包含cycleId的通用查询缓存（可能也会受到影响）
-            String generalPattern = QUERY_RESUME_CACHE_PREFIX + "*";
-            Set<String> generalKeys = redisTemplate.keys(generalPattern);
-            if (generalKeys != null && !generalKeys.isEmpty()) {
-                redisTemplate.delete(generalKeys);
-            }
-            
+
+            RedisScanUtils.deleteByPattern(redisTemplate, QUERY_RESUME_CACHE_PREFIX + "*:cycleId:" + cycleId + ":*");
+            RedisScanUtils.deleteByPattern(redisTemplate, QUERY_RESUME_CACHE_PREFIX + "*");
+
             logger.debug("清除招募周期 {} 的简历缓存和相关查询缓存", cycleId);
         }
     }

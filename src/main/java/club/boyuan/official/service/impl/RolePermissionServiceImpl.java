@@ -15,8 +15,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * RolePermission的业务层实现
@@ -105,6 +108,17 @@ public class RolePermissionServiceImpl extends ServiceImpl<RolePermissionMapper,
         }
 
         return baseMapper.selectPermissionIdsByRoleId(roleId);
+    }
+
+    @Override
+    public List<Integer> getPermissionIdsByRoleIds(Collection<Integer> roleIds) {
+        if (roleIds == null || roleIds.isEmpty()) {
+            return List.of();
+        }
+        Set<Integer> distinct = new LinkedHashSet<>();
+        list(new LambdaQueryWrapper<RolePermission>().in(RolePermission::getRoleId, roleIds))
+                .forEach(rp -> distinct.add(rp.getPermissionId()));
+        return List.copyOf(distinct);
     }
 
     @Override

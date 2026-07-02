@@ -5,6 +5,7 @@ import club.boyuan.official.entity.RolePermission;
 import club.boyuan.official.exception.BusinessException;
 import com.baomidou.mybatisplus.extension.service.IService;
 
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -49,6 +50,11 @@ public interface RolePermissionService extends IService<RolePermission> {
      * @throws BusinessException 业务异常
      */
     List<Integer> getPermissionIdsByRoleId(int roleId) throws BusinessException;
+
+    /**
+     * 批量查询多个角色的权限 ID（去重），登录等场景避免逐角色查询。
+     */
+    List<Integer> getPermissionIdsByRoleIds(Collection<Integer> roleIds);
     
     /**
      * 为角色添加单个权限

@@ -20,6 +20,9 @@ spring:
 rate-limit:
   enabled: false
 
+outbox:
+  enabled: false
+
 management:
   endpoints:
     web:

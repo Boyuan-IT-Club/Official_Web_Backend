@@ -8,6 +8,7 @@ public class ResumeDTO {
     private Integer userId;
     private Integer cycleId;
     private Integer status;
+    private Integer resumeScore;
     private LocalDateTime submittedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -50,6 +51,14 @@ public class ResumeDTO {
     
     public void setStatus(Integer status) {
         this.status = status;
+    }
+
+    public Integer getResumeScore() {
+        return resumeScore;
+    }
+
+    public void setResumeScore(Integer resumeScore) {
+        this.resumeScore = resumeScore;
     }
     
     public LocalDateTime getSubmittedAt() {

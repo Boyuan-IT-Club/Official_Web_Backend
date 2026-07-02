@@ -59,4 +59,9 @@ public interface ResumeFieldValueMapper extends BaseMapper<ResumeFieldValue> {
      * @return 影响行数
      */
     int deleteByFieldId(Integer fieldId);
+
+    /**
+     * 批量按简历 ID 查询字段值
+     */
+    List<ResumeFieldValue> findByResumeIds(@Param("resumeIds") List<Integer> resumeIds);
 }
