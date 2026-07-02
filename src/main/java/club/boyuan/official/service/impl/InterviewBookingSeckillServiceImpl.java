@@ -134,7 +134,7 @@ public class InterviewBookingSeckillServiceImpl implements InterviewBookingSecki
                 existing != null ? existing.getScheduleId() : null
         );
 
-        saveRequestStatus(requestId, pendingStatus(request.getCycleId(), request.getSlotId()));
+        saveRequestStatus(requestId, pendingStatus(userId, request.getCycleId(), request.getSlotId()));
         enqueueBookingPersistMessage(requestId, message);
 
         InterviewBookingAsyncResultDTO result = new InterviewBookingAsyncResultDTO()
@@ -168,6 +168,9 @@ public class InterviewBookingSeckillServiceImpl implements InterviewBookingSecki
         if (cache == null) {
             throw new BusinessException(BusinessExceptionEnum.INTERVIEW_BOOKING_REQUEST_NOT_FOUND);
         }
+        if (cache.getUserId() != null && !Objects.equals(cache.getUserId(), userId)) {
+            throw new BusinessException(BusinessExceptionEnum.INTERVIEW_BOOKING_FORBIDDEN);
+        }
 
         InterviewBookingAsyncResultDTO dto = new InterviewBookingAsyncResultDTO()
                 .setRequestId(requestId)
@@ -191,9 +194,11 @@ public class InterviewBookingSeckillServiceImpl implements InterviewBookingSecki
 
     @Override
     public void markRequestSuccess(String requestId, InterviewBookingDTO booking) {
+        InterviewBookingRequestStatusCache existing = loadRequestStatus(requestId);
         InterviewBookingRequestStatusCache cache = new InterviewBookingRequestStatusCache()
                 .setStatus(InterviewBookingRequestStatusCache.SUCCESS)
                 .setMessage("预约成功")
+                .setUserId(existing != null ? existing.getUserId() : null)
                 .setScheduleId(booking.getScheduleId())
                 .setSlotId(booking.getSlotId())
                 .setCycleId(booking.getCycleId());
@@ -217,6 +222,7 @@ public class InterviewBookingSeckillServiceImpl implements InterviewBookingSecki
         InterviewBookingRequestStatusCache cache = new InterviewBookingRequestStatusCache()
                 .setStatus(InterviewBookingRequestStatusCache.FAILED)
                 .setMessage(message)
+                .setUserId(userId)
                 .setSlotId(slotId)
                 .setCycleId(cycleId);
         saveRequestStatus(requestId, cache);
@@ -244,10 +250,11 @@ public class InterviewBookingSeckillServiceImpl implements InterviewBookingSecki
                 .setBooking(InterviewBookingDTO.from(schedule, slot));
     }
 
-    private InterviewBookingRequestStatusCache pendingStatus(Integer cycleId, Integer slotId) {
+    private InterviewBookingRequestStatusCache pendingStatus(Integer userId, Integer cycleId, Integer slotId) {
         return new InterviewBookingRequestStatusCache()
                 .setStatus(InterviewBookingRequestStatusCache.PENDING)
                 .setMessage("预约处理中")
+                .setUserId(userId)
                 .setCycleId(cycleId)
                 .setSlotId(slotId);
     }

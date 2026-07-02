@@ -6676,10 +6676,11 @@ paths:
         - bearer: []
   /api/interview/booking/seckill:
     post:
-      summary: 秒杀预约（始终异步）
+      summary: 秒杀预约（支持异步受理）
       deprecated: false
       description: |
-        与 `POST /api/interview/booking` 在秒杀开启时行为一致，但**始终**走异步链路并返回 **202 Accepted**。
+        与 `POST /api/interview/booking` 在秒杀开启时行为一致。通常走异步链路并返回 **202 Accepted**；
+        若已存在同一时段有效预约或幂等命中已完成记录，可直接返回 **200** 及 `SUCCESS` 结果（`data.booking` 含预约详情）。
         流程：Lua 预扣 Redis 库存 → 写 PENDING 状态 → RabbitMQ 落库 → 异步邮件通知（大时段信息）。
         支持请求头 `Idempotency-Key`。
       tags:
@@ -6704,6 +6705,12 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateInterviewBookingRequest'
       responses:
+        '200':
+          description: 已有同一时段有效预约，或幂等命中已完成结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseMessageInterviewBookingAsyncResult'
         '202':
           description: 已受理，返回 requestId 与 PENDING 状态
           content:
@@ -6885,7 +6892,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponse'
+                $ref: '#/components/schemas/ResponseMessageVoid'
       security:
         - bearer: []
   /api/interview/booking/admin/cycles/{cycleId}:

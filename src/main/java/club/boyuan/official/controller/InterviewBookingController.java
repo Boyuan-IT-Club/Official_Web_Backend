@@ -96,7 +96,8 @@ public class InterviewBookingController {
     }
 
     /**
-     * 秒杀预约专用入口（始终异步）：Lua 预扣 → MQ 落库 → MQ 通知。
+     * 秒杀预约专用入口：Lua 预扣 → MQ 落库 → MQ 通知。
+     * 若已存在同一时段有效预约，直接返回 SUCCESS 结果。
      */
     @PostMapping("/seckill")
     @PreAuthorize("isAuthenticated()")
@@ -109,6 +110,10 @@ public class InterviewBookingController {
                 userId, requestDTO.getCycleId(), requestDTO.getSlotId());
         InterviewBookingAsyncResultDTO result = interviewBookingSeckillService.submitSeckillBooking(
                 userId, requestDTO, idempotencyKey);
+        if (result.getBooking() != null
+                && InterviewBookingRequestStatusCache.SUCCESS.equals(result.getStatus())) {
+            return ResponseEntity.ok(ResponseMessage.success(result));
+        }
         return ResponseEntity.accepted().body(ResponseMessage.success(result));
     }
 
