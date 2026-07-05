@@ -14,8 +14,13 @@ import club.boyuan.official.exception.BusinessExceptionEnum;
 import club.boyuan.official.messaging.BookingOperationType;
 import club.boyuan.official.messaging.InterviewBookingMessage;
 import club.boyuan.official.messaging.InterviewBookingProducer;
+import club.boyuan.official.outbox.MessageOutboxService;
+import club.boyuan.official.outbox.OutboxAggregateType;
+import club.boyuan.official.outbox.OutboxEventType;
 import club.boyuan.official.seckill.*;
 import club.boyuan.official.service.*;
+import club.boyuan.official.sse.AsyncTaskChannel;
+import club.boyuan.official.sse.AsyncTaskSseHub;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -44,6 +49,8 @@ public class InterviewBookingSeckillServiceImpl implements InterviewBookingSecki
     private final InterviewBookingLuaInventoryService luaInventoryService;
     private final InterviewSlotInventoryService slotInventoryService;
     private final InterviewBookingProducer bookingProducer;
+    private final MessageOutboxService messageOutboxService;
+    private final AsyncTaskSseHub asyncTaskSseHub;
     private final IResumeService resumeService;
     private final IRecruitmentCycleService recruitmentCycleService;
     private final IInterviewSlotService interviewSlotService;
@@ -128,7 +135,7 @@ public class InterviewBookingSeckillServiceImpl implements InterviewBookingSecki
         );
 
         saveRequestStatus(requestId, pendingStatus(request.getCycleId(), request.getSlotId()));
-        bookingProducer.publishPersist(message);
+        enqueueBookingPersistMessage(requestId, message);
 
         InterviewBookingAsyncResultDTO result = new InterviewBookingAsyncResultDTO()
                 .setRequestId(requestId)
@@ -139,7 +146,20 @@ public class InterviewBookingSeckillServiceImpl implements InterviewBookingSecki
             saveIdempotentResult(idempotencyKey, result);
         }
         log.info("秒杀预约已受理 requestId={}, userId={}, slotId={}", requestId, userId, request.getSlotId());
+        publishBookingSse(requestId, result, false);
         return result;
+    }
+
+    private void enqueueBookingPersistMessage(String requestId, InterviewBookingMessage message) {
+        if (messageOutboxService.isEnabled()) {
+            messageOutboxService.enqueue(
+                    OutboxEventType.INTERVIEW_BOOKING_PERSIST,
+                    OutboxAggregateType.INTERVIEW_BOOKING,
+                    requestId,
+                    message);
+        } else {
+            bookingProducer.publishPersist(message);
+        }
     }
 
     @Override
@@ -183,16 +203,36 @@ public class InterviewBookingSeckillServiceImpl implements InterviewBookingSecki
                 "1",
                 seckillProperties.getRequestStatusTtlHours(),
                 TimeUnit.HOURS);
+        InterviewBookingAsyncResultDTO dto = new InterviewBookingAsyncResultDTO()
+                .setRequestId(requestId)
+                .setStatus(InterviewBookingRequestStatusCache.SUCCESS)
+                .setMessage("预约成功")
+                .setBooking(booking);
+        publishBookingSse(requestId, dto, true);
     }
 
     @Override
     public void markRequestFailed(String requestId, String message, Integer slotId, Integer userId, Integer cycleId) {
         luaInventoryService.rollbackPreDeduct(slotId, userId, cycleId);
-        saveRequestStatus(requestId, new InterviewBookingRequestStatusCache()
+        InterviewBookingRequestStatusCache cache = new InterviewBookingRequestStatusCache()
                 .setStatus(InterviewBookingRequestStatusCache.FAILED)
                 .setMessage(message)
                 .setSlotId(slotId)
-                .setCycleId(cycleId));
+                .setCycleId(cycleId);
+        saveRequestStatus(requestId, cache);
+        publishBookingSse(requestId, buildAsyncResultFromCache(requestId, cache), true);
+    }
+
+    private void publishBookingSse(String requestId, InterviewBookingAsyncResultDTO dto, boolean terminal) {
+        asyncTaskSseHub.publish(AsyncTaskChannel.BOOKING, requestId, dto, terminal);
+    }
+
+    private InterviewBookingAsyncResultDTO buildAsyncResultFromCache(
+            String requestId, InterviewBookingRequestStatusCache cache) {
+        return new InterviewBookingAsyncResultDTO()
+                .setRequestId(requestId)
+                .setStatus(cache.getStatus())
+                .setMessage(cache.getMessage());
     }
 
     private InterviewBookingAsyncResultDTO buildSuccessResult(InterviewSchedule schedule, String requestId) {

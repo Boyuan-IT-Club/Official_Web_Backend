@@ -75,6 +75,12 @@ public class InterviewSchedule implements Serializable {
     private Integer syncStatus;
 
     /**
+     * 飞书多维表格行 record_id（用于改期后 batch_update）
+     */
+    @TableField("feishu_record_id")
+    private String feishuRecordId;
+
+    /**
      * 通知状态：0(未通知), 1(已通知)
      */
     @TableField("notif_status")

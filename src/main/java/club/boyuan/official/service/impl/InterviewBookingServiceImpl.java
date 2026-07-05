@@ -7,7 +7,14 @@ import club.boyuan.official.entity.RecruitmentCycle;
 import club.boyuan.official.entity.Resume;
 import club.boyuan.official.exception.BusinessException;
 import club.boyuan.official.exception.BusinessExceptionEnum;
-import club.boyuan.official.service.*;
+import club.boyuan.official.service.IInterviewBookingService;
+import club.boyuan.official.service.IInterviewScheduleService;
+import club.boyuan.official.service.IInterviewSlotService;
+import club.boyuan.official.service.IRecruitmentCycleService;
+import club.boyuan.official.service.IResumeService;
+import club.boyuan.official.service.InterviewFineSlotTimeService;
+import club.boyuan.official.service.InterviewNotificationService;
+import club.boyuan.official.service.InterviewSlotInventoryService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +48,7 @@ public class InterviewBookingServiceImpl implements IInterviewBookingService {
     private final IRecruitmentCycleService recruitmentCycleService;
     private final InterviewSlotInventoryService slotInventoryService;
     private final InterviewFineSlotTimeService fineSlotTimeService;
+    private final InterviewNotificationService interviewNotificationService;
 
     @Override
     public List<InterviewBookableSlotDTO> listBookableSlots(Integer userId, Integer cycleId, boolean resumeSubmittedOnly) {
@@ -148,6 +156,7 @@ public class InterviewBookingServiceImpl implements IInterviewBookingService {
                 .setNotifStatus(0);
         interviewScheduleService.updateById(schedule);
         log.info("改期完成，scheduleId={}, oldSlotId={}, newSlotId={}", scheduleId, oldSlotId, request.getSlotId());
+        interviewNotificationService.enqueueBookingSuccess(scheduleId, null);
         return toBookingDto(schedule);
     }
 
@@ -214,7 +223,9 @@ public class InterviewBookingServiceImpl implements IInterviewBookingService {
         interviewScheduleService.save(schedule);
         log.info("新建预约成功，scheduleId={}, resumeId={}, slotId={}",
                 schedule.getScheduleId(), resume.getResumeId(), request.getSlotId());
-        return toBookingDto(schedule);
+        InterviewBookingDTO dto = toBookingDto(schedule);
+        interviewNotificationService.enqueueBookingSuccess(schedule.getScheduleId(), null);
+        return dto;
     }
 
     private InterviewBookingDTO reactivateCancelledBooking(InterviewSchedule existing,
@@ -230,6 +241,7 @@ public class InterviewBookingServiceImpl implements IInterviewBookingService {
                 .setSyncStatus(0)
                 .setNotifStatus(0);
         interviewScheduleService.updateById(existing);
+        interviewNotificationService.enqueueBookingSuccess(existing.getScheduleId(), null);
         return toBookingDto(existing);
     }
 
@@ -248,6 +260,7 @@ public class InterviewBookingServiceImpl implements IInterviewBookingService {
                 .setSyncStatus(0)
                 .setNotifStatus(0);
         interviewScheduleService.updateById(existing);
+        interviewNotificationService.enqueueBookingSuccess(existing.getScheduleId(), null);
         return toBookingDto(existing);
     }
 

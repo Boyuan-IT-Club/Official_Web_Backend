@@ -1,10 +1,19 @@
 spring:
   application:
     name: Official
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    # 启动时自动迁移；面试相关表由 Flyway/official.sql 维护（非 JPA 实体，ddl-auto 不会建 interview_schedule）
+    baseline-on-migrate: true
+    baseline-version: 1
+    validate-on-migrate: true
+    table: flyway_schema_history
   datasource:
-    url: jdbc:mysql://localhost:3306/official?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
+    # Docker Compose 将 MySQL 映射到宿主机 3307（见 docker ps）；勿与 3306 上其它 MySQL 实例混淆
+    url: jdbc:mysql://localhost:${MYSQL_PORT:3307}/official?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       maximum-pool-size: 20
@@ -118,6 +127,35 @@ rate-limit:
 jwt:
   secret: ${JWT_SECRET:}
   expiration: ${JWT_EXPIRATION:86400000}
+
+# 飞书开放平台（多维表格导入）
+feishu:
+  app-id: ${FEISHU_APP_ID:}
+  app-secret: ${FEISHU_APP_SECRET:}
+  api-base-url: ${FEISHU_API_BASE_URL:https://open.feishu.cn}
+  batch-size: ${FEISHU_BATCH_SIZE:100}
+  parallel-bucket-concurrency: ${FEISHU_PARALLEL_BUCKET_CONCURRENCY:3}
+  list-page-size: ${FEISHU_LIST_PAGE_SIZE:500}
+  api-max-retries: ${FEISHU_API_MAX_RETRIES:3}
+  api-initial-backoff-ms: ${FEISHU_API_INITIAL_BACKOFF_MS:500}
+  api-max-backoff-ms: ${FEISHU_API_MAX_BACKOFF_MS:8000}
+  circuit-failure-threshold: ${FEISHU_CIRCUIT_FAILURE_THRESHOLD:5}
+  circuit-open-seconds: ${FEISHU_CIRCUIT_OPEN_SECONDS:30}
+  task-ttl-days: ${FEISHU_TASK_TTL_DAYS:7}
+  task-lock-ttl-hours: ${FEISHU_TASK_LOCK_TTL_HOURS:24}
+
+# 面试邮件通知（预约成功、定时提醒、录取/未录取）
+outbox:
+  enabled: false
+  relay-interval-ms: 1000
+  batch-size: 50
+  max-retries: 8
+
+interview:
+  notification:
+    enabled: true
+    eve-reminder-cron: "0 0 12 * * ?"
+    day-reminder-cron: "0 0 8 * * ?"
 
 server:
   port: 8080

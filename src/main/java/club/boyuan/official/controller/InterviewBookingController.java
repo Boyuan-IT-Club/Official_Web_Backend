@@ -13,7 +13,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import club.boyuan.official.seckill.InterviewBookingRequestStatusCache;
+import club.boyuan.official.sse.AsyncTaskChannel;
+import club.boyuan.official.sse.AsyncTaskSseHub;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.List;
 
@@ -35,6 +41,8 @@ public class InterviewBookingController {
     private final InterviewBookingSeckillProperties seckillProperties;
     private final IUserService userService;
     private final JwtTokenUtil jwtTokenUtil;
+    private final AsyncTaskSseHub asyncTaskSseHub;
+    private final ObjectMapper objectMapper;
 
     /**
      * 查询某招募周期下可预约的面试时段（含已约/共计与是否约满）。
@@ -115,6 +123,29 @@ public class InterviewBookingController {
         Integer userId = getAuthenticatedUserId(request);
         InterviewBookingAsyncResultDTO status = interviewBookingSeckillService.getRequestStatus(userId, requestId);
         return ResponseEntity.ok(ResponseMessage.success(status));
+    }
+
+    /**
+     * SSE 订阅秒杀预约结果（终态后连接自动关闭）。仍保留 GET /requests/{id} 作为兜底。
+     */
+    @GetMapping(value = "/requests/{requestId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @PreAuthorize("isAuthenticated()")
+    public SseEmitter streamBookingRequest(
+            @PathVariable String requestId,
+            HttpServletRequest request) throws Exception {
+        Integer userId = getAuthenticatedUserId(request);
+        InterviewBookingAsyncResultDTO current = interviewBookingSeckillService.getRequestStatus(userId, requestId);
+        SseEmitter emitter = asyncTaskSseHub.register(AsyncTaskChannel.BOOKING, requestId);
+        emitter.send(SseEmitter.event().name("status").data(objectMapper.writeValueAsString(current)));
+        if (isTerminalBookingStatus(current.getStatus())) {
+            emitter.complete();
+        }
+        return emitter;
+    }
+
+    private static boolean isTerminalBookingStatus(String status) {
+        return InterviewBookingRequestStatusCache.SUCCESS.equals(status)
+                || InterviewBookingRequestStatusCache.FAILED.equals(status);
     }
 
     /**

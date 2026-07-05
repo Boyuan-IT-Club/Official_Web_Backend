@@ -5,18 +5,23 @@ import club.boyuan.official.dto.InterviewBookingDTO;
 import club.boyuan.official.entity.User;
 import club.boyuan.official.service.IUserService;
 import club.boyuan.official.service.InterviewBookingSeckillService;
+import club.boyuan.official.service.InterviewNotificationService;
 import club.boyuan.official.service.impl.InterviewBookingAsyncPersistenceService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
+import club.boyuan.official.seckill.InterviewBookingLuaInventoryService;
 import club.boyuan.official.seckill.InterviewBookingRedisKeys;
 
 import java.util.concurrent.TimeUnit;
 
 /**
  * 消费者：异步将 Redis 预扣结果落库。
+ * <p>幂等：{@code processed:{requestId}} Redis SETNX，重复消息直接跳过。
+ * 失败：删除 processed 标记并调用 {@link InterviewBookingSeckillService#markRequestFailed}，
+ * 内部通过 {@code rollback_remain.lua} 回滚库存，避免超卖。
  */
 @Slf4j
 @Component
@@ -25,8 +30,8 @@ public class InterviewBookingConsumer {
 
     private final InterviewBookingAsyncPersistenceService persistenceService;
     private final InterviewBookingSeckillService seckillService;
-    private final InterviewBookingProducer bookingProducer;
-    private final IUserService userService;
+    private final InterviewBookingLuaInventoryService luaInventoryService;
+    private final InterviewNotificationService interviewNotificationService;
     private final StringRedisTemplate stringRedisTemplate;
 
     @RabbitListener(queues = RabbitMQConfig.INTERVIEW_BOOKING_QUEUE)
@@ -57,7 +62,8 @@ public class InterviewBookingConsumer {
             }
 
             seckillService.markRequestSuccess(message.getRequestId(), booking);
-            publishNotification(message, booking);
+            luaInventoryService.clearUserCycleLock(message.getUserId(), message.getCycleId());
+            interviewNotificationService.enqueueBookingSuccess(booking.getScheduleId(), message.getRequestId());
         } catch (Exception e) {
             log.error("预约落库异常 requestId={}", message.getRequestId(), e);
             stringRedisTemplate.delete(processedKey);
@@ -68,20 +74,5 @@ public class InterviewBookingConsumer {
                     message.getUserId(),
                     message.getCycleId());
         }
-    }
-
-    private void publishNotification(InterviewBookingMessage message, InterviewBookingDTO booking) {
-        User user = userService.getUserById(message.getUserId());
-        String email = user != null ? user.getEmail() : null;
-        String name = user != null ? user.getName() : null;
-        bookingProducer.publishNotification(new InterviewBookingNotificationMessage(
-                message.getRequestId(),
-                message.getUserId(),
-                booking.getScheduleId(),
-                message.getCycleId(),
-                message.getSlotId(),
-                email,
-                name
-        ));
     }
 }

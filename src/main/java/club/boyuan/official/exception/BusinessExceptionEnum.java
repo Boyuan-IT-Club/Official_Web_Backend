@@ -111,6 +111,16 @@ public enum BusinessExceptionEnum {
     INTERVIEW_SECKILL_DISABLED(3410, "秒杀预约模式未开启"),
     TOO_MANY_REQUESTS(4291, "请求过于频繁，请稍后再试"),
 
+    // 飞书集成 (3500-3599)
+    FEISHU_NOT_CONFIGURED(3501, "飞书应用未配置"),
+    FEISHU_AUTH_FAILED(3502, "飞书鉴权失败"),
+    FEISHU_TABLE_URL_INVALID(3503, "飞书表格 URL 无效"),
+    FEISHU_TABLE_URL_MISSING(3504, "未配置飞书表格 URL"),
+    FEISHU_NO_SCHEDULES(3505, "没有可导入的面试安排"),
+    FEISHU_IMPORT_FAILED(3506, "飞书导入失败"),
+    FEISHU_SYNC_TASK_NOT_FOUND(3507, "飞书同步任务不存在"),
+    FEISHU_TABLE_EMPTY(3508, "飞书表格无数据"),
+
     // 活动相关异常 (7000-7099)
     ACTIVITY_NOT_FOUND(7001, "活动不存在"),
     ACTIVITY_CREATE_FAILED(7002, "创建活动失败"),

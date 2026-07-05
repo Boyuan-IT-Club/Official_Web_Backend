@@ -1,5 +1,7 @@
 package club.boyuan.official.dto;
 
+import club.boyuan.official.entity.ResumeFieldDefinition;
+
 import java.time.LocalDateTime;
 
 public class ResumeFieldDefinitionDTO {
@@ -7,6 +9,8 @@ public class ResumeFieldDefinitionDTO {
     private Integer cycleId;
     private String fieldKey;
     private String fieldLabel;
+    private String fieldType;
+    private String placeholder;
     private Boolean isRequired;
     private Integer sortOrder;
     private Boolean isActive;
@@ -49,6 +53,22 @@ public class ResumeFieldDefinitionDTO {
     public void setFieldLabel(String fieldLabel) {
         this.fieldLabel = fieldLabel;
     }
+
+    public String getFieldType() {
+        return fieldType;
+    }
+
+    public void setFieldType(String fieldType) {
+        this.fieldType = fieldType;
+    }
+
+    public String getPlaceholder() {
+        return placeholder;
+    }
+
+    public void setPlaceholder(String placeholder) {
+        this.placeholder = placeholder;
+    }
     
     public Boolean getIsRequired() {
         return isRequired;
@@ -88,5 +108,24 @@ public class ResumeFieldDefinitionDTO {
     
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public static ResumeFieldDefinitionDTO fromEntity(ResumeFieldDefinition entity) {
+        if (entity == null) {
+            return null;
+        }
+        ResumeFieldDefinitionDTO dto = new ResumeFieldDefinitionDTO();
+        dto.setFieldId(entity.getFieldId());
+        dto.setCycleId(entity.getCycleId());
+        dto.setFieldKey(entity.getFieldKey());
+        dto.setFieldLabel(entity.getFieldLabel());
+        dto.setFieldType(entity.getFieldType());
+        dto.setPlaceholder(entity.getPlaceholder());
+        dto.setIsRequired(entity.getIsRequired());
+        dto.setSortOrder(entity.getSortOrder());
+        dto.setIsActive(entity.getIsActive());
+        dto.setCreatedAt(entity.getCreatedAt());
+        dto.setUpdatedAt(entity.getUpdatedAt());
+        return dto;
     }
 }

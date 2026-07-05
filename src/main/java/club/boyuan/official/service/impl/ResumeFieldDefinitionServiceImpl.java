@@ -105,6 +105,7 @@ public class ResumeFieldDefinitionServiceImpl implements IResumeFieldDefinitionS
         logger.info("创建简历字段定义，年份: {}，字段键名: {}", 
                 fieldDefinition.getCycleId(), fieldDefinition.getFieldKey());
         try {
+            applyFieldDefinitionDefaults(fieldDefinition);
             resumeFieldDefinitionMapper.insert(fieldDefinition);
             return fieldDefinition;
         } catch (Exception e) {
@@ -178,8 +179,23 @@ public class ResumeFieldDefinitionServiceImpl implements IResumeFieldDefinitionS
     
     /**
      * 根据字段ID清除相关缓存
-     * @param fieldId 字段ID
+     *
      */
+    private void applyFieldDefinitionDefaults(ResumeFieldDefinition fieldDefinition) {
+        if (fieldDefinition.getFieldType() == null || fieldDefinition.getFieldType().isBlank()) {
+            fieldDefinition.setFieldType("text");
+        }
+        if (fieldDefinition.getIsRequired() == null) {
+            fieldDefinition.setIsRequired(false);
+        }
+        if (fieldDefinition.getSortOrder() == null) {
+            fieldDefinition.setSortOrder(0);
+        }
+        if (fieldDefinition.getIsActive() == null) {
+            fieldDefinition.setIsActive(true);
+        }
+    }
+
     private void clearCacheByFieldId(Integer fieldId) {
         try {
             String cacheKey = "field_definition:" + fieldId;
