@@ -445,6 +445,7 @@ CREATE TABLE `interview_slot` (
                                   `start_time` time NOT NULL COMMENT '开始时间',
                                   `end_time` time NOT NULL COMMENT '结束时间',
                                   `location` varchar(255) COMMENT '面试地点',
+                                  `dept_id` int NULL COMMENT '归属部门ID，NULL表示共享/调剂面试场',
                                   `interview_type` tinyint NOT NULL DEFAULT 1 COMMENT '面试类型：1(线下面试), 2(线上面试)',
                                   `meeting_link` varchar(500) NULL COMMENT '会议链接（线上面试用）',
                                   `max_capacity` int NOT NULL DEFAULT 10 COMMENT '最大容量',
@@ -455,6 +456,7 @@ CREATE TABLE `interview_slot` (
                                   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                                   PRIMARY KEY (`slot_id`),
                                   INDEX `idx_cycle_date` (`cycle_id`, `interview_date`),
+                                  INDEX `idx_slot_dept` (`dept_id`),
                                   INDEX `idx_status` (`status`),
                                   CONSTRAINT `fk_slot_cycle` FOREIGN KEY (`cycle_id`)
                                       REFERENCES `recruitment_cycle` (`cycle_id`) ON DELETE CASCADE
@@ -469,6 +471,8 @@ CREATE TABLE `interview_schedule` (
                                       `resume_id` int NOT NULL COMMENT '简历ID',
                                       `cycle_id` int NOT NULL COMMENT '招募活动ID',
                                       `slot_id` int NOT NULL COMMENT '分配ID',
+                                      `preferred_slot_ids` text NULL COMMENT '学生提交的候选面试时段ID列表(JSON数组)',
+                                      `assigned_dept_id` int NULL COMMENT '按志愿分配得到的部门ID',
                                       `interview_time`   datetime NULL COMMENT '分配的面试具体时间',
                                       `status` tinyint NOT NULL DEFAULT 0 COMMENT '状态：0（未安排），1(已安排), 2(已取消)',
                                       `notes` text NULL COMMENT '安排备注',
@@ -480,6 +484,7 @@ CREATE TABLE `interview_schedule` (
                                       PRIMARY KEY (`schedule_id`),
                                       UNIQUE INDEX `uk_resume_cycle` (`resume_id`, `cycle_id`),
                                       INDEX `idx_slot_id` (`slot_id`),
+                                      INDEX `idx_schedule_assigned_dept` (`assigned_dept_id`),
                                       INDEX `idx_status` (`status`),
                                       CONSTRAINT `fk_schedule_slot` FOREIGN KEY (`slot_id`)
                                           REFERENCES `interview_slot` (`slot_id`) ON DELETE CASCADE,

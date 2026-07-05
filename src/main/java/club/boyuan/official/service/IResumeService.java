@@ -62,6 +62,11 @@ public interface IResumeService {
      * @return 提交后的简历
      */
     Resume submitResume(Integer resumeId);
+
+    /**
+     * 管理员更新简历分数
+     */
+    Resume updateResumeScore(Integer resumeId, Integer score);
     
     /**
      * 保存简历字段值

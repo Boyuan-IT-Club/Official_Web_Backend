@@ -160,7 +160,18 @@ public class UserRoleServiceImpl extends ServiceImpl<UserRoleMapper, UserRole> i
             throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND, "用户不存在");
         }
         
-        // 查询用户的角色ID列表
+        return loadRolesByUserId(userId);
+    }
+
+    @Override
+    public List<Role> getRolesByUserIdForAuth(int userId) {
+        if (userId <= 0) {
+            return List.of();
+        }
+        return loadRolesByUserId(userId);
+    }
+
+    private List<Role> loadRolesByUserId(int userId) {
         List<Integer> roleIds = userRoleMapper.selectList(new LambdaQueryWrapper<UserRole>()
                 .eq(UserRole::getUserId, userId))
                 .stream()
@@ -171,7 +182,6 @@ public class UserRoleServiceImpl extends ServiceImpl<UserRoleMapper, UserRole> i
             return List.of();
         }
         
-        // 查询角色详情
         List<Role> roles = roleMapper.selectBatchIds(roleIds);
         logger.info("获取用户角色列表成功，用户ID: {}, 角色数量: {}", userId, roles.size());
         return roles;

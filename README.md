@@ -74,7 +74,22 @@ make dev-down
 
 ## API 接口文档
 
-本项目使用 Apifox 管理 API 接口文档，不再通过依赖方式生成文档。
+本项目使用 [Apifox](https://apifox.com) 管理 API 接口文档，OpenAPI 源文件位于仓库根目录：
+
+- **`默认模块.openapi.yaml`** — 完整 OpenAPI 3.0 定义，可导入 Apifox / Postman
+
+### 近期重要接口
+
+| 模块 | 方法 | 路径 | 说明 |
+|------|------|------|------|
+| 飞书导出 | POST | `/api/interview/feishu/import` | 平台 → 飞书（异步 PUSH） |
+| 飞书拉回 | POST | `/api/interview/feishu/import-from-table` | 飞书 → 平台（异步 PULL） |
+| 任务轮询 | GET | `/api/interview/feishu/import/tasks/{taskId}` | 查询 PUSH/PULL 任务状态 |
+| 任务 SSE | GET | `/api/interview/feishu/import/tasks/{taskId}/stream` | 订阅任务进度 |
+| 简历评分 | PUT | `/api/resumes/{resumeId}/score` | 管理员更新 resume_score |
+| 面试秒杀 | POST | `/api/interview/booking/seckill` | Redis Lua + MQ 异步占坑 |
+
+飞书相关接口均需权限 `resume:audit`，并配置环境变量 `FEISHU_APP_ID` / `FEISHU_APP_SECRET`。
 
 ## 部署说明
 

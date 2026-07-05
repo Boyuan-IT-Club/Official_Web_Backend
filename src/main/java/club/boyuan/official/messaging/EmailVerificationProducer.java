@@ -16,9 +16,9 @@ public class EmailVerificationProducer {
 
     private final RabbitTemplate rabbitTemplate;
 
-    public void publish(String email, String code) {
-        EmailVerificationMessage message = new EmailVerificationMessage(email, code);
+    public void publish(EmailVerificationMessage message) {
         rabbitTemplate.convertAndSend(RabbitMQConfig.EMAIL_VERIFICATION_QUEUE, message);
-        log.info("邮箱验证码消息已投递到队列 {}, email={}", RabbitMQConfig.EMAIL_VERIFICATION_QUEUE, email);
+        log.info("邮箱验证码消息已投递到队列 {}, messageId={}, email={}",
+                RabbitMQConfig.EMAIL_VERIFICATION_QUEUE, message.getMessageId(), message.getEmail());
     }
 }

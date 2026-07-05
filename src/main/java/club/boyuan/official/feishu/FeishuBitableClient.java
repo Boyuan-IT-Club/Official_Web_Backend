@@ -13,8 +13,11 @@ import org.springframework.util.StringUtils;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -38,6 +41,73 @@ public class FeishuBitableClient {
     }
 
     public record RecordUpdate(String recordId, Map<String, Object> fields) {
+    }
+
+    /**
+     * 分页读取多维表格全部 record_id（仅 ID，不解析字段，用于导出前校验本地缓存是否仍有效）。
+     */
+    public Set<String> listExistingRecordIds(String tableUrl) {
+        ensureConfigured();
+        FeishuTableUrlParser.ParsedTable parsed = FeishuTableUrlParser.parse(tableUrl);
+        String token = getTenantAccessToken();
+
+        Set<String> ids = new LinkedHashSet<>();
+        String pageToken = null;
+        int pageSize = Math.max(1, Math.min(feishuProperties.getListPageSize(), 500));
+        do {
+            RecordIdPageSlice slice = listRecordIdsPage(parsed, token, pageSize, pageToken);
+            ids.addAll(slice.recordIds());
+            pageToken = slice.hasMore() ? slice.nextPageToken() : null;
+        } while (pageToken != null);
+        return ids;
+    }
+
+    private record RecordIdPageSlice(Set<String> recordIds, boolean hasMore, String nextPageToken) {
+    }
+
+    private RecordIdPageSlice listRecordIdsPage(
+            FeishuTableUrlParser.ParsedTable parsed,
+            String token,
+            int pageSize,
+            String pageToken) {
+        StringBuilder url = new StringBuilder(feishuProperties.getApiBaseUrl())
+                .append("/open-apis/bitable/v1/apps/").append(parsed.appToken())
+                .append("/tables/").append(parsed.tableId())
+                .append("/records?page_size=").append(pageSize);
+        if (StringUtils.hasText(pageToken)) {
+            url.append("&page_token=").append(pageToken);
+        }
+
+        String responseBody = feishuApiInvoker.get(url.toString(), token);
+        return parseListRecordIdsPage(responseBody);
+    }
+
+    private RecordIdPageSlice parseListRecordIdsPage(String responseBody) {
+        try {
+            JsonNode root = objectMapper.readTree(responseBody);
+            int code = root.path("code").asInt(-1);
+            if (code != 0) {
+                String msg = root.path("msg").asText("未知错误");
+                log.error("飞书 list record ids 失败 code={}, msg={}", code, msg);
+                throw new BusinessException(BusinessExceptionEnum.FEISHU_IMPORT_FAILED, msg);
+            }
+            JsonNode data = root.path("data");
+            Set<String> ids = new LinkedHashSet<>();
+            for (JsonNode item : data.path("items")) {
+                String recordId = item.path("record_id").asText(null);
+                if (StringUtils.hasText(recordId)) {
+                    ids.add(recordId);
+                }
+            }
+            boolean hasMore = data.path("has_more").asBoolean(false);
+            String next = data.path("page_token").asText(null);
+            return new RecordIdPageSlice(ids, hasMore, next);
+        } catch (BusinessException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            log.error("解析飞书 list record ids 响应失败", ex);
+            throw new BusinessException(BusinessExceptionEnum.FEISHU_IMPORT_FAILED, "飞书 record_id 列表解析失败");
+        }
     }
 
     /**
@@ -104,6 +174,112 @@ public class FeishuBitableClient {
         } catch (Exception ex) {
             log.error("解析飞书 list records 响应失败", ex);
             throw new BusinessException(BusinessExceptionEnum.FEISHU_IMPORT_FAILED, "飞书 API 响应解析失败");
+        }
+    }
+
+    /**
+     * 列出数据表全部字段名称（分页拉取）。
+     */
+    public Set<String> listFieldNames(String tableUrl) {
+        ensureConfigured();
+        FeishuTableUrlParser.ParsedTable parsed = FeishuTableUrlParser.parse(tableUrl);
+        String token = getTenantAccessToken();
+
+        Set<String> names = new LinkedHashSet<>();
+        String pageToken = null;
+        int pageSize = 100;
+        do {
+            FieldPageSlice slice = listFieldsPage(parsed, token, pageSize, pageToken);
+            names.addAll(slice.fieldNames());
+            pageToken = slice.hasMore() ? slice.nextPageToken() : null;
+        } while (pageToken != null);
+        return names;
+    }
+
+    /**
+     * 在数据表中新增一列。
+     */
+    public void createField(String tableUrl, String fieldName, FeishuBitableFieldType type) {
+        ensureConfigured();
+        FeishuTableUrlParser.ParsedTable parsed = FeishuTableUrlParser.parse(tableUrl);
+        String token = getTenantAccessToken();
+
+        Map<String, Object> body = Map.of(
+                "field_name", fieldName,
+                "type", type.code());
+
+        String url = feishuProperties.getApiBaseUrl()
+                + "/open-apis/bitable/v1/apps/" + parsed.appToken()
+                + "/tables/" + parsed.tableId()
+                + "/fields";
+
+        String responseBody = feishuApiInvoker.postJson(url, token, body);
+        parseFieldCreateResponse(responseBody, fieldName);
+    }
+
+    private record FieldPageSlice(Set<String> fieldNames, boolean hasMore, String nextPageToken) {
+    }
+
+    private FieldPageSlice listFieldsPage(
+            FeishuTableUrlParser.ParsedTable parsed,
+            String token,
+            int pageSize,
+            String pageToken) {
+        StringBuilder url = new StringBuilder(feishuProperties.getApiBaseUrl())
+                .append("/open-apis/bitable/v1/apps/").append(parsed.appToken())
+                .append("/tables/").append(parsed.tableId())
+                .append("/fields?page_size=").append(pageSize);
+        if (StringUtils.hasText(pageToken)) {
+            url.append("&page_token=").append(pageToken);
+        }
+
+        String responseBody = feishuApiInvoker.get(url.toString(), token);
+        return parseListFieldsPage(responseBody);
+    }
+
+    private FieldPageSlice parseListFieldsPage(String responseBody) {
+        try {
+            JsonNode root = objectMapper.readTree(responseBody);
+            int code = root.path("code").asInt(-1);
+            if (code != 0) {
+                String msg = root.path("msg").asText("未知错误");
+                log.error("飞书 list fields 失败 code={}, msg={}", code, msg);
+                throw new BusinessException(BusinessExceptionEnum.FEISHU_IMPORT_FAILED, msg);
+            }
+            JsonNode data = root.path("data");
+            Set<String> names = new HashSet<>();
+            for (JsonNode item : data.path("items")) {
+                String name = item.path("field_name").asText(null);
+                if (StringUtils.hasText(name)) {
+                    names.add(name.trim());
+                }
+            }
+            boolean hasMore = data.path("has_more").asBoolean(false);
+            String next = data.path("page_token").asText(null);
+            return new FieldPageSlice(names, hasMore, next);
+        } catch (BusinessException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            log.error("解析飞书 list fields 响应失败", ex);
+            throw new BusinessException(BusinessExceptionEnum.FEISHU_IMPORT_FAILED, "飞书字段列表解析失败");
+        }
+    }
+
+    private void parseFieldCreateResponse(String responseBody, String fieldName) {
+        try {
+            JsonNode root = objectMapper.readTree(responseBody);
+            int code = root.path("code").asInt(-1);
+            if (code != 0) {
+                String msg = root.path("msg").asText("未知错误");
+                log.error("飞书 create field 失败 fieldName={}, code={}, msg={}", fieldName, code, msg);
+                throw new BusinessException(BusinessExceptionEnum.FEISHU_IMPORT_FAILED,
+                        "创建飞书列「" + fieldName + "」失败: " + msg);
+            }
+        } catch (BusinessException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            log.error("解析飞书 create field 响应失败 fieldName={}", fieldName, ex);
+            throw new BusinessException(BusinessExceptionEnum.FEISHU_IMPORT_FAILED, "飞书字段创建响应解析失败");
         }
     }
 

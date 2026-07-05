@@ -11,7 +11,7 @@ import club.boyuan.official.entity.User;
 import club.boyuan.official.mapper.InterviewNotificationLogMapper;
 import club.boyuan.official.mapper.InterviewResultMapper;
 import club.boyuan.official.messaging.InterviewNotificationMessage;
-import club.boyuan.official.messaging.InterviewNotificationProducer;
+import club.boyuan.official.messaging.ReliableMessagePublisher;
 import club.boyuan.official.notification.InterviewNotificationEmailBuilder;
 import club.boyuan.official.notification.InterviewNotificationType;
 import club.boyuan.official.service.DepartmentService;
@@ -25,6 +25,7 @@ import club.boyuan.official.utils.MessageUtils;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -42,7 +43,7 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
     private static final int DECISION_PASSED = 1;
     private static final int DECISION_REJECTED = 2;
 
-    private final InterviewNotificationProducer notificationProducer;
+    private final ReliableMessagePublisher reliableMessagePublisher;
     private final InterviewNotificationLogMapper notificationLogMapper;
     private final IInterviewScheduleService interviewScheduleService;
     private final IInterviewSlotService interviewSlotService;
@@ -58,7 +59,9 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
         if (scheduleId == null) {
             return;
         }
-        notificationProducer.publishBookingSuccess(scheduleId, requestId);
+        reliableMessagePublisher.publishInterviewNotification(
+                new InterviewNotificationMessage(
+                        InterviewNotificationType.BOOKING_SUCCESS, scheduleId, null, requestId, null));
     }
 
     @Override
@@ -84,7 +87,8 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
             if (alreadySent(reminderType, schedule.getScheduleId(), null)) {
                 continue;
             }
-            notificationProducer.publishReminder(reminderType, schedule.getScheduleId());
+            reliableMessagePublisher.publishInterviewNotification(
+                    new InterviewNotificationMessage(reminderType, schedule.getScheduleId(), null, null, null));
         }
         log.info("已扫描并投递 {} 提醒，目标日期={}", reminderType, targetDate);
     }
@@ -94,7 +98,8 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
         if (resultId == null) {
             return;
         }
-        notificationProducer.publishResult(resultId, customBody);
+        reliableMessagePublisher.publishInterviewNotification(
+                new InterviewNotificationMessage(null, null, resultId, null, customBody));
     }
 
     /**
@@ -147,7 +152,7 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
         InterviewBookingDTO booking = InterviewBookingDTO.from(schedule, slot);
 
         String subject = InterviewNotificationEmailBuilder.subject(type);
-        String body = InterviewNotificationEmailBuilder.body(type, name, booking, null);
+        String body = InterviewNotificationEmailBuilder.htmlBody(type, name, booking, null);
         sendAndLog(type, scheduleId, null, email, subject, body, schedule, message.getRequestId());
     }
 
@@ -200,8 +205,8 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
                 ? InterviewNotificationEmailBuilder.subject(effectiveType)
                 : "【博远信息技术社】面试结果通知";
         String body = templated
-                ? InterviewNotificationEmailBuilder.body(effectiveType, name, booking, departmentName)
-                : message.getCustomBody();
+                ? InterviewNotificationEmailBuilder.htmlBody(effectiveType, name, booking, departmentName)
+                : InterviewNotificationEmailBuilder.customHtmlBody(name, message.getCustomBody(), booking);
 
         sendAndLog(effectiveType, result.getScheduleId(), resultId, email, subject, body, schedule, null);
     }
@@ -241,23 +246,58 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
                             InterviewSchedule schedule,
                             String requestId) {
         messageUtils.validateEmail(email);
-        messageUtils.sendEmail(email, subject, body);
-
-        InterviewNotificationLog logEntry = new InterviewNotificationLog()
-                .setNotificationType(type.name())
-                .setScheduleId(scheduleId)
-                .setResultId(resultId)
-                .setRecipientEmail(email)
-                .setSentAt(LocalDateTime.now());
-        notificationLogMapper.insert(logEntry);
-
-        if (schedule != null && type == InterviewNotificationType.BOOKING_SUCCESS) {
-            schedule.setNotifStatus(1);
-            interviewScheduleService.updateById(schedule);
+        if (!tryClaimNotification(type, scheduleId, resultId, email)) {
+            log.info("通知已发送或已被抢占，跳过 type={}, scheduleId={}, resultId={}",
+                    type, scheduleId, resultId);
+            return;
         }
+        try {
+            messageUtils.sendHtmlEmail(email, subject, body);
+            if (schedule != null && type == InterviewNotificationType.BOOKING_SUCCESS) {
+                schedule.setNotifStatus(1);
+                interviewScheduleService.updateById(schedule);
+            }
+            log.info("面试通知已发送 type={}, scheduleId={}, resultId={}, email={}, requestId={}",
+                    type, scheduleId, resultId, email, requestId);
+        } catch (Exception e) {
+            rollbackNotificationClaim(type, scheduleId, resultId);
+            throw e;
+        }
+    }
 
-        log.info("面试通知已发送 type={}, scheduleId={}, resultId={}, email={}, requestId={}",
-                type, scheduleId, resultId, email, requestId);
+    /**
+     * 先插入通知日志占位（唯一索引），成功后再发信，避免并发重复发送。
+     */
+    private boolean tryClaimNotification(InterviewNotificationType type,
+                                         Integer scheduleId,
+                                         Integer resultId,
+                                         String email) {
+        try {
+            InterviewNotificationLog logEntry = new InterviewNotificationLog()
+                    .setNotificationType(type.name())
+                    .setScheduleId(scheduleId)
+                    .setResultId(resultId)
+                    .setRecipientEmail(email)
+                    .setSentAt(LocalDateTime.now());
+            notificationLogMapper.insert(logEntry);
+            return true;
+        } catch (DuplicateKeyException e) {
+            return false;
+        }
+    }
+
+    private void rollbackNotificationClaim(InterviewNotificationType type,
+                                           Integer scheduleId,
+                                           Integer resultId) {
+        LambdaQueryWrapper<InterviewNotificationLog> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(InterviewNotificationLog::getNotificationType, type.name());
+        if (scheduleId != null) {
+            wrapper.eq(InterviewNotificationLog::getScheduleId, scheduleId);
+        }
+        if (resultId != null) {
+            wrapper.eq(InterviewNotificationLog::getResultId, resultId);
+        }
+        notificationLogMapper.delete(wrapper);
     }
 
     private boolean alreadySent(InterviewNotificationType type, Integer scheduleId, Integer resultId) {

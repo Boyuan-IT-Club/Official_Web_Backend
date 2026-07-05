@@ -4,6 +4,7 @@ import club.boyuan.official.dto.PageResultDTO;
 import club.boyuan.official.dto.ResponseMessage;
 import club.boyuan.official.dto.ResumeDTO;
 import club.boyuan.official.dto.ResumeFieldValueDTO;
+import club.boyuan.official.dto.UpdateResumeScoreRequestDTO;
 import club.boyuan.official.entity.Resume;
 import club.boyuan.official.entity.ResumeFieldDefinition;
 import club.boyuan.official.entity.ResumeFieldValue;
@@ -15,6 +16,7 @@ import club.boyuan.official.service.IResumeService;
 import club.boyuan.official.service.IUserService;
 import club.boyuan.official.utils.JwtTokenUtil;
 import club.boyuan.official.utils.PdfExportUtil;
+import jakarta.validation.Valid;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.AllArgsConstructor;
@@ -486,6 +488,31 @@ public class ResumeController {
     }
     
     /**
+     * 管理员更新简历分数
+     */
+    @PutMapping("/{resumeId}/score")
+    @PreAuthorize("hasAuthority('resume:audit')")
+    public ResponseEntity<ResponseMessage<?>> updateResumeScore(
+            @PathVariable Integer resumeId,
+            @Valid @RequestBody UpdateResumeScoreRequestDTO request) {
+        try {
+            Resume updated = resumeService.updateResumeScore(resumeId, request.getScore());
+            return ResponseEntity.ok(ResponseMessage.success(updated));
+        } catch (BusinessException e) {
+            logger.warn("更新简历分数业务异常，resumeId={}，错误码={}，错误信息={}",
+                    resumeId, e.getCode(), e.getMessage());
+            HttpStatus status = e.getCode() == BusinessExceptionEnum.RESUME_NOT_FOUND.getCode()
+                    ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+            return ResponseEntity.status(status)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("更新简历分数系统异常，resumeId={}", resumeId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(BusinessExceptionEnum.SYSTEM_ERROR.getCode(), "更新简历分数失败"));
+        }
+    }
+
+    /**
      * 更新简历状态
      * @param resumeId 简历ID
      * @param status 状态
@@ -586,8 +613,8 @@ public class ResumeController {
                 throw new BusinessException(BusinessExceptionEnum.RESUME_NOT_FOUND);
             }
             
-            // 检查简历状态，已提交的简历不能更新
-            if (resume.getStatus() != null && resume.getStatus() > 2) {
+            // 检查简历状态，已提交及之后不可更新
+            if (resume.getStatus() != null && resume.getStatus() >= 2) {
                 logger.warn("尝试更新已提交的简历，用户ID: {}，招募周期ID: {}，状态: {}", 
                         currentUser.getUserId(), cycleId, resume.getStatus());
                 throw new BusinessException(BusinessExceptionEnum.RESUME_ALREADY_SUBMITTED);

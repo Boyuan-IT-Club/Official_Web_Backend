@@ -99,7 +99,15 @@ public class InterviewSlotInventoryServiceImpl implements InterviewSlotInventory
 
     @Override
     public void syncRemainCacheFromDb(Integer slotId) {
-        InterviewSlot slot = interviewSlotMapper.selectById(slotId);
+        syncRemainCacheFromDb(interviewSlotMapper.selectById(slotId), slotId);
+    }
+
+    @Override
+    public void syncRemainCacheFromDb(InterviewSlot slot) {
+        syncRemainCacheFromDb(slot, slot == null ? null : slot.getSlotId());
+    }
+
+    private void syncRemainCacheFromDb(InterviewSlot slot, Integer slotId) {
         if (slot == null) {
             stringRedisTemplate.delete(redisKey(slotId));
             return;
@@ -108,7 +116,7 @@ public class InterviewSlotInventoryServiceImpl implements InterviewSlotInventory
         int occupied = slot.getCurrentOccupied() == null ? 0 : slot.getCurrentOccupied();
         long remain = Math.max(0L, (long) max - occupied);
         stringRedisTemplate.opsForValue().set(
-                redisKey(slotId), String.valueOf(remain), REDIS_TTL_HOURS, TimeUnit.HOURS);
+                redisKey(slot.getSlotId()), String.valueOf(remain), REDIS_TTL_HOURS, TimeUnit.HOURS);
     }
 
     private boolean doTryOccupy(Integer slotId) {

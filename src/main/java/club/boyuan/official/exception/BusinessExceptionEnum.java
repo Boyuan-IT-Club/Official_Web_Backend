@@ -62,6 +62,8 @@ public enum BusinessExceptionEnum {
     RESUME_DELETE_FAILED(3007, "简历删除失败"),
     RESUME_SUBMIT_FAILED(3008, "简历提交失败"),
     RESUME_QUERY_FAILED(3009, "简历查询失败"),
+    RESUME_SUBMIT_VALIDATION_FAILED(3010, "简历提交校验失败"),
+    RESUME_SCORE_INVALID(3011, "简历分数无效"),
     
     // 简历字段定义相关异常 (3100-3199)
     RESUME_FIELD_DEFINITION_CREATE_FAILED(3101, "简历字段定义创建失败"),

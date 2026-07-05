@@ -3,10 +3,14 @@ package club.boyuan.official.outbox;
 import club.boyuan.official.config.OutboxProperties;
 import club.boyuan.official.entity.MessageOutbox;
 import club.boyuan.official.mapper.MessageOutboxMapper;
+import club.boyuan.official.messaging.EmailVerificationMessage;
+import club.boyuan.official.messaging.EmailVerificationProducer;
 import club.boyuan.official.messaging.FeishuSyncMessage;
 import club.boyuan.official.messaging.FeishuSyncProducer;
 import club.boyuan.official.messaging.InterviewBookingMessage;
 import club.boyuan.official.messaging.InterviewBookingProducer;
+import club.boyuan.official.messaging.InterviewNotificationMessage;
+import club.boyuan.official.messaging.InterviewNotificationProducer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +34,8 @@ public class MessageOutboxRelay {
     private final ObjectMapper objectMapper;
     private final InterviewBookingProducer bookingProducer;
     private final FeishuSyncProducer feishuSyncProducer;
+    private final InterviewNotificationProducer notificationProducer;
+    private final EmailVerificationProducer emailVerificationProducer;
 
     @Scheduled(fixedDelayString = "${outbox.relay-interval-ms:1000}")
     @Transactional(rollbackFor = Exception.class)
@@ -58,6 +64,16 @@ public class MessageOutboxRelay {
                     FeishuSyncMessage message = objectMapper.readValue(
                             row.getPayload(), FeishuSyncMessage.class);
                     feishuSyncProducer.publish(message.getTaskId());
+                }
+                case INTERVIEW_NOTIFICATION -> {
+                    InterviewNotificationMessage message = objectMapper.readValue(
+                            row.getPayload(), InterviewNotificationMessage.class);
+                    notificationProducer.publish(message);
+                }
+                case EMAIL_VERIFICATION -> {
+                    EmailVerificationMessage message = objectMapper.readValue(
+                            row.getPayload(), EmailVerificationMessage.class);
+                    emailVerificationProducer.publish(message);
                 }
                 default -> throw new IllegalStateException("未知 Outbox 事件: " + type);
             }

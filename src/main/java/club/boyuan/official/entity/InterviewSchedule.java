@@ -51,6 +51,18 @@ public class InterviewSchedule implements Serializable {
     private Integer slotId;
 
     /**
+     * 学生提交的候选面试时段ID列表（JSON数组）
+     */
+    @TableField("preferred_slot_ids")
+    private String preferredSlotIds;
+
+    /**
+     * 按志愿部门分配得到的部门ID；共享场地时也记录最终按哪个志愿部门安排
+     */
+    @TableField("assigned_dept_id")
+    private Integer assignedDeptId;
+
+    /**
      * 分配的面试具体时间
      */
     @TableField("interview_time")

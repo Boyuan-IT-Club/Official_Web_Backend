@@ -10,22 +10,18 @@ import club.boyuan.official.service.PermissionService;
 import club.boyuan.official.service.RolePermissionService;
 import club.boyuan.official.service.UserRoleService;
 import club.boyuan.official.utils.JwtTokenUtil;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Objects;
-import java.util.Set;
+import club.boyuan.official.entity.Role;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import club.boyuan.official.entity.Role;
-import club.boyuan.official.entity.Permission;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 /**
  * 登录服务实现类
@@ -160,29 +156,20 @@ public class LoginServiceImpl implements ILoginService {
      * @return 包含令牌的成功响应
      */
     private ResponseMessage<?> generateLoginSuccessResponse(User user) {
-        // 检查用户是否被冻结
         if (user.getStatus() != 1) {
             return ResponseMessage.error(403, "账号已被冻结，无法登录");
         }
-        // 获取用户角色列表
-        List<Role> roles = userRoleService.getRolesByUserId(user.getUserId());
+
+        List<Role> roles = userRoleService.getRolesByUserIdForAuth(user.getUserId());
         List<String> roleNames = roles.stream()
-            .map(Role::getRoleName)
-            .collect(Collectors.toList());
-        
-        // 获取用户权限列表
-        List<Integer> permissionIds = new ArrayList<>();
-        for (Role role : roles) {
-            permissionIds.addAll(rolePermissionService
-                .getPermissionIdsByRoleId(role.getRoleId()));
-        }
-        // 将权限id去重，转换为权限码
-        List<String> permissionCodes = permissionIds.stream()
-            .distinct() // 去重
-            .map(code -> permissionService
-                .getPermissionById(code)
-                .getPermissionCode())
-            .collect(Collectors.toList());
+                .map(Role::getRoleName)
+                .collect(Collectors.toList());
+
+        List<Integer> roleIds = roles.stream()
+                .map(Role::getRoleId)
+                .collect(Collectors.toList());
+        List<String> permissionCodes = permissionService.getPermissionCodesByIds(
+                rolePermissionService.getPermissionIdsByRoleIds(roleIds));
 
         user.setRoles(roles);
 

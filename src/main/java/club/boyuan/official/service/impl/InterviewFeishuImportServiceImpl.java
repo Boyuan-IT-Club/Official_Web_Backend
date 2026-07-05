@@ -14,11 +14,7 @@ import club.boyuan.official.feishu.FeishuTablePullImportExecutor;
 import club.boyuan.official.feishu.FeishuSyncTaskRecord;
 import club.boyuan.official.feishu.FeishuSyncTaskRedisStore;
 import club.boyuan.official.feishu.FeishuSyncTaskStatus;
-import club.boyuan.official.messaging.FeishuSyncMessage;
-import club.boyuan.official.messaging.FeishuSyncProducer;
-import club.boyuan.official.outbox.MessageOutboxService;
-import club.boyuan.official.outbox.OutboxAggregateType;
-import club.boyuan.official.outbox.OutboxEventType;
+import club.boyuan.official.messaging.ReliableMessagePublisher;
 import club.boyuan.official.service.InterviewFeishuImportService;
 import club.boyuan.official.sse.AsyncTaskChannel;
 import club.boyuan.official.sse.AsyncTaskSseHub;
@@ -43,10 +39,9 @@ import org.springframework.stereotype.Service;
 public class InterviewFeishuImportServiceImpl implements InterviewFeishuImportService {
 
     private final FeishuSyncTaskRedisStore taskRedisStore;
-    private final FeishuSyncProducer feishuSyncProducer;
+    private final ReliableMessagePublisher reliableMessagePublisher;
     private final FeishuImportExecutor feishuImportExecutor;
     private final FeishuTablePullImportExecutor feishuTablePullImportExecutor;
-    private final MessageOutboxService messageOutboxService;
     private final AsyncTaskSseHub asyncTaskSseHub;
 
     /** 同步部分：写 Redis + 发 MQ；耗时导入在消费者里异步跑。 */
@@ -78,15 +73,7 @@ public class InterviewFeishuImportServiceImpl implements InterviewFeishuImportSe
     }
 
     private void enqueueFeishuSyncMessage(Long taskId) {
-        if (messageOutboxService.isEnabled()) {
-            messageOutboxService.enqueue(
-                    OutboxEventType.FEISHU_SYNC,
-                    OutboxAggregateType.FEISHU_SYNC,
-                    String.valueOf(taskId),
-                    new FeishuSyncMessage(taskId));
-        } else {
-            feishuSyncProducer.publish(taskId);
-        }
+        reliableMessagePublisher.publishFeishuSync(String.valueOf(taskId));
     }
 
     @Override

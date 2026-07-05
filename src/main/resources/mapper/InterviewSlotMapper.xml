@@ -9,6 +9,7 @@
                start_time,
                end_time,
                location,
+               dept_id,
                interview_type,
                meeting_link,
                max_capacity,
@@ -35,6 +36,21 @@
         WHERE slot_id = #{slotId}
           AND status != 3
           AND current_occupied &lt; max_capacity
+    </update>
+
+    <!-- 批量占坑：调用方已用 selectByIdForUpdate 锁行并算好 delta，一次 UPDATE 顶替 N 次单条占坑 -->
+    <update id="occupyBatch">
+        UPDATE interview_slot
+        SET current_occupied = current_occupied + #{delta},
+            status = CASE
+                         WHEN status = 3 THEN 3
+                         WHEN (current_occupied + #{delta}) >= max_capacity THEN 2
+                         ELSE 1
+                END,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE slot_id = #{slotId}
+          AND status != 3
+          AND current_occupied + #{delta} &lt;= max_capacity
     </update>
 
     <update id="releaseOne">

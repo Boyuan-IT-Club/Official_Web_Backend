@@ -30,6 +30,11 @@ public class CreateInterviewSlotRequestDTO {
 
     private String location;
 
+    /**
+     * 该面试场归属部门；为空表示共享/调剂面试场。
+     */
+    private Integer deptId;
+
     @NotNull(message = "面试类型不能为空")
     private Integer interviewType; // 1-线下面试，2-线上面试
 

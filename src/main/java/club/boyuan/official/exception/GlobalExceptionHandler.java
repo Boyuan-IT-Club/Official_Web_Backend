@@ -85,13 +85,15 @@ public class GlobalExceptionHandler {
             return HttpStatus.BAD_REQUEST;
         }
         // 面试预约相关异常 (3400-3499)
-        else if (businessCode == 3402) {
+        else if (businessCode == 3402 || businessCode == 3408) {
             return HttpStatus.CONFLICT;
         } else if (businessCode == 3406) {
             return HttpStatus.FORBIDDEN;
+        } else if (businessCode == 3409) {
+            return HttpStatus.NOT_FOUND;
         } else if (businessCode == 4291) {
             return HttpStatus.TOO_MANY_REQUESTS;
-        } else if (businessCode >= 3408 && businessCode <= 3410) {
+        } else if (businessCode == 3410) {
             return HttpStatus.BAD_REQUEST;
         } else if (businessCode >= 3401 && businessCode <= 3407) {
             return HttpStatus.BAD_REQUEST;

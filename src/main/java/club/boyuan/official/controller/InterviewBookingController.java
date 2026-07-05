@@ -3,6 +3,8 @@ package club.boyuan.official.controller;
 import club.boyuan.official.dto.*;
 import club.boyuan.official.entity.User;
 import club.boyuan.official.config.InterviewBookingSeckillProperties;
+import club.boyuan.official.exception.BusinessException;
+import club.boyuan.official.exception.BusinessExceptionEnum;
 import club.boyuan.official.service.IInterviewBookingService;
 import club.boyuan.official.service.InterviewBookingSeckillService;
 import club.boyuan.official.service.IUserService;
@@ -26,8 +28,9 @@ import java.util.List;
 /**
  * 面试预约（学生自助 + 管理员查询）。
  * <p>
- * 学生先选 {@link InterviewBookableSlotDTO} 中的大时段（slotId），写入 {@code interview_schedule}；
- * 预约成功时按大时段容量均分并写入精确 {@code interviewTime}；到场前提醒由后续定时任务发送。
+ * 学生可提交一个或多个 {@link InterviewBookableSlotDTO} 大时段，后端按简历志愿部门选择最终 slot，
+ * 写入 {@code interview_schedule}；预约成功时按最终大时段容量均分并写入精确 {@code interviewTime}。
+ * 到场前提醒由后续定时任务发送。
  * 路径参数 {@code bookingId} 即 {@code schedule_id}。
  */
 @RestController
@@ -63,10 +66,8 @@ public class InterviewBookingController {
     }
 
     /**
-     * 创建或覆盖预约：同一用户同一周期仅保留一条有效安排（uk_resume_cycle）。
-     */
-    /**
-     * 创建或更新预约。当 {@code booking.seckill.enabled=true} 时，首次预约/复用取消记录走秒杀异步链路。
+     * 创建或更新预约。当 {@code booking.seckill.enabled=true} 且只提交单个 slot 时，首次预约/复用取消记录走秒杀异步链路。
+     * 多候选 slot 预约走同步分配链路。
      * 请求头可传 {@code Idempotency-Key} 防重复提交。
      */
     @PostMapping
@@ -76,10 +77,11 @@ public class InterviewBookingController {
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             HttpServletRequest request) {
         Integer userId = getAuthenticatedUserId(request);
-        log.info("提交面试预约，userId={}, cycleId={}, slotId={}, seckill={}",
-                userId, requestDTO.getCycleId(), requestDTO.getSlotId(), seckillProperties.isEnabled());
+        normalizeSingleSlotId(requestDTO);
+        log.info("提交面试预约，userId={}, cycleId={}, slotIds={}, seckill={}",
+                userId, requestDTO.getCycleId(), requestDTO.resolveSlotIds(), seckillProperties.isEnabled());
 
-        if (seckillProperties.isEnabled()) {
+        if (seckillProperties.isEnabled() && requestDTO.isSingleSlotSelection()) {
             InterviewBookingAsyncResultDTO asyncResult = interviewBookingSeckillService.submitSeckillBooking(
                     userId, requestDTO, idempotencyKey);
             if (asyncResult.getBooking() != null
@@ -96,7 +98,8 @@ public class InterviewBookingController {
     }
 
     /**
-     * 秒杀预约专用入口（始终异步）：Lua 预扣 → MQ 落库 → MQ 通知。
+     * 秒杀预约专用入口：Lua 预扣 → MQ 落库 → MQ 通知。
+     * 若已存在同一时段有效预约，直接返回 SUCCESS 结果。
      */
     @PostMapping("/seckill")
     @PreAuthorize("isAuthenticated()")
@@ -105,10 +108,19 @@ public class InterviewBookingController {
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             HttpServletRequest request) {
         Integer userId = getAuthenticatedUserId(request);
+        normalizeSingleSlotId(requestDTO);
+        if (!requestDTO.isSingleSlotSelection()) {
+            throw new BusinessException(BusinessExceptionEnum.UNSUPPORTED_OPERATION,
+                    "秒杀预约只支持提交单个面试时段");
+        }
         log.info("提交秒杀面试预约，userId={}, cycleId={}, slotId={}",
                 userId, requestDTO.getCycleId(), requestDTO.getSlotId());
         InterviewBookingAsyncResultDTO result = interviewBookingSeckillService.submitSeckillBooking(
                 userId, requestDTO, idempotencyKey);
+        if (result.getBooking() != null
+                && InterviewBookingRequestStatusCache.SUCCESS.equals(result.getStatus())) {
+            return ResponseEntity.ok(ResponseMessage.success(result));
+        }
         return ResponseEntity.accepted().body(ResponseMessage.success(result));
     }
 
@@ -148,6 +160,12 @@ public class InterviewBookingController {
                 || InterviewBookingRequestStatusCache.FAILED.equals(status);
     }
 
+    private void normalizeSingleSlotId(CreateInterviewBookingRequestDTO requestDTO) {
+        if (requestDTO.getSlotId() == null && requestDTO.isSingleSlotSelection()) {
+            requestDTO.setSlotId(requestDTO.resolveSlotIds().get(0));
+        }
+    }
+
     /**
      * 查询当前用户在指定周期的预约；未预约时 {@code data} 为 null。
      */
@@ -178,8 +196,8 @@ public class InterviewBookingController {
             @Valid @RequestBody UpdateInterviewBookingRequestDTO requestDTO,
             HttpServletRequest request) {
         Integer userId = getAuthenticatedUserId(request);
-        log.info("改期面试预约，userId={}, scheduleId={}, newSlotId={}",
-                userId, bookingId, requestDTO.getSlotId());
+        log.info("改期面试预约，userId={}, scheduleId={}, newSlotIds={}",
+                userId, bookingId, requestDTO.resolveSlotIds());
         InterviewBookingDTO booking = interviewBookingService.rescheduleBooking(userId, bookingId, requestDTO);
         log.info("改期成功，userId={}, scheduleId={}, slotId={}",
                 userId, booking.getScheduleId(), booking.getSlotId());

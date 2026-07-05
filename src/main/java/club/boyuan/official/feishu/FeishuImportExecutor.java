@@ -20,11 +20,11 @@ import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Semaphore;
@@ -47,6 +47,7 @@ public class FeishuImportExecutor {
     private final ResumeMapper resumeMapper;
     private final ResumeFieldReader resumeFieldReader;
     private final FeishuBitableClient feishuBitableClient;
+    private final FeishuBitableFieldSyncService feishuBitableFieldSyncService;
     private final FeishuProperties feishuProperties;
     private final Executor feishuBucketExecutor;
 
@@ -55,6 +56,7 @@ public class FeishuImportExecutor {
                                 ResumeMapper resumeMapper,
                                 ResumeFieldReader resumeFieldReader,
                                 FeishuBitableClient feishuBitableClient,
+                                FeishuBitableFieldSyncService feishuBitableFieldSyncService,
                                 FeishuProperties feishuProperties,
                                 @Qualifier("feishuBucketExecutor") Executor feishuBucketExecutor) {
         this.interviewScheduleService = interviewScheduleService;
@@ -62,6 +64,7 @@ public class FeishuImportExecutor {
         this.resumeMapper = resumeMapper;
         this.resumeFieldReader = resumeFieldReader;
         this.feishuBitableClient = feishuBitableClient;
+        this.feishuBitableFieldSyncService = feishuBitableFieldSyncService;
         this.feishuProperties = feishuProperties;
         this.feishuBucketExecutor = feishuBucketExecutor;
     }
@@ -246,6 +249,11 @@ public class FeishuImportExecutor {
 
         int imported = 0;
         try {
+            feishuBitableFieldSyncService.ensurePushExportFields(bucket.tableUrl);
+
+            List<ScheduledRow> recreatePlans = reconcileStaleUpdates(updatePlans, bucket.tableUrl);
+            createPlans.addAll(recreatePlans);
+
             if (!createPlans.isEmpty()) {
                 List<Map<String, Object>> rows = createPlans.stream().map(ScheduledRow::fields).toList();
                 FeishuBatchWriteResult created = feishuBitableClient.batchCreateRecords(bucket.tableUrl, rows);
@@ -272,6 +280,33 @@ public class FeishuImportExecutor {
             log.error("飞书导入失败 location={}, url={}", bucket.locationKey, bucket.tableUrl, ex);
             return locationResult;
         }
+    }
+
+    /**
+     * 本地 feishu_record_id 可能已失效（换表、清表、手动删行）。校验后把失效行移出 update 列表，改为重新创建。
+     *
+     * @return 需要重新创建的行（原 updatePlans 中仍有效的行保留在 updatePlans 内）
+     */
+    private List<ScheduledRow> reconcileStaleUpdates(List<ScheduledRow> updatePlans, String tableUrl) {
+        if (updatePlans.isEmpty()) {
+            return List.of();
+        }
+        Set<String> existingIds = feishuBitableClient.listExistingRecordIds(tableUrl);
+        List<ScheduledRow> recreatePlans = new ArrayList<>();
+        updatePlans.removeIf(row -> {
+            if (existingIds.contains(row.recordId())) {
+                return false;
+            }
+            log.warn("飞书记录已不存在，将重新创建 scheduleId={}, staleRecordId={}, tableUrl={}",
+                    row.scheduleId(), row.recordId(), tableUrl);
+            recreatePlans.add(new ScheduledRow(row.scheduleId(), row.fields()));
+            return true;
+        });
+        if (!recreatePlans.isEmpty()) {
+            log.info("飞书 record_id 校验：{} 行将更新，{} 行失效后重新创建",
+                    updatePlans.size(), recreatePlans.size());
+        }
+        return recreatePlans;
     }
 
     private void persistCreateResults(List<ScheduledRow> createPlans, List<String> recordIds) {
@@ -301,22 +336,7 @@ public class FeishuImportExecutor {
                                          Map<Integer, ResumeFieldReader.ResumeSnapshot> snapshotByResumeId) {
         ResumeFieldReader.ResumeSnapshot snapshot = snapshotByResumeId.getOrDefault(
                 schedule.getResumeId(), ResumeFieldReader.ResumeSnapshot.empty());
-
-        Map<String, Object> fields = new HashMap<>();
-        fields.put(FeishuBitableColumns.NAME, snapshot.name());
-        fields.put(FeishuBitableColumns.INTENDED_DEPT, snapshot.intendedDepartments());
-        fields.put(FeishuBitableColumns.GRADE, snapshot.grade());
-        fields.put(FeishuBitableColumns.MAJOR, snapshot.major());
-        fields.put(FeishuBitableColumns.SELF_INTRO, snapshot.selfIntroduction());
-        fields.put(FeishuBitableColumns.QUESTION_ONE, "");
-        fields.put(FeishuBitableColumns.QUESTION_TWO, "");
-        fields.put(FeishuBitableColumns.QUESTION_THREE, "");
-        fields.put(FeishuBitableColumns.EVALUATION, "");
-        fields.put(FeishuBitableColumns.RESUME_SCORE, snapshot.resumeScore());
-        fields.put(FeishuBitableColumns.PRESELECT, "");
-        fields.put(FeishuBitableColumns.ADJUSTABLE, "");
-        fields.put(FeishuBitableColumns.RECORDER, "");
-        return fields;
+        return FeishuBitableExportSchema.buildPushRow(snapshot);
     }
 
     private FeishuLocationImportResultDTO failedLocationResult(LocationBucket bucket, String message) {

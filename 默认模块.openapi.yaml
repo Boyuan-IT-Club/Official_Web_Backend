@@ -4,9 +4,12 @@ info:
   description: |
     博远信息技术社官网后端面试模块的完整 API 接口文档。
 
-    **面试预约（与简历解耦）**：学生按 `InterviewSlot` 选择大时段（`interviewDate` + 24 小时制 `startTime`/`endTime`）；已约/共计用 `currentOccupied`/`maxCapacity`，约满时 `fullyBooked=true`。预约写入 `InterviewSchedule`；成功占坑后按 `(endTime - startTime) / maxCapacity` 均分并写入精确 `interviewTime`。默认开启秒杀模式（Lua 预扣 + Outbox/MQ 异步落库 + 消费端 Redis 幂等与失败回滚），推荐 `GET /api/interview/booking/requests/{requestId}/stream`（SSE）获取结果，轮询 `GET .../requests/{requestId}` 作兜底。`location` 可为 null。
+    **面试预约（按志愿部门分配）**：学生可提交一个或多个候选 `InterviewSlot` 大时段（`slotId` 或 `slotIds`）。后端读取简历 `expected_departments`，优先在候选时段中匹配 `interview_slot.dept_id` 对应的第一/第二志愿部门；匹配不到时使用共享/调剂场（`dept_id=null`）或候选时段中其它有容量的 slot。最终只生成一条 `InterviewSchedule`，并写入 `preferredSlotIds`、`assignedDeptId`、最终 `slotId` 和按容量均分后的精确 `interviewTime`。秒杀链路仍只支持单个 `slotId`。
 
-    **飞书多维表格导入（异步）**：`POST /api/interview/feishu/import` 立即返回 `taskId`（任务状态存 Redis，Outbox/MQ 异步执行）；推荐 `GET /api/interview/feishu/import/tasks/{taskId}/stream`（SSE）推送进度，轮询 `GET .../tasks/{taskId}` 作兜底。按面试地点分桶并行写入各 `feishu_table_url`。
+    **飞书多维表格双向同步（异步）**：
+    - **平台 → 飞书（PUSH）**：`POST /api/interview/feishu/import`，将 `interview_schedule`（`sync_status=0`）及关联简历字段写入飞书；按 `interview_slot.location` 分桶，并行写入各 `feishu_table_url`。
+    - **飞书 → 平台（PULL）**：`POST /api/interview/feishu/import-from-table`，从飞书表格拉回录取结果，写入 `interview_result`，可选更新 `user.dept_id`。
+    - 两类任务均立即返回 `taskId`（状态存 Redis，RabbitMQ 异步执行）；推荐 `GET /api/interview/feishu/import/tasks/{taskId}/stream`（SSE）订阅进度，轮询 `GET .../tasks/{taskId}` 作兜底。终态：`SUCCESS` / `PARTIAL_SUCCESS` / `FAILED`。
   version: 1.0.0
 tags:
   - name: 登录注册页
@@ -1310,6 +1313,50 @@ paths:
           headers: {}
       security:
         - bearer: []
+  /api/resumes/{resumeId}/score:
+    put:
+      summary: 更新简历评分
+      deprecated: false
+      description: |
+        管理员更新指定简历的 `resume_score`（0–100）。权限：`resume:audit`。
+      tags:
+        - 简历相关功能——管理员
+      parameters:
+        - name: resumeId
+          in: path
+          description: 简历 ID
+          required: true
+          schema:
+            type: integer
+            example: 1001
+        - name: Authorization
+          in: header
+          example: Bearer {{token}}
+          schema:
+            type: string
+            default: Bearer {{token}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateResumeScoreRequest'
+            example:
+              score: 85
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '404':
+          description: 简历不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+      security: []
   /api/resumes/fields/{fieldId}:
     delete:
       summary: 删除字段定义
@@ -1865,6 +1912,62 @@ paths:
           headers: {}
       security:
         - bearer: []
+  /api/user/upload/typed:
+    post:
+      summary: 上传文件（带 MIME 类型校验）
+      deprecated: false
+      description: |
+        在通用上传基础上增加 `fileType` 校验（如 `image/`、`application/pdf`）。需登录。
+      tags:
+        - 个人信息页
+      parameters:
+        - name: Authorization
+          in: header
+          example: Bearer {{token}}
+          schema:
+            type: string
+            default: Bearer {{token}}
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+                - uploadPath
+                - fileType
+              properties:
+                file:
+                  type: string
+                  format: binary
+                uploadPath:
+                  type: string
+                  example: avatar/
+                fileType:
+                  type: string
+                  description: 允许的 MIME 前缀或完整类型
+                  example: image/
+      responses:
+        '200':
+          description: 上传成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      filePath:
+                        type: string
+                      fullHttpPath:
+                        type: string
+      security: []
   /api/user:
     put:
       summary: 管理员修改成员信息
@@ -6576,7 +6679,7 @@ paths:
       description: |
         返回指定招募周期下可预约的面试时段列表，结构与实体 **`InterviewSlot`** 一致（`slotId`、`interviewDate`、`startTime`、`endTime` 等为 **24 小时制** `HH:mm:ss`）。
 
-        **已约/共计**：使用 `currentOccupied` / `maxCapacity`（如 `7/30`）。`fullyBooked=true` 或 `status=2` 时不可再预约。`location` 可为 null（线上面试等场景）。
+        **已约/共计**：使用 `currentOccupied` / `maxCapacity`（如 `7/30`）。`fullyBooked=true` 或 `status=2` 时不可再预约。`location` 可为 null（线上面试等场景）。`deptId` 表示该时段/面试场归属部门，null 表示共享/调剂场。
 
         列表查询时会预热 Redis 剩余名额缓存。预约成功后精确 `interviewTime` 在占坑时自动写入（均分大时段），无需单独切分接口。
       tags:
@@ -6616,14 +6719,20 @@ paths:
         - bearer: []
   /api/interview/booking:
     post:
-      summary: 预约某一面试时间段（创建或覆盖）
+      summary: 提交一个或多个候选面试时段（创建或覆盖）
       deprecated: false
       description: |
         同一用户在同一 `cycleId` 下仅保留一条有效预约（`uk_resume_cycle`）。
 
-        **同步模式**（`booking.seckill.enabled=false`）：DB 原子占坑后立即返回 `InterviewBooking`，含自动分配的 `interviewTime`。
+        请求可传单个 `slotId`（兼容旧格式），也可传 `slotIds` 数组提交多个候选时段。后端按简历志愿部门选择最终 slot：
+        1. 优先匹配候选 slot 中 `deptId` 等于第一志愿部门的时段；
+        2. 再匹配第二志愿等后续志愿；
+        3. 再匹配 `deptId=null` 的共享/调剂场；
+        4. 最后在候选时段中调剂到任意有容量的 slot。
 
-        **秒杀模式**（默认 `booking.seckill.enabled=true`）：Redis Lua 预扣 → MQ 异步落库 → 通常返回 **202** 及 `requestId`（`status=PENDING`），客户端轮询 `GET /api/interview/booking/requests/{requestId}`。若同 slot 已有效预约或幂等命中已完成记录，可返回 **200** 及完整 `InterviewBooking`。
+        **同步模式**（`booking.seckill.enabled=false`，或提交多个候选 `slotIds`）：DB 原子占坑后立即返回 `InterviewBooking`，含最终 `slotId`、`preferredSlotIds`、`assignedDeptId` 和自动分配的 `interviewTime`。
+
+        **秒杀模式**（默认 `booking.seckill.enabled=true`）：仅在提交单个 `slotId` 时生效。Redis Lua 预扣 → MQ 异步落库 → 通常返回 **202** 及 `requestId`（`status=PENDING`），客户端轮询 `GET /api/interview/booking/requests/{requestId}`。若同 slot 已有效预约或幂等命中已完成记录，可返回 **200** 及完整 `InterviewBooking`。
 
         精确 `interviewTime` = 大时段开始时间 + `(endTime-startTime)/maxCapacity × (占坑序号-1)`。
 
@@ -6676,12 +6785,13 @@ paths:
         - bearer: []
   /api/interview/booking/seckill:
     post:
-      summary: 秒杀预约（始终异步）
+      summary: 秒杀预约（支持异步受理）
       deprecated: false
       description: |
-        与 `POST /api/interview/booking` 在秒杀开启时行为一致，但**始终**走异步链路并返回 **202 Accepted**。
+        与 `POST /api/interview/booking` 在秒杀开启且只提交单个 `slotId` 时行为一致。通常走异步链路并返回 **202 Accepted**；
+        若已存在同一时段有效预约或幂等命中已完成记录，可直接返回 **200** 及 `SUCCESS` 结果（`data.booking` 含预约详情）。
         流程：Lua 预扣 Redis 库存 → 写 PENDING 状态 → RabbitMQ 落库 → 异步邮件通知（大时段信息）。
-        支持请求头 `Idempotency-Key`。
+        支持请求头 `Idempotency-Key`。本接口不支持多个候选 `slotIds`；多候选预约请使用 `POST /api/interview/booking`。
       tags:
         - 面试预约（学生）
         - interview-booking
@@ -6704,6 +6814,12 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateInterviewBookingRequest'
       responses:
+        '200':
+          description: 已有同一时段有效预约，或幂等命中已完成结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseMessageInterviewBookingAsyncResult'
         '202':
           description: 已受理，返回 requestId 与 PENDING 状态
           content:
@@ -6822,10 +6938,10 @@ paths:
         - bearer: []
   /api/interview/booking/{bookingId}:
     put:
-      summary: 改期（更换已预约的时间段）
+      summary: 改期（重新提交一个或多个候选时间段）
       deprecated: false
       description: |
-        路径参数 `bookingId` 即 `interview_schedule.schedule_id`。改期时更换为另一条未约满的 `slotId`，并**重新分配**精确 `interviewTime`（按新时段容量均分）。
+        路径参数 `bookingId` 即 `interview_schedule.schedule_id`。改期时可提交单个 `slotId` 或多个候选 `slotIds`，后端重新按志愿部门选择最终 slot，并**重新分配**精确 `interviewTime`（按新时段容量均分）。
       tags:
         - 面试预约（学生）
         - interview-booking
@@ -6885,7 +7001,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiResponse'
+                $ref: '#/components/schemas/ResponseMessageVoid'
       security:
         - bearer: []
   /api/interview/booking/admin/cycles/{cycleId}:
@@ -7189,11 +7305,10 @@ paths:
       security: []
   /api/interview/schedule/list:
     get:
-      summary: 获取分配结果
-      deprecated: false
+      summary: 获取分配结果（预留，未实现）
+      deprecated: true
       description: |
-        获取面试安排分配结果列表。`ScheduleDetail` 含 `interviewDate`、`startTime`、`endTime`（与 `InterviewSlot` 一致，24 小时制）；
-        `interviewTime` 为预约占坑时自动均分写入的精确到场时间；取消后为 null。
+        **当前后端未实现此接口。** 面试安排请通过 `GET /api/interview/booking/admin/cycles/{cycleId}` 或数据库查询 `interview_schedule`。
       tags:
         - 面试分配模块
         - interview-schedule
@@ -7254,9 +7369,10 @@ paths:
       security: []
   /api/interview/schedule/manual-adjust:
     put:
-      summary: 手动调整分配结果
-      deprecated: false
-      description: 手动调整面试安排分配结果
+      summary: 手动调整分配结果（预留，未实现）
+      deprecated: true
+      description: |
+        **当前后端未实现此接口。** 改期请使用 `PUT /api/interview/booking/{bookingId}`（`bookingId` 即 `schedule_id`）。
       tags:
         - 面试分配模块
         - interview-schedule
@@ -7309,9 +7425,10 @@ paths:
       security: []
   /api/interview/schedule/delete/{scheduleId}:
     delete:
-      summary: 删除分配结果
-      deprecated: false
-      description: 删除指定的面试安排分配结果
+      summary: 删除分配结果（预留，未实现）
+      deprecated: true
+      description: |
+        **当前后端未实现此接口。** 取消预约请使用 `DELETE /api/interview/booking/{bookingId}`。
       tags:
         - 面试分配模块
         - interview-schedule
@@ -7341,9 +7458,10 @@ paths:
       security: []
   /api/interview/schedule/update-notification-status:
     put:
-      summary: 更新面试安排通知状态
-      deprecated: false
-      description: 更新面试安排的通知状态
+      summary: 更新面试安排通知状态（预留，未实现）
+      deprecated: true
+      description: |
+        **当前后端未实现此接口。** 通知发送请使用 `POST /api/interview/result/send-notifications`。
       tags:
         - 面试分配模块
         - interview-schedule
@@ -7372,21 +7490,22 @@ paths:
       security: []
   /api/interview/feishu/import:
     post:
-      summary: 提交飞书导入任务（异步）
+      summary: 提交飞书导出任务（异步，平台 → 飞书）
       deprecated: false
       description: |
-        创建导入任务并投递 RabbitMQ，**立即返回** `taskId` 与初始状态 `PENDING`；实际写飞书在消费者中执行。
+        创建 **PUSH** 导入任务（`taskType=PUSH_TO_FEISHU`）并投递 RabbitMQ，**立即返回** `taskId` 与初始状态 `PENDING`；实际写飞书在消费者中执行。
 
         请使用 `GET /api/interview/feishu/import/tasks/{taskId}` 轮询，直至终态：
         `SUCCESS`（全部成功）、`PARTIAL_SUCCESS`（部分成功）、`FAILED`（失败）。
 
         导入逻辑（与消费者内 `FeishuImportExecutor` 一致）：
-        - 按 **面试地点**（`interview_slot.location`）分桶，写入对应 `feishu_table_url`
-        - 桶内按 **面试时间** 升序；多地点桶 **并行** 调用飞书 `batch_create`
-        - 默认仅 `sync_status=0`；`forceUpdate=true` 时包含已同步记录（**追加行**，不删旧数据）
+        - 筛选 `interview_schedule.status=1`；默认仅 `sync_status=0`；`forceUpdate=true` 时包含已同步记录
+        - 按 **面试地点**（`interview_slot.location`）分桶，写入对应 `feishu_table_url`（请求体 `feishuTableUrl` 可覆盖 slot 配置）
+        - 桶内按 **面试时间** 升序；多地点桶 **并行** 调用飞书 `batch_create` / `batch_update`（已有 `feishu_record_id` 时更新）
+        - `forceUpdate=true` 时对已同步记录 **追加/更新行**，不删飞书旧数据
 
-        **从官网简历导入**：姓名、意向部门、年级、专业、自我介绍、简历评分等（见 `FeishuBitableColumns`）。
-        **留空待面试官填写**：三类问题、面试评价、预选、调剂、记录人等。
+        **写入飞书的列**（见 `FeishuBitableColumns`）：姓名、意向部门、年级、专业、自我介绍、简历评分等。
+        **留空待面试官填写**：第一类问题、第二类问题、第三类问题、面试评价、预选、调剂、记录人等。
 
         鉴权：飞书开放平台 `FEISHU_APP_ID` / `FEISHU_APP_SECRET`。
         权限：`resume:audit`。
@@ -7418,11 +7537,14 @@ paths:
       security: []
   /api/interview/feishu/import/tasks/{taskId}:
     get:
-      summary: 查询飞书导入任务状态（轮询）
+      summary: 查询飞书同步任务状态（轮询）
       deprecated: false
       description: |
-        读取 Redis 中的任务状态与汇总结果。`status=RUNNING` 时继续轮询；
-        终态后 `data.result` 含按地点分组的明细（`locations`）。
+        读取 Redis 中的任务状态与汇总结果。`status=RUNNING` 时继续轮询；终态后：
+        - `taskType=PUSH_TO_FEISHU`：`data.result` 含按地点分组的导出明细（`locations`）
+        - `taskType=PULL_FROM_FEISHU`：`data.pullResult` 含逐行拉回明细（`rows`）
+
+        `importedCount` 含义随任务类型变化：PUSH 为写入飞书条数，PULL 为成功写入平台条数。
 
         权限：`resume:audit`。
       tags:
@@ -7462,10 +7584,12 @@ paths:
       security: []
   /api/interview/feishu/import/tasks/{taskId}/stream:
     get:
-      summary: SSE 订阅飞书导入任务进度
+      summary: SSE 订阅飞书同步任务进度
       deprecated: false
       description: |
         `text/event-stream`，事件名 `status`，data 为 `FeishuSyncTaskStatus` JSON。
+        适用于 PUSH（`import`）与 PULL（`import-from-table`）两类任务。
+        推送字段含 `taskType`、`progressPercent`、`completedSteps`/`totalSteps`（PULL 按行进度）。
         终态 `SUCCESS` / `PARTIAL_SUCCESS` / `FAILED` 后连接关闭。权限 `resume:audit`。
       tags:
         - 面试关联飞书模块
@@ -7493,12 +7617,69 @@ paths:
         '400':
           description: 任务不存在或已过期
       security: []
+  /api/interview/feishu/import-from-table:
+    post:
+      summary: 提交飞书拉回任务（异步）
+      deprecated: false
+      description: |
+        从飞书多维表格 **拉回** 面试录取结果并写入平台，创建异步任务后立即返回 `taskId`。
+        任务类型为 `PULL_FROM_FEISHU`；进度查询与 SSE 订阅与 PUSH 任务共用同一组接口。
+
+        **飞书表格必需列**（列名须完全一致，见 `FeishuBitableColumns`）：
+        - `姓名`：与平台简历 EAV 中 `name` 字段匹配（同周期内姓名应唯一）
+        - `录取部门`（或兼容旧列名 `部门`）
+        - `面试是否通过`（复选框）
+        - `面试是否通过（预选）`（复选框）
+        - `是否调剂`（复选框）
+        - `决定人`（人员字段，支持 `@姓名` 格式；未匹配到平台用户时使用操作人）
+
+        **写入逻辑**（消费者内 `FeishuTablePullImportExecutor`）：
+        - 按姓名匹配本周期 `interview_schedule` → 创建或更新 `interview_result`
+        - `updateUserDept=true`（默认）时，同步更新 `user.dept_id` 为录取部门
+        - 分页同步读取飞书全表；单行失败计入 `failedCount`，不阻断其他行
+
+        权限：`resume:audit`。
+      tags:
+        - 面试关联飞书模块
+        - feishu-integration
+      parameters:
+        - name: Authorization
+          in: header
+          example: Bearer {{token}}
+          schema:
+            type: string
+            default: Bearer {{token}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportFromFeishuTableRequest'
+            example:
+              cycleId: 2
+              feishuTableUrl: https://example.feishu.cn/base/AppToken?table=tblXXXX
+              updateUserDept: true
+      responses:
+        '200':
+          description: 任务已创建并已投递 MQ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseMessageFeishuSyncTaskSubmit'
+        '400':
+          description: 参数错误或飞书表格为空
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+      security: []
   /api/interview/feishu/export-results:
     post:
-      summary: 从飞书表格导出录取结果合并到官网
+      summary: 从飞书表格导出录取结果合并到官网（已废弃）
       deprecated: true
       description: |
-        **当前后端未实现此接口**，保留文档条目仅供规划。请使用面试结果模块相关 API 维护录取数据。
+        **已废弃**：请使用 `POST /api/interview/feishu/import-from-table`。
+        该接口在当前后端未实现，保留条目仅供历史 Apifox 项目兼容。
       tags:
         - 面试关联飞书模块
         - feishu-integration
@@ -7742,9 +7923,10 @@ paths:
       security: []
   /api/interview/statistics:
     get:
-      summary: 获取面试统计信息
-      deprecated: false
-      description: 获取面试相关的统计数据
+      summary: 获取面试统计信息（预留，未实现）
+      deprecated: true
+      description: |
+        **当前后端未实现此接口。**
       tags:
         - 面试结果统计页
         - interview-statistics
@@ -7773,9 +7955,10 @@ paths:
       security: []
   /api/interview/schedule/batch-import:
     post:
-      summary: 批量导入面试安排
-      deprecated: false
-      description: 通过Excel文件批量导入面试安排
+      summary: 批量导入面试安排（预留，未实现）
+      deprecated: true
+      description: |
+        **当前后端未实现此接口。**
       tags:
         - 面试结果统计页
         - interview-statistics
@@ -7851,7 +8034,7 @@ paths:
                 format: binary
           headers: {}
       security: []
-  /activity:
+  /api/activity:
     get:
       summary: 获取所有活动
       deprecated: false
@@ -7905,7 +8088,7 @@ paths:
           headers: {}
       security:
         - bearerAuth: []
-  /activity/{id}:
+  /api/activity/{id}:
     get:
       summary: 根据 ID 获取活动详情
       deprecated: false
@@ -8004,7 +8187,7 @@ paths:
           headers: {}
       security:
         - bearerAuth: []
-  /activity/category/{category}:
+  /api/activity/category/{category}:
     get:
       summary: 根据分类获取活动
       deprecated: false
@@ -8035,7 +8218,7 @@ paths:
                 $ref: '#/components/schemas/ActivityListResponse'
           headers: {}
       security: []
-  /activity/active:
+  /api/activity/active:
     get:
       summary: 获取进行中的活动
       deprecated: false
@@ -8061,9 +8244,10 @@ paths:
       security: []
   /api/search/ai:
     get:
-      summary: AI
-      deprecated: false
-      description: ''
+      summary: AI 搜索（预留，未实现）
+      deprecated: true
+      description: |
+        **当前后端未实现此接口。** 请使用 `GET /api/search/global`。
       tags: []
       parameters:
         - name: query
@@ -8811,6 +8995,20 @@ components:
           type: integer
           description: 外键，关联 interview_slot.slot_id
           example: 55
+        preferredSlotIds:
+          type: array
+          description: 学生提交的候选面试时段 ID 列表；后端最终只会占用其中一个 slot
+          items:
+            type: integer
+          example:
+            - 55
+            - 56
+            - 60
+        assignedDeptId:
+          type: integer
+          nullable: true
+          description: 本次最终安排按哪个志愿部门分配；为空表示未匹配到明确部门或仅按共享场调剂
+          example: 3
         interviewTime:
           type: string
           format: date-time
@@ -8851,7 +9049,13 @@ components:
       type: object
       required:
         - cycleId
-        - slotId
+      anyOf:
+        - required:
+            - slotId
+        - required:
+            - slotIds
+      description: |
+        `slotId` 与 `slotIds` 二选一。只传 `slotId` 为旧格式；传 `slotIds` 可提交多个候选时段，后端按简历志愿部门分配最终面试时间地点。
       properties:
         cycleId:
           type: integer
@@ -8859,8 +9063,19 @@ components:
           example: 2
         slotId:
           type: integer
-          description: 选中的面试时段 ID，对应 interview_slot.slot_id
+          nullable: true
+          description: 单个候选面试时段 ID，对应 interview_slot.slot_id；秒杀预约只支持该字段
           example: 55
+        slotIds:
+          type: array
+          nullable: true
+          description: 多个候选面试时段 ID；普通预约接口会按志愿部门从中选择最终 slot
+          items:
+            type: integer
+          example:
+            - 55
+            - 56
+            - 60
         notes:
           type: string
           nullable: true
@@ -8868,13 +9083,29 @@ components:
 
     UpdateInterviewBookingRequest:
       type: object
-      required:
-        - slotId
+      anyOf:
+        - required:
+            - slotId
+        - required:
+            - slotIds
+      description: |
+        `slotId` 与 `slotIds` 二选一。传多个 `slotIds` 时，后端重新按志愿部门分配最终 slot。
       properties:
         slotId:
           type: integer
-          description: 改约到的新 slot_id（须未约满）
+          nullable: true
+          description: 改约到的单个候选 slot_id
           example: 56
+        slotIds:
+          type: array
+          nullable: true
+          description: 改期候选 slot_id 列表
+          items:
+            type: integer
+          example:
+            - 56
+            - 60
+            - 61
         notes:
           type: string
           nullable: true
@@ -8907,6 +9138,11 @@ components:
               type: string
               nullable: true
               description: 来自 InterviewSlot.location，可为空
+            slotDeptId:
+              type: integer
+              nullable: true
+              description: 来自 InterviewSlot.deptId；为空表示共享/调剂面试场
+              example: 3
             interviewType:
               type: integer
               description: 来自 InterviewSlot，1-线下 2-线上
@@ -9122,6 +9358,11 @@ components:
           nullable: true
           description: 面试地点（可为空，如纯线上面试）
           example: 计算机楼301室
+        deptId:
+          type: integer
+          nullable: true
+          description: 归属部门 ID；为空表示共享/调剂面试场
+          example: 3
         interviewType:
           type: integer
           description: 面试类型：1-线下面试，2-线上面试
@@ -9163,6 +9404,11 @@ components:
           nullable: true
           description: 面试地点（可选）
           example: 计算机楼401室
+        deptId:
+          type: integer
+          nullable: true
+          description: 归属部门 ID；传 null 或不传表示共享/调剂面试场
+          example: 3
         interviewType:
           type: integer
           description: 面试类型：1-线下面试，2-线上面试
@@ -9235,6 +9481,11 @@ components:
           nullable: true
           description: 面试地点（可为空，如纯线上面试）
           example: 计算机楼301室
+        deptId:
+          type: integer
+          nullable: true
+          description: 归属部门 ID；为空表示共享/调剂面试场
+          example: 3
         interviewType:
           type: integer
           description: 面试类型：1-线下面试，2-线上面试
@@ -9658,7 +9909,7 @@ components:
           example: false
     FeishuSyncTaskSubmit:
       type: object
-      description: 提交导入任务后的即时响应 data
+      description: 提交同步任务后的即时响应 data（PUSH / PULL 通用）
       required:
         - taskId
         - status
@@ -9666,7 +9917,7 @@ components:
         taskId:
           type: integer
           format: int64
-          description: 任务 ID，用于轮询
+          description: 任务 ID，用于轮询 / SSE
           example: 42
         status:
           type: string
@@ -9674,6 +9925,85 @@ components:
           enum:
             - PENDING
           example: PENDING
+    FeishuSyncTaskTypeEnum:
+      type: string
+      description: 飞书异步任务类型
+      enum:
+        - PUSH_TO_FEISHU
+        - PULL_FROM_FEISHU
+    ImportFromFeishuTableRequest:
+      type: object
+      required:
+        - cycleId
+        - feishuTableUrl
+      properties:
+        cycleId:
+          type: integer
+          description: 招募活动 ID
+          example: 2
+        feishuTableUrl:
+          type: string
+          description: 飞书多维表格 URL（含 app_token 与 table_id）
+          example: https://example.feishu.cn/base/AppToken?table=tblXXXX
+        updateUserDept:
+          type: boolean
+          description: 为 true 时同步更新 user.dept_id；默认 true
+          default: true
+          example: true
+    ImportFromFeishuRowResult:
+      type: object
+      description: 飞书拉回单行处理结果
+      properties:
+        recordId:
+          type: string
+          description: 飞书 record_id
+        name:
+          type: string
+          description: 姓名（匹配键）
+        department:
+          type: string
+          description: 录取部门名称
+        success:
+          type: boolean
+        message:
+          type: string
+          description: 失败原因或成功说明
+        userId:
+          type: integer
+          description: 匹配到的平台用户 ID
+          nullable: true
+        resultId:
+          type: integer
+          description: 写入或更新后的 interview_result.result_id
+          nullable: true
+    ImportFromFeishuTableResponse:
+      type: object
+      description: 飞书拉回任务终态汇总（出现在 pullResult）
+      properties:
+        totalRows:
+          type: integer
+          description: 飞书表格总行数
+        successCount:
+          type: integer
+        failedCount:
+          type: integer
+        skippedCount:
+          type: integer
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportFromFeishuRowResult'
+    UpdateResumeScoreRequest:
+      type: object
+      required:
+        - score
+      properties:
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: 简历评分（0–100）
+          example: 85
     FeishuSyncTaskStatusEnum:
       type: string
       description: 任务状态（Redis）
@@ -9730,7 +10060,7 @@ components:
             $ref: '#/components/schemas/FeishuLocationImportResult'
     FeishuSyncTaskStatus:
       type: object
-      description: 轮询接口返回的 data
+      description: 轮询 / SSE 接口返回的 data（PUSH 与 PULL 通用）
       required:
         - taskId
         - status
@@ -9739,11 +10069,13 @@ components:
           type: integer
           format: int64
           example: 42
+        taskType:
+          $ref: '#/components/schemas/FeishuSyncTaskTypeEnum'
         status:
           $ref: '#/components/schemas/FeishuSyncTaskStatusEnum'
         importedCount:
           type: integer
-          description: 汇总成功条数（终态时有值）
+          description: PUSH 为写入飞书条数；PULL 为成功写入平台条数（终态时有值）
           example: 10
         failedCount:
           type: integer
@@ -9751,15 +10083,33 @@ components:
           example: 0
         skippedCount:
           type: integer
-          description: 跳过条数
+          description: 跳过条数（缺 slot、未配置 URL、姓名为空等）
           example: 1
+        totalSteps:
+          type: integer
+          description: 总进度步数（PULL 通常为飞书行数；PUSH 为地点桶数）
+          nullable: true
+        completedSteps:
+          type: integer
+          description: 已完成步数
+          nullable: true
+        progressPercent:
+          type: integer
+          description: 进度百分比 0–100
+          nullable: true
+          example: 75
         errorMessage:
           type: string
           description: 失败时的错误信息
           nullable: true
         result:
           $ref: '#/components/schemas/ImportFeishuImportResult'
-          description: 终态时的按地点明细；RUNNING 时可能为空
+          description: PUSH 终态明细；PULL 时为空
+          nullable: true
+        pullResult:
+          $ref: '#/components/schemas/ImportFromFeishuTableResponse'
+          description: PULL 终态明细；PUSH 时为空
+          nullable: true
         createdAt:
           type: string
           format: date-time

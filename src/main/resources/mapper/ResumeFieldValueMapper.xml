@@ -60,4 +60,12 @@
         WHERE field_id = #{fieldId}
     </delete>
 
+    <select id="findByResumeIds" resultMap="ResumeFieldValueMap">
+        SELECT * FROM resume_field_value
+        WHERE resume_id IN
+        <foreach collection="resumeIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
 </mapper>

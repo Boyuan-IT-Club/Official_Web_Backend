@@ -16,6 +16,7 @@ public class InterviewBookingRequestStatusCache {
 
     private String status;
     private String message;
+    private Integer userId;
     private Integer scheduleId;
     private Integer slotId;
     private Integer cycleId;

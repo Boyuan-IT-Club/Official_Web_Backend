@@ -27,6 +27,12 @@ public interface InterviewSlotInventoryService {
     void syncRemainCacheFromDb(Integer slotId);
 
     /**
+     * 用调用方已持有的 slot 快照刷新 Redis 剩余名额，避免对同一行重复 SELECT。
+     * 仅适用于调用方已在同一事务内拿到该 slot 最新状态的场景（如秒杀落库）。
+     */
+    void syncRemainCacheFromDb(club.boyuan.official.entity.InterviewSlot slot);
+
+    /**
      * 仅 DB 原子占坑（不修改 Redis）。用于秒杀消费者：Redis 已在 Lua 中预扣。
      */
     boolean tryOccupyDbOnly(Integer slotId);

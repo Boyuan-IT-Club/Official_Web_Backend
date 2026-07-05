@@ -65,6 +65,12 @@ public class InterviewSlot implements Serializable {
     private String location;
 
     /**
+     * 归属部门ID；为空表示共享/调剂面试场
+     */
+    @TableField("dept_id")
+    private Integer deptId;
+
+    /**
      * 面试类型：1(线下面试), 2(线上面试)
      */
     @TableField("interview_type")

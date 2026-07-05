@@ -58,6 +58,7 @@ spring:
     listener:
       simple:
         acknowledge-mode: auto
+        default-requeue-rejected: false
         retry:
           enabled: true
           max-attempts: 3

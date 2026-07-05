@@ -6,7 +6,7 @@ import club.boyuan.official.service.ILoginService;
 import club.boyuan.official.service.IUserService;
 import club.boyuan.official.service.impl.LoginServiceImpl.TokenVO;
 import club.boyuan.official.utils.JwtTokenUtil;
-import club.boyuan.official.messaging.EmailVerificationProducer;
+import club.boyuan.official.messaging.ReliableMessagePublisher;
 import club.boyuan.official.utils.MessageUtils;
 import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -42,7 +42,7 @@ public class AuthController {
 
     private final MessageUtils messageUtils;
 
-    private final EmailVerificationProducer emailVerificationProducer;
+    private final ReliableMessagePublisher reliableMessagePublisher;
 
     /**
      * 用户注册接口
@@ -139,7 +139,7 @@ public class AuthController {
             String code = loginService.generateVerificationCode("email");
             loginService.saveVerificationCode(email, code, 300);
             // 投递到 RabbitMQ，由消费者异步发信，避免 SMTP 阻塞 HTTP 请求
-            emailVerificationProducer.publish(email, code);
+            reliableMessagePublisher.publishEmailVerification(email, code);
             return ResponseEntity.ok(new ResponseMessage<>(200, "验证码已发送，请查收邮箱", null));
         } catch (BusinessException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -188,46 +188,32 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<ResponseMessage<?>> login(@Valid @RequestBody AuthLoginDTO authLoginDTO) {
         try {
-            User user;
             ResponseMessage<?> response;
 
             switch (authLoginDTO.getAuth_type()) {
                 case "email-password":
-                    // 验证邮箱格式
                     messageUtils.validateEmail(authLoginDTO.getAuth_id());
                     if (!authLoginDTO.getAuth_id().endsWith("@stu.ecnu.edu.cn")) {
                         throw new BusinessException(BusinessExceptionEnum.INVALID_EMAIL_FORMAT);
                     }
-                    user = userService.getUserByEmail(authLoginDTO.getAuth_id());
                     response = loginService.loginByEmailPassword(authLoginDTO.getAuth_id(), authLoginDTO.getVerify());
                     break;
                 case "email-code":
-                    // 验证邮箱格式
                     messageUtils.validateEmail(authLoginDTO.getAuth_id());
                     if (!authLoginDTO.getAuth_id().endsWith("@stu.ecnu.edu.cn")) {
                         throw new BusinessException(BusinessExceptionEnum.INVALID_EMAIL_FORMAT);
                     }
-                    user = userService.getUserByEmail(authLoginDTO.getAuth_id());
-
-                    // 直接调用登录服务进行验证，避免重复验证验证码
                     response = loginService.loginByEmailCode(authLoginDTO.getAuth_id(), authLoginDTO.getVerify());
                     break;
                 case "phone-password":
-                    // 验证手机号格式
                     messageUtils.validatePhone(authLoginDTO.getAuth_id());
-                    user = userService.getUserByPhone(authLoginDTO.getAuth_id());
                     response = loginService.loginByPhonePassword(authLoginDTO.getAuth_id(), authLoginDTO.getVerify());
                     break;
                 case "phone-code":
-                    // 验证手机号格式
                     messageUtils.validatePhone(authLoginDTO.getAuth_id());
-                    user = userService.getUserByPhone(authLoginDTO.getAuth_id());
-
-                    // 直接调用登录服务进行验证，避免重复验证验证码
                     response = loginService.loginByPhoneCode(authLoginDTO.getAuth_id(), authLoginDTO.getVerify());
                     break;
                 case "username-password":
-                    user = userService.getUserByUsername(authLoginDTO.getAuth_id());
                     response = loginService.loginByUsernamePassword(authLoginDTO.getAuth_id(), authLoginDTO.getVerify());
                     break;
                 default:
@@ -235,29 +221,18 @@ public class AuthController {
                             .body(ResponseMessage.error(400, "不支持的认证方式"));
             }
 
-            if (user == null) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(ResponseMessage.error(401, "用户不存在"));
-            }
-
             if (response == null || response.getCode() != 200) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(ResponseMessage.error(401, response != null ? response.getMessage() : "登录失败"));
             }
 
-            // 构建返回数据
-            Map<String, Object> data = new HashMap<>();
-            data.put("user_id", user.getUserId());
-            // 获取用户角色列表，User类已经没有getRole()方法
-
             TokenVO tokenVO = (TokenVO) response.getData();
             String token = tokenVO.getToken();
 
-            List<String> roleNames = jwtTokenUtil.extractRoleNames(token);
-            List<String> permissionCodes = jwtTokenUtil.extractPermissionCodes(token);
+            Map<String, Object> data = new HashMap<>();
+            data.put("user_id", jwtTokenUtil.extractUserId(token));
             data.put("token", token);
-            // 添加角色信息到返回数据
-            data.put("roleNames", roleNames);
+            data.put("roleNames", jwtTokenUtil.extractRoleNames(token));
 
             return ResponseEntity.ok(ResponseMessage.success(data));
         } catch (BusinessException e) {

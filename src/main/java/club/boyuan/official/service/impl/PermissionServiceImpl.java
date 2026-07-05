@@ -17,7 +17,10 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -146,6 +149,19 @@ public class PermissionServiceImpl extends ServiceImpl<PermissionMapper, Permiss
         PermissionDTO resultDTO = new PermissionDTO();
         BeanUtils.copyProperties(permission, resultDTO);
         return resultDTO;
+    }
+
+    @Override
+    public List<String> getPermissionCodesByIds(Collection<Integer> permissionIds) {
+        if (permissionIds == null || permissionIds.isEmpty()) {
+            return List.of();
+        }
+        Set<Integer> distinctIds = new LinkedHashSet<>(permissionIds);
+        return list(new LambdaQueryWrapper<Permission>().in(Permission::getPermissionId, distinctIds))
+                .stream()
+                .map(Permission::getPermissionCode)
+                .distinct()
+                .collect(Collectors.toList());
     }
 
     @Override

@@ -5,6 +5,7 @@ import club.boyuan.official.entity.Permission;
 import club.boyuan.official.exception.BusinessException;
 import com.baomidou.mybatisplus.extension.service.IService;
 
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -47,6 +48,11 @@ public interface PermissionService extends IService<Permission> {
      * @throws BusinessException 业务异常
      */
     PermissionDTO getPermissionById(int permissionId) throws BusinessException;
+
+    /**
+     * 批量查询权限编码（去重），登录等场景避免 N+1。
+     */
+    List<String> getPermissionCodesByIds(Collection<Integer> permissionIds);
     
     /**
      * 根据权限编码获取权限
