@@ -11,8 +11,10 @@ public class ResumeFieldValueDTO {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     
-    // 简化字段信息（仅包含字段标签）
+    private String fieldKey;
     private String fieldLabel;
+    private String fieldType;
+    private String placeholder;
     
     // 构造函数
     public ResumeFieldValueDTO() {
@@ -25,7 +27,10 @@ public class ResumeFieldValueDTO {
         this.fieldValue = fieldValueDTO.getFieldValue();
         this.createdAt = fieldValueDTO.getCreatedAt();
         this.updatedAt = fieldValueDTO.getUpdatedAt();
+        this.fieldKey = fieldValueDTO.getFieldKey();
         this.fieldLabel = fieldValueDTO.getFieldLabel();
+        this.fieldType = fieldValueDTO.getFieldType();
+        this.placeholder = fieldValueDTO.getPlaceholder();
     }
     
     // Getter 和 Setter 方法
@@ -77,11 +82,35 @@ public class ResumeFieldValueDTO {
         this.updatedAt = updatedAt;
     }
     
+    public String getFieldKey() {
+        return fieldKey;
+    }
+
+    public void setFieldKey(String fieldKey) {
+        this.fieldKey = fieldKey;
+    }
+
     public String getFieldLabel() {
         return fieldLabel;
     }
     
     public void setFieldLabel(String fieldLabel) {
         this.fieldLabel = fieldLabel;
+    }
+
+    public String getFieldType() {
+        return fieldType;
+    }
+
+    public void setFieldType(String fieldType) {
+        this.fieldType = fieldType;
+    }
+
+    public String getPlaceholder() {
+        return placeholder;
+    }
+
+    public void setPlaceholder(String placeholder) {
+        this.placeholder = placeholder;
     }
 }

@@ -7,6 +7,8 @@
         <result column="cycle_id" property="cycleId"/>
         <result column="field_key" property="fieldKey"/>
         <result column="field_label" property="fieldLabel"/>
+        <result column="field_type" property="fieldType"/>
+        <result column="placeholder" property="placeholder"/>
         <result column="is_required" property="isRequired"/>
         <result column="sort_order" property="sortOrder"/>
         <result column="is_active" property="isActive"/>

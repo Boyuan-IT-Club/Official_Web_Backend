@@ -1,9 +1,12 @@
 package club.boyuan.official.feishu;
 
+import club.boyuan.official.dto.ImportFromFeishuTableRequestDTO;
+import club.boyuan.official.dto.ImportFromFeishuTableResponseDTO;
 import club.boyuan.official.dto.ImportFeishuRequestDTO;
 import club.boyuan.official.dto.ImportFeishuResponseDTO;
 import lombok.Data;
 import lombok.experimental.Accessors;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 
@@ -16,6 +19,8 @@ import java.time.LocalDateTime;
 public class FeishuSyncTaskRecord {
 
     private Long taskId;
+    /** {@link FeishuSyncTaskType} 名称；缺省视为 PUSH_TO_FEISHU */
+    private String taskType;
     /** 招聘周期，对应 interview_schedule.cycle_id */
     private Integer cycleId;
     /** 非空时只导入该场次；空则导入周期内全部待同步记录 */
@@ -29,20 +34,47 @@ public class FeishuSyncTaskRecord {
     private Integer importedCount;
     private Integer failedCount;
     private Integer skippedCount;
-    /** 按地点分组的导入明细，轮询接口会返回给前端 */
+    /** 总步骤数（PUSH=地点桶数，PULL=表格行数） */
+    private Integer totalSteps;
+    /** 已完成步骤数 */
+    private Integer completedSteps;
+    /** 0–100，执行中进度 */
+    private Integer progressPercent;
+    /** 拉回任务：是否同步更新 user.dept_id */
+    private Boolean updateUserDept;
+    /** 拉回任务：操作人 userId（决定人缺省时的 fallback） */
+    private Integer operatorUserId;
+    /** 平台 → 飞书：按地点分组的导入明细 */
     private ImportFeishuResponseDTO result;
+    /** 飞书 → 平台：按行导入明细 */
+    private ImportFromFeishuTableResponseDTO pullResult;
     private String errorMessage;
     private LocalDateTime createdAt;
     private LocalDateTime startedAt;
     private LocalDateTime finishedAt;
 
     /** MQ 消费时把 Redis 里存的参数还原成执行器入参。 */
+    public FeishuSyncTaskType resolvedTaskType() {
+        if (!StringUtils.hasText(taskType)) {
+            return FeishuSyncTaskType.PUSH_TO_FEISHU;
+        }
+        return FeishuSyncTaskType.valueOf(taskType);
+    }
+
     public ImportFeishuRequestDTO toImportRequest() {
         ImportFeishuRequestDTO request = new ImportFeishuRequestDTO();
         request.setCycleId(cycleId);
         request.setSlotId(slotId);
         request.setFeishuTableUrl(feishuTableUrl);
         request.setForceUpdate(Boolean.TRUE.equals(forceUpdate));
+        return request;
+    }
+
+    public ImportFromFeishuTableRequestDTO toPullRequest() {
+        ImportFromFeishuTableRequestDTO request = new ImportFromFeishuTableRequestDTO();
+        request.setCycleId(cycleId);
+        request.setFeishuTableUrl(feishuTableUrl);
+        request.setUpdateUserDept(updateUserDept);
         return request;
     }
 }

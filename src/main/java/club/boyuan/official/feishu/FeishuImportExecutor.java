@@ -28,29 +28,18 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * 飞书导入「执行层」：查 MySQL → 按面试地点分桶 → 并行调飞书 API → 回写 sync_status。
- *
- * <p>{@link #execute} 主流程四步：
- * <ol>
- *   <li>{@link #loadSchedules} — 查出本周期待同步的 interview_schedule</li>
- *   <li>{@link #preload} — 一次性批量加载 slot、简历字段，避免 N+1</li>
- *   <li>{@link #buildBuckets} — 按地点（location）分组，每组对应一张飞书表 URL</li>
- *   <li>并行 {@link #importBucket} — 每组调一次 batch_create，成功则标记 sync_status=1</li>
- * </ol>
- *
- * <p>「桶 / Bucket」= 同一面试地点 + 同一张飞书多维表格下的多条 schedule。
+ * 飞书导入「执行层」：查 MySQL → 按面试地点分桶 → 并行调飞书 API → 回写 sync_status 与 feishu_record_id。
  */
 @Component
 @Slf4j
 public class FeishuImportExecutor {
 
-    /** interview_schedule.status：有效预约 */
     private static final int STATUS_ACTIVE = 1;
-    /** interview_schedule.sync_status：已写入飞书 */
     private static final int SYNC_DONE = 1;
 
     private final IInterviewScheduleService interviewScheduleService;
@@ -78,15 +67,16 @@ public class FeishuImportExecutor {
     }
 
     public ImportFeishuResponseDTO execute(ImportFeishuRequestDTO request) {
-        // --- 1. 查待导入的面试安排 ---
+        return execute(request, null);
+    }
+
+    public ImportFeishuResponseDTO execute(ImportFeishuRequestDTO request, FeishuSyncProgressCallback progress) {
         List<InterviewSchedule> schedules = loadSchedules(request);
         if (schedules.isEmpty()) {
             throw new BusinessException(BusinessExceptionEnum.FEISHU_NO_SCHEDULES);
         }
 
-        // --- 2. 批量预加载 slot、简历（一次 SQL，非逐条查）---
         PreloadContext preload = preload(schedules, request.getCycleId());
-        // --- 3. 按地点分桶；无 URL 的 schedule 计入 skipped ---
         BucketPlan plan = buildBuckets(schedules, request, preload);
 
         if (plan.buckets.isEmpty()) {
@@ -97,16 +87,35 @@ public class FeishuImportExecutor {
         ImportFeishuResponseDTO response = new ImportFeishuResponseDTO();
         response.setSkippedCount(plan.skipped);
 
-        // --- 4. 每个地点桶并行写飞书（Semaphore 限制同时请求数，防触发飞书限流）---
+        int totalBuckets = plan.buckets.size();
+        if (progress != null) {
+            progress.onProgress(0, totalBuckets, 0, 0, plan.skipped);
+        }
+
         int concurrency = Math.max(1, feishuProperties.getParallelBucketConcurrency());
         Semaphore limit = new Semaphore(concurrency);
+        AtomicInteger completedBuckets = new AtomicInteger(0);
+        AtomicInteger importedAcc = new AtomicInteger(0);
+        AtomicInteger failedAcc = new AtomicInteger(0);
+
         List<CompletableFuture<FeishuLocationImportResultDTO>> futures = new ArrayList<>();
 
         for (LocationBucket bucket : plan.buckets.values()) {
             futures.add(CompletableFuture.supplyAsync(() -> {
                 try {
                     limit.acquire();
-                    return importBucket(bucket, preload.snapshotByResumeId);
+                    FeishuLocationImportResultDTO result = importBucket(bucket, preload.snapshotByResumeId);
+                    importedAcc.addAndGet(result.getImportedCount());
+                    failedAcc.addAndGet(result.getFailedCount());
+                    if (progress != null) {
+                        progress.onProgress(
+                                completedBuckets.incrementAndGet(),
+                                totalBuckets,
+                                importedAcc.get(),
+                                failedAcc.get(),
+                                plan.skipped);
+                    }
+                    return result;
                 } catch (InterruptedException ex) {
                     Thread.currentThread().interrupt();
                     return failedLocationResult(bucket, "并行导入被中断");
@@ -132,10 +141,6 @@ public class FeishuImportExecutor {
         return response;
     }
 
-    /**
-     * 加载待导入的面试安排。
-     * forceUpdate=false 时只拉 sync_status=0（未同步）；true 时允许重复导入（飞书侧会追加行）。
-     */
     private List<InterviewSchedule> loadSchedules(ImportFeishuRequestDTO request) {
         boolean forceUpdate = Boolean.TRUE.equals(request.getForceUpdate());
         LambdaQueryWrapper<InterviewSchedule> wrapper = new LambdaQueryWrapper<>();
@@ -150,7 +155,6 @@ public class FeishuImportExecutor {
         return interviewScheduleService.list(wrapper);
     }
 
-    /** 根据 schedule 里出现的 slotId、resumeId，批量查 slot 表与简历 EAV 字段。 */
     private PreloadContext preload(List<InterviewSchedule> schedules, Integer cycleId) {
         List<Integer> slotIds = schedules.stream()
                 .map(InterviewSchedule::getSlotId)
@@ -179,11 +183,6 @@ public class FeishuImportExecutor {
         return new PreloadContext(slotById, snapshotByResumeId);
     }
 
-    /**
-     * 按「面试地点」分桶：同一 location 的 schedule 进同一个桶，共享一张飞书表。
-     * <p>LinkedHashMap 保证返回结果里地点顺序稳定（便于日志与前端展示）。
-     * <p>tableUrl 优先用请求里的 feishuTableUrl，否则用 interview_slot.feishu_table_url。
-     */
     private BucketPlan buildBuckets(List<InterviewSchedule> schedules,
                                     ImportFeishuRequestDTO request,
                                     PreloadContext preload) {
@@ -205,18 +204,11 @@ public class FeishuImportExecutor {
             }
 
             LocationBucket bucket = buckets.computeIfAbsent(locationKey, k -> new LocationBucket(locationKey, tableUrl));
-            if (!Objects.equals(bucket.tableUrl, tableUrl)) {
-                log.warn("地点 {} 存在多个不同的飞书表格 URL，使用首次配置的 {}", locationKey, bucket.tableUrl);
-            }
             bucket.schedules.add(schedule);
         }
         return new BucketPlan(buckets, skipped);
     }
 
-    /**
-     * 单个地点桶：组装飞书行 → batch_create → 成功则批量更新 sync_status。
-     * 行组装失败只记 failed，不阻断同桶其他行；整批 API 失败则该桶全部算 failed。
-     */
     private FeishuLocationImportResultDTO importBucket(LocationBucket bucket,
                                                        Map<Integer, ResumeFieldReader.ResumeSnapshot> snapshotByResumeId) {
         bucket.schedules.sort(Comparator.comparing(
@@ -227,42 +219,74 @@ public class FeishuImportExecutor {
                 .setLocation(bucket.locationKey)
                 .setTableUrl(bucket.tableUrl);
 
-        List<Map<String, Object>> rows = new ArrayList<>();
-        List<Integer> successScheduleIds = new ArrayList<>();
+        List<ScheduledRow> createPlans = new ArrayList<>();
+        List<ScheduledRow> updatePlans = new ArrayList<>();
         int rowBuildFailed = 0;
 
         for (InterviewSchedule schedule : bucket.schedules) {
             try {
-                rows.add(buildRow(schedule, snapshotByResumeId));
-                successScheduleIds.add(schedule.getScheduleId());
+                Map<String, Object> fields = buildRow(schedule, snapshotByResumeId);
+                ScheduledRow row = new ScheduledRow(schedule.getScheduleId(), fields);
+                if (StringUtils.hasText(schedule.getFeishuRecordId())) {
+                    updatePlans.add(new ScheduledRow(schedule.getScheduleId(), schedule.getFeishuRecordId(), fields));
+                } else {
+                    createPlans.add(row);
+                }
             } catch (Exception ex) {
                 rowBuildFailed++;
                 log.error("组装飞书行失败 scheduleId={}", schedule.getScheduleId(), ex);
             }
         }
 
-        if (rows.isEmpty()) {
+        if (createPlans.isEmpty() && updatePlans.isEmpty()) {
             locationResult.setMessage("无可导入行")
                     .setFailedCount(bucket.schedules.size());
             return locationResult;
         }
 
+        int imported = 0;
         try {
-            int imported = feishuBitableClient.batchCreateRecords(bucket.tableUrl, rows);
-            markSynced(successScheduleIds);
+            if (!createPlans.isEmpty()) {
+                List<Map<String, Object>> rows = createPlans.stream().map(ScheduledRow::fields).toList();
+                FeishuBatchWriteResult created = feishuBitableClient.batchCreateRecords(bucket.tableUrl, rows);
+                imported += created.count();
+                persistCreateResults(createPlans, created.recordIds());
+            }
+            if (!updatePlans.isEmpty()) {
+                List<FeishuBitableClient.RecordUpdate> updates = updatePlans.stream()
+                        .map(r -> new FeishuBitableClient.RecordUpdate(r.recordId(), r.fields()))
+                        .toList();
+                FeishuBatchWriteResult updated = feishuBitableClient.batchUpdateRecords(bucket.tableUrl, updates);
+                imported += updated.count();
+                markSynced(updatePlans.stream().map(ScheduledRow::scheduleId).toList());
+            }
+
             locationResult.setImportedCount(imported)
                     .setFailedCount(rowBuildFailed)
                     .setMessage(rowBuildFailed > 0 ? "部分导入成功" : "导入成功");
             return locationResult;
         } catch (BusinessException ex) {
-            locationResult.setFailedCount(rows.size() + rowBuildFailed)
+            int failedRows = createPlans.size() + updatePlans.size() + rowBuildFailed;
+            locationResult.setFailedCount(failedRows)
                     .setMessage(ex.getMessage());
             log.error("飞书导入失败 location={}, url={}", bucket.locationKey, bucket.tableUrl, ex);
             return locationResult;
         }
     }
 
-    /** 飞书写入成功后，把对应 schedule 标为已同步，避免下次默认导入重复拉取。 */
+    private void persistCreateResults(List<ScheduledRow> createPlans, List<String> recordIds) {
+        for (int i = 0; i < createPlans.size(); i++) {
+            String recordId = i < recordIds.size() ? recordIds.get(i) : null;
+            var update = interviewScheduleService.lambdaUpdate()
+                    .set(InterviewSchedule::getSyncStatus, SYNC_DONE)
+                    .eq(InterviewSchedule::getScheduleId, createPlans.get(i).scheduleId());
+            if (StringUtils.hasText(recordId)) {
+                update.set(InterviewSchedule::getFeishuRecordId, recordId);
+            }
+            update.update();
+        }
+    }
+
     private void markSynced(List<Integer> scheduleIds) {
         if (scheduleIds.isEmpty()) {
             return;
@@ -273,7 +297,6 @@ public class FeishuImportExecutor {
                 .update();
     }
 
-    /** 把一条面试安排 + 简历快照，映射为飞书多维表格「字段名 → 值」。 */
     private Map<String, Object> buildRow(InterviewSchedule schedule,
                                          Map<Integer, ResumeFieldReader.ResumeSnapshot> snapshotByResumeId) {
         ResumeFieldReader.ResumeSnapshot snapshot = snapshotByResumeId.getOrDefault(
@@ -285,7 +308,6 @@ public class FeishuImportExecutor {
         fields.put(FeishuBitableColumns.GRADE, snapshot.grade());
         fields.put(FeishuBitableColumns.MAJOR, snapshot.major());
         fields.put(FeishuBitableColumns.SELF_INTRO, snapshot.selfIntroduction());
-        // 以下列在飞书表里由面试官现场填写，导入时留空
         fields.put(FeishuBitableColumns.QUESTION_ONE, "");
         fields.put(FeishuBitableColumns.QUESTION_TWO, "");
         fields.put(FeishuBitableColumns.QUESTION_THREE, "");
@@ -312,7 +334,6 @@ public class FeishuImportExecutor {
         return slot.getFeishuTableUrl();
     }
 
-    /** 分桶键：优先 slot.location；线上面试无地点时用固定文案。 */
     private String resolveLocationKey(InterviewSlot slot) {
         if (StringUtils.hasText(slot.getLocation())) {
             return slot.getLocation().trim();
@@ -323,17 +344,20 @@ public class FeishuImportExecutor {
         return "未指定地点";
     }
 
-    /** 预加载结果：slotId → 场次信息；resumeId → 姓名/专业等展示字段。 */
     private record PreloadContext(
             Map<Integer, InterviewSlot> slotById,
             Map<Integer, ResumeFieldReader.ResumeSnapshot> snapshotByResumeId) {
     }
 
-    /** 分桶结果 + 因缺 slot/缺 URL 而跳过的条数。 */
     private record BucketPlan(Map<String, LocationBucket> buckets, int skipped) {
     }
 
-    /** 同一面试地点下、写入同一张飞书表的一批 schedule。 */
+    private record ScheduledRow(int scheduleId, String recordId, Map<String, Object> fields) {
+        ScheduledRow(int scheduleId, Map<String, Object> fields) {
+            this(scheduleId, null, fields);
+        }
+    }
+
     static final class LocationBucket {
         private final String locationKey;
         private final String tableUrl;

@@ -1,0 +1,35 @@
+# 压测专用：关闭网关限流，暴露 Prometheus，减少日志噪音
+# 注：Docker MySQL/Redis/RabbitMQ 未映射宿主机端口时，使用容器内网 IP
+spring:
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 1
+    validate-on-migrate: true
+  datasource:
+    url: jdbc:mysql://${LOADTEST_MYSQL_HOST:localhost}:${LOADTEST_MYSQL_PORT:3307}/official?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+  data:
+    redis:
+      host: ${LOADTEST_REDIS_HOST:localhost}
+  rabbitmq:
+    host: ${LOADTEST_RABBITMQ_HOST:localhost}
+  jpa:
+    show-sql: false
+
+rate-limit:
+  enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    tags:
+      application: official-loadtest
+
+logging:
+  level:
+    club.boyuan.official: WARN
+    org.springframework: WARN
