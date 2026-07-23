@@ -1,0 +1,91 @@
+package club.boyuan.official.persistence.entity;
+
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.FieldFill;
+import com.fasterxml.jackson.annotation.JsonFormat;
+import java.time.LocalDateTime;
+
+@TableName("resume_field_value") // MyBatis-Plus 表映射注解
+public class ResumeFieldValue {
+    @TableId(value = "value_id", type = IdType.AUTO) // MyBatis-Plus 主键映射，指定自增策略
+    private Integer valueId;
+
+    @TableField("resume_id") // MyBatis-Plus 字段映射
+    private Integer resumeId;
+
+    @TableField("field_id")
+    private Integer fieldId;
+
+    @TableField("field_value")
+    private String fieldValue;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField(value = "created_at", fill = FieldFill.INSERT) // 自动填充创建时间
+    private LocalDateTime createdAt;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField(value = "updated_at", fill = FieldFill.INSERT_UPDATE) // 自动填充更新时间
+    private LocalDateTime updatedAt;
+
+    // 构造函数
+    public ResumeFieldValue() {
+    }
+
+    public ResumeFieldValue(Integer resumeId, Integer fieldId, String fieldValue) {
+        this.resumeId = resumeId;
+        this.fieldId = fieldId;
+        this.fieldValue = fieldValue;
+    }
+
+    // Getter 和 Setter 方法
+    public Integer getValueId() {
+        return valueId;
+    }
+
+    public void setValueId(Integer valueId) {
+        this.valueId = valueId;
+    }
+
+    public Integer getResumeId() {
+        return resumeId;
+    }
+
+    public void setResumeId(Integer resumeId) {
+        this.resumeId = resumeId;
+    }
+
+    public Integer getFieldId() {
+        return fieldId;
+    }
+
+    public void setFieldId(Integer fieldId) {
+        this.fieldId = fieldId;
+    }
+
+    public String getFieldValue() {
+        return fieldValue;
+    }
+
+    public void setFieldValue(String fieldValue) {
+        this.fieldValue = fieldValue;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+}

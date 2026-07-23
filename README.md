@@ -17,11 +17,42 @@ Official 是一个社团管理系统，旨在为社团提供完整的成员管�
 ## 技术架构
 
 ### 后端技术栈
-- Spring Boot 3.5.3
-- MyBatis 3.5.15 + MySQL 8.0+
+- Spring Boot 3.2.1
+- MyBatis-Plus 3.5.9 + MySQL 8.0+（数据访问统一走 MyBatis-Plus，未使用 JPA/Hibernate 持久化）
 - Spring Security + JWT (jjwt 0.11.5)
-- Redis
+- Redis（缓存与限流）
+- RabbitMQ（Spring AMQP，配合事务发件箱 Outbox 异步投递）
+- Flyway（数据库版本化迁移，作为唯一 schema 来源；`ddl-auto=none`）
+- MapStruct 1.5.5（编译期 DTO/实体映射，替换反射式 BeanUtils）
 - Java 17
+
+### 代码结构
+采用顶层语义分区（方案 C）：
+
+```
+club.boyuan.official
+├─ domain/        业务域，按功能聚合 controller + service + service.impl + dto
+│   ├─ user/      （含 auth/role/permission/department 及其 dto）
+│   ├─ resume/    ├─ interview/（含 scheduling 排期算法与 dto）
+│   ├─ activity/  └─ system/（含 global-search dto）
+├─ persistence/   持久化内核：entity + mapper 接口（对应 resources/mapper/*.xml）
+├─ integration/   外部系统集成：feishu 飞书（含其 dto）
+├─ messaging/     消息：RabbitMQ 配置 + outbox 事务发件箱
+├─ infra/         基础设施：config / filter / ratelimit / sse / seckill / scheduler / notification
+├─ common/        通用能力：exception / utils / converter(MapStruct) 及跨域 dto（ResponseMessage、PageResultDTO）
+└─ OfficialApplication
+```
+
+DTO 按所属功能就近归入 `domain.<feature>.dto` 与 `integration.feishu.dto`，仅 `ResponseMessage`、
+`PageResultDTO` 等跨域通用响应保留在 `common.dto`。其中 `@MapperScan` 指向 `persistence.mapper`，
+`type-aliases-package` 指向 `persistence.entity`，Mapper XML 的 `namespace` 与 `resultType/parameterType`
+均使用对应的全限定类名。
+
+### Maven 仓库说明
+本项目通过 `.mvn/settings.xml` + `.mvn/maven.config` 强制使用 Maven 中央仓库，
+不依赖任何私服，且不会影响全局 `~/.m2/settings.xml`。
+若在 IntelliJ IDEA 构建，请在 `Settings → Build Tools → Maven` 中将
+"User settings file" 覆盖指向本项目的 `.mvn/settings.xml`。
 
 ### 版本管理
 - 使用语义化版本号（SemVer）规范：主版本号.次版本号.补丁版本号
@@ -59,7 +90,7 @@ make status
 make dev-down
 ```
 
-然后在IDE中运行 [OfficialApplication.java](file:///C:/Users/35183/IdeaProjects/Official/src/main/java/club/boyuan/official/OfficialApplication.java) 文件中的 main 方法启动应用。
+然后在IDE中运行 `src/main/java/club/boyuan/official/OfficialApplication.java` 文件中的 main 方法启动应用。
 
 #### 传统方式
 ```bash
@@ -70,7 +101,7 @@ make dev-down
 ./mvnw spring-boot:run
 ```
 
-或者直接运行 [OfficialApplication.java](file:///C:/Users/35183/IdeaProjects/Official/src/main/java/club/boyuan/official/OfficialApplication.java) 文件中的 main 方法。
+或者直接运行 `src/main/java/club/boyuan/official/OfficialApplication.java` 文件中的 main 方法。
 
 ## API 接口文档
 
@@ -208,12 +239,12 @@ make test-down
 
 2. 将生成的 JAR 文件上传到服务器：
    ```bash
-   scp target/Official-0.0.1-SNAPSHOT.jar user@server:/path/to/app/
+   scp target/Official-1.0.0.jar user@server:/path/to/app/
    ```
 
 3. 在服务器上运行：
    ```bash
-   java -jar Official-0.0.1-SNAPSHOT.jar
+   java -jar Official-1.0.0.jar
    ```
 
 ## 管理命令

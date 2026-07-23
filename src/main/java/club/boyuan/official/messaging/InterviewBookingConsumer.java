@@ -1,19 +1,19 @@
 package club.boyuan.official.messaging;
 
-import club.boyuan.official.config.RabbitMQConfig;
-import club.boyuan.official.dto.InterviewBookingDTO;
-import club.boyuan.official.entity.User;
-import club.boyuan.official.service.IUserService;
-import club.boyuan.official.service.InterviewBookingSeckillService;
-import club.boyuan.official.service.InterviewNotificationService;
-import club.boyuan.official.service.impl.InterviewBookingAsyncPersistenceService;
+import club.boyuan.official.infra.config.RabbitMQConfig;
+import club.boyuan.official.domain.interview.dto.InterviewBookingDTO;
+import club.boyuan.official.persistence.entity.User;
+import club.boyuan.official.domain.user.service.IUserService;
+import club.boyuan.official.domain.interview.service.InterviewBookingSeckillService;
+import club.boyuan.official.domain.interview.service.InterviewNotificationService;
+import club.boyuan.official.domain.interview.service.impl.InterviewBookingAsyncPersistenceService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
-import club.boyuan.official.seckill.InterviewBookingLuaInventoryService;
-import club.boyuan.official.seckill.InterviewBookingRedisKeys;
+import club.boyuan.official.infra.seckill.InterviewBookingLuaInventoryService;
+import club.boyuan.official.infra.seckill.InterviewBookingRedisKeys;
 
 import java.util.concurrent.TimeUnit;
 

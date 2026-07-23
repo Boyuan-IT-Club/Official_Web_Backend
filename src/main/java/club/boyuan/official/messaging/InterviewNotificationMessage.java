@@ -1,6 +1,6 @@
 package club.boyuan.official.messaging;
 
-import club.boyuan.official.notification.InterviewNotificationType;
+import club.boyuan.official.infra.notification.InterviewNotificationType;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
