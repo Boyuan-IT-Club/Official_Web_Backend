@@ -1,0 +1,61 @@
+name: CI
+
+# PR 与非 main 分支推送时跑测试 + 覆盖率，作为质量门禁。
+on:
+  pull_request:
+  push:
+    branches-ignore:
+      - main   # main 的构建+测试+部署由 docker-push.yml 负责
+
+jobs:
+  test:
+    name: Build & Test & Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Run tests (with JaCoCo)
+        run: |
+          chmod +x mvnw
+          ./mvnw -B clean test
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          CSV=target/site/jacoco/jacoco.csv
+          if [ ! -f "$CSV" ]; then
+            echo "未生成覆盖率报告（可能测试未跑到 report 阶段）" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          awk -F',' 'NR>1 {im+=$4; ic+=$5; bm+=$6; bc+=$7} END {
+            inst=im+ic; brc=bm+bc;
+            ip = (inst>0)? 100*ic/inst : 0;
+            bp = (brc>0)? 100*bc/brc : 0;
+            printf("## 测试覆盖率 (JaCoCo)\n\n| 维度 | 覆盖 | 总计 | 覆盖率 |\n|---|---|---|---|\n");
+            printf("| 指令(Instruction) | %d | %d | %.1f%% |\n", ic, inst, ip);
+            printf("| 分支(Branch) | %d | %d | %.1f%% |\n", bc, brc, bp);
+          }' "$CSV" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: target/surefire-reports/
+          if-no-files-found: ignore
+
+      - name: Publish coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-coverage
+          path: target/site/jacoco/
+          if-no-files-found: ignore
