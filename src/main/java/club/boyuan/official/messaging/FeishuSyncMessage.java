@@ -8,7 +8,7 @@ import java.io.Serializable;
 
 /**
  * RabbitMQ 消息体：只携带 Redis 里的任务 ID。
- * 导入条件（cycleId、forceUpdate 等）以 {@link club.boyuan.official.feishu.FeishuSyncTaskRecord} 为准。
+ * 导入条件（cycleId、forceUpdate 等）以 {@link club.boyuan.official.integration.feishu.FeishuSyncTaskRecord} 为准。
  */
 @Data
 @NoArgsConstructor

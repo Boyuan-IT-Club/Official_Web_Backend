@@ -1,0 +1,317 @@
+package club.boyuan.official.domain.resume.controller;
+
+import club.boyuan.official.common.dto.ResponseMessage;
+import club.boyuan.official.persistence.entity.AwardExperience;
+import club.boyuan.official.persistence.entity.User;
+import club.boyuan.official.common.exception.BusinessException;
+import club.boyuan.official.common.exception.BusinessExceptionEnum;
+import club.boyuan.official.domain.resume.service.IAwardExperienceService;
+import club.boyuan.official.domain.user.service.IUserService;
+import club.boyuan.official.common.utils.SecurityUtil;
+import lombok.AllArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
+import club.boyuan.official.common.utils.PermissionUtils;
+
+/**
+ * 奖项经验控制器
+ * 处理用户奖项经验的增删改查操作
+ */
+@AllArgsConstructor
+@RestController
+@RequestMapping("/api/awards")
+public class AwardExperienceController {
+
+    private static final Logger logger = LoggerFactory.getLogger(AwardExperienceController.class);
+
+    private final IAwardExperienceService awardExperienceService;
+    private final IUserService userService;
+
+    /**
+     * 创建获奖经历
+     * @param awardExperience 奖项经验信息
+     * @param request HTTP请求
+     * @return 创建结果
+     */
+    @PostMapping
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ResponseMessage<?>> createAward(@RequestBody AwardExperience awardExperience) {
+        try {
+            logger.info("开始创建获奖经历");
+            logger.debug("接收到的获奖经历信息: {}", awardExperience);
+            
+            // 当前登录用户名由 JwtAuthenticationFilter 统一写入 SecurityContext
+            String username = SecurityUtil.getCurrentUsername();
+            User currentUser = userService.getUserByUsername(username);
+            if (currentUser == null) {
+                logger.warn("未找到用户: {}", username);
+                throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
+            }
+            
+            // 获取目标用户ID
+            Integer targetUserId = awardExperience.getUserId();
+
+            // 权限控制：
+            if (targetUserId == null) {
+                // 未指定用户ID - 拒绝访问
+                logger.warn("创建获奖经历时未指定用户ID，操作者用户ID: {}", currentUser.getUserId());
+                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
+            } else {
+                // 检查当前用户是否具有 award:manage 权限
+                boolean hasManagePermission = false;
+                if (SecurityContextHolder.getContext().getAuthentication() != null) {
+                    hasManagePermission = SecurityContextHolder.getContext().getAuthentication()
+                            .getAuthorities().stream()
+                            .anyMatch(auth -> "award:manage".equals(auth.getAuthority()));
+                }
+                
+                if (hasManagePermission) {
+                    // 管理员：验证目标用户是否存在
+                    User targetUser = userService.getUserById(targetUserId);
+                    if (targetUser == null) {
+                        logger.warn("管理员尝试为不存在的用户创建获奖经历，目标用户ID: {}", targetUserId);
+                        throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
+                    }
+                    logger.debug("管理员为用户ID为{}的用户创建获奖经历", targetUserId);
+                } else {
+                    // 普通用户：只能为自己创建获奖经历
+                    if (!targetUserId.equals(currentUser.getUserId())) {
+                        logger.warn("用户ID为{}的用户尝试为其他用户创建获奖经历，目标用户ID: {}", currentUser.getUserId(), targetUserId);
+                        throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
+                    }
+                    logger.debug("用户为自己创建获奖经历，用户ID: {}", currentUser.getUserId());
+                }
+            }
+
+            // 设置获奖经历的用户ID
+            awardExperience.setUserId(targetUserId);
+            
+            AwardExperience createdAward = awardExperienceService.create(awardExperience);
+            logger.info("成功创建获奖经历，获奖ID: {}, 用户ID: {}", createdAward.getAwardId(), targetUserId);
+            
+            Map<String, Integer> data = new HashMap<>();
+            data.put("award_id", createdAward.getAwardId());
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(ResponseMessage.success(data));
+        } catch (BusinessException e) {
+            logger.error("创建获奖经历时发生业务异常", e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("创建获奖经历时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * 根据ID获取获奖经历
+     * @param id 奖项ID
+     * @return 奖项信息
+     */
+    @GetMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ResponseMessage<?>> getAwardById(@PathVariable Integer id) {
+        try {
+            logger.info("开始获取获奖经历，获奖ID: {}", id);
+            
+            // 从SecurityContext获取当前用户信息
+            org.springframework.security.core.Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication == null || !authentication.isAuthenticated()) {
+                logger.warn("未找到认证信息");
+                throw new BusinessException(BusinessExceptionEnum.AUTHENTICATION_FAILED);
+            }
+            
+            String username = authentication.getName();
+            User currentUser = userService.getUserByUsername(username);
+            if (currentUser == null) {
+                logger.warn("用户不存在: {}", username);
+                throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
+            }
+            
+            AwardExperience award = awardExperienceService.getById(id);
+            if (award == null) {
+                logger.warn("未找到指定的获奖经历，获奖ID: {}", id);
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ResponseMessage.error(BusinessExceptionEnum.AWARD_EXPERIENCE_NOT_FOUND.getCode(), BusinessExceptionEnum.AWARD_EXPERIENCE_NOT_FOUND.getMessage()));
+            }
+            
+            // 权限检查：管理员可以查看所有，普通用户只能查看自己的
+            boolean hasManagePermission = SecurityContextHolder.getContext().getAuthentication()
+                    .getAuthorities().stream()
+                    .anyMatch(auth -> "award:manage".equals(auth.getAuthority()));
+            
+            if (!hasManagePermission) {
+                if (!award.getUserId().equals(currentUser.getUserId())) {
+                    logger.warn("用户ID为{}的用户尝试查看其他用户的获奖经历，目标用户ID: {}, 获奖ID: {}", 
+                               currentUser.getUserId(), award.getUserId(), id);
+                    throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
+                }
+            }
+            
+            logger.info("成功获取获奖经历，获奖ID: {}", id);
+            return ResponseEntity.ok(ResponseMessage.success(award));
+        } catch (BusinessException e) {
+            logger.error("获取获奖经历时发生业务异常", e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("获取获奖经历时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * 根据用户ID获取所有获奖经历
+     * @param userId 用户ID
+     * @param request HTTP请求
+     * @return 奖项列表
+     */
+    @GetMapping("/user/{userId}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ResponseMessage<?>> getAwardsByUserId(@PathVariable Integer userId) {
+        try {
+            logger.info("开始获取用户的所有获奖经历，用户ID: {}", userId);
+            
+            String username = SecurityUtil.getCurrentUsername();
+            User currentUser = userService.getUserByUsername(username);
+            
+            // 权限检查：管理员可以查看所有，普通用户只能查看自己的
+            boolean hasManagePermission = SecurityContextHolder.getContext().getAuthentication()
+                    .getAuthorities().stream()
+                    .anyMatch(auth -> "award:manage".equals(auth.getAuthority()));
+            
+            if (!hasManagePermission) {
+                if (!userId.equals(currentUser.getUserId())) {
+                    logger.warn("用户ID为{}的用户尝试查看其他用户的获奖经历，目标用户ID: {}", currentUser.getUserId(), userId);
+                    throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
+                }
+            }
+            
+            List<AwardExperience> awards = awardExperienceService.getByUserId(userId);
+            logger.info("成功获取用户的所有获奖经历，用户ID: {}, 获奖经历数量: {}", userId, awards.size());
+            return ResponseEntity.ok(ResponseMessage.success(awards));
+        } catch (BusinessException e) {
+            logger.error("获取用户获奖经历时发生业务异常", e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("获取用户获奖经历时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * 更新获奖经历
+     * @param awardExperience 奖项经验信息
+     * @param request HTTP请求
+     * @return 更新结果
+     */
+    @PutMapping
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ResponseMessage<?>> updateAward(@RequestBody AwardExperience awardExperience) {
+        try {
+            logger.info("开始更新获奖经历，获奖ID: {}", awardExperience.getAwardId());
+            logger.debug("接收到的获奖经历信息: {}", awardExperience);
+            
+            String username = SecurityUtil.getCurrentUsername();
+            User user = userService.getUserByUsername(username);
+            Integer currentUserId = user.getUserId();
+            User currentUser = userService.getUserByUsername(username);
+            
+            // 获取要更新的获奖经历原始数据
+            AwardExperience originalAward = awardExperienceService.getById(awardExperience.getAwardId());
+            if (originalAward == null) {
+                logger.warn("尝试更新不存在的获奖经历，获奖ID: {}", awardExperience.getAwardId());
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ResponseMessage.error(BusinessExceptionEnum.AWARD_EXPERIENCE_NOT_FOUND.getCode(), BusinessExceptionEnum.AWARD_EXPERIENCE_NOT_FOUND.getMessage()));
+            }
+            
+            // 权限检查：管理员可以修改所有人的，普通用户只能修改自己的
+            boolean hasManagePermission = SecurityContextHolder.getContext().getAuthentication()
+                    .getAuthorities().stream()
+                    .anyMatch(auth -> "award:manage".equals(auth.getAuthority()));
+            
+            if (!hasManagePermission) {
+                if (!originalAward.getUserId().equals(currentUserId)) {
+                    logger.warn("用户ID为{}的用户尝试更新其他用户的获奖经历，目标用户ID: {}, 获奖ID: {}", 
+                               currentUserId, originalAward.getUserId(), awardExperience.getAwardId());
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                            .body(ResponseMessage.error(BusinessExceptionEnum.PERMISSION_DENIED.getCode(), BusinessExceptionEnum.PERMISSION_DENIED.getMessage()));
+                }
+            }
+            
+            // 设置用户ID为当前登录用户ID，防止篡改
+            awardExperience.setUserId(currentUserId);
+            AwardExperience updatedAward = awardExperienceService.update(awardExperience);
+            logger.info("成功更新获奖经历，获奖ID: {}", awardExperience.getAwardId());
+            return ResponseEntity.ok(ResponseMessage.success());
+        } catch (BusinessException e) {
+            logger.error("更新获奖经历时发生业务异常", e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("更新获奖经历时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * 删除获奖经历
+     * @param id 奖项ID
+     * @param request HTTP请求
+     * @return 删除结果
+     */
+    @DeleteMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ResponseMessage<?>> deleteAward(@PathVariable Integer id) {
+        try {
+            logger.info("开始删除获奖经历，获奖ID: {}", id);
+            
+            String username = SecurityUtil.getCurrentUsername();
+            User currentUser = userService.getUserByUsername(username);
+            if (currentUser == null) {
+                logger.warn("未找到用户: {}", username);
+                throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
+            }
+
+            // 获取要删除的获奖经历
+            AwardExperience award = awardExperienceService.getById(id);
+            if (award == null) {
+                logger.warn("尝试删除不存在的获奖经历，获奖ID: {}", id);
+                throw new BusinessException(BusinessExceptionEnum.AWARD_EXPERIENCE_NOT_FOUND);
+            }
+
+            // 权限检查：管理员可以删除所有，普通用户只能删除自己的
+            if (!PermissionUtils.canAccessUserResource(currentUser, award.getUserId())) {
+                logger.warn("用户ID为{}的用户尝试删除其他用户的获奖经历，目标用户ID: {}, 获奖ID: {}", 
+                           currentUser.getUserId(), award.getUserId(), id);
+                throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
+            }
+
+            awardExperienceService.deleteById(id);
+            logger.info("成功删除获奖经历，获奖ID: {}", id);
+            return ResponseEntity.ok(ResponseMessage.success());
+        } catch (BusinessException e) {
+            logger.error("删除获奖经历时发生业务异常", e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ResponseMessage.error(e.getCode(), e.getMessage()));
+        } catch (Exception e) {
+            logger.error("删除获奖经历时发生系统异常", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
+    }
+}

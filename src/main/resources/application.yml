@@ -25,19 +25,15 @@ spring:
     multipart:
       max-file-size: 10MB
       max-request-size: 10MB
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: true
-    # 移除数据库方言配置，让Hibernate自动检测
-    # database-platform: org.hibernate.dialect.MySQLDialect
-    # 明确关闭open-in-view以消除警告
-    open-in-view: false
   data:
     redis:
       host: localhost
       port: 6379
       timeout: 3000ms
+      # 项目仅使用 RedisTemplate 做缓存/限流，未使用 Spring Data Redis 仓库；
+      # 关闭仓库自动装配，避免 redisKeyValueAdapter 依赖 RedisTemplate#getConnectionFactory（测试中被 @MockBean 后为 null）
+      repositories:
+        enabled: false
       lettuce:
         pool:
           max-active: 8
@@ -67,13 +63,15 @@ spring:
 
 mybatis-plus:
   mapper-locations: classpath:mapper/*.xml
-  type-aliases-package: club.boyuan.official.entity
+  type-aliases-package: club.boyuan.official.persistence.entity
   configuration:
     mapUnderscoreToCamelCase: true
 
 booking:
   seckill:
-    enabled: true
+    # 方案B 上线后旧的"自助抢时段"下线：面试改由学生填志愿 + 管理员维护场次 + 算法分配。
+    # 保留秒杀基础设施但默认关闭，如需临时回退自助预约可置为 true。
+    enabled: false
     user-lock-ttl-seconds: 600
     request-status-ttl-hours: 24
 

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="club.boyuan.official.mapper.LoginMapper">
+<mapper namespace="club.boyuan.official.persistence.mapper.LoginMapper">
 
-    <select id="getUserByUsername" parameterType="java.lang.String" resultType="club.boyuan.official.entity.User">
+    <select id="getUserByUsername" parameterType="java.lang.String" resultType="club.boyuan.official.persistence.entity.User">
         SELECT user_id,
                username,
                password,

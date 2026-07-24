@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="club.boyuan.official.mapper.AwardExperienceMapper">
+<mapper namespace="club.boyuan.official.persistence.mapper.AwardExperienceMapper">
 
     <!-- 结果映射 -->
-    <resultMap id="AwardExperienceResultMap" type="club.boyuan.official.entity.AwardExperience">
+    <resultMap id="AwardExperienceResultMap" type="club.boyuan.official.persistence.entity.AwardExperience">
         <id property="awardId" column="award_id"/>
         <result property="userId" column="user_id"/>
         <result property="awardName" column="award_name"/>
@@ -32,7 +32,7 @@
         ORDER BY award_time DESC
     </select>
 
-    <update id="update" parameterType="club.boyuan.official.entity.AwardExperience">
+    <update id="update" parameterType="club.boyuan.official.persistence.entity.AwardExperience">
         UPDATE award_experience
         <set>
             <if test="userId != null">user_id = #{userId},</if>

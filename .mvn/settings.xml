@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  项目级 Maven 配置：仅对本项目生效，不影响全局 ~/.m2/settings.xml。
+  目的：本项目直接使用 Maven 中央仓库，绕过全局配置里通配私服（AWS CodeArtifact），
+       因为本项目不需要私服，而其他项目仍依赖全局私服配置。
+  生效方式：由 .mvn/maven.config 自动加载本文件。
+  注意：本地仓库仍复用默认 ${user.home}/.m2/repository，已缓存的依赖不会重复下载。
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 http://maven.apache.org/xsd/settings-1.0.0.xsd">
+
+    <!-- 不配置任何 mirror，避免全局 mirrorOf=* 把中央仓库重定向到私服 -->
+    <mirrors/>
+
+    <profiles>
+        <profile>
+            <id>maven-central-only</id>
+            <repositories>
+                <repository>
+                    <id>central</id>
+                    <name>Maven Central</name>
+                    <url>https://repo.maven.apache.org/maven2</url>
+                    <releases>
+                        <enabled>true</enabled>
+                    </releases>
+                    <snapshots>
+                        <enabled>false</enabled>
+                    </snapshots>
+                </repository>
+            </repositories>
+            <pluginRepositories>
+                <pluginRepository>
+                    <id>central</id>
+                    <name>Maven Central</name>
+                    <url>https://repo.maven.apache.org/maven2</url>
+                    <releases>
+                        <enabled>true</enabled>
+                    </releases>
+                    <snapshots>
+                        <enabled>false</enabled>
+                    </snapshots>
+                </pluginRepository>
+            </pluginRepositories>
+        </profile>
+    </profiles>
+
+    <activeProfiles>
+        <activeProfile>maven-central-only</activeProfile>
+    </activeProfiles>
+</settings>

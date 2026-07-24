@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="club.boyuan.official.mapper.ResumeFieldDefinitionMapper">
+<mapper namespace="club.boyuan.official.persistence.mapper.ResumeFieldDefinitionMapper">
 
-    <resultMap id="ResumeFieldDefinitionMap" type="club.boyuan.official.entity.ResumeFieldDefinition">
+    <resultMap id="ResumeFieldDefinitionMap" type="club.boyuan.official.persistence.entity.ResumeFieldDefinition">
         <id column="field_id" property="fieldId"/>
         <result column="cycle_id" property="cycleId"/>
         <result column="field_key" property="fieldKey"/>
