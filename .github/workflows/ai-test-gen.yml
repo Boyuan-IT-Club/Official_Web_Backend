@@ -1,0 +1,42 @@
+name: AI Test Generation
+
+# 手动触发：输入被测类名，AI 生成 JUnit5 测试草稿并开 Draft PR（需人工审核后合并）。
+on:
+  workflow_dispatch:
+    inputs:
+      target_class:
+        description: '被测类名（简单名或全限定名，如 SessionAssignmentServiceImpl）'
+        required: true
+        type: string
+      base_branch:
+        description: 'PR 目标分支'
+        required: false
+        default: 'develop'
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  gen-test:
+    name: Generate test draft
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate & open PR
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_CLASS: ${{ github.event.inputs.target_class }}
+          PR_BASE: ${{ github.event.inputs.base_branch }}
+        run: |
+          if [ -z "${DEEPSEEK_API_KEY}" ]; then
+            echo "未配置 DEEPSEEK_API_KEY，无法生成。"; exit 1
+          fi
+          chmod +x .github/scripts/ai_test_gen.sh
+          .github/scripts/ai_test_gen.sh

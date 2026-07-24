@@ -1,103 +1,91 @@
-name: Push to Docker Hub on main branch merge
+name: Push to Docker Hub & Deploy on main
 
-# 定义工作流触发条件
+# 触发：推送到 main、打 v*.*.* 标签、或手动触发
 on:
-  # 当推送到main分支时触发
   push:
     branches:
       - main
-    # 当有标签推送时触发
     tags: [ 'v*.*.*' ]
-  # 允许从Actions页面手动触发
   workflow_dispatch:
 
-# 定义环境变量
 env:
   DOCKER_USERNAME: boyuanclub
   IMAGE_NAME: official-core-api
   DOCKERHUB_EMAIL: notify@boyuan.club
 
-# 定义工作流任务
 jobs:
-  build:
+  # ── 1) 测试门禁：测试不过不发布 ──────────────────────────────
+  test:
+    name: Test
     runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-    # 定义任务步骤
     steps:
-      # 步骤1: 检出代码
       - name: Checkout code
         uses: actions/checkout@v4
-        
-      # 步骤2: 设置Java环境
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          
-      # 步骤3: 构建项目
+          cache: maven
+      - name: Run tests
+        run: |
+          chmod +x mvnw
+          ./mvnw -B clean test
+
+  # ── 2) 构建并推送镜像到 Docker Hub ──────────────────────────
+  build:
+    name: Build & Push
+    runs-on: ubuntu-latest
+    needs: test
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
       - name: Build with Maven
         run: |
           chmod +x mvnw
-          ./mvnw clean package -DskipTests
-          
-      # 步骤4: 设置Docker Buildx（用于构建Docker镜像）
+          ./mvnw clean package -DskipTests   # 测试已在 test job 跑过
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-        
-      # 步骤5: 登录到Docker Hub
+
       - name: Login to Docker Hub
         if: github.event_name == 'push'
         uses: docker/login-action@v3
         with:
           username: ${{ env.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-          
-      # 步骤6: 获取或增加版本号
+
       - name: Bump Version
         id: version
         run: |
-          echo "Fetching latest version from DockerHub for ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}"
-          
-          # 尝试从标签获取版本号
           if [[ "${{ github.ref_type }}" == 'tag' ]]; then
             VERSION_TAG=${GITHUB_REF#refs/tags/v}
-            echo "Using version from tag: $VERSION_TAG"
-            echo "VERSION=$VERSION_TAG" >> $GITHUB_ENV
             echo "version=$VERSION_TAG" >> $GITHUB_OUTPUT
           else
-            # 从DockerHub获取当前最新版本
-            echo "Fetching tags from DockerHub..."
             RESPONSE=$(curl -s https://hub.docker.com/v2/repositories/${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}/tags)
-            echo "DockerHub API response: $RESPONSE"
-            
             LATEST_VERSION=$(echo "$RESPONSE" | jq -r '.results[].name' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
-            echo "Latest semantic version found: $LATEST_VERSION"
-            
             if [[ -z "$LATEST_VERSION" ]] || [[ "$LATEST_VERSION" == "null" ]]; then
               LATEST_VERSION="0.0.0"
-              echo "No valid semantic version found, starting from $LATEST_VERSION"
             fi
-            
-            # 版本号自增逻辑 (将最后一位数字+1)
             IFS='.' read -ra VERSION_PARTS <<< "$LATEST_VERSION"
             if [ ${#VERSION_PARTS[@]} -eq 3 ]; then
-              MAJOR=${VERSION_PARTS[0]}
-              MINOR=${VERSION_PARTS[1]}
-              PATCH=$((${VERSION_PARTS[2]} + 1))
-              NEW_VERSION="$MAJOR.$MINOR.$PATCH"
-              echo "Incrementing version from $LATEST_VERSION to $NEW_VERSION"
+              NEW_VERSION="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}.$(( ${VERSION_PARTS[2]} + 1 ))"
             else
               NEW_VERSION="0.0.1"
-              echo "Invalid version format, using default $NEW_VERSION"
             fi
-            
-            echo "VERSION=$NEW_VERSION" >> $GITHUB_ENV
             echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
           fi
-          
-      # 步骤7: 构建并推送Docker镜像
+
       - name: Build and push Docker image
         if: github.event_name == 'push'
         uses: docker/build-push-action@v5
@@ -108,22 +96,60 @@ jobs:
           tags: |
             ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest
             ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
-  
-  # 部署验证任务
+
+  # ── 3) 自动部署到双机集群（先 B 后 A，滚动重启）─────────────
   deploy:
+    name: Deploy to cluster
     runs-on: ubuntu-latest
     needs: build
     if: github.event_name == 'push'
     steps:
-      # 验证镜像是否正确推送
-      - name: Verify Docker image
-        run: |
-          echo "Checking if image ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ needs.build.outputs.version }} exists"
-          IMAGE_INFO=$(curl -s https://hub.docker.com/v2/repositories/${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}/tags/${{ needs.build.outputs.version }})
-          if echo "$IMAGE_INFO" | jq -e .name > /dev/null 2>&1; then
-            echo "SUCCESS: Image successfully pushed to Docker Hub with version ${{ needs.build.outputs.version }}"
-          else
-            echo "ERROR: Failed to push image to Docker Hub"
-            echo "Response from DockerHub: $IMAGE_INFO"
-            exit 1
-          fi
+      - name: Deploy to Node B (8.159.150.156)
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST_B }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            cd ~/boyuan-official
+            docker compose pull official
+            docker compose up -d official
+            echo "等待 B 健康检查..."
+            for i in $(seq 1 20); do
+              if curl -fsS http://localhost:8080/actuator/health | grep -q '"status":"UP"'; then
+                echo "Node B UP"; break
+              fi
+              sleep 5
+              if [ "$i" = "20" ]; then echo "Node B 健康检查超时" >&2; exit 1; fi
+            done
+
+      - name: Deploy to Node A (8.159.153.140)
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST_A }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            cd ~/boyuan-official
+            docker compose pull official
+            docker compose up -d official
+            echo "等待 A 健康检查..."
+            for i in $(seq 1 20); do
+              if curl -fsS http://localhost:8080/actuator/health | grep -q '"status":"UP"'; then
+                echo "Node A UP"; break
+              fi
+              sleep 5
+              if [ "$i" = "20" ]; then echo "Node A 健康检查超时" >&2; exit 1; fi
+            done
+
+      - name: Verify via load balancer
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST_A }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/api/user/login || true)
+            echo "LB /api 返回码: $code (401/400 表示反代通)"

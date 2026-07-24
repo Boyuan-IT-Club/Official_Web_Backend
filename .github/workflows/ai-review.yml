@@ -1,0 +1,39 @@
+name: AI Code Review
+
+# PR 触发：调用 Claude 对 diff 做一轮 AI 代码审查并回帖。
+# 说明：使用 pull_request（非 pull_request_target），仅对本仓库分支的 PR 生效，
+#       Fork 外部 PR 因拿不到密钥会自动跳过（安全考虑，不用 pull_request_target 拉取不可信代码 + 密钥）。
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  ai-review:
+    name: AI Review
+    runs-on: ubuntu-latest
+    # 没有配置密钥时跳过，避免报错
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run AI review
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          # REVIEW_MODEL: deepseek-reasoner   # 取消注释以用更强(较慢较贵)的 R1
+        run: |
+          if [ -z "${DEEPSEEK_API_KEY}" ]; then
+            echo "未配置 DEEPSEEK_API_KEY，跳过 AI 审查。"; exit 0
+          fi
+          chmod +x .github/scripts/ai_review.sh
+          .github/scripts/ai_review.sh
