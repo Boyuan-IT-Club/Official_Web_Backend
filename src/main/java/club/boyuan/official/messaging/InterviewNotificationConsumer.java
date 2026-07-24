@@ -1,7 +1,7 @@
 package club.boyuan.official.messaging;
 
-import club.boyuan.official.config.RabbitMQConfig;
-import club.boyuan.official.service.impl.InterviewNotificationServiceImpl;
+import club.boyuan.official.infra.config.RabbitMQConfig;
+import club.boyuan.official.domain.interview.service.impl.InterviewNotificationServiceImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;

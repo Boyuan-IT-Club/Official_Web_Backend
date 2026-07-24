@@ -1,13 +1,13 @@
 package club.boyuan.official.messaging;
 
-import club.boyuan.official.config.RabbitMQConfig;
+import club.boyuan.official.infra.config.RabbitMQConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
 
 /**
- * 飞书同步 MQ 生产者：只往队列 {@link club.boyuan.official.config.RabbitMQConfig#FEISHU_SYNC_QUEUE}
+ * 飞书同步 MQ 生产者：只往队列 {@link club.boyuan.official.infra.config.RabbitMQConfig#FEISHU_SYNC_QUEUE}
  * 投递 taskId；具体导入参数在 Redis 任务里。
  */
 @Slf4j
