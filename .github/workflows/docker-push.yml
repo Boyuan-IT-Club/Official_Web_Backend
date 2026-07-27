@@ -148,6 +148,7 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST_B }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 30m
           script: |
             set -e
             cd ~/boyuan-official
@@ -168,6 +169,7 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST_A }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 30m
           script: |
             set -e
             cd ~/boyuan-official
@@ -188,6 +190,7 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST_A }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 30m
           script: |
             code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/api/user/login || true)
             echo "LB /api 返回码: $code (401/400 表示反代通)"
