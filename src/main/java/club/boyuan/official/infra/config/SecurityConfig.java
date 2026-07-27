@@ -121,15 +121,22 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // 允许的域名
-        configuration.addAllowedOriginPattern("http://localhost:8080");
-        configuration.addAllowedOriginPattern("http://43.143.27.198:8080");
-        configuration.addAllowedOriginPattern("http://localhost:3000");
-        configuration.addAllowedOriginPattern("https://localhost:8080");
-        configuration.addAllowedOriginPattern("https://localhost:3000");
-        configuration.addAllowedOriginPattern("http://127.0.0.1:8080");
-        configuration.addAllowedOriginPattern("http://127.0.0.1:3000");
+        // 允许的来源(origin)。注意：即使前端走同源 /api（nginx 反代），
+        // 浏览器对 POST 等仍会带 Origin 头，Spring 会校验，故部署站点 origin 必须在此白名单内。
+        // 生产站点入口
+        configuration.addAllowedOriginPattern("http://8.159.153.140");
+        configuration.addAllowedOriginPattern("https://8.159.153.140");
+        configuration.addAllowedOriginPattern("http://8.159.150.156");
+        configuration.addAllowedOriginPattern("https://8.159.150.156");
+        configuration.addAllowedOriginPattern("http://official.boyuan.club");
         configuration.addAllowedOriginPattern("https://official.boyuan.club");
+        // 本地开发 / 直连
+        configuration.addAllowedOriginPattern("http://localhost:3000");
+        configuration.addAllowedOriginPattern("https://localhost:3000");
+        configuration.addAllowedOriginPattern("http://127.0.0.1:3000");
+        configuration.addAllowedOriginPattern("http://localhost:8080");
+        configuration.addAllowedOriginPattern("https://localhost:8080");
+        configuration.addAllowedOriginPattern("http://127.0.0.1:8080");
 
         // 允许的请求头
         configuration.addAllowedHeader("*");

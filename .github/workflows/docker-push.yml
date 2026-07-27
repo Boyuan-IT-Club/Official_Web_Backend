@@ -148,10 +148,17 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST_B }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 30m
           script: |
             set -e
             cd ~/boyuan-official
-            docker compose pull official
+            # 拉取镜像：公网从 Docker Hub 拉取偶发中断，重试至多 5 次
+            n=0
+            until docker compose pull official; do
+              n=$((n+1))
+              if [ "$n" -ge 5 ]; then echo "Node B 镜像拉取重试 5 次仍失败" >&2; exit 1; fi
+              echo "拉取失败，第 $n 次重试..."; sleep 10
+            done
             docker compose up -d official
             echo "等待 B 健康检查..."
             for i in $(seq 1 20); do
@@ -168,10 +175,17 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST_A }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 30m
           script: |
             set -e
             cd ~/boyuan-official
-            docker compose pull official
+            # 拉取镜像：公网从 Docker Hub 拉取偶发中断，重试至多 5 次
+            n=0
+            until docker compose pull official; do
+              n=$((n+1))
+              if [ "$n" -ge 5 ]; then echo "Node A 镜像拉取重试 5 次仍失败" >&2; exit 1; fi
+              echo "拉取失败，第 $n 次重试..."; sleep 10
+            done
             docker compose up -d official
             echo "等待 A 健康检查..."
             for i in $(seq 1 20); do
@@ -188,6 +202,7 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST_A }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 30m
           script: |
             code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/api/user/login || true)
             echo "LB /api 返回码: $code (401/400 表示反代通)"
