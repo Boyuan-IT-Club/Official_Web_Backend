@@ -3,7 +3,7 @@ services:
     image: mysql:8
     container_name: ${PROJECT_NAME:-official}-mysql
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
       MYSQL_DATABASE: ${DB_NAME:-official}
       TZ: Asia/Shanghai
     ports:
@@ -36,7 +36,7 @@ services:
       - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-guest}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     restart: always
     networks:
       - official-network
@@ -51,19 +51,20 @@ services:
       - ./volumes/logs:/official/logs
     environment:
       - DB_USERNAME=root
-      - DB_PASSWORD=${DB_ROOT_PASSWORD:-root}
+      - DB_PASSWORD=${DB_ROOT_PASSWORD}
       - DB_NAME=${DB_NAME:-official}
       - MYSQL_PORT=${MYSQL_PORT:-3306}
       - REDIS_PORT=${REDIS_PORT:-6379}
-      - JWT_SECRET=${JWT_SECRET:-30b264511df560046ae9907e50cd6e69a3cb94ce987538fb2c90b98c70ce684a}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRATION=${JWT_EXPIRATION}
       - MAIL_HOST=${MAIL_HOST:-smtp.feishu.cn}
       - MAIL_PORT=${MAIL_PORT:-465}
       - MAIL_USERNAME=${MAIL_USERNAME:-notify@boyuan.club}
-      - MAIL_PASSWORD=${MAIL_PASSWORD:-12bGmEWjvyRDjzxE}
+      - MAIL_PASSWORD=${MAIL_PASSWORD}
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_PORT=5672
       - RABBITMQ_USERNAME=${RABBITMQ_USERNAME:-guest}
-      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-guest}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
       - SERVER_PORT=8080
       # 添加中文环境支持
       - LANG=zh_CN.UTF-8
