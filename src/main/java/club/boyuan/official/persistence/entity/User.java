@@ -31,6 +31,9 @@ public class User {
     @TableField("phone")
     private String phone;
 
+    @TableField("role")
+    private String role;
+
     @TableField("major")
     private String major;
 
@@ -123,6 +126,14 @@ public class User {
 
     public void setPhone(String phone) {
         this.phone = phone;
+    }
+
+    public String getRole() {
+        return role;
+    }
+
+    public void setRole(String role) {
+        this.role = role;
     }
 
     public String getMajor() {

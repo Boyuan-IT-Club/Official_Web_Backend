@@ -70,6 +70,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
         // 使用BCrypt加密密码
         String encodedPassword = passwordEncoder.encode(user.getPassword());
         user.setPassword(encodedPassword);
+        // 管理员添加用户时默认角色为申请人（APPLICANT），若需设置更高角色请通过角色管理接口
+        user.setRole("APPLICANT");
         userMapper.insert(user);
         logger.info("成功添加用户，用户ID: {}", user.getUserId());
         return user;
@@ -425,6 +427,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
         // 使用BCrypt加密密码
         String encodedPassword = passwordEncoder.encode(user.getPassword());
         user.setPassword(encodedPassword);
+        // 新注册用户默认角色为申请人（APPLICANT），后端统一设置，前端不可指定
+        user.setRole("APPLICANT");
         userMapper.insert(user);
         logger.info("用户注册成功，用户ID: {}", user.getUserId());
         return user;
