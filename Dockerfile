@@ -1,5 +1,7 @@
 # 运行阶段
-FROM openjdk:17-jdk-slim
+# 注：openjdk 官方镜像已废弃下架（openjdk:17-jdk-slim 不再可拉取），
+# 改用仍维护的 Eclipse Temurin（同为 Ubuntu/Debian 系，apt-get 与字体包可用）。
+FROM eclipse-temurin:17-jdk-jammy
 
 # 安装字体和必要的依赖
 RUN apt-get update && \
