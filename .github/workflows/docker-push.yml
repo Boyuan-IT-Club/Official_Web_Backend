@@ -15,9 +15,47 @@ env:
 
 jobs:
   # ── 1) 测试门禁：测试不过不发布 ──────────────────────────────
+  # @SpringBootTest 需完整容器(Flyway+Redis+RabbitMQ)，为测试挂服务容器，与 ci.yml 一致。
   test:
     name: Test
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: official
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s --health-timeout=5s --health-retries=15
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+      rabbitmq:
+        image: rabbitmq:3-management
+        env:
+          RABBITMQ_DEFAULT_USER: root
+          RABBITMQ_DEFAULT_PASS: root
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd="rabbitmq-diagnostics -q ping"
+          --health-interval=10s --health-timeout=10s --health-retries=15
+    env:
+      MYSQL_PORT: 3306
+      DB_USERNAME: root
+      DB_PASSWORD: root
+      RABBITMQ_HOST: localhost
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: root
+      RABBITMQ_PASSWORD: root
+      JWT_SECRET: ci-only-test-secret-not-for-production-0123456789abcdef0123456789
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
