@@ -10,6 +10,7 @@
         <result property="email" column="email"/>
         <result property="name" column="name"/>
         <result property="phone" column="phone"/>
+        <result property="role" column="role"/>
         <result property="major" column="major"/>
         <result property="github" column="github"/>
         <result property="deptId" column="dept_id"/>
