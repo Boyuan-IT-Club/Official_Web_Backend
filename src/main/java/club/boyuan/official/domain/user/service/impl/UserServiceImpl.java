@@ -5,12 +5,14 @@ import club.boyuan.official.common.dto.PageResultDTO;
 import club.boyuan.official.domain.user.dto.UserDTO;
 import club.boyuan.official.persistence.entity.Resume;
 import club.boyuan.official.persistence.entity.User;
+import club.boyuan.official.persistence.entity.UserRole;
 import club.boyuan.official.common.exception.BusinessException;
 import club.boyuan.official.common.exception.BusinessExceptionEnum;
 import club.boyuan.official.persistence.mapper.AwardExperienceMapper;
 import club.boyuan.official.persistence.mapper.ResumeFieldValueMapper;
 import club.boyuan.official.persistence.mapper.ResumeMapper;
 import club.boyuan.official.persistence.mapper.UserMapper;
+import club.boyuan.official.persistence.mapper.UserRoleMapper;
 import club.boyuan.official.domain.user.service.IUserService;
 import club.boyuan.official.common.utils.JwtTokenUtil;
 import club.boyuan.official.common.utils.PasswordValidator;
@@ -34,6 +36,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
     private static final Logger logger = LoggerFactory.getLogger(UserServiceImpl.class);
 
     private final UserMapper userMapper;
+    private final UserRoleMapper userRoleMapper;
     private final AwardExperienceMapper awardExperienceMapper;
     private final ResumeMapper resumeMapper;
     private final ResumeFieldValueMapper resumeFieldValueMapper;
@@ -42,6 +45,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
     private final UserConverter userConverter;
 
     @Override
+    @Transactional
     public User add(UserDTO userDTO) {
         logger.info("开始添加新用户，用户名: {}", userDTO.getUsername());
         
@@ -73,6 +77,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
         // 管理员添加用户时默认角色为申请人（APPLICANT），若需设置更高角色请通过角色管理接口
         user.setRole("APPLICANT");
         userMapper.insert(user);
+        UserRole userRole = new UserRole();
+        userRole.setUserId(user.getUserId());
+        userRole.setRoleId(4);
+        userRoleMapper.insert(userRole);
         logger.info("成功添加用户，用户ID: {}", user.getUserId());
         return user;
     }
@@ -404,6 +412,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
     }
 
     @Override
+    @Transactional
     public User register(UserDTO userDTO) {
         // 检查用户名是否已存在
         if (userMapper.selectByUsername(userDTO.getUsername()) != null) {
@@ -430,6 +439,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
         // 新注册用户默认角色为申请人（APPLICANT），后端统一设置，前端不可指定
         user.setRole("APPLICANT");
         userMapper.insert(user);
+        // 同时在 user_role 关联表插入记录，使得登录后能获取到角色
+        UserRole userRole = new UserRole();
+        userRole.setUserId(user.getUserId());
+        userRole.setRoleId(4); // role_id=4 -> APPLICANT（申请人）
+        userRoleMapper.insert(userRole);
         logger.info("用户注册成功，用户ID: {}", user.getUserId());
         return user;
     }
