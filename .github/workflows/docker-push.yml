@@ -6,6 +6,11 @@ on:
     branches:
       - main
     tags: [ 'v*.*.*' ]
+    # 纯文档改动不触发构建与生产部署
+    paths-ignore:
+      - '**.md'
+      - 'openapi.yaml'
+      - 'docs/**'
   workflow_dispatch:
 
 env:
