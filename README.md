@@ -77,17 +77,17 @@ DTO 按所属功能就近归入 `domain.<feature>.dto` 与 `integration.feishu.d
 
 ### 开发环境运行
 
-#### 使用Makefile (推荐)
+#### 使用 Docker Compose 启动依赖 (推荐)
 
 ```bash
-# 启动依赖服务 (MySQL和Redis)
-make dev-up
+# 启动依赖服务 (MySQL、Redis、RabbitMQ)
+docker compose up -d mysql redis rabbitmq
 
 # 查看服务状态
-make status
+docker compose ps
 
 # 停止服务
-make dev-down
+docker compose down
 ```
 
 然后在IDE中运行 `src/main/java/club/boyuan/official/OfficialApplication.java` 文件中的 main 方法启动应用。
@@ -137,15 +137,6 @@ git push origin v1.2.3
    - 访问DockerHub仓库页面
    - 查看Tags选项卡中的版本列表
 
-3. 使用本地测试脚本验证版本管理
-   ```bash
-   # 测试版本自增逻辑
-   bash test_version_bump.sh
-   
-   # 测试从DockerHub获取真实标签
-   bash test_dockerhub_version.sh
-   ```
-   
 #### 版本号跳转解决方案
 
 为了避免版本号跳转带来的困惑，建议采取以下措施：
@@ -158,49 +149,30 @@ git push origin v1.2.3
 ### 本地测试环境部署
 
 ```bash
-# 构建并启动完整测试环境（包括应用、MySQL和Redis）
-make test-up
+# 构建 jar 包（Dockerfile 从 target/ 复制）
+./mvnw clean package -DskipTests
+
+# 构建并启动完整测试环境（包括应用、MySQL、Redis、RabbitMQ）
+docker compose up -d --build
 
 # 查看服务状态
-make status
+docker compose ps
 
 # 停止测试环境
-make test-down
+docker compose down
 ```
 
-### Docker Hub 部署方式（生产环境推荐）
+### 生产环境部署（CI/CD 自动完成）
 
-1. 登录到 Docker Hub：
-   ```bash
-   docker login -u boyuanclub
-   ```
+生产部署由 GitHub Actions 全自动完成，无需手动操作：
 
-2. 构建并推送镜像到 Docker Hub：
-   ```bash
-   # 构建并推送镜像
-   make deploy
-   ```
-   
-   或者使用脚本方式：
-   ```bash
-   ./deploy.sh
-   ```
+1. 代码合并到 `main` 分支后触发 `.github/workflows/docker-push.yml`
+2. 测试门禁 → 构建并推送镜像 `boyuanclub/official-core-api` 到 Docker Hub
+3. 双机（Node A/B）并行预拉镜像 → 先 B 后 A 滚动重启 → 健康检查与负载均衡验证
 
-3. 在服务器上更新应用：
-   ```bash
-   # 登录 Docker Hub（如果尚未登录）
-   docker login -u boyuanclub
-   
-   # 拉取最新镜像并重启服务
-   make update
-   ```
-   
-   或者使用脚本方式：
-   ```bash
-   ./update.sh
-   ```
+详见 `.github/workflows/docker-push.yml` 与飞书 wiki《09-1 CICD 与发布流程》。
 
-### 手动 Docker 部署
+### 手动 Docker 部署（应急备用）
 
 1. 构建项目:
    ```bash
@@ -213,60 +185,20 @@ make test-down
 
 2. 构建 Docker 镜像:
    ```bash
-   docker build -t boyuanclub/official:latest .
+   docker build -t boyuanclub/official-core-api:latest .
    ```
 
 3. 推送到 Docker Hub:
    ```bash
-   docker push boyuanclub/official:latest
+   docker push boyuanclub/official-core-api:latest
    ```
 
 4. 在服务器上运行:
    ```bash
-   # 拉取最新镜像
-   docker pull boyuanclub/official:latest
-   
-   # 启动服务
-   docker-compose up -d
+   cd ~/boyuan-official
+   docker compose pull official
+   docker compose up -d official
    ```
-
-### 传统部署方式
-
-1. 构建项目：
-   ```bash
-   ./mvnw clean package
-   ```
-
-2. 将生成的 JAR 文件上传到服务器：
-   ```bash
-   scp target/Official-1.0.0.jar user@server:/path/to/app/
-   ```
-
-3. 在服务器上运行：
-   ```bash
-   java -jar Official-1.0.0.jar
-   ```
-
-## 管理命令
-
-项目提供了一系列便捷的管理命令：
-
-```bash
-# 显示所有可用命令
-make help
-
-# 构建项目
-make build
-
-# 本地启动应用
-make local-up
-
-# 查看服务日志
-make dev-logs
-
-# 初始化数据库
-make init-db
-```
 
 ## 第一阶段功能说明
 

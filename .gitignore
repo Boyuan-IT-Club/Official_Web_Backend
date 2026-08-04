@@ -32,6 +32,9 @@ build/
 ### VS Code ###
 .vscode/
 
+### macOS ###
+.DS_Store
+
 *.log
 
 ### 部署私钥与套件（含私钥/密钥/数据快照，禁止提交）###
