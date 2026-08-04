@@ -1,6 +1,6 @@
 name: Sync OpenAPI to Apifox
 
-# 触发：main 上的接口文档（默认模块.openapi.yaml）有变更即自动同步到 Apifox；
+# 触发：main 上的接口文档（openapi.yaml）有变更即自动同步到 Apifox；
 # 也可在 Actions 页手动触发全量同步。
 # 需要的 Secrets：
 #   APIFOX_ACCESS_TOKEN —— Apifox 个人头像 → 账号设置 → API 访问令牌 生成
@@ -9,7 +9,7 @@ on:
   push:
     branches: [ main ]
     paths:
-      - '默认模块.openapi.yaml'
+      - 'openapi.yaml'
   workflow_dispatch:
 
 jobs:
@@ -35,7 +35,7 @@ jobs:
           #   OVERWRITE_EXISTING       —— 路径+方法匹配的接口/模型直接覆盖
           #   updateFolderOfChangedEndpoint=false —— 不改变接口在 Apifox 里已整理好的目录归属
           #   deleteUnmatchedResources=false      —— 文档里没有的接口不删（防误删 Apifox 中单独维护的内容）
-          jq -n --rawfile input '默认模块.openapi.yaml' '{
+          jq -n --rawfile input 'openapi.yaml' '{
             input: $input,
             options: {
               endpointOverwriteBehavior: "OVERWRITE_EXISTING",

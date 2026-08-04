@@ -1,17 +1,24 @@
 openapi: 3.0.1
 info:
-  title: 默认模块
-  description: |
-    博远信息技术社官网后端面试模块的完整 API 接口文档。
+  title: 博远社团官网 API
+  description: '博远信息技术社官网后端面试模块的完整 API 接口文档。
+
 
     **面试分配（方案 B，当前流程）**：
+
     1. 管理员维护**时间窗**（`InterviewTimeSlot`，大时段，如“周六上午”）与**场次**（`InterviewSession` = 部门 × 时间窗 × 地点 × 容量）——见「面试场次管理（管理员）」。
+
     2. 学生提交**志愿**（至多两个志愿部门 + 勾选可接受时间窗）——见「面试志愿（学生）」。
+
     3. 管理员**一键分配**：每人只面一场，先匹配第一志愿有空场次，满了自动降级第二志愿，都不行进入待调剂名单；命中后按场次 `interviewDurationMinutes` 把时间窗细分到每人精确时刻并写入 `InterviewSchedule`。人工调剂可一键把候选人再分配到其它有空场次——见「面试场次分配（管理员）」。
+
 
     **已下线：自助抢/秒杀预约**。原 `POST /api/interview/booking`、`/api/interview/booking/seckill` 等自助抢接口已弃用（`booking.seckill.enabled=false`），改由“志愿提交 + 管理员场次分配”替代。文档中相关路径标记为 `deprecated`。
 
+
     **飞书多维表格导入**：`POST /api/interview/feishu/import` 异步导入（返回 `taskId`，SSE `.../tasks/{taskId}/stream` 推送进度，轮询 `.../tasks/{taskId}` 兜底）；`POST /api/interview/feishu/import-from-table` 为同步导入。按面试地点分桶并行写入各 `feishu_table_url`。
+
+    '
   version: 1.0.0
 tags:
 - name: 登录注册页
@@ -68,14 +75,6 @@ paths:
       description: 注册社团官网账号。校验用户名/邮箱唯一性及验证码，成功后创建普通用户账号。
       tags:
       - 登录注册页
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -159,14 +158,6 @@ paths:
       description: 使用用户名/邮箱 + 密码登录，成功后返回 JWT 令牌；后续受保护接口需在 Authorization 头携带 `Bearer {token}`。
       tags:
       - 登录注册页
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -237,14 +228,6 @@ paths:
       description: 通过邮箱或手机验证码校验身份后重置登录密码。
       tags:
       - 登录注册页
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -299,19 +282,13 @@ paths:
     post:
       summary: 发送邮箱验证码
       deprecated: false
-      description: |
-        生成验证码写入 Redis 后投递 RabbitMQ 异步发信，HTTP 立即返回。限流：同一 IP 60 秒内最多 5 次（超限 HTTP 429，业务码 4291）。
+      description: '生成验证码写入 Redis 后投递 RabbitMQ 异步发信，HTTP 立即返回。限流：同一 IP 60 秒内最多 5 次（超限 HTTP 429，业务码 4291）。
+
         邮箱须为 `@stu.ecnu.edu.cn` 后缀。
+
+        '
       tags:
       - 登录注册页
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -341,8 +318,9 @@ paths:
                     type: string
                     description: 提示信息
                   data:
-                    type: 'null'
+                    type: object
                     description: 响应数据
+                    nullable: true
                 required:
                 - code
                 - message
@@ -356,14 +334,6 @@ paths:
       description: 向指定手机号发送短信验证码，用于注册或重置密码等场景。
       tags:
       - 登录注册页
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -393,8 +363,9 @@ paths:
                     type: string
                     description: 提示信息
                   data:
-                    type: 'null'
+                    type: object
                     description: 响应数据
+                    nullable: true
                 required:
                 - code
                 - message
@@ -408,14 +379,6 @@ paths:
       description: （已弃用）JWT 为无状态令牌，登出仅需客户端丢弃本地令牌即可；此接口仅为兼容保留。
       tags:
       - 登录注册页
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -431,15 +394,15 @@ paths:
                     type: string
                     description: 提示信息
                   data:
-                    type: 'null'
+                    type: object
                     description: 响应数据
+                    nullable: true
                 required:
                 - code
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
+      security: []
   /api/user/me:
     put:
       summary: 利用token修改个人信息
@@ -447,14 +410,6 @@ paths:
       description: 根据当前登录用户身份修改本人可编辑的个人信息（如姓名、专业、GitHub 等）。
       tags:
       - 个人信息页
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -516,22 +471,12 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - Jwt: []
     get:
       summary: 利用token查询个人信息
       deprecated: false
       description: 根据 Authorization 中的 JWT 解析当前登录用户，返回其完整个人信息。
       tags:
       - 个人信息页
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -641,8 +586,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - Jwt: []
   /api/awards:
     put:
       summary: 修改获奖经历
@@ -650,14 +593,6 @@ paths:
       description: 修改当前用户已有的获奖经历（按奖项 ID 定位记录）。
       tags:
       - 个人信息页
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -702,29 +637,20 @@ paths:
                     type: string
                     description: 提示信息
                   data:
-                    type: 'null'
+                    type: object
                     description: 响应数据
+                    nullable: true
                 required:
                 - code
                 - message
                 - data
           headers: {}
-      security:
-      - Jwt: []
     post:
       summary: 创建获奖经历
       deprecated: false
       description: 为当前登录用户新增一条获奖/荣誉经历。
       tags:
       - 个人信息页
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -785,8 +711,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - Jwt: []
   /api/awards/{id}:
     get:
       summary: 根据奖项id获取获奖经历
@@ -801,13 +725,6 @@ paths:
         required: true
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -853,8 +770,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - Jwt: []
     delete:
       summary: 根据奖项id删除获奖经历
       deprecated: false
@@ -868,13 +783,6 @@ paths:
         required: true
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -890,15 +798,14 @@ paths:
                     type: string
                     description: 提示信息
                   data:
-                    type: 'null'
+                    type: object
                     description: 响应数据
+                    nullable: true
                 required:
                 - code
                 - message
                 - data
           headers: {}
-      security:
-      - Jwt: []
   /api/awards/user/{userId}:
     get:
       summary: 根据用户id获取所有用户经历
@@ -913,13 +820,6 @@ paths:
         required: true
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -967,8 +867,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
   /api/user/avatar:
     post:
       summary: 上传用户头像
@@ -976,14 +874,6 @@ paths:
       description: 上传并更新当前登录用户的头像，返回可访问的头像 URL。
       tags:
       - 个人信息页
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           multipart/form-data:
@@ -1032,8 +922,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
   /uploads/avatars/4d86f534-b8ca-4b29-89c8-d0477de12b15.png:
     get:
       summary: 获取头像
@@ -1041,14 +929,6 @@ paths:
       description: 通过静态资源路径访问已上传的头像文件（此为示例路径，实际路径以上传接口返回值为准）。
       tags:
       - 个人信息页
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -1058,8 +938,7 @@ paths:
                 type: string
                 format: binary
           headers: {}
-      security:
-      - bearer: []
+      security: []
   /api/user/upload:
     post:
       summary: 上传通用文件
@@ -1067,14 +946,6 @@ paths:
       description: 上传通用文件（如简历附件等），返回文件的访问路径。
       tags:
       - 个人信息页
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           multipart/form-data:
@@ -1127,8 +998,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
   /api/resumes/fields:
     post:
       summary: 创建简历字段
@@ -1136,14 +1005,6 @@ paths:
       description: 为指定招募周期创建一个简历自定义字段定义。
       tags:
       - 简历相关功能——管理员
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -1180,22 +1041,12 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
     put:
       summary: 更新字段定义
       deprecated: false
       description: 更新已有的简历字段定义（显示名、是否必填、排序、启用状态等）。
       tags:
       - 简历相关功能——管理员
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -1233,16 +1084,16 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
   /api/resumes/fields/{cycleId}:
     get:
       summary: 获取字段定义
       deprecated: false
-      description: |
-        返回指定招募周期下启用的简历字段定义（含 `fieldType`、`placeholder`，用于前端渲染表单项）。
+      description: '返回指定招募周期下启用的简历字段定义（含 `fieldType`、`placeholder`，用于前端渲染表单项）。
+
 
         `fieldKey` 为 `expected_interview_time` 的字段**应废弃**：面试时段改由「面试预约」接口维护，请将其 `isActive` 置为 false 或勿再展示。
+
+        '
       tags:
       - 简历相关功能——普通用户
       parameters:
@@ -1252,13 +1103,6 @@ paths:
         required: true
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -1283,8 +1127,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
   /api/resumes/admin/{userId}/{cycleId}:
     get:
       summary: 查看用户简历
@@ -1305,13 +1147,6 @@ paths:
         required: true
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -1373,8 +1208,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
   /api/resumes/{resumeId}/status/{status}:
     put:
       summary: 修改简历状态
@@ -1395,13 +1228,6 @@ paths:
         required: true
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -1457,8 +1283,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
   /api/resumes/fields/{fieldId}:
     delete:
       summary: 删除字段定义
@@ -1473,13 +1297,6 @@ paths:
         required: true
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -1502,24 +1319,15 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
   /api/resumes/fields/batch:
     put:
       summary: 批量更新简历字段
       deprecated: false
-      description: |
-        不建议再为周期配置 `expected_interview_time` 字段；面试预约请使用 `GET /api/interview/booking/cycles/{cycleId}/segments`、`POST /api/interview/booking`（或 `/seckill`）及轮询 `/requests/{requestId}` 等接口。
+      description: '不建议再为周期配置 `expected_interview_time` 字段；面试预约请使用 `GET /api/interview/booking/cycles/{cycleId}/segments`、`POST /api/interview/booking`（或 `/seckill`）及轮询 `/requests/{requestId}` 等接口。
+
+        '
       tags:
       - 简历相关功能——管理员
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -1588,8 +1396,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
   /api/resumes/search:
     get:
       summary: 条件查询
@@ -1661,13 +1467,6 @@ paths:
         example: submitted_at
         schema:
           type: string
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -1806,8 +1605,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
   /api/resumes/export/pdf/{resumeId}:
     get:
       summary: 导出简历pdf
@@ -1823,13 +1620,6 @@ paths:
         example: '5'
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -1839,8 +1629,6 @@ paths:
                 type: string
                 format: binary
           headers: {}
-      security:
-      - bearer: []
   /api/interviews/assign/{cycleId}:
     post:
       summary: 自动分配简历
@@ -1856,13 +1644,6 @@ paths:
         example: '2'
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -2041,15 +1822,14 @@ paths:
                     type: string
                     description: 提示信息
                   data:
-                    type: 'null'
+                    type: object
                     description: 响应数据
+                    nullable: true
                 required:
                 - code
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
   /api/interviews/assign/{cycleId}/export:
     get:
       summary: 简历安排导出excel
@@ -2065,13 +1845,6 @@ paths:
         example: '2'
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -2081,8 +1854,6 @@ paths:
                 type: string
                 format: binary
           headers: {}
-      security:
-      - bearer: []
   /api/user:
     put:
       summary: 管理员修改成员信息
@@ -2090,14 +1861,6 @@ paths:
       description: 管理员修改任意成员的账号信息。
       tags:
       - 管理员特殊功能
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -2157,15 +1920,14 @@ paths:
                     type: string
                     description: 提示信息
                   data:
-                    type: 'null'
+                    type: object
                     description: 响应数据
+                    nullable: true
                 required:
                 - code
                 - message
                 - data
           headers: {}
-      security:
-      - Jwt: []
   /api/admin/users:
     get:
       summary: 管理员分页查询
@@ -2209,13 +1971,6 @@ paths:
         example: 'false'
         schema:
           type: string
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -2320,22 +2075,12 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - Jwt: []
     post:
       summary: 管理员添加账号接口
       deprecated: false
       description: 管理员新增用户账号。
       tags:
       - 管理员特殊功能
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -2425,8 +2170,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - Jwt: []
   /api/user/{userId}:
     get:
       summary: 管理员查询他人信息
@@ -2441,13 +2184,6 @@ paths:
         required: true
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -2562,8 +2298,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - Jwt: []
   /api/search/global:
     get:
       summary: 全局查询
@@ -2600,13 +2334,6 @@ paths:
         example: 10
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -2721,15 +2448,14 @@ paths:
                     type: string
                     description: 提示信息
                   data:
-                    type: 'null'
+                    type: object
                     description: 响应数据
+                    nullable: true
                 required:
                 - code
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
   /api/admin/cache/clear:
     post:
       summary: 清理Redis缓存
@@ -2737,14 +2463,6 @@ paths:
       description: 清理 Redis 缓存，可通过参数指定缓存类型（如 field_definition、all 或含通配符的模式）。
       tags:
       - 管理员特殊功能
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         required: false
         content:
@@ -2779,8 +2497,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
   /api/admin/users/{userId}/freeze:
     put:
       summary: 管理员冻结账号
@@ -2796,13 +2512,6 @@ paths:
         example: 2
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -2899,8 +2608,6 @@ paths:
         '403':
           description: ''
           headers: {}
-      security:
-      - bearer: []
   /api/admin/users/{userId}/membership:
     put:
       summary: 录取/开除成员
@@ -2916,13 +2623,6 @@ paths:
         example: 2
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -3016,7 +2716,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security: []
   /api/admin/users/{userId}/status:
     put:
       summary: 管理员更新用户状态
@@ -3032,13 +2731,6 @@ paths:
         example: 2
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -3132,7 +2824,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security: []
   /api/admin/users/batch-membership:
     put:
       summary: 批量录取用户
@@ -3140,14 +2831,6 @@ paths:
       description: 批量将多个用户录取为正式成员。
       tags:
       - 管理员特殊功能
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -3216,15 +2899,14 @@ paths:
                     type: string
                     description: 提示信息
                   data:
-                    type: 'null'
+                    type: object
                     description: 响应数据
+                    nullable: true
                 required:
                 - code
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
   /api/admin/users/batch-dept:
     put:
       summary: 批量修改用户部门
@@ -3232,14 +2914,6 @@ paths:
       description: 批量调整多个用户所属的部门。
       tags:
       - 管理员特殊功能
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -3308,15 +2982,14 @@ paths:
                     type: string
                     description: 提示信息
                   data:
-                    type: 'null'
+                    type: object
                     description: 响应数据
+                    nullable: true
                 required:
                 - code
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
   /api/admin/users/batch-status:
     put:
       summary: 批量冻结/解冻用户
@@ -3324,14 +2997,6 @@ paths:
       description: 批量冻结/解冻多个用户账号。
       tags:
       - 管理员特殊功能
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -3386,8 +3051,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
   /api/user/export/excel:
     get:
       summary: 导出用户excel
@@ -3395,14 +3058,6 @@ paths:
       description: 将用户列表导出为 Excel 文件。
       tags:
       - 管理员特殊功能
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -3412,8 +3067,6 @@ paths:
                 type: string
                 format: binary
           headers: {}
-      security:
-      - bearer: []
   /api/admin/users/{userId}/grant-admin:
     post:
       summary: 赋予管理员权限
@@ -3429,13 +3082,6 @@ paths:
         example: '1'
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -3458,8 +3104,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
   /api/resumes/cycle/{cycleId}:
     get:
       summary: 获取/创建简历
@@ -3474,13 +3118,6 @@ paths:
         required: true
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -3542,8 +3179,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
     put:
       summary: 修改简历内容
       deprecated: false
@@ -3557,13 +3192,6 @@ paths:
         required: true
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -3606,8 +3234,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
   /api/resumes/cycle/{cycleId}/field-values:
     post:
       summary: 填写字段值
@@ -3622,13 +3248,6 @@ paths:
         required: true
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -3675,8 +3294,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
     get:
       summary: 获取字段值
       deprecated: false
@@ -3690,13 +3307,6 @@ paths:
         required: true
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -3721,8 +3331,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
   /api/resumes/cycle/{cycleId}/submit:
     post:
       summary: 提交简历
@@ -3737,13 +3345,6 @@ paths:
         required: true
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -3799,8 +3400,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
   /api/resumes/{resumeId}:
     delete:
       summary: 删除简历
@@ -3815,13 +3414,6 @@ paths:
         required: true
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -3844,8 +3436,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
   /api/cycles/{cycleId}:
     get:
       summary: 根据id查看招募周期
@@ -3860,13 +3450,6 @@ paths:
         required: true
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -3935,8 +3518,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
   /api/cycles:
     get:
       summary: 查询招募周期
@@ -3944,14 +3525,6 @@ paths:
       description: 查询招募周期列表。
       tags:
       - 招聘活动相关接口（管理员专属）
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -4022,22 +3595,12 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
     post:
       summary: 创建新的招募周期
       deprecated: false
       description: 创建新的招募周期。
       tags:
       - 招聘活动相关接口（管理员专属）
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -4147,22 +3710,12 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
     put:
       summary: 更新招募周期
       deprecated: false
       description: 更新招募周期信息。
       tags:
       - 招聘活动相关接口（管理员专属）
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -4278,8 +3831,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
     delete:
       summary: 删除招募周期
       deprecated: false
@@ -4293,13 +3844,6 @@ paths:
         required: true
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -4322,8 +3866,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
   /api/cycles/page:
     get:
       summary: 分页获取招募周期
@@ -4360,13 +3902,6 @@ paths:
         example: DESC
         schema:
           type: string
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '500':
           description: ''
@@ -4382,15 +3917,14 @@ paths:
                     type: string
                     description: 提示信息
                   data:
-                    type: 'null'
+                    type: object
                     description: 响应数据
+                    nullable: true
                 required:
                 - code
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
   /api/cycles/search:
     get:
       summary: 条件查询分页周期
@@ -4448,13 +3982,6 @@ paths:
         example: ASC
         schema:
           type: string
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -4555,8 +4082,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
   /api/cycles/update-statuses:
     post:
       summary: 自动更新状态
@@ -4564,14 +4089,6 @@ paths:
       description: 根据当前时间自动刷新各招募周期的状态（未开始/进行中/已结束）。
       tags:
       - 招聘活动相关接口（管理员专属）
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -4594,8 +4111,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
   /api/cycles/batch:
     put:
       summary: 批量更新招募周期接口
@@ -4603,14 +4118,6 @@ paths:
       description: 批量更新多个招募周期。
       tags:
       - 招聘活动相关接口（管理员专属）
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -4682,25 +4189,15 @@ paths:
                 - message
                 - data
           headers: {}
-      security:
-      - bearer: []
   /api/roles:
     post:
       summary: 创建角色
       deprecated: false
-      description: |-
-        创建新角色
-        权限要求：需要管理员权限
+      description: '创建新角色
+
+        权限要求：需要管理员权限'
       tags:
       - 角色控制模块
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -4763,8 +4260,6 @@ paths:
                 description: ''
                 status: 0
           headers: {}
-      security:
-      - bearer: []
     get:
       summary: 获取角色列表
       deprecated: false
@@ -4807,13 +4302,6 @@ paths:
         example: roleId,asc
         schema:
           type: string
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -4933,17 +4421,17 @@ paths:
                       description: 测试用户
                       status: 0
           headers: {}
-      security:
-      - bearer: []
   /api/roles/{roleId}:
     put:
       summary: 更新角色
       deprecated: false
-      description: |-
-        更新角色的基本信息：name，code，description，status等等。
+      description: '更新角色的基本信息：name，code，description，status等等。
+
         ps：status为1代表启用，为0代表弃用；
+
         roleCode为role的唯一标识符
-        权限要求：需要管理员权限
+
+        权限要求：需要管理员权限'
       tags:
       - 角色控制模块
       parameters:
@@ -4954,13 +4442,6 @@ paths:
         example: 0
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -4991,14 +4472,12 @@ paths:
                   description: 测试用户
                   status: 0
           headers: {}
-      security:
-      - bearer: []
     delete:
       summary: 删除角色
       deprecated: false
-      description: |-
-        删除角色
-        注意：删除角色会级联删除该角色的所有用户关联和权限关联。
+      description: '删除角色
+
+        注意：删除角色会级联删除该角色的所有用户关联和权限关联。'
       tags:
       - 角色控制模块
       parameters:
@@ -5009,13 +4488,6 @@ paths:
         example: 0
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -5029,8 +4501,6 @@ paths:
                 message: 操作成功
                 data: null
           headers: {}
-      security:
-      - bearer: []
     get:
       summary: 获取角色详情
       deprecated: false
@@ -5045,13 +4515,6 @@ paths:
         example: 0
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -5070,8 +4533,6 @@ paths:
                   description: 拥有系统所有权限，可管理所有角色和用户
                   status: 1
           headers: {}
-      security:
-      - bearer: []
   /api/roles/available:
     get:
       summary: 获取所有启用的角色
@@ -5079,14 +4540,6 @@ paths:
       description: 获取所有处于启用状态的角色。
       tags:
       - 角色控制模块
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -5122,8 +4575,6 @@ paths:
                   description: 拥有系统所有权限，可管理所有角色和用户
                   status: 1
           headers: {}
-      security:
-      - bearer: []
   /api/roles/{roleId}/permissions:
     get:
       summary: 获取角色的权限列表
@@ -5139,13 +4590,6 @@ paths:
         example: 0
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -5206,8 +4650,6 @@ paths:
                   resourceIdentifier: null
                   description: 管理角色权限分配
           headers: {}
-      security:
-      - bearer: []
   /api/departments:
     post:
       summary: 创建部门
@@ -5215,14 +4657,6 @@ paths:
       description: 创建部门。
       tags:
       - 部门模块
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -5253,8 +4687,6 @@ paths:
                   description: 测试部门
                   status: 1
           headers: {}
-      security:
-      - bearer: []
     get:
       summary: 获取部门列表
       deprecated: false
@@ -5297,13 +4729,6 @@ paths:
         example: deptId,asc
         schema:
           type: string
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -5354,8 +4779,6 @@ paths:
                   description: G9YPlARWcJuMNv1Lj)Tz&lXP7fwd^%fBBt07ERw1[^s*YzdAaV&FInW6Z1U*MuW5WAFpu7
                   status: 97
           headers: {}
-      security:
-      - bearer: []
   /api/departments/{deptId}:
     put:
       summary: 更新部门
@@ -5371,13 +4794,6 @@ paths:
         example: 0
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -5408,8 +4824,6 @@ paths:
                   description: 测试部门
                   status: 0
           headers: {}
-      security:
-      - bearer: []
     delete:
       summary: 删除部门
       deprecated: false
@@ -5424,13 +4838,6 @@ paths:
         example: 0
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -5444,8 +4851,6 @@ paths:
                 message: 操作成功
                 data: null
           headers: {}
-      security:
-      - bearer: []
     get:
       summary: 获取部门详情
       deprecated: false
@@ -5460,13 +4865,6 @@ paths:
         example: 0
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -5496,8 +4894,6 @@ paths:
                       description: 负责社团的技术开发与维护工作
                       status: 1
           headers: {}
-      security:
-      - bearer: []
   /api/departments/enabled:
     get:
       summary: 获取所有启用的部门
@@ -5505,14 +4901,6 @@ paths:
       description: 获取所有处于启用状态的部门。
       tags:
       - 部门模块
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -5530,8 +4918,6 @@ paths:
                 description: ''
                 status: 0
           headers: {}
-      security:
-      - bearer: []
   /api/permissions:
     post:
       summary: 创建权限
@@ -5539,14 +4925,6 @@ paths:
       description: 创建权限项。
       tags:
       - 权限模块
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -5582,8 +4960,6 @@ paths:
                       resourceIdentifier: 'null'
                       description: test 权限
           headers: {}
-      security:
-      - bearer: []
     get:
       summary: 分页获取权限列表
       deprecated: false
@@ -5626,13 +5002,6 @@ paths:
         example: permissionId,asc
         schema:
           type: string
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -5709,8 +5078,6 @@ paths:
                       resourceIdentifier: 'null'
                       description: test 权限
           headers: {}
-      security:
-      - bearer: []
   /api/permissions/{permissionId}:
     put:
       summary: 更新权限
@@ -5726,13 +5093,6 @@ paths:
         example: 0
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -5774,8 +5134,6 @@ paths:
                       resourceIdentifier: 'null'
                       description: test 权限更新2
           headers: {}
-      security:
-      - bearer: []
     delete:
       summary: 删除权限
       deprecated: false
@@ -5790,13 +5148,6 @@ paths:
         example: 0
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -5810,8 +5161,6 @@ paths:
                 message: 操作成功
                 data: null
           headers: {}
-      security:
-      - bearer: []
     get:
       summary: 获取权限详情
       deprecated: false
@@ -5826,13 +5175,6 @@ paths:
         example: 0
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -5862,8 +5204,6 @@ paths:
                       resourceIdentifier: null
                       description: 创建、编辑、删除管理员账号
           headers: {}
-      security:
-      - bearer: []
   /api/permissions/all:
     get:
       summary: 获取所有权限（不分页）
@@ -5871,14 +5211,6 @@ paths:
       description: 获取全部权限项（不分页）。
       tags:
       - 权限模块
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -5950,8 +5282,6 @@ paths:
                       resourceIdentifier: null
                       description: 创建、编辑、删除部门信息
           headers: {}
-      security:
-      - bearer: []
   /api/role-permissions:
     post:
       summary: 为角色分配权限
@@ -5974,13 +5304,6 @@ paths:
           type: array
           items:
             type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -5994,8 +5317,6 @@ paths:
                 message: 操作成功
                 data: true
           headers: {}
-      security:
-      - bearer: []
   /api/role-permissions/{roleId}/permissions/{permissionId}:
     post:
       summary: 为角色添加单个权限
@@ -6018,13 +5339,6 @@ paths:
         example: 0
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -6038,8 +5352,6 @@ paths:
                 message: 操作成功
                 data: true
           headers: {}
-      security:
-      - bearer: []
     delete:
       summary: 从角色移除权限
       deprecated: false
@@ -6061,13 +5373,6 @@ paths:
         example: 0
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -6081,8 +5386,6 @@ paths:
                 message: 操作成功
                 data: true
           headers: {}
-      security:
-      - bearer: []
   /api/role-permissions/{roleId}/permissions:
     get:
       summary: 获取角色的权限ID列表
@@ -6098,13 +5401,6 @@ paths:
         example: 0
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -6135,8 +5431,6 @@ paths:
                     - 8
                     - 9
           headers: {}
-      security:
-      - bearer: []
   /api/role-permissions/permission/{permissionId}/roles:
     get:
       summary: 获取拥有指定权限的角色列表
@@ -6152,13 +5446,6 @@ paths:
         example: 0
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -6192,8 +5479,6 @@ paths:
                   users: null
                   permissions: null
           headers: {}
-      security:
-      - bearer: []
   /api/role-permissions/batch:
     post:
       summary: 批量分配权限
@@ -6218,13 +5503,6 @@ paths:
           type: array
           items:
             type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -6238,8 +5516,6 @@ paths:
                 message: 操作成功
                 data: true
           headers: {}
-      security:
-      - bearer: []
   /api/user-roles:
     post:
       summary: 为用户分配角色
@@ -6262,13 +5538,6 @@ paths:
           type: array
           items:
             type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -6320,8 +5589,6 @@ paths:
                   users: null
                   permissions: null
           headers: {}
-      security:
-      - bearer: []
   /api/user-roles/{userId}/roles/{roleId}:
     post:
       summary: 为用户添加单个角色
@@ -6344,13 +5611,6 @@ paths:
         example: 0
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -6409,8 +5669,6 @@ paths:
                   users: null
                   permissions: null
           headers: {}
-      security:
-      - bearer: []
     delete:
       summary: 从用户移除角色
       deprecated: false
@@ -6432,13 +5690,6 @@ paths:
         example: 0
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -6488,8 +5739,6 @@ paths:
                   users: null
                   permissions: null
           headers: {}
-      security:
-      - bearer: []
   /api/user-roles/{userId}/roles:
     get:
       summary: 获取用户的角色列表
@@ -6505,13 +5754,6 @@ paths:
         example: 0
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -6914,8 +6156,6 @@ paths:
                       users: null
                       permissions: null
           headers: {}
-      security:
-      - bearer: []
   /api/user-roles/me/roles:
     get:
       summary: 获取当前用户的角色列表
@@ -6923,14 +6163,6 @@ paths:
       description: 获取当前登录用户的角色列表。
       tags:
       - 用户角色管理模块
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -6955,8 +6187,6 @@ paths:
                   users: null
                   permissions: null
           headers: {}
-      security:
-      - bearer: []
   /api/user-roles/role/{roleId}/users:
     get:
       summary: 获取拥有指定角色的用户列表
@@ -6986,13 +6216,6 @@ paths:
         example: 10
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -7056,8 +6279,6 @@ paths:
                   department: null
                   roles: null
           headers: {}
-      security:
-      - bearer: []
   /api/user-roles/batch:
     post:
       summary: 批量分配角色给多个用户
@@ -7082,13 +6303,6 @@ paths:
           type: array
           items:
             type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -7102,18 +6316,19 @@ paths:
                 message: 操作成功
                 data: 2
           headers: {}
-      security:
-      - bearer: []
   /api/interview/booking/cycles/{cycleId}/segments:
     get:
       summary: 可预约面试时间段列表（含已约/共计）
       deprecated: false
-      description: |
-        返回指定招募周期下可预约的面试时段列表，结构与实体 **`InterviewSlot`** 一致（`slotId`、`interviewDate`、`startTime`、`endTime` 等为 **24 小时制** `HH:mm:ss`）。
+      description: '返回指定招募周期下可预约的面试时段列表，结构与实体 **`InterviewSlot`** 一致（`slotId`、`interviewDate`、`startTime`、`endTime` 等为 **24 小时制** `HH:mm:ss`）。
+
 
         **已约/共计**：使用 `currentOccupied` / `maxCapacity`（如 `7/30`）。`fullyBooked=true` 或 `status=2` 时不可再预约。`location` 可为 null（线上面试等场景）。
 
+
         列表查询时会预热 Redis 剩余名额缓存。预约成功后精确 `interviewTime` 在占坑时自动写入（均分大时段），无需单独切分接口。
+
+        '
       tags:
       - 面试预约（学生）
       parameters:
@@ -7130,13 +6345,6 @@ paths:
         schema:
           type: boolean
           default: true
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: 查询成功
@@ -7146,22 +6354,25 @@ paths:
                 $ref: '#/components/schemas/InterviewBookingSegmentsResponse'
         '400':
           description: 参数错误或周期不可预约
-      security:
-      - bearer: []
   /api/interview/booking:
     post:
       summary: 预约某一面试时间段（创建或覆盖）（已下线：自助抢改为“志愿提交 + 管理员场次分配”）
       deprecated: true
-      description: |
-        同一用户在同一 `cycleId` 下仅保留一条有效预约（`uk_resume_cycle`）。
+      description: '同一用户在同一 `cycleId` 下仅保留一条有效预约（`uk_resume_cycle`）。
+
 
         **同步模式**（`booking.seckill.enabled=false`）：DB 原子占坑后立即返回 `InterviewBooking`，含自动分配的 `interviewTime`。
 
+
         **秒杀模式**（默认 `booking.seckill.enabled=true`）：Redis Lua 预扣 → MQ 异步落库 → 通常返回 **202** 及 `requestId`（`status=PENDING`），客户端轮询 `GET /api/interview/booking/requests/{requestId}`。若同 slot 已有效预约或幂等命中已完成记录，可返回 **200** 及完整 `InterviewBooking`。
+
 
         精确 `interviewTime` = 大时段开始时间 + `(endTime-startTime)/maxCapacity × (占坑序号-1)`。
 
+
         限流：同一用户 60 秒内最多 10 次（HTTP 429，业务码 4291）。
+
+        '
       tags:
       - 面试预约（学生）
       parameters:
@@ -7171,13 +6382,6 @@ paths:
         required: false
         schema:
           type: string
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         required: true
         content:
@@ -7205,16 +6409,17 @@ paths:
           description: 时段已满（3402）或已有有效预约需走改期（3408）
         '429':
           description: 请求过于频繁（4291），响应头含 Retry-After
-      security:
-      - bearer: []
   /api/interview/booking/seckill:
     post:
       summary: 秒杀预约（始终异步）（已下线：booking.seckill.enabled=false，改为管理员场次分配）
       deprecated: true
-      description: |
-        与 `POST /api/interview/booking` 在秒杀开启时行为一致，但**始终**走异步链路并返回 **202 Accepted**。
+      description: '与 `POST /api/interview/booking` 在秒杀开启时行为一致，但**始终**走异步链路并返回 **202 Accepted**。
+
         流程：Lua 预扣 Redis 库存 → 写 PENDING 状态 → RabbitMQ 落库 → 异步邮件通知（大时段信息）。
+
         支持请求头 `Idempotency-Key`。
+
+        '
       tags:
       - 面试预约（学生）
       parameters:
@@ -7223,13 +6428,6 @@ paths:
         required: false
         schema:
           type: string
-      - name: Authorization
-        in: header
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
-        description: 身份认证令牌，格式为 `Bearer {token}`
       requestBody:
         required: true
         content:
@@ -7249,15 +6447,15 @@ paths:
           description: 名额已满或用户周期锁冲突
         '429':
           description: 限流
-      security:
-      - bearer: []
   /api/interview/booking/requests/{requestId}:
     get:
       summary: 轮询秒杀预约结果
       deprecated: false
-      description: |
-        根据 `requestId` 查询异步预约状态：`PENDING` | `SUCCESS` | `FAILED`。
+      description: '根据 `requestId` 查询异步预约状态：`PENDING` | `SUCCESS` | `FAILED`。
+
         `SUCCESS` 时 `data.booking` 含完整预约及 `interviewTime`。
+
+        '
       tags:
       - 面试预约（学生）
       parameters:
@@ -7267,13 +6465,6 @@ paths:
         schema:
           type: string
         description: 异步请求 ID
-      - name: Authorization
-        in: header
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
-        description: 身份认证令牌，格式为 `Bearer {token}`
       responses:
         '200':
           description: 查询成功
@@ -7285,16 +6476,17 @@ paths:
           description: 无权查看他人 requestId（3406）
         '404':
           description: requestId 不存在或已过期（3409）
-      security:
-      - bearer: []
   /api/interview/booking/requests/{requestId}/stream:
     get:
       summary: SSE 订阅秒杀预约结果
       deprecated: false
-      description: |
-        `text/event-stream`，事件名 `status`，data 为 `InterviewBookingAsyncResult` JSON。
+      description: '`text/event-stream`，事件名 `status`，data 为 `InterviewBookingAsyncResult` JSON。
+
         连接建立时先推送当前状态；终态 `SUCCESS`/`FAILED` 后服务端关闭连接。
+
         多实例通过 Redis Pub/Sub 广播。
+
+        '
       tags:
       - 面试预约（学生）
       parameters:
@@ -7304,13 +6496,6 @@ paths:
         schema:
           type: string
         description: 异步请求 ID
-      - name: Authorization
-        in: header
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
-        description: 身份认证令牌，格式为 `Bearer {token}`
       responses:
         '200':
           description: SSE 流
@@ -7322,8 +6507,6 @@ paths:
           description: 无权查看他人 requestId
         '404':
           description: requestId 不存在或已过期
-      security:
-      - bearer: []
   /api/interview/booking/my:
     get:
       summary: 查询本人在指定周期的面试预约
@@ -7338,13 +6521,6 @@ paths:
         required: true
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: 查询成功
@@ -7352,14 +6528,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResponseMessageInterviewBookingNullable'
-      security:
-      - bearer: []
   /api/interview/booking/{bookingId}:
     put:
       summary: 改期（更换已预约的时间段）
       deprecated: false
-      description: |
-        路径参数 `bookingId` 即 `interview_schedule.schedule_id`。改期时更换为另一条未约满的 `slotId`，并**重新分配**精确 `interviewTime`（按新时段容量均分）。
+      description: '路径参数 `bookingId` 即 `interview_schedule.schedule_id`。改期时更换为另一条未约满的 `slotId`，并**重新分配**精确 `interviewTime`（按新时段容量均分）。
+
+        '
       tags:
       - 面试预约（学生）
       parameters:
@@ -7369,13 +6544,6 @@ paths:
         required: true
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         required: true
         content:
@@ -7389,8 +6557,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResponseMessageInterviewBooking'
-      security:
-      - bearer: []
     delete:
       summary: 取消面试预约
       deprecated: false
@@ -7404,13 +6570,6 @@ paths:
         required: true
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: 取消成功
@@ -7418,14 +6577,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponse'
-      security:
-      - bearer: []
   /api/interview/booking/admin/cycles/{cycleId}:
     get:
       summary: 分页查询某周期全部面试预约（管理员）
       deprecated: false
-      description: |
-        管理员分页查看预约记录；`data.list` 为 `InterviewBooking`（`InterviewSchedule` + 关联 `InterviewSlot` 时段字段）。
+      description: '管理员分页查看预约记录；`data.list` 为 `InterviewBooking`（`InterviewSchedule` + 关联 `InterviewSlot` 时段字段）。
+
+        '
       tags:
       - 面试预约管理
       parameters:
@@ -7453,13 +6611,6 @@ paths:
           type: integer
           default: 10
         description: 每页数量
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: 查询成功
@@ -7467,24 +6618,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/InterviewBookingAdminListResponse'
-      security:
-      - bearer: []
   /api/interview/slot/create:
     post:
       summary: 创建面试时段
       deprecated: false
-      description: |
-        创建一条面试时段配置。在学生预约流程中，**每一条时段通常对应预约列表里的一条「可预约段」**：`interview_date` + `start_time`～`end_time` 即学生可选的连续区间（如 3.27 09:00–12:00），`max_capacity` 为该区间总名额；`current_occupied` 或等价统计用于展示 **已约/共计** 与是否约满。
+      description: '创建一条面试时段配置。在学生预约流程中，**每一条时段通常对应预约列表里的一条「可预约段」**：`interview_date` + `start_time`～`end_time` 即学生可选的连续区间（如 3.27 09:00–12:00），`max_capacity` 为该区间总名额；`current_occupied` 或等价统计用于展示 **已约/共计** 与是否约满。
+
+        '
       tags:
       - 面试时间地点管理
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -7499,7 +6641,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ResponseMessageInterviewSlot'
           headers: {}
-      security: []
   /api/interview/slot/list:
     get:
       summary: 获取面试时段列表
@@ -7560,13 +6701,6 @@ paths:
         schema:
           type: integer
           default: 10
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: 获取面试时段列表成功
@@ -7575,7 +6709,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/GetInterviewSlotListResponse'
           headers: {}
-      security: []
   /api/interview/slot/update/{slotId}:
     put:
       summary: 修改面试时段
@@ -7591,13 +6724,6 @@ paths:
         example: 0
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -7612,7 +6738,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ResponseMessageInterviewSlot'
           headers: {}
-      security: []
   /api/interview/slot/delete/{slotId}:
     delete:
       summary: 删除面试时段
@@ -7628,13 +6753,6 @@ paths:
         example: 0
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: 面试时段删除成功
@@ -7643,15 +6761,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/ResponseMessageVoid'
           headers: {}
-      security: []
   /api/interview/schedule/auto-assign/{cycleId}:
     post:
       summary: 一键分配面试成员面试时间地点（按招募周期）
       deprecated: false
-      description: |
-        根据当前业务策略为指定招募周期下的候选人分配面试资源。
+      description: '根据当前业务策略为指定招募周期下的候选人分配面试资源。
+
 
         **新流程（与简历解耦）**：以面试预约接口锁定的 `interview_slot` 为准。精确 `interviewTime` 已在学生预约/改期占坑时按容量均分写入，本接口不再负责切分小时间段。
+
+        '
       tags:
       - 面试分配模块
       parameters:
@@ -7662,13 +6781,6 @@ paths:
         example: 0
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: 自动分配完成
@@ -7677,14 +6789,15 @@ paths:
               schema:
                 $ref: '#/components/schemas/AutoAssignInterviewResponseV2'
           headers: {}
-      security: []
   /api/interview/schedule/refine-fine-slots/{cycleId}:
     post:
       summary: 细粒度切分精确到场时间（预留，未实现）
       deprecated: true
-      description: |
-        **当前后端未实现此接口。** 精确 `interviewTime` 已在 `POST /api/interview/booking` 占坑成功时按 `(endTime-startTime)/maxCapacity` 自动写入。
+      description: '**当前后端未实现此接口。** 精确 `interviewTime` 已在 `POST /api/interview/booking` 占坑成功时按 `(endTime-startTime)/maxCapacity` 自动写入。
+
         本文档保留 schema 仅供历史参考。
+
+        '
       tags:
       - 面试分配模块
       parameters:
@@ -7694,13 +6807,6 @@ paths:
         required: true
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         required: false
         content:
@@ -7714,14 +6820,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RefineFineSlotsResponseWrapper'
-      security: []
   /api/interview/schedule/list:
     get:
       summary: 获取分配结果（已下线，代码中无此接口）
       deprecated: true
-      description: |
-        获取面试安排分配结果列表。`ScheduleDetail` 含 `interviewDate`、`startTime`、`endTime`（与 `InterviewSlot` 一致，24 小时制）；
+      description: '获取面试安排分配结果列表。`ScheduleDetail` 含 `interviewDate`、`startTime`、`endTime`（与 `InterviewSlot` 一致，24 小时制）；
+
         `interviewTime` 为预约占坑时自动均分写入的精确到场时间；取消后为 null。
+
+        '
       tags:
       - 面试分配模块
       parameters:
@@ -7763,13 +6870,6 @@ paths:
         schema:
           type: integer
           default: 10
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: 获取分配结果成功
@@ -7778,7 +6878,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/GetScheduleListResponse'
           headers: {}
-      security: []
   /api/interview/schedule/manual-adjust:
     put:
       summary: 手动调整分配结果（已下线，改用 POST /api/interview/admin/preferences/{resumeId}/assign）
@@ -7786,14 +6885,6 @@ paths:
       description: 手动调整面试安排分配结果
       tags:
       - 面试分配模块
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -7833,7 +6924,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponse'
           headers: {}
-      security: []
   /api/interview/schedule/delete/{scheduleId}:
     delete:
       summary: 删除分配结果（已下线，代码中无此接口）
@@ -7849,13 +6939,6 @@ paths:
         example: 0
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: 分配结果删除成功
@@ -7864,7 +6947,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponse'
           headers: {}
-      security: []
   /api/interview/schedule/update-notification-status:
     put:
       summary: 更新面试安排通知状态（已下线，代码中无此接口）
@@ -7872,14 +6954,6 @@ paths:
       description: 更新面试安排的通知状态
       tags:
       - 面试分配模块
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -7894,37 +6968,39 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponse'
           headers: {}
-      security: []
   /api/interview/feishu/import:
     post:
       summary: 提交飞书导入任务（异步）
       deprecated: false
-      description: |
-        创建导入任务并投递 RabbitMQ，**立即返回** `taskId` 与初始状态 `PENDING`；实际写飞书在消费者中执行。
+      description: '创建导入任务并投递 RabbitMQ，**立即返回** `taskId` 与初始状态 `PENDING`；实际写飞书在消费者中执行。
+
 
         请使用 `GET /api/interview/feishu/import/tasks/{taskId}` 轮询，直至终态：
+
         `SUCCESS`（全部成功）、`PARTIAL_SUCCESS`（部分成功）、`FAILED`（失败）。
 
+
         导入逻辑（与消费者内 `FeishuImportExecutor` 一致）：
+
         - 按 **面试地点**（`interview_slot.location`）分桶，写入对应 `feishu_table_url`
+
         - 桶内按 **面试时间** 升序；多地点桶 **并行** 调用飞书 `batch_create`
+
         - 默认仅 `sync_status=0`；`forceUpdate=true` 时包含已同步记录（**追加行**，不删旧数据）
 
+
         **从官网简历导入**：姓名、意向部门、年级、专业、自我介绍、简历评分等（见 `FeishuBitableColumns`）。
+
         **留空待面试官填写**：三类问题、面试评价、预选、调剂、记录人等。
 
+
         鉴权：飞书开放平台 `FEISHU_APP_ID` / `FEISHU_APP_SECRET`。
+
         权限：`resume:audit`。
+
+        '
       tags:
       - 面试关联飞书模块
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -7939,16 +7015,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/ResponseMessageFeishuSyncTaskSubmit'
           headers: {}
-      security: []
   /api/interview/feishu/import/tasks/{taskId}:
     get:
       summary: 查询飞书导入任务状态（轮询）
       deprecated: false
-      description: |
-        读取 Redis 中的任务状态与汇总结果。`status=RUNNING` 时继续轮询；
+      description: '读取 Redis 中的任务状态与汇总结果。`status=RUNNING` 时继续轮询；
+
         终态后 `data.result` 含按地点分组的明细（`locations`）。
 
+
         权限：`resume:audit`。
+
+        '
       tags:
       - 面试关联飞书模块
       parameters:
@@ -7960,13 +7038,6 @@ paths:
           type: integer
           format: int64
           example: 1
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: 查询成功（任务存在）
@@ -7982,14 +7053,15 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponse'
           headers: {}
-      security: []
   /api/interview/feishu/import/tasks/{taskId}/stream:
     get:
       summary: SSE 订阅飞书导入任务进度
       deprecated: false
-      description: |
-        `text/event-stream`，事件名 `status`，data 为 `FeishuSyncTaskStatus` JSON。
+      description: '`text/event-stream`，事件名 `status`，data 为 `FeishuSyncTaskStatus` JSON。
+
         终态 `SUCCESS` / `PARTIAL_SUCCESS` / `FAILED` 后连接关闭。权限 `resume:audit`。
+
+        '
       tags:
       - 面试关联飞书模块
       parameters:
@@ -8000,13 +7072,6 @@ paths:
           type: integer
           format: int64
         description: 异步任务 ID
-      - name: Authorization
-        in: header
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
-        description: 身份认证令牌，格式为 `Bearer {token}`
       responses:
         '200':
           description: SSE 流
@@ -8016,38 +7081,6 @@ paths:
                 type: string
         '400':
           description: 任务不存在或已过期
-      security: []
-  /api/interview/feishu/export-results:
-    post:
-      summary: 从飞书表格导出录取结果合并到官网
-      deprecated: true
-      description: |
-        **当前后端未实现此接口**，保留文档条目仅供规划。请使用面试结果模块相关 API 维护录取数据。
-      tags:
-      - 面试关联飞书模块
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ExportResultsRequest'
-        required: true
-      responses:
-        '200':
-          description: 录取结果导入成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ExportResultsResponse'
-          headers: {}
-      security: []
   /api/interview/result/get/{resultId}:
     get:
       summary: 根据resultId获取面试结果
@@ -8062,13 +7095,6 @@ paths:
         required: true
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -8128,7 +7154,6 @@ paths:
                 - message
                 - data
           headers: {}
-      security: []
   /api/interview/result/send-notifications:
     post:
       summary: 发送录取通知
@@ -8136,14 +7161,6 @@ paths:
       description: 发送录取通知给候选人
       tags:
       - 面试结果模块
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -8158,7 +7175,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/SendNotificationsResponse'
           headers: {}
-      security: []
   /api/interview/result/list:
     get:
       summary: 查看录取结果
@@ -8205,13 +7221,6 @@ paths:
         schema:
           type: integer
           default: 10
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: 获取录取结果成功
@@ -8220,7 +7229,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/InterviewResultListResponse'
           headers: {}
-      security: []
   /api/interview/result/update/{resultId}:
     put:
       summary: 修改录取结果
@@ -8236,13 +7244,6 @@ paths:
         example: 0
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -8267,7 +7268,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ResponseMessageInterviewResult'
           headers: {}
-      security: []
   /api/interview/statistics:
     get:
       summary: 获取面试统计信息（未实现，代码中无此接口）
@@ -8282,13 +7282,6 @@ paths:
         required: true
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: 获取统计信息成功
@@ -8297,7 +7290,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/GetStatisticsResponse'
           headers: {}
-      security: []
   /api/interview/schedule/batch-import:
     post:
       summary: 批量导入面试安排（未实现，代码中无此接口）
@@ -8305,14 +7297,6 @@ paths:
       description: 通过Excel文件批量导入面试安排
       tags:
       - 面试结果统计页
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           multipart/form-data:
@@ -8337,7 +7321,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/BatchImportResponse'
           headers: {}
-      security: []
   /api/interview/result/export:
     get:
       summary: 导出面试结果报表（未实现，代码中无此接口）
@@ -8359,13 +7342,6 @@ paths:
         schema:
           type: string
           default: excel
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: 文件下载
@@ -8375,14 +7351,15 @@ paths:
                 type: string
                 format: binary
           headers: {}
-      security: []
   /api/interview/preference/cycles/{cycleId}/time-slots:
     get:
       summary: 可勾选的面试时间窗列表（学生）
       deprecated: false
-      description: |
-        方案B：返回指定招募周期下**开放中**的面试时间窗（大时段，如“周六上午”），供学生勾选。
+      description: '方案B：返回指定招募周期下**开放中**的面试时间窗（大时段，如“周六上午”），供学生勾选。
+
         对应实体 `InterviewTimeSlot`，`startTime`/`endTime` 为 24 小时制。仅返回 `status=1`（可选）的时间窗。
+
+        '
       tags:
       - 面试志愿（学生）
       parameters:
@@ -8392,13 +7369,6 @@ paths:
         required: true
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
-        description: 身份认证令牌，格式为 `Bearer {token}`
       responses:
         '200':
           description: 查询成功
@@ -8447,25 +7417,17 @@ paths:
                           type: integer
                           description: 1 可选 / 2 关闭
                     description: 响应数据
-      security:
-      - bearer: []
   /api/interview/preference:
     post:
       summary: 提交/更新本人面试志愿（学生）
       deprecated: false
-      description: |
-        方案B：学生提交至多两个志愿部门 + 勾选一个或多个可接受时间窗。同一份简历只保留一条志愿（`uk_pref_resume`），重复提交为覆盖更新。
+      description: '方案B：学生提交至多两个志愿部门 + 勾选一个或多个可接受时间窗。同一份简历只保留一条志愿（`uk_pref_resume`），重复提交为覆盖更新。
+
         要求简历已提交（`status≥2`）；`secondDeptId` 可空但不得与 `firstDeptId` 相同；`timeSlotIds` 需全部属于该周期且为开放状态。
+
+        '
       tags:
       - 面试志愿（学生）
-      parameters:
-      - name: Authorization
-        in: header
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
-        description: 身份认证令牌，格式为 `Bearer {token}`
       requestBody:
         required: true
         content:
@@ -8508,8 +7470,6 @@ paths:
                 $ref: '#/components/schemas/ResponseMessageInterviewPreference'
         '400':
           description: 简历未提交、志愿部门重复/不存在、时间窗无效等
-      security:
-      - bearer: []
   /api/interview/preference/my:
     get:
       summary: 查询本人面试志愿（学生）
@@ -8524,13 +7484,6 @@ paths:
         required: true
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
-        description: 身份认证令牌，格式为 `Bearer {token}`
       responses:
         '200':
           description: 查询成功
@@ -8538,8 +7491,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResponseMessageInterviewPreference'
-      security:
-      - bearer: []
   /api/interview/admin/time-slots:
     post:
       summary: 创建面试时间窗（管理员）
@@ -8547,14 +7498,6 @@ paths:
       description: 方案B：管理员维护学生可勾选的大时段。需权限 `resume:audit`。新建后默认 `status=1`（可选）。
       tags:
       - 面试场次管理（管理员）
-      parameters:
-      - name: Authorization
-        in: header
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
-        description: 身份认证令牌，格式为 `Bearer {token}`
       requestBody:
         required: true
         content:
@@ -8595,8 +7538,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResponseMessageInterviewTimeSlot'
-      security:
-      - bearer: []
   /api/interview/admin/time-slots/{timeSlotId}:
     put:
       summary: 更新面试时间窗（管理员）
@@ -8611,13 +7552,6 @@ paths:
         schema:
           type: integer
         description: 面试时间窗 ID
-      - name: Authorization
-        in: header
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
-        description: 身份认证令牌，格式为 `Bearer {token}`
       requestBody:
         required: true
         content:
@@ -8648,8 +7582,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResponseMessageInterviewTimeSlot'
-      security:
-      - bearer: []
     delete:
       summary: 删除面试时间窗（管理员）
       deprecated: false
@@ -8663,13 +7595,6 @@ paths:
         schema:
           type: integer
         description: 面试时间窗 ID
-      - name: Authorization
-        in: header
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
-        description: 身份认证令牌，格式为 `Bearer {token}`
       responses:
         '200':
           description: 删除成功
@@ -8679,8 +7604,6 @@ paths:
                 $ref: '#/components/schemas/ResponseMessageVoid'
         '409':
           description: 该时间窗下已有场次，无法删除（3607）
-      security:
-      - bearer: []
   /api/interview/admin/cycles/{cycleId}/time-slots:
     get:
       summary: 时间窗列表（管理员，含关闭）
@@ -8695,13 +7618,6 @@ paths:
         schema:
           type: integer
         description: 招募周期 ID
-      - name: Authorization
-        in: header
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
-        description: 身份认证令牌，格式为 `Bearer {token}`
       responses:
         '200':
           description: 查询成功
@@ -8723,25 +7639,17 @@ paths:
                     items:
                       $ref: '#/components/schemas/InterviewTimeSlot'
                     description: 响应数据
-      security:
-      - bearer: []
   /api/interview/admin/sessions:
     post:
       summary: 创建面试场次（管理员）
       deprecated: false
-      description: |
-        方案B：场次 = **部门 × 时间窗 × 地点 × 容量**。同一时间窗同地点的不同部门、同时间窗不同地点均为独立场次。
+      description: '方案B：场次 = **部门 × 时间窗 × 地点 × 容量**。同一时间窗同地点的不同部门、同时间窗不同地点均为独立场次。
+
         `interviewDurationMinutes` 为单人面试时长（默认 10 分钟），分配时用于把时间窗细分到每人的精确时刻。需权限 `resume:audit`。
+
+        '
       tags:
       - 面试场次管理（管理员）
-      parameters:
-      - name: Authorization
-        in: header
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
-        description: 身份认证令牌，格式为 `Bearer {token}`
       requestBody:
         required: true
         content:
@@ -8783,8 +7691,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResponseMessageInterviewSession'
-      security:
-      - bearer: []
   /api/interview/admin/sessions/{sessionId}:
     put:
       summary: 更新面试场次（管理员）
@@ -8799,13 +7705,6 @@ paths:
         schema:
           type: integer
         description: 面试场次 ID
-      - name: Authorization
-        in: header
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
-        description: 身份认证令牌，格式为 `Bearer {token}`
       requestBody:
         required: true
         content:
@@ -8832,8 +7731,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResponseMessageInterviewSession'
-      security:
-      - bearer: []
     delete:
       summary: 删除面试场次（管理员）
       deprecated: false
@@ -8847,13 +7744,6 @@ paths:
         schema:
           type: integer
         description: 面试场次 ID
-      - name: Authorization
-        in: header
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
-        description: 身份认证令牌，格式为 `Bearer {token}`
       responses:
         '200':
           description: 删除成功
@@ -8863,8 +7753,6 @@ paths:
                 $ref: '#/components/schemas/ResponseMessageVoid'
         '409':
           description: 该场次已有面试安排，无法删除（3606）
-      security:
-      - bearer: []
   /api/interview/admin/cycles/{cycleId}/sessions:
     get:
       summary: 场次列表（管理员）
@@ -8885,13 +7773,6 @@ paths:
         description: 按部门过滤（可选）
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
-        description: 身份认证令牌，格式为 `Bearer {token}`
       responses:
         '200':
           description: 查询成功
@@ -8913,16 +7794,17 @@ paths:
                     items:
                       $ref: '#/components/schemas/InterviewSession'
                     description: 响应数据
-      security:
-      - bearer: []
   /api/interview/admin/cycles/{cycleId}/assign:
     post:
       summary: 一键场次分配（管理员）
       deprecated: false
-      description: |
-        方案B 核心：为该周期批量分配面试场次。仅处理**已提交简历 + 已填志愿 + 尚未分配**的候选人，**可重复执行**。
+      description: '方案B 核心：为该周期批量分配面试场次。仅处理**已提交简历 + 已填志愿 + 尚未分配**的候选人，**可重复执行**。
+
         规则：每人只面一场 → 先匹配第一志愿部门中被勾选时间窗且有空的场次，满了自动降级第二志愿，都不行进入待调剂名单；
+
         命中场次后按场次 `interviewDurationMinutes` 把时间窗细分到每人精确时刻并落库 `InterviewSchedule`。需权限 `resume:audit`。
+
+        '
       tags:
       - 面试场次分配（管理员）
       parameters:
@@ -8932,13 +7814,6 @@ paths:
         schema:
           type: integer
         description: 招募周期 ID
-      - name: Authorization
-        in: header
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
-        description: 身份认证令牌，格式为 `Bearer {token}`
       responses:
         '200':
           description: 分配完成
@@ -8946,8 +7821,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResponseMessageSessionAssignmentResult'
-      security:
-      - bearer: []
   /api/interview/admin/cycles/{cycleId}/unassigned:
     get:
       summary: 待人工调剂名单（管理员）
@@ -8962,13 +7835,6 @@ paths:
         schema:
           type: integer
         description: 招募周期 ID
-      - name: Authorization
-        in: header
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
-        description: 身份认证令牌，格式为 `Bearer {token}`
       responses:
         '200':
           description: 查询成功
@@ -8990,8 +7856,6 @@ paths:
                     items:
                       $ref: '#/components/schemas/UnassignedCandidate'
                     description: 响应数据
-      security:
-      - bearer: []
   /api/interview/admin/cycles/{cycleId}/available-sessions:
     get:
       summary: 可用场次列表（管理员，用于调剂）
@@ -9012,13 +7876,6 @@ paths:
         schema:
           type: integer
         description: 部门 ID
-      - name: Authorization
-        in: header
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
-        description: 身份认证令牌，格式为 `Bearer {token}`
       responses:
         '200':
           description: 查询成功
@@ -9040,15 +7897,15 @@ paths:
                     items:
                       $ref: '#/components/schemas/InterviewSession'
                     description: 响应数据
-      security:
-      - bearer: []
   /api/interview/admin/preferences/{resumeId}/assign:
     post:
       summary: 人工调剂到指定场次（管理员）
       deprecated: false
-      description: |
-        方案B：把某位候选人（按简历 ID）一键分配 / 再分配到目标场次。已有有效安排则从原场次释放名额后转入目标场次；没有则新建安排。
+      description: '方案B：把某位候选人（按简历 ID）一键分配 / 再分配到目标场次。已有有效安排则从原场次释放名额后转入目标场次；没有则新建安排。
+
         目标场次原子占位，已满返回业务码 3604。转入后按目标场次时长重新计算精确到场时间。需权限 `resume:audit`。
+
+        '
       tags:
       - 面试场次分配（管理员）
       parameters:
@@ -9058,13 +7915,6 @@ paths:
         description: 简历 ID
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
-        description: 身份认证令牌，格式为 `Bearer {token}`
       requestBody:
         required: true
         content:
@@ -9100,25 +7950,17 @@ paths:
                     description: 响应数据
         '409':
           description: 目标场次已满（3604）
-      security:
-      - bearer: []
   /api/interview/feishu/import-from-table:
     post:
       summary: 从飞书多维表格同步导入面试安排（同步）
       deprecated: false
-      description: |
-        直接按请求指定的飞书表格 URL 同步导入面试安排数据（区别于异步的 `POST /api/interview/feishu/import`）。
+      description: '直接按请求指定的飞书表格 URL 同步导入面试安排数据（区别于异步的 `POST /api/interview/feishu/import`）。
+
         需飞书应用配置正确。
+
+        '
       tags:
       - 面试关联飞书模块
-      parameters:
-      - name: Authorization
-        in: header
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
-        description: 身份认证令牌，格式为 `Bearer {token}`
       requestBody:
         required: true
         content:
@@ -9141,8 +7983,6 @@ paths:
                 $ref: '#/components/schemas/ResponseMessageVoid'
         '400':
           description: 飞书未配置 / URL 无效 / 无数据等
-      security:
-      - bearer: []
   /api/user/upload/typed:
     post:
       summary: 按类型上传文件
@@ -9150,14 +7990,6 @@ paths:
       description: 上传文件并指定业务类型（如头像、简历附件等），返回可访问的文件路径。
       tags:
       - 个人信息页
-      parameters:
-      - name: Authorization
-        in: header
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
-        description: 身份认证令牌，格式为 `Bearer {token}`
       requestBody:
         required: true
         content:
@@ -9191,8 +8023,6 @@ paths:
                   data:
                     type: string
                     description: 文件访问路径
-      security:
-      - bearer: []
   /api/activity:
     get:
       summary: 获取所有活动
@@ -9200,14 +8030,6 @@ paths:
       description: 获取所有社团活动列表。
       tags:
       - 社团活动模块
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: 成功
@@ -9216,21 +8038,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ActivityListResponse'
           headers: {}
-      security: []
     post:
       summary: 创建活动
       deprecated: false
       description: 创建社团活动。
       tags:
       - 社团活动模块
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -9245,8 +8058,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ActivityResponse'
           headers: {}
-      security:
-      - bearerAuth: []
   /api/activity/{id}:
     get:
       summary: 根据 ID 获取活动详情
@@ -9262,13 +8073,6 @@ paths:
         example: 0
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: 成功
@@ -9277,7 +8081,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ActivityResponse'
           headers: {}
-      security: []
     put:
       summary: 更新活动
       deprecated: false
@@ -9292,13 +8095,6 @@ paths:
         example: 0
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -9313,8 +8109,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ActivityResponse'
           headers: {}
-      security:
-      - bearerAuth: []
     delete:
       summary: 删除活动
       deprecated: false
@@ -9329,13 +8123,6 @@ paths:
         example: 0
         schema:
           type: integer
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: 删除成功
@@ -9344,8 +8131,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/EmptyResponse'
           headers: {}
-      security:
-      - bearerAuth: []
   /api/activity/category/{category}:
     get:
       summary: 根据分类获取活动
@@ -9361,13 +8146,6 @@ paths:
         example: ''
         schema:
           type: string
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: 成功
@@ -9376,7 +8154,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ActivityListResponse'
           headers: {}
-      security: []
   /api/activity/active:
     get:
       summary: 获取进行中的活动
@@ -9384,14 +8161,6 @@ paths:
       description: 获取当前进行中的活动列表。
       tags:
       - 社团活动模块
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: 成功
@@ -9400,7 +8169,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ActivityListResponse'
           headers: {}
-      security: []
   /api/search/ai:
     get:
       summary: AI
@@ -9416,13 +8184,6 @@ paths:
         example: 我们社团有没有ACM得奖的学生
         schema:
           type: string
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       responses:
         '200':
           description: ''
@@ -9439,14 +8200,13 @@ paths:
                     type: array
                     items: {}
                   aiResponse:
-                    type: 'null'
+                    type: object
+                    nullable: true
                 required:
                 - users
                 - awards
                 - aiResponse
           headers: {}
-      security:
-      - bearer: []
   /api/health:
     get:
       summary: 服务状态查询接口
@@ -9454,14 +8214,6 @@ paths:
       description: 服务健康检查，返回服务运行状态，供负载均衡/监控探活使用。
       tags:
       - 系统监控
-      parameters:
-      - name: Authorization
-        in: header
-        description: 身份认证令牌，格式为 `Bearer {token}`
-        example: Bearer {{token}}
-        schema:
-          type: string
-          default: Bearer {{token}}
       requestBody:
         content:
           application/json:
@@ -9478,8 +8230,7 @@ paths:
                 type: object
                 properties: {}
           headers: {}
-      security:
-      - Jwt: []
+      security: []
 components:
   schemas:
     ResumeFieldDefinition:
@@ -9500,14 +8251,21 @@ components:
           description: 字段展示标签（给用户看）
         fieldType:
           type: string
-          description: |
-            字段类型，决定前端渲染控件：
+          description: '字段类型，决定前端渲染控件：
+
             - `text` 单行文本
+
             - `textarea` 多行文本
+
             - `select` 下拉框
+
             - `radio` 单选
+
             - `checkbox` 多选
+
             - `file` 文件上传
+
+            '
           default: text
           example: text
         placeholder:
@@ -10413,9 +9171,11 @@ components:
       - message
       - data
     InterviewBookableSlot:
-      description: |
-        可预约面试时段，字段与实体 `InterviewSlot` 一致；另含派生字段 `fullyBooked`（是否已满不可约）。
+      description: '可预约面试时段，字段与实体 `InterviewSlot` 一致；另含派生字段 `fullyBooked`（是否已满不可约）。
+
         前端展示时段请用 `interviewDate` + `startTime`～`endTime`（24 小时制），勿使用「上午/下午」文案。
+
+        '
       allOf:
       - $ref: '#/components/schemas/InterviewSlot'
       - type: object
@@ -10470,9 +9230,11 @@ components:
           type: string
           format: date-time
           nullable: true
-          description: |
-            精确到场时间。预约/改期占坑成功后由后端按大时段均分自动写入：
+          description: '精确到场时间。预约/改期占坑成功后由后端按大时段均分自动写入：
+
             开始时间 + (endTime-startTime)/maxCapacity × (占坑序号-1)。取消后为 null。
+
+            '
         status:
           type: integer
           description: 0-未安排，1-已安排，2-已取消
@@ -10536,9 +9298,11 @@ components:
           description: 备注
     InterviewBooking:
       type: object
-      description: |
-        学生预约详情：`InterviewSchedule` 字段 + 关联 `InterviewSlot` 的日期与 24 小时制时段。
+      description: '学生预约详情：`InterviewSchedule` 字段 + 关联 `InterviewSlot` 的日期与 24 小时制时段。
+
         路径中的 `bookingId` 即 `scheduleId`。
+
+        '
       allOf:
       - $ref: '#/components/schemas/InterviewSchedule'
       - type: object
@@ -11010,9 +9774,11 @@ components:
               example: 2
             noPreferenceCount:
               type: integer
-              description: |
-                新流程：未完成面试时段预约（未锁定 `slotId`）的人数。
+              description: '新流程：未完成面试时段预约（未锁定 `slotId`）的人数。
+
                 旧流程兼容：未在简历中填写期望面试时间的人数。
+
+                '
               example: 1
             assignmentTime:
               type: string
@@ -11033,9 +9799,11 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/NoPreferenceUserV2'
-              description: |
-                新流程：未完成可预约面试时间段选择的用户列表。
+              description: '新流程：未完成可预约面试时间段选择的用户列表。
+
                 旧流程兼容：未填写简历期望时间的用户列表。
+
+                '
           description: 响应数据
     AssignmentDetailV2:
       type: object
@@ -11143,9 +9911,11 @@ components:
           example: 第1志愿：技术部、 第2志愿：媒体部
     NoPreferenceUserV2:
       type: object
-      description: |
-        新流程：未完成可预约面试时间段选择、无法参与自动分配的用户。
+      description: '新流程：未完成可预约面试时间段选择、无法参与自动分配的用户。
+
         旧流程兼容：未在简历中填写期望面试时间的用户。
+
+        '
       properties:
         userId:
           type: integer
@@ -11498,66 +10268,6 @@ components:
         data:
           $ref: '#/components/schemas/ImportFeishuImportResult'
           description: 响应数据
-    ExportResultsRequest:
-      type: object
-      required:
-      - cycleId
-      properties:
-        cycleId:
-          type: integer
-          description: 招募活动ID
-          example: 2
-        feishuTableUrl:
-          type: string
-          description: 飞书表格URL
-          example: https://example.feishu.cn/table
-    ExportResultsResponse:
-      type: object
-      properties:
-        code:
-          type: integer
-          description: 响应码
-          example: 200
-        message:
-          type: string
-          description: 响应消息
-          example: 录取结果导入成功
-        data:
-          type: object
-          properties:
-            importedResults:
-              type: array
-              items:
-                $ref: '#/components/schemas/ImportedResult'
-          description: 响应数据
-    ImportedResult:
-      type: object
-      properties:
-        userId:
-          type: integer
-          description: 用户ID
-          example: 1
-        decision:
-          type: integer
-          description: 决定：1-通过，2-不通过等
-          example: 1
-        recommendedDeptId:
-          type: integer
-          description: 推荐部门ID
-          example: 1
-        finalScore:
-          type: number
-          format: float
-          description: 最终分数
-          example: 85.5
-        summary:
-          type: string
-          description: 总结
-          example: 表现优秀，适合技术部
-        decisionBy:
-          type: integer
-          description: 决策者ID
-          example: 1001
     SendNotificationsRequest:
       type: object
       required:
@@ -11969,20 +10679,16 @@ components:
           example: success
           description: 提示信息
         data:
-          type: 'null'
-          example: null
+          type: object
           description: 响应数据
+          nullable: true
   responses: {}
   securitySchemes:
-    Jwt:
-      type: http
-      scheme: bearer
-    bearer:
-      type: http
-      scheme: bearer
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: '登录接口(/api/auth/login)返回的 JWT，置于 Authorization: Bearer {token}'
 servers: []
-security: []
+security:
+- bearerAuth: []
