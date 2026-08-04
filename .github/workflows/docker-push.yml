@@ -131,34 +131,64 @@ jobs:
           context: .
           platforms: linux/amd64
           push: true
+          # provenance 附加清单会让部分旧版拉取端多一次往返，关闭以保持清单精简
+          provenance: false
+          # GHA 层缓存：基础层/字体层/依赖层在依赖未变时摘要不变，
+          # 服务器 docker pull 仅下载变化的应用层（几百 KB），部署从 ~10 分钟降到秒级
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           tags: |
             ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest
             ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
 
-  # ── 3) 自动部署到双机集群（先 B 后 A，滚动重启）─────────────
-  deploy:
-    name: Deploy to cluster
+  # ── 3) 双机并行预拉镜像 ─────────────────────────────────────
+  # 拉镜像是部署耗时大头（跨境访问 Docker Hub 慢且不稳定），A/B 并行拉、
+  # 单次限时 10 分钟：卡死即杀掉重试（已完成的层保留，重试只补缺失层）。
+  # 配合分层镜像+构建缓存，依赖未变时通常仅拉几百 KB，秒级完成。
+  pull:
+    name: Pull image
     runs-on: ubuntu-latest
     needs: build
     if: github.event_name == 'push'
+    strategy:
+      matrix:
+        node: [ B, A ]
     steps:
-      - name: Deploy to Node B (8.159.150.156)
+      - name: Pull image on Node ${{ matrix.node }}
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets[format('DEPLOY_HOST_{0}', matrix.node)] }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 35m
+          script: |
+            set -e
+            cd ~/boyuan-official
+            n=0
+            until timeout 600 docker compose pull official; do
+              n=$((n+1))
+              if [ "$n" -ge 3 ]; then echo "Node ${{ matrix.node }} 镜像拉取重试 3 次仍失败" >&2; exit 1; fi
+              echo "拉取失败/超时，第 $n 次重试..."; sleep 10
+            done
+            echo "Node ${{ matrix.node }} 镜像就绪"
+
+  # ── 4) 滚动重启（先 B 后 A，镜像已就绪，仅换容器+健康检查）──
+  deploy:
+    name: Deploy to cluster
+    runs-on: ubuntu-latest
+    needs: pull
+    if: github.event_name == 'push'
+    steps:
+      - name: Restart Node B (8.159.150.156)
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.DEPLOY_HOST_B }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          command_timeout: 30m
+          command_timeout: 10m
           script: |
             set -e
             cd ~/boyuan-official
-            # 拉取镜像：公网从 Docker Hub 拉取偶发中断，重试至多 5 次
-            n=0
-            until docker compose pull official; do
-              n=$((n+1))
-              if [ "$n" -ge 5 ]; then echo "Node B 镜像拉取重试 5 次仍失败" >&2; exit 1; fi
-              echo "拉取失败，第 $n 次重试..."; sleep 10
-            done
             docker compose up -d official
             echo "等待 B 健康检查..."
             for i in $(seq 1 20); do
@@ -168,24 +198,19 @@ jobs:
               sleep 5
               if [ "$i" = "20" ]; then echo "Node B 健康检查超时" >&2; exit 1; fi
             done
+            # 清理换代后悬空的旧镜像层，防磁盘占满
+            docker image prune -f >/dev/null 2>&1 || true
 
-      - name: Deploy to Node A (8.159.153.140)
+      - name: Restart Node A (8.159.153.140)
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.DEPLOY_HOST_A }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          command_timeout: 30m
+          command_timeout: 10m
           script: |
             set -e
             cd ~/boyuan-official
-            # 拉取镜像：公网从 Docker Hub 拉取偶发中断，重试至多 5 次
-            n=0
-            until docker compose pull official; do
-              n=$((n+1))
-              if [ "$n" -ge 5 ]; then echo "Node A 镜像拉取重试 5 次仍失败" >&2; exit 1; fi
-              echo "拉取失败，第 $n 次重试..."; sleep 10
-            done
             docker compose up -d official
             echo "等待 A 健康检查..."
             for i in $(seq 1 20); do
@@ -195,6 +220,7 @@ jobs:
               sleep 5
               if [ "$i" = "20" ]; then echo "Node A 健康检查超时" >&2; exit 1; fi
             done
+            docker image prune -f >/dev/null 2>&1 || true
 
       - name: Verify via load balancer
         uses: appleboy/ssh-action@v1
@@ -202,7 +228,7 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST_A }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          command_timeout: 30m
+          command_timeout: 5m
           script: |
             code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/api/user/login || true)
             echo "LB /api 返回码: $code (401/400 表示反代通)"
