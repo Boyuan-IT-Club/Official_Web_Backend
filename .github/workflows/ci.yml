@@ -103,3 +103,36 @@ jobs:
           name: jacoco-coverage
           path: target/site/jacoco/
           if-no-files-found: ignore
+
+  # Docker 构建冒烟测试：PR 阶段验证 Dockerfile（分层解包/多阶段构建）能成功出镜像，
+  # 只构建不推送，避免 Dockerfile 问题合入 main 后才在部署时暴露。
+  docker-build:
+    name: Docker build smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build jar
+        run: |
+          chmod +x mvnw
+          ./mvnw -B clean package -DskipTests
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
