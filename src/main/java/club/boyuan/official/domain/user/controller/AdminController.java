@@ -36,6 +36,8 @@ public class AdminController {
 
     private final IUserService userService;
 
+    private final club.boyuan.official.domain.user.service.UserRoleService userRoleService;
+
     private final RedisUtil redisUtil;
 
     private static final Logger logger = LoggerFactory.getLogger(AdminController.class);
@@ -105,6 +107,16 @@ public class AdminController {
             @PageableDefault(size = 10, sort = "userId", direction = Sort.Direction.ASC) Pageable pageable) {
         User currentUser = userService.getUserByUsername(SecurityUtil.getCurrentUsername());
         PageResultDTO<User> userPage = userService.getUsersByConditions(role, dept, status, pageable, currentUser);
+        // 填充 RBAC 角色（user 表的 role 列为注册期遗留字段，展示与分配统一走 user_role 关联）
+        if (userPage != null && userPage.getContent() != null) {
+            userPage.getContent().forEach(u -> {
+                try {
+                    u.setRoles(userRoleService.getRolesByUserId(u.getUserId()));
+                } catch (Exception e) {
+                    logger.warn("填充用户{}的角色失败: {}", u.getUserId(), e.getMessage());
+                }
+            });
+        }
         return ResponseEntity.ok(ResponseMessage.success(userPage));
     }
 
