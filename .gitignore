@@ -50,3 +50,5 @@ docs/feishu-wiki/
 !*.template
 .trae
 文档
+# 本地规划笔记（不入库）
+可扩展功能清单.md
