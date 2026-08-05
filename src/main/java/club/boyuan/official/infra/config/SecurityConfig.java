@@ -124,12 +124,14 @@ public class SecurityConfig {
         // 允许的来源(origin)。注意：即使前端走同源 /api（nginx 反代），
         // 浏览器对 POST 等仍会带 Origin 头，Spring 会校验，故部署站点 origin 必须在此白名单内。
         // 生产站点入口
+        configuration.addAllowedOriginPattern("http://124.221.222.206");
+        configuration.addAllowedOriginPattern("https://124.221.222.206");
+        // 旧阿里云集群（回滚保险，观察期后可移除）
         configuration.addAllowedOriginPattern("http://8.159.153.140");
         configuration.addAllowedOriginPattern("https://8.159.153.140");
-        configuration.addAllowedOriginPattern("http://8.159.150.156");
-        configuration.addAllowedOriginPattern("https://8.159.150.156");
         configuration.addAllowedOriginPattern("http://official.boyuan.club");
         configuration.addAllowedOriginPattern("https://official.boyuan.club");
+        configuration.addAllowedOriginPattern("https://admin.boyuan.club");
         // 本地开发 / 直连
         configuration.addAllowedOriginPattern("http://localhost:3000");
         configuration.addAllowedOriginPattern("https://localhost:3000");
