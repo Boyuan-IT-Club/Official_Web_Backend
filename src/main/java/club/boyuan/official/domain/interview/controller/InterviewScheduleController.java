@@ -2,13 +2,28 @@ package club.boyuan.official.domain.interview.controller;
 
 import club.boyuan.official.domain.interview.dto.AutoAssignInterviewResponseDTO;
 import club.boyuan.official.common.dto.ResponseMessage;
+import club.boyuan.official.common.utils.SecurityUtil;
 import club.boyuan.official.domain.interview.service.IInterviewScheduleService;
+import club.boyuan.official.domain.resume.service.IResumeService;
+import club.boyuan.official.domain.user.service.IUserService;
+import club.boyuan.official.persistence.entity.Department;
+import club.boyuan.official.persistence.entity.InterviewSchedule;
+import club.boyuan.official.persistence.entity.InterviewSession;
+import club.boyuan.official.persistence.entity.Resume;
+import club.boyuan.official.persistence.entity.User;
+import club.boyuan.official.persistence.mapper.DepartmentMapper;
+import club.boyuan.official.persistence.mapper.InterviewScheduleMapper;
+import club.boyuan.official.persistence.mapper.InterviewSessionMapper;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * <p>
@@ -25,6 +40,56 @@ import org.springframework.web.bind.annotation.*;
 public class InterviewScheduleController {
 
     private final IInterviewScheduleService interviewScheduleService;
+
+    private final IUserService userService;
+
+    private final IResumeService resumeService;
+
+    private final InterviewScheduleMapper interviewScheduleMapper;
+
+    private final InterviewSessionMapper interviewSessionMapper;
+
+    private final DepartmentMapper departmentMapper;
+
+    /**
+     * 学生查询本人在指定周期的面试安排（方案B分配结果）。
+     * 未分配时 data 为 null；已分配时返回时间/部门/地点等信息。
+     */
+    @GetMapping("/my")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ResponseMessage<Map<String, Object>>> getMySchedule(@RequestParam Integer cycleId) {
+        User currentUser = userService.getUserByUsername(SecurityUtil.getCurrentUsername());
+        Resume resume = resumeService.getResumeByUserIdAndCycleId(currentUser.getUserId(), cycleId);
+        if (resume == null) {
+            return ResponseEntity.ok(ResponseMessage.success(null));
+        }
+        InterviewSchedule schedule = interviewScheduleMapper.selectOne(
+                new LambdaQueryWrapper<InterviewSchedule>()
+                        .eq(InterviewSchedule::getResumeId, resume.getResumeId())
+                        .eq(InterviewSchedule::getCycleId, cycleId)
+                        .orderByDesc(InterviewSchedule::getScheduleId)
+                        .last("LIMIT 1"));
+        if (schedule == null) {
+            return ResponseEntity.ok(ResponseMessage.success(null));
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("scheduleId", schedule.getScheduleId());
+        result.put("cycleId", schedule.getCycleId());
+        result.put("interviewTime", schedule.getInterviewTime());
+        result.put("status", schedule.getStatus());
+        result.put("deptId", schedule.getDeptId());
+        if (schedule.getDeptId() != null) {
+            Department dept = departmentMapper.selectById(schedule.getDeptId());
+            result.put("deptName", dept != null ? dept.getDeptName() : null);
+        }
+        if (schedule.getSessionId() != null) {
+            InterviewSession session = interviewSessionMapper.selectById(schedule.getSessionId());
+            if (session != null) {
+                result.put("location", session.getLocation());
+            }
+        }
+        return ResponseEntity.ok(ResponseMessage.success(result));
+    }
 
     /**
      * 一键分配面试成员面试时间地点（按招募周期）- 路径参数版本
