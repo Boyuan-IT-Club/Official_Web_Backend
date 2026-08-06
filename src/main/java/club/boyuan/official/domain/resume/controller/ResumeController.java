@@ -295,7 +295,7 @@ public class ResumeController {
      * 因直接向响应流写二进制，保留局部异常处理（无法交给 GlobalExceptionHandler 处理半写响应）。
      */
     @GetMapping("/export/pdf/{resumeId}")
-    @PreAuthorize("hasAuthority('resume:view')")
+    @PreAuthorize("isAuthenticated()")  // 归属校验在方法内：本人或具备管理权限者可导出
     public void exportResumeToPdf(@PathVariable Integer resumeId, HttpServletResponse response) {
         try {
             User currentUser = currentUser();

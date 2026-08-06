@@ -6761,6 +6761,193 @@ paths:
               schema:
                 $ref: '#/components/schemas/ResponseMessageVoid'
           headers: {}
+  /api/interview/schedule/my-result:
+    get:
+      summary: 学生查询本人面试结果（录取/未录取）
+      deprecated: false
+      description: 按招募周期查询当前登录用户的面试结果。结果未录入（decision 为空）或未投递/未面试时 data 为 null。
+      tags:
+      - 面试预约（学生）
+      parameters:
+      - name: cycleId
+        in: query
+        description: 招募周期ID
+        required: true
+        example: 2
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: 业务状态码（200 表示成功）
+                  message:
+                    type: string
+                    description: 提示信息
+                  data:
+                    type: object
+                    nullable: true
+                    description: 面试结果；未出结果时为 null
+                    properties:
+                      resultId:
+                        type: integer
+                        description: 结果ID
+                      decision:
+                        type: integer
+                        description: 1=通过 2=未通过
+                      decisionAt:
+                        type: string
+                        nullable: true
+                        description: 决定时间
+                      assignedDeptId:
+                        type: integer
+                        nullable: true
+                        description: 录取部门ID
+                      assignedDeptName:
+                        type: string
+                        nullable: true
+                        description: 录取部门名称
+                required:
+                - code
+                - message
+          headers: {}
+  /api/interview/reschedule:
+    post:
+      summary: 学生提交面试改期申请
+      deprecated: false
+      description: 需本周期已分配面试；同一排期存在待处理申请时不可重复提交。管理员同意后在「分配与调剂」中人工重排。
+      tags:
+      - 面试预约（学生）
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - cycleId
+              - reason
+              properties:
+                cycleId:
+                  type: integer
+                  description: 招募周期ID
+                  example: 2
+                reason:
+                  type: string
+                  description: 改期原因（≤500字）
+                preferredTimeSlotIds:
+                  type: string
+                  nullable: true
+                  description: 期望时间窗ID列表（逗号分隔，可空）
+        required: true
+      responses:
+        '200':
+          description: 提交成功，返回申请记录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RescheduleRequestEnvelope'
+          headers: {}
+  /api/interview/reschedule/my:
+    get:
+      summary: 学生查询本人最新改期申请
+      deprecated: false
+      description: 按招募周期查询本人最新一条改期申请；没有时 data 为 null。
+      tags:
+      - 面试预约（学生）
+      parameters:
+      - name: cycleId
+        in: query
+        required: true
+        example: 2
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RescheduleRequestEnvelope'
+          headers: {}
+  /api/interview/reschedule/admin/list:
+    get:
+      summary: 管理员查询改期申请列表
+      deprecated: false
+      description: 按周期查询改期申请，可按状态过滤（0待处理 1已同意 2已拒绝）。需 resume:audit 权限。
+      tags:
+      - 面试分配模块
+      parameters:
+      - name: cycleId
+        in: query
+        required: true
+        example: 2
+        schema:
+          type: integer
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RescheduleRequest'
+          headers: {}
+  /api/interview/reschedule/admin/{requestId}/handle:
+    put:
+      summary: 管理员处理改期申请
+      deprecated: false
+      description: status=1 同意（随后在「分配与调剂」人工重排）；status=2 拒绝。可附 adminNote 备注。需 resume:audit 权限。
+      tags:
+      - 面试分配模块
+      parameters:
+      - name: requestId
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - status
+              properties:
+                status:
+                  type: integer
+                  description: 1=同意 2=拒绝
+                adminNote:
+                  type: string
+                  nullable: true
+                  description: 处理备注
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RescheduleRequestEnvelope'
+          headers: {}
   /api/interview/schedule/my:
     get:
       summary: 学生查询本人面试安排（方案B分配结果）
@@ -8295,6 +8482,57 @@ paths:
       security: []
 components:
   schemas:
+    RescheduleRequest:
+      type: object
+      description: 面试改期申请
+      properties:
+        requestId:
+          type: integer
+        scheduleId:
+          type: integer
+        resumeId:
+          type: integer
+        userId:
+          type: integer
+        cycleId:
+          type: integer
+        reason:
+          type: string
+        preferredTimeSlotIds:
+          type: string
+          nullable: true
+          description: 期望时间窗ID列表（逗号分隔）
+        status:
+          type: integer
+          description: 0待处理 1已同意 2已拒绝
+        adminNote:
+          type: string
+          nullable: true
+        handledBy:
+          type: integer
+          nullable: true
+        handledAt:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          nullable: true
+    RescheduleRequestEnvelope:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: 业务状态码（200 表示成功）
+        message:
+          type: string
+          description: 提示信息
+        data:
+          nullable: true
+          allOf:
+          - $ref: '#/components/schemas/RescheduleRequest'
+      required:
+      - code
+      - message
     ResumeFieldDefinition:
       type: object
       description: 简历字段定义，与实体 `ResumeFieldDefinition` 一致
