@@ -6761,6 +6761,68 @@ paths:
               schema:
                 $ref: '#/components/schemas/ResponseMessageVoid'
           headers: {}
+  /api/interview/schedule/my:
+    get:
+      summary: 学生查询本人面试安排（方案B分配结果）
+      deprecated: false
+      description: 按招募周期查询当前登录用户的最新面试排期。未投递简历或尚未分配时 data 为 null；已分配时返回时间、部门、地点与状态。
+      tags:
+      - 面试预约（学生）
+      parameters:
+      - name: cycleId
+        in: query
+        description: 招募周期ID
+        required: true
+        example: 2
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: 业务状态码（200 表示成功）
+                  message:
+                    type: string
+                    description: 提示信息
+                  data:
+                    type: object
+                    nullable: true
+                    description: 面试安排；未分配时为 null
+                    properties:
+                      scheduleId:
+                        type: integer
+                        description: 排期ID
+                      cycleId:
+                        type: integer
+                        description: 招募周期ID
+                      interviewTime:
+                        type: string
+                        description: 面试时间（ISO 格式）
+                      status:
+                        type: integer
+                        description: 排期状态
+                      deptId:
+                        type: integer
+                        nullable: true
+                        description: 面试部门ID
+                      deptName:
+                        type: string
+                        nullable: true
+                        description: 面试部门名称
+                      location:
+                        type: string
+                        nullable: true
+                        description: 面试地点
+                required:
+                - code
+                - message
+          headers: {}
   /api/interview/schedule/auto-assign/{cycleId}:
     post:
       summary: 一键分配面试成员面试时间地点（按招募周期）
