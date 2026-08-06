@@ -78,12 +78,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
         user.setRole("APPLICANT");
         userMapper.insert(user);
         
-        // 给新用户分配默认角色（申请人，role_id=4）
-        UserRole userRole = new UserRole();
-        userRole.setUserId(user.getUserId());
-        userRole.setRoleId(4);
-        userRoleMapper.insert(userRole);
-        
+        // 注：不再自动分配 RBAC 默认角色，新用户为「暂无角色」，由管理员按需分配
+        // （user 表的 role 列为 NOT NULL 遗留字段，仅写入占位值，界面不展示）
         logger.info("成功添加用户，用户ID: {}", user.getUserId());
         return user;
     }
@@ -446,12 +442,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
         user.setRole("APPLICANT");
         userMapper.insert(user);
         
-        // 给新用户分配默认角色（申请人，role_id=4）
-        UserRole userRole = new UserRole();
-        userRole.setUserId(user.getUserId());
-        userRole.setRoleId(4);
-        userRoleMapper.insert(userRole);
-        
+        // 注：不再自动分配 RBAC 默认角色，新用户为「暂无角色」，由管理员按需分配
+        // （user 表的 role 列为 NOT NULL 遗留字段，仅写入占位值，界面不展示）
         logger.info("用户注册成功，用户ID: {}", user.getUserId());
         return user;
     }
