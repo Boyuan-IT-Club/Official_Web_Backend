@@ -202,6 +202,7 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
         if (isNew) {
             schedule = new InterviewSchedule()
                     .setResumeId(resumeId)
+                    .setUserId(resume.getUserId())
                     .setCycleId(target.getCycleId())
                     .setSyncStatus(0)
                     .setNotifStatus(0);
@@ -249,6 +250,7 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
         LocalDateTime start = computeStart(state.timeSlot, index, durationOf(state.session));
         InterviewSchedule schedule = new InterviewSchedule()
                 .setResumeId(resume.getResumeId())
+                .setUserId(resume.getUserId())
                 .setCycleId(state.session.getCycleId())
                 .setSlotId(null)
                 .setSessionId(state.session.getSessionId())

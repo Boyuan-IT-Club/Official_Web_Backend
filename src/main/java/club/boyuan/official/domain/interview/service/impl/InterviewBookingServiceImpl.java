@@ -214,6 +214,7 @@ public class InterviewBookingServiceImpl implements IInterviewBookingService {
         }
         InterviewSchedule schedule = new InterviewSchedule()
                 .setResumeId(resume.getResumeId())
+                .setUserId(resume.getUserId())
                 .setCycleId(request.getCycleId())
                 .setSlotId(request.getSlotId())
                 .setInterviewTime(resolveFineInterviewTimeAfterOccupy(request.getSlotId()))

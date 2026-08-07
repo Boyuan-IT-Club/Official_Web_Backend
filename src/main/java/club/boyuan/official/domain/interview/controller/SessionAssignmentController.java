@@ -27,6 +27,50 @@ public class SessionAssignmentController {
 
     private final ISessionAssignmentService sessionAssignmentService;
     private final IInterviewSessionService interviewSessionService;
+    private final club.boyuan.official.persistence.mapper.InterviewScheduleMapper interviewScheduleMapper;
+    private final club.boyuan.official.persistence.mapper.UserMapper userMapper;
+    private final club.boyuan.official.persistence.mapper.DepartmentMapper departmentMapper;
+
+    /**
+     * 查询某周期的已分配名单（可按场次过滤），按面试时间排序。
+     * 供管理端「场次」查看每个场次/时间段实际分配到的候选人。
+     */
+    @GetMapping("/cycles/{cycleId}/schedules")
+    public ResponseEntity<ResponseMessage<java.util.List<java.util.Map<String, Object>>>> listSchedules(
+            @PathVariable Integer cycleId,
+            @RequestParam(required = false) Integer sessionId) {
+        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<club.boyuan.official.persistence.entity.InterviewSchedule> qw =
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<club.boyuan.official.persistence.entity.InterviewSchedule>()
+                        .eq(club.boyuan.official.persistence.entity.InterviewSchedule::getCycleId, cycleId)
+                        .orderByAsc(club.boyuan.official.persistence.entity.InterviewSchedule::getInterviewTime);
+        if (sessionId != null) {
+            qw.eq(club.boyuan.official.persistence.entity.InterviewSchedule::getSessionId, sessionId);
+        }
+        java.util.List<club.boyuan.official.persistence.entity.InterviewSchedule> schedules =
+                interviewScheduleMapper.selectList(qw);
+        java.util.List<java.util.Map<String, Object>> result = new java.util.ArrayList<>();
+        for (club.boyuan.official.persistence.entity.InterviewSchedule sc : schedules) {
+            java.util.Map<String, Object> item = new java.util.LinkedHashMap<>();
+            item.put("scheduleId", sc.getScheduleId());
+            item.put("resumeId", sc.getResumeId());
+            item.put("userId", sc.getUserId());
+            item.put("sessionId", sc.getSessionId());
+            item.put("interviewTime", sc.getInterviewTime());
+            item.put("status", sc.getStatus());
+            item.put("notes", sc.getNotes());
+            if (sc.getUserId() != null) {
+                club.boyuan.official.persistence.entity.User u = userMapper.selectById(sc.getUserId());
+                item.put("name", u != null ? (u.getName() != null ? u.getName() : u.getUsername()) : null);
+                item.put("username", u != null ? u.getUsername() : null);
+            }
+            if (sc.getDeptId() != null) {
+                club.boyuan.official.persistence.entity.Department d = departmentMapper.selectById(sc.getDeptId());
+                item.put("deptName", d != null ? d.getDeptName() : null);
+            }
+            result.add(item);
+        }
+        return ResponseEntity.ok(ResponseMessage.success(result));
+    }
 
     /**
      * 为某周期一键分配面试场次（可重复执行，仅处理尚未分配的候选人）。
