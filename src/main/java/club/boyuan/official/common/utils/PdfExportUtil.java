@@ -51,161 +51,116 @@ public class PdfExportUtil {
             }
             
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            
-            // 创建文档
-            Document document = new Document(PageSize.A4);
+
+            Document document = new Document(PageSize.A4, 48, 48, 44, 44);
             PdfWriter.getInstance(document, baos);
             document.open();
-            
-            // 设置字体
-            Font titleFont = getFont(18, Font.BOLD);
-            Font headerFont = getFont(14, Font.BOLD);
-            Font normalFont = getFont(10, Font.NORMAL);
-            
+
+            BaseColor brand = new BaseColor(31, 58, 96);      // 深蓝
+            BaseColor accent = new BaseColor(31, 118, 204);   // 品牌蓝
+            BaseColor lightLine = new BaseColor(225, 232, 240);
+            BaseColor subText = new BaseColor(110, 120, 135);
+
+            Font bannerCn = getFont(20, Font.BOLD, BaseColor.WHITE);
+            Font bannerSub = getFont(9, Font.NORMAL, new BaseColor(200, 215, 235));
+            Font sectionFont = getFont(12, Font.BOLD, accent);
+            Font labelFont = getFont(9, Font.NORMAL, subText);
+            Font valueFont = getFont(11, Font.NORMAL, new BaseColor(35, 40, 48));
+            Font bodyFont = getFont(10, Font.NORMAL, new BaseColor(55, 62, 72));
+            Font footFont = getFont(8, Font.NORMAL, subText);
+
             try {
-                // 首先检查是否有照片字段，如果有则在最前面显示
+                java.util.Map<String, String> byKey = new java.util.LinkedHashMap<>();
+                java.util.List<SimpleResumeFieldDTO> fields = resumeDTO.getSimpleFields() != null
+                        ? resumeDTO.getSimpleFields() : new ArrayList<>();
                 Image photoImage = null;
-                SimpleResumeFieldDTO photoField = null;
-                
-                if (resumeDTO.getSimpleFields() != null) {
-                    for (SimpleResumeFieldDTO field : resumeDTO.getSimpleFields()) {
-                        if (isBase64Image(field.getFieldValue())) {
-                            photoImage = createImageFromBase64(field.getFieldValue());
-                            if (photoImage != null) {
-                                photoField = field;
-                                break; // 找到第一张图片就使用
-                            }
-                        }
+                for (SimpleResumeFieldDTO f : fields) {
+                    if (f.getFieldKey() != null) byKey.put(f.getFieldKey(), f.getFieldValue());
+                    if (photoImage == null && isBase64Image(f.getFieldValue())) {
+                        photoImage = createImageFromBase64(f.getFieldValue());
                     }
                 }
-                
-                // 添加标题
-                Paragraph title = new Paragraph("个人简历", titleFont);
-                title.setAlignment(Element.ALIGN_CENTER);
-                title.setSpacingAfter(20);
-                document.add(title);
-                
-                // 如果有照片，在标题下方添加照片
+
+                String name = firstNonBlank(byKey.get("name"), "未填写姓名");
+
+                // ── 顶部品牌横幅 ─────────────────────────────
+                PdfPTable banner = new PdfPTable(1);
+                banner.setWidthPercentage(100);
+                PdfPCell bc = new PdfPCell();
+                bc.setBackgroundColor(brand);
+                bc.setBorder(Rectangle.NO_BORDER);
+                bc.setPadding(16f);
+                Paragraph bt = new Paragraph(name, bannerCn);
+                Paragraph bs = new Paragraph("博远信息技术社 · 招新申请简历", bannerSub);
+                bs.setSpacingBefore(4);
+                bc.addElement(bt);
+                bc.addElement(bs);
+                banner.addCell(bc);
+                banner.setSpacingAfter(14);
+                document.add(banner);
+
+                // ── 基本信息（左双列 + 右照片）───────────────
+                PdfPTable info = new PdfPTable(photoImage != null ? new float[]{2.2f, 2.2f, 1.3f} : new float[]{1f, 1f});
+                info.setWidthPercentage(100);
+                info.setSpacingAfter(10);
+                java.util.List<String[]> basics = new ArrayList<>();
+                addBasic(basics, "学号", byKey.get("student_id"));
+                addBasic(basics, "邮箱", byKey.get("email"));
+                addBasic(basics, "手机", byKey.get("phone"));
+                addBasic(basics, "年级", byKey.get("grade"));
+                addBasic(basics, "性别", byKey.get("gender"));
+                addBasic(basics, "专业", byKey.get("major"));
+                addBasic(basics, "GitHub", byKey.get("github"));
+                addBasic(basics, "期望部门", joinIfJsonArray(byKey.get("expected_departments")));
+
+                int perCol = (int) Math.ceil(basics.size() / 2.0);
+                PdfPCell colA = basicColumn(basics.subList(0, Math.min(perCol, basics.size())), labelFont, valueFont);
+                PdfPCell colB = basicColumn(basics.size() > perCol ? basics.subList(perCol, basics.size()) : new ArrayList<>(), labelFont, valueFont);
+                info.addCell(colA);
+                info.addCell(colB);
                 if (photoImage != null) {
-                    // 设置照片居中显示
-                    photoImage.setAlignment(Element.ALIGN_CENTER);
-                    photoImage.setSpacingAfter(15);
-                    document.add(photoImage);
-                    System.out.println("照片已添加到简历顶部，字段: " + photoField.getFieldLabel());
+                    PdfPCell pc = new PdfPCell(photoImage, true);
+                    pc.setBorder(Rectangle.NO_BORDER);
+                    pc.setHorizontalAlignment(Element.ALIGN_RIGHT);
+                    pc.setPadding(2f);
+                    info.addCell(pc);
                 }
-                
-                // 添加基本信息
-                PdfPTable infoTable = new PdfPTable(2);
-                infoTable.setWidthPercentage(100);
-                infoTable.setSpacingAfter(20);
-                
-                PdfPCell cell1 = new PdfPCell(new Paragraph("用户ID: " + resumeDTO.getUserId(), normalFont));
-                PdfPCell cell2 = new PdfPCell(new Paragraph("招募周期ID: " + resumeDTO.getCycleId(), normalFont));
-                PdfPCell cell3 = new PdfPCell(new Paragraph("状态: " + getStatusText(resumeDTO.getStatus()), normalFont));
-                PdfPCell cell4 = new PdfPCell(new Paragraph("创建时间: " + formatDateTime(resumeDTO.getCreatedAt()), normalFont));
-                
-                infoTable.addCell(cell1);
-                infoTable.addCell(cell2);
-                infoTable.addCell(cell3);
-                infoTable.addCell(cell4);
-                
-                document.add(infoTable);
-                
-                // 添加字段值信息
-                if (resumeDTO.getSimpleFields() != null && !resumeDTO.getSimpleFields().isEmpty()) {
-                    System.out.println("开始添加简历详情，字段数量: " + resumeDTO.getSimpleFields().size());
-                    
-                    // 过滤掉在顶部已显示的照片字段
-                    List<SimpleResumeFieldDTO> filteredFields = new ArrayList<>();
-                    for (SimpleResumeFieldDTO field : resumeDTO.getSimpleFields()) {
-                        // 如果是照片字段且已经在顶部显示，则跳过
-                        if (isBase64Image(field.getFieldValue()) && photoField != null && 
-                            field.getFieldId() != null && field.getFieldId().equals(photoField.getFieldId())) {
-                            System.out.println("跳过已在顶部显示的照片字段: " + field.getFieldLabel());
-                            continue;
-                        }
-                        filteredFields.add(field);
-                    }
-                    
-                    if (!filteredFields.isEmpty()) {
-                        Paragraph fieldsTitle = new Paragraph("简历详情", headerFont);
-                        fieldsTitle.setSpacingBefore(20);
-                        fieldsTitle.setSpacingAfter(10);
-                        document.add(fieldsTitle);
-                        
-                        PdfPTable fieldsTable = new PdfPTable(2);
-                        fieldsTable.setWidthPercentage(100);
-                        fieldsTable.setWidths(new int[]{1, 3});
-                        
-                        // 表头
-                        PdfPCell header1 = new PdfPCell(new Paragraph("字段名称", headerFont));
-                        PdfPCell header2 = new PdfPCell(new Paragraph("字段值", headerFont));
-                        header1.setBorder(Rectangle.BOX);
-                        header2.setBorder(Rectangle.BOX);
-                        header1.setBackgroundColor(BaseColor.LIGHT_GRAY);
-                        header2.setBackgroundColor(BaseColor.LIGHT_GRAY);
-                        fieldsTable.addCell(header1);
-                        fieldsTable.addCell(header2);
-                        
-                        // 数据行
-                        for (SimpleResumeFieldDTO field : filteredFields) {
-                            String fieldLabel = field.getFieldLabel() != null ? field.getFieldLabel() : "未知字段";
-                            String fieldValue = field.getFieldValue() != null ? field.getFieldValue() : "";
-                            
-                            System.out.println("添加字段: " + fieldLabel + " = " + 
-                                (isBase64Image(fieldValue) ? "[图片数据]" : fieldValue));
-                            
-                            PdfPCell fieldLabelCell = new PdfPCell(new Paragraph(fieldLabel, normalFont));
-                            PdfPCell fieldValueCell;
-                            
-                            // 检查是否为Base64图片
-                            if (isBase64Image(fieldValue)) {
-                                Image image = createImageFromBase64(fieldValue);
-                                if (image != null) {
-                                    // 使用图片创建单元格
-                                    fieldValueCell = new PdfPCell(image, true);
-                                    fieldValueCell.setHorizontalAlignment(Element.ALIGN_CENTER);
-                                    fieldValueCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
-                                    fieldValueCell.setPadding(5f);
-                                    System.out.println("成功添加图片到PDF: " + fieldLabel);
-                                } else {
-                                    // 图片转换失败，显示错误信息
-                                    fieldValueCell = new PdfPCell(new Paragraph("[图片加载失败]", normalFont));
-                                    System.err.println("图片转换失败: " + fieldLabel);
-                                }
-                            } else {
-                                // 普通文本字段
-                                fieldValueCell = new PdfPCell(new Paragraph(fieldValue, normalFont));
-                            }
-                            
-                            fieldLabelCell.setBorder(Rectangle.BOX);
-                            fieldValueCell.setBorder(Rectangle.BOX);
-                            
-                            fieldsTable.addCell(fieldLabelCell);
-                            fieldsTable.addCell(fieldValueCell);
-                        }
-                        
-                        document.add(fieldsTable);
-                        System.out.println("添加简历详情成功");
-                    } else {
-                        System.out.println("警告: 简历详情为空或只有照片字段");
-                    }
-                } else {
-                    System.out.println("警告: 简历详情为空或没有字段数据");
-                    
-                    // 添加提示信息
-                    Paragraph noDataMsg = new Paragraph("暂无简历详情数据", normalFont);
-                    noDataMsg.setSpacingBefore(20);
-                    noDataMsg.setAlignment(Element.ALIGN_CENTER);
-                    document.add(noDataMsg);
+                document.add(info);
+
+                // ── 长文本小节 ──────────────────────────────
+                addSection(document, "技术栈", joinIfJsonArray(byKey.get("tech_stack")), sectionFont, bodyFont, lightLine);
+                addSection(document, "个人简介", firstNonBlank(byKey.get("self_introduction"), byKey.get("introduction")), sectionFont, bodyFont, lightLine);
+                addSection(document, "项目经验", byKey.get("project_experience"), sectionFont, bodyFont, lightLine);
+                addSection(document, "加入原因", byKey.get("reason"), sectionFont, bodyFont, lightLine);
+
+                // 其余未归类字段（模板可扩展，逐条列出）
+                java.util.Set<String> known = new java.util.HashSet<>(java.util.Arrays.asList(
+                        "name", "student_id", "email", "phone", "grade", "gender", "major", "github",
+                        "expected_departments", "tech_stack", "self_introduction", "introduction",
+                        "project_experience", "reason", "personal_photo"));
+                StringBuilder extras = new StringBuilder();
+                for (SimpleResumeFieldDTO f : fields) {
+                    if (f.getFieldKey() == null || known.contains(f.getFieldKey())) continue;
+                    if (f.getFieldValue() == null || f.getFieldValue().trim().isEmpty()) continue;
+                    if (isBase64Image(f.getFieldValue())) continue;
+                    if (extras.length() > 0) extras.append("\n");
+                    extras.append(f.getFieldLabel() != null ? f.getFieldLabel() : f.getFieldKey())
+                          .append("：").append(joinIfJsonArray(f.getFieldValue()));
                 }
-                
-                // 添加导出时间
-                Paragraph exportTime = new Paragraph("导出时间: " + formatDateTime(LocalDateTime.now()), normalFont);
-                exportTime.setAlignment(Element.ALIGN_RIGHT);
-                exportTime.setSpacingBefore(20);
-                document.add(exportTime);
-                
+                if (extras.length() > 0) {
+                    addSection(document, "其他信息", extras.toString(), sectionFont, bodyFont, lightLine);
+                }
+
+                // ── 页脚 ────────────────────────────────────
+                Paragraph foot = new Paragraph(
+                        "状态：" + getStatusText(resumeDTO.getStatus())
+                                + "    导出时间：" + formatDateTime(LocalDateTime.now())
+                                + "    boyuan.club",
+                        footFont);
+                foot.setAlignment(Element.ALIGN_RIGHT);
+                foot.setSpacingBefore(24);
+                document.add(foot);
+
             } finally {
                 document.close();
             }
@@ -228,6 +183,77 @@ public class PdfExportUtil {
         }
     }
     
+    private static String firstNonBlank(String... values) {
+        for (String v : values) {
+            if (v != null && !v.trim().isEmpty()) return v;
+        }
+        return "";
+    }
+
+    /** JSON 数组字符串转顿号分隔；非数组原样返回 */
+    private static String joinIfJsonArray(String raw) {
+        if (raw == null) return "";
+        String t = raw.trim();
+        if (t.startsWith("[") && t.endsWith("]")) {
+            try {
+                String inner = t.substring(1, t.length() - 1);
+                if (inner.trim().isEmpty()) return "";
+                String[] parts = inner.split(",");
+                StringBuilder sb = new StringBuilder();
+                for (String part : parts) {
+                    String v = part.trim();
+                    if (v.startsWith("\"") && v.endsWith("\"") && v.length() >= 2) {
+                        v = v.substring(1, v.length() - 1);
+                    }
+                    if (v.isEmpty()) continue;
+                    if (sb.length() > 0) sb.append("、");
+                    sb.append(v);
+                }
+                return sb.toString();
+            } catch (Exception ignored) { /* 原样返回 */ }
+        }
+        return raw;
+    }
+
+    private static void addBasic(java.util.List<String[]> list, String label, String value) {
+        if (value != null && !value.trim().isEmpty()) list.add(new String[]{label, value});
+    }
+
+    private static PdfPCell basicColumn(java.util.List<String[]> items, Font labelFont, Font valueFont) {
+        PdfPCell cell = new PdfPCell();
+        cell.setBorder(Rectangle.NO_BORDER);
+        cell.setPaddingRight(10f);
+        for (String[] kv : items) {
+            Paragraph line = new Paragraph();
+            line.setSpacingAfter(6);
+            line.add(new Chunk(kv[0] + "  ", labelFont));
+            line.add(new Chunk(kv[1], valueFont));
+            cell.addElement(line);
+        }
+        return cell;
+    }
+
+    private static void addSection(Document document, String title, String content,
+                                   Font sectionFont, Font bodyFont, BaseColor lineColor) throws DocumentException {
+        if (content == null || content.trim().isEmpty()) return;
+        Paragraph st = new Paragraph(title, sectionFont);
+        st.setSpacingBefore(14);
+        st.setSpacingAfter(2);
+        document.add(st);
+        com.itextpdf.text.pdf.draw.LineSeparator sep = new com.itextpdf.text.pdf.draw.LineSeparator(0.8f, 100, lineColor, Element.ALIGN_LEFT, 2);
+        document.add(sep);
+        Paragraph body = new Paragraph(content, bodyFont);
+        body.setSpacingBefore(8);
+        body.setLeading(16f);
+        document.add(body);
+    }
+
+    private static Font getFont(int size, int style, BaseColor color) {
+        Font f = getFont(size, style);
+        f.setColor(color);
+        return f;
+    }
+
     /**
      * 获取字体，支持中文显示
      * @param size 字体大小
