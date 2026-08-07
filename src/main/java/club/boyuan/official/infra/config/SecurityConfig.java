@@ -62,6 +62,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**", "/api/health", "/api/health/**", "/health").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/prometheus").permitAll()
                         .requestMatchers("/api/public/**").permitAll()
+                        // 活动为公开内容：读接口无需登录（写接口由 @PreAuthorize activity:manage 保护）
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/activity/**").permitAll()
                         // 允许访问上传的文件
                         .requestMatchers("/uploads/**").permitAll()
                         // 允许静态资源访问
