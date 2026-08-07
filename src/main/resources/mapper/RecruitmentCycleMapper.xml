@@ -51,20 +51,49 @@
         </foreach>
     </delete>
 
+    <!-- 批量更新：CASE WHEN 单语句实现（JDBC 默认禁止 foreach separator=";" 的多语句拼接） -->
     <update id="batchUpdate" parameterType="java.util.List">
-        <foreach collection="recruitmentCycles" item="item" separator=";">
-            UPDATE recruitment_cycle
-            <set>
-                <if test="item.cycleName != null">cycle_name = #{item.cycleName},</if>
-                <if test="item.description != null">description = #{item.description},</if>
-                <if test="item.startDate != null">start_date = #{item.startDate},</if>
-                <if test="item.endDate != null">end_date = #{item.endDate},</if>
-                <if test="item.academicYear != null">academic_year = #{item.academicYear},</if>
-                <if test="item.status != null">status = #{item.status},</if>
-                <if test="item.isActive != null">is_active = #{item.isActive},</if>
-                updated_at = NOW()
-            </set>
-            WHERE cycle_id = #{item.cycleId}
+        UPDATE recruitment_cycle
+        SET
+        cycle_name = CASE cycle_id
+        <foreach collection="recruitmentCycles" item="item">
+            <if test="item.cycleName != null">WHEN #{item.cycleId} THEN #{item.cycleName}</if>
+        </foreach>
+        ELSE cycle_name END,
+        description = CASE cycle_id
+        <foreach collection="recruitmentCycles" item="item">
+            <if test="item.description != null">WHEN #{item.cycleId} THEN #{item.description}</if>
+        </foreach>
+        ELSE description END,
+        start_date = CASE cycle_id
+        <foreach collection="recruitmentCycles" item="item">
+            <if test="item.startDate != null">WHEN #{item.cycleId} THEN #{item.startDate}</if>
+        </foreach>
+        ELSE start_date END,
+        end_date = CASE cycle_id
+        <foreach collection="recruitmentCycles" item="item">
+            <if test="item.endDate != null">WHEN #{item.cycleId} THEN #{item.endDate}</if>
+        </foreach>
+        ELSE end_date END,
+        academic_year = CASE cycle_id
+        <foreach collection="recruitmentCycles" item="item">
+            <if test="item.academicYear != null">WHEN #{item.cycleId} THEN #{item.academicYear}</if>
+        </foreach>
+        ELSE academic_year END,
+        status = CASE cycle_id
+        <foreach collection="recruitmentCycles" item="item">
+            <if test="item.status != null">WHEN #{item.cycleId} THEN #{item.status}</if>
+        </foreach>
+        ELSE status END,
+        is_active = CASE cycle_id
+        <foreach collection="recruitmentCycles" item="item">
+            <if test="item.isActive != null">WHEN #{item.cycleId} THEN #{item.isActive}</if>
+        </foreach>
+        ELSE is_active END,
+        updated_at = NOW()
+        WHERE cycle_id IN
+        <foreach collection="recruitmentCycles" item="item" open="(" separator="," close=")">
+            #{item.cycleId}
         </foreach>
     </update>
 
