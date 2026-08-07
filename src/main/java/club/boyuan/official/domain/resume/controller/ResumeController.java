@@ -47,6 +47,18 @@ public class ResumeController {
     private final club.boyuan.official.persistence.mapper.ResumeMapper resumeMapper;
     private final club.boyuan.official.persistence.mapper.RecruitmentCycleMapper recruitmentCycleMapper;
 
+
+    /** 三态化：草稿且周期已截止 → 状态 3（已截止未提交），仅影响展示层 */
+    private Integer effectiveStatus(Integer status, Integer cycleId) {
+        if (status == null || status != 1 || cycleId == null) return status;
+        club.boyuan.official.persistence.entity.RecruitmentCycle cycle = recruitmentCycleMapper.selectById(cycleId);
+        if (cycle != null && cycle.getEndDate() != null
+                && cycle.getEndDate().isBefore(java.time.LocalDate.now())) {
+            return 3;
+        }
+        return status;
+    }
+
     /**
      * 查询本人历届申请（各周期的简历概要，按周期倒序）。
      * 供个人主页「我的申请」列表使用；点击后按 cycleId 查看该届完整进度。
@@ -64,7 +76,7 @@ public class ResumeController {
             java.util.Map<String, Object> item = new java.util.LinkedHashMap<>();
             item.put("resumeId", r.getResumeId());
             item.put("cycleId", r.getCycleId());
-            item.put("status", r.getStatus());
+            item.put("status", effectiveStatus(r.getStatus(), r.getCycleId()));
             item.put("createdAt", r.getCreatedAt());
             if (r.getCycleId() != null) {
                 club.boyuan.official.persistence.entity.RecruitmentCycle cycle =
@@ -152,6 +164,9 @@ public class ResumeController {
         // 只读查询（如首页进度卡）：不存在时不自动创建草稿，直接返回 null
         if (resumeDTO == null && !Boolean.TRUE.equals(autoCreate)) {
             return ResponseEntity.ok(ResponseMessage.success(null));
+        }
+        if (resumeDTO != null) {
+            resumeDTO.setStatus(effectiveStatus(resumeDTO.getStatus(), cycleId));
         }
         if (resumeDTO == null) {
             Resume resume = new Resume();
@@ -244,6 +259,13 @@ public class ResumeController {
         if (resume == null) {
             throw new BusinessException(BusinessExceptionEnum.RESUME_NOT_FOUND);
         }
+        // 周期已截止：不再接受提交
+        club.boyuan.official.persistence.entity.RecruitmentCycle cycle = recruitmentCycleMapper.selectById(cycleId);
+        if (cycle != null && cycle.getEndDate() != null
+                && cycle.getEndDate().isBefore(java.time.LocalDate.now())) {
+            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD,
+                    "本周期简历提交已于 " + cycle.getEndDate() + " 截止");
+        }
         if (resume.getStatus() != null && resume.getStatus() >= 2) {
             logger.warn("简历已提交或已在评审中，用户ID: {}，招募周期ID: {}，状态: {}",
                     currentUser.getUserId(), cycleId, resume.getStatus());
@@ -263,6 +285,11 @@ public class ResumeController {
             @PathVariable Integer resumeId, @PathVariable Integer status) {
         logger.info("管理员{}更新简历{}状态为{}", SecurityUtil.getCurrentUsername(), resumeId, status);
 
+        // 状态三态化：1草稿 2已提交（3=已截止由系统按周期截止派生，不允许手工设置）
+        if (status == null || (status != 1 && status != 2)) {
+            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD,
+                    "简历状态仅支持 1(草稿)/2(已提交)，评审结论请使用面试结果模块");
+        }
         Resume resume = resumeService.getResumeById(resumeId);
         if (resume == null) {
             throw new BusinessException(BusinessExceptionEnum.RESUME_NOT_FOUND);
