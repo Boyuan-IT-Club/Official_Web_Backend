@@ -39,6 +39,12 @@ public class InterviewSchedule implements Serializable {
     private Integer resumeId;
 
     /**
+     * 用户ID（表列 NOT NULL；实体曾缺失该字段导致所有排期插入失败）
+     */
+    @TableField("user_id")
+    private Integer userId;
+
+    /**
      * 招募活动ID
      */
     @TableField("cycle_id")

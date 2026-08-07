@@ -64,6 +64,7 @@ public class InterviewBookingAsyncPersistenceService {
         } else {
             schedule = new InterviewSchedule()
                     .setResumeId(message.getResumeId())
+                    .setUserId(message.getUserId())
                     .setCycleId(message.getCycleId())
                     .setSlotId(message.getSlotId())
                     .setInterviewTime(fineInterviewTime)
