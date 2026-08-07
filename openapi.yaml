@@ -3104,6 +3104,52 @@ paths:
                 - message
                 - data
           headers: {}
+  /api/resumes/my:
+    get:
+      summary: 查询本人历届申请（各周期简历概要）
+      deprecated: false
+      description: 返回当前登录用户在所有招募周期的简历概要（按周期倒序），供个人主页「我的申请」列表使用。
+      tags:
+      - 简历相关功能——普通用户
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: 业务状态码（200 表示成功）
+                  message:
+                    type: string
+                    description: 提示信息
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        resumeId:
+                          type: integer
+                        cycleId:
+                          type: integer
+                        cycleName:
+                          type: string
+                          nullable: true
+                        academicYear:
+                          type: string
+                          nullable: true
+                        status:
+                          type: integer
+                          description: 1草稿 2已提交 3评审中 4通过 5未通过
+                        createdAt:
+                          type: string
+                          nullable: true
+                required:
+                - code
+                - message
+          headers: {}
   /api/resumes/cycle/{cycleId}:
     get:
       summary: 获取/创建简历
