@@ -39,14 +39,21 @@
         WHERE value_id = #{valueId}
     </update>
 
+    <!-- 批量更新：单条 CASE WHEN 语句实现。
+         注意不要用 foreach separator=";" 拼多条 UPDATE——JDBC 默认禁止多语句，
+         会抛 SQLSyntaxErrorException（历史上因该方法从未被触发而长期潜伏）。 -->
     <update id="batchUpdate" parameterType="java.util.List">
-        <foreach collection="fieldValues" item="item" separator=";">
-            UPDATE resume_field_value
-            <set>
-                <if test="item.fieldValue != null">field_value = #{item.fieldValue},</if>
-                updated_at = NOW()
-            </set>
-            WHERE value_id = #{item.valueId}
+        UPDATE resume_field_value
+        SET field_value = CASE value_id
+        <foreach collection="fieldValues" item="item">
+            <if test="item.fieldValue != null">WHEN #{item.valueId} THEN #{item.fieldValue}</if>
+        </foreach>
+            ELSE field_value
+        END,
+        updated_at = NOW()
+        WHERE value_id IN
+        <foreach collection="fieldValues" item="item" open="(" separator="," close=")">
+            #{item.valueId}
         </foreach>
     </update>
 
