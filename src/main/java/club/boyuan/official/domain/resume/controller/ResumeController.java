@@ -44,6 +44,38 @@ public class ResumeController {
     private final IResumeService resumeService;
     private final IResumeFieldDefinitionService fieldDefinitionService;
     private final IUserService userService;
+    private final club.boyuan.official.persistence.mapper.ResumeMapper resumeMapper;
+    private final club.boyuan.official.persistence.mapper.RecruitmentCycleMapper recruitmentCycleMapper;
+
+    /**
+     * 查询本人历届申请（各周期的简历概要，按周期倒序）。
+     * 供个人主页「我的申请」列表使用；点击后按 cycleId 查看该届完整进度。
+     */
+    @GetMapping("/my")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ResponseMessage<?>> getMyResumes() {
+        User currentUser = currentUser();
+        java.util.List<Resume> resumes = resumeMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Resume>()
+                        .eq(Resume::getUserId, currentUser.getUserId())
+                        .orderByDesc(Resume::getCycleId));
+        java.util.List<java.util.Map<String, Object>> list = new java.util.ArrayList<>();
+        for (Resume r : resumes) {
+            java.util.Map<String, Object> item = new java.util.LinkedHashMap<>();
+            item.put("resumeId", r.getResumeId());
+            item.put("cycleId", r.getCycleId());
+            item.put("status", r.getStatus());
+            item.put("createdAt", r.getCreatedAt());
+            if (r.getCycleId() != null) {
+                club.boyuan.official.persistence.entity.RecruitmentCycle cycle =
+                        recruitmentCycleMapper.selectById(r.getCycleId());
+                item.put("cycleName", cycle != null ? cycle.getCycleName() : null);
+                item.put("academicYear", cycle != null ? cycle.getAcademicYear() : null);
+            }
+            list.add(item);
+        }
+        return ResponseEntity.ok(ResponseMessage.success(list));
+    }
 
     /**
      * 获取指定招募周期的简历字段定义
