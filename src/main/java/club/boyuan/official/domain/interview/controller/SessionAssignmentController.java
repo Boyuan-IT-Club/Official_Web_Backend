@@ -57,6 +57,8 @@ public class SessionAssignmentController {
             item.put("sessionId", sc.getSessionId());
             item.put("interviewTime", sc.getInterviewTime());
             item.put("status", sc.getStatus());
+            item.put("syncStatus", sc.getSyncStatus());
+            item.put("notifStatus", sc.getNotifStatus());
             item.put("notes", sc.getNotes());
             if (sc.getUserId() != null) {
                 club.boyuan.official.persistence.entity.User u = userMapper.selectById(sc.getUserId());
