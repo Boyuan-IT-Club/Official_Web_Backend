@@ -110,11 +110,17 @@ public class ResumeController {
      */
     @GetMapping("/cycle/{cycleId}")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ResponseMessage<?>> getResumeByCycleId(@PathVariable Integer cycleId) {
+    public ResponseEntity<ResponseMessage<?>> getResumeByCycleId(
+            @PathVariable Integer cycleId,
+            @RequestParam(required = false, defaultValue = "true") Boolean autoCreate) {
         User currentUser = currentUser();
         logger.info("用户{}({})获取招募周期ID为{}的简历", currentUser.getUsername(), currentUser.getUserId(), cycleId);
 
         ResumeDTO resumeDTO = resumeService.getResumeWithFieldValues(currentUser.getUserId(), cycleId);
+        // 只读查询（如首页进度卡）：不存在时不自动创建草稿，直接返回 null
+        if (resumeDTO == null && !Boolean.TRUE.equals(autoCreate)) {
+            return ResponseEntity.ok(ResponseMessage.success(null));
+        }
         if (resumeDTO == null) {
             Resume resume = new Resume();
             resume.setUserId(currentUser.getUserId());
