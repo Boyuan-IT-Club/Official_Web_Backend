@@ -3108,7 +3108,7 @@ paths:
     get:
       summary: 获取/创建简历
       deprecated: false
-      description: 获取当前用户在指定招募周期的简历；若不存在则自动创建草稿。
+      description: 获取当前用户在指定招募周期的简历；若不存在且 autoCreate=true（默认）则自动创建草稿。autoCreate=false 时为只读查询（用于首页进度卡等场景），不存在时 data 为 null。
       tags:
       - 简历相关功能——普通用户
       parameters:
@@ -3118,6 +3118,14 @@ paths:
         required: true
         schema:
           type: integer
+      - name: autoCreate
+        in: query
+        description: 不存在时是否自动创建草稿（默认 true）
+        required: false
+        example: false
+        schema:
+          type: boolean
+          default: true
       responses:
         '200':
           description: ''
