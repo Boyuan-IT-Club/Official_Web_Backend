@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="club.boyuan.official.persistence.mapper.EvaluationSubmissionMapper">
+
+    <!-- 候选人聚合:按 github_username 分组;部门 = COALESCE(用户当前部门, 该周期第一志愿部门) -->
+    <sql id="candidateGrouped">
+        SELECT s.github_username AS githubUsername,
+               u.user_id         AS userId,
+               u.name            AS userName,
+               COALESCE(d.dept_name, vd.dept_name) AS deptName,
+               MAX(s.total_score) AS maxTotalScore,
+               MAX(s.evaluated_at) AS lastEvaluatedAt,
+               COUNT(*)          AS submissionCount,
+               (SELECT s2.total_score
+                FROM evaluation_submission s2
+                WHERE s2.github_username = s.github_username
+                ORDER BY s2.evaluated_at DESC, s2.id DESC
+                LIMIT 1)         AS latestTotalScore
+        FROM evaluation_submission s
+                 LEFT JOIN user u ON u.github = s.github_username
+                 LEFT JOIN department d ON d.dept_id = u.dept_id
+                 LEFT JOIN resume r ON r.user_id = u.user_id AND r.cycle_id = s.cycle_id
+                 LEFT JOIN interview_preference ip ON ip.resume_id = r.resume_id
+                 LEFT JOIN department vd ON vd.dept_id = ip.first_dept_id
+        <where>
+            <if test="cycleId != null">AND s.cycle_id = #{cycleId}</if>
+            <if test="deptId != null">AND (d.dept_id = #{deptId} OR vd.dept_id = #{deptId})</if>
+            <if test="claimed == 'claimed'">AND u.user_id IS NOT NULL</if>
+            <if test="claimed == 'unclaimed'">AND u.user_id IS NULL</if>
+        </where>
+        GROUP BY s.github_username, u.user_id, u.name, COALESCE(d.dept_name, vd.dept_name)
+        <if test="minScore != null or maxScore != null">
+            HAVING
+            <if test="minScore != null">MAX(s.total_score) &gt;= #{minScore}</if>
+            <if test="minScore != null and maxScore != null"> AND </if>
+            <if test="maxScore != null">MAX(s.total_score) &lt;= #{maxScore}</if>
+        </if>
+    </sql>
+
+    <select id="selectCandidates" resultType="club.boyuan.official.domain.evaluation.dto.CandidateRow">
+        SELECT * FROM (
+            <include refid="candidateGrouped"/>
+        ) t
+        ORDER BY
+        <choose>
+            <when test="sortBy == 'maxScore'">t.maxTotalScore</when>
+            <when test="sortBy == 'submissionCount'">t.submissionCount</when>
+            <otherwise>t.latestTotalScore</otherwise>
+        </choose>
+        DESC, t.githubUsername ASC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countCandidates" resultType="long">
+        SELECT COUNT(*) FROM (
+            <include refid="candidateGrouped"/>
+        ) t
+    </select>
+
+    <select id="selectByUserId" resultType="club.boyuan.official.persistence.entity.EvaluationSubmission">
+        SELECT * FROM evaluation_submission
+        WHERE user_id = #{userId}
+        ORDER BY evaluated_at DESC, id DESC
+    </select>
+
+    <select id="selectByGithub" resultType="club.boyuan.official.persistence.entity.EvaluationSubmission">
+        SELECT * FROM evaluation_submission
+        WHERE github_username = #{githubUsername}
+        ORDER BY evaluated_at DESC, id DESC
+    </select>
+
+</mapper>

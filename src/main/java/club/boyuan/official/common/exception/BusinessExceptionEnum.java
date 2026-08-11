@@ -36,6 +36,7 @@ public enum BusinessExceptionEnum {
     DEPARTMENT_NOT_FOUND(2016, "部门不存在", HttpStatus.BAD_REQUEST),
     GITHUB_ALREADY_BOUND(2017, "该 GitHub 账号已被其他用户绑定", HttpStatus.BAD_REQUEST),
     INVALID_REPORT(2018, "报告单无效", HttpStatus.BAD_REQUEST),
+    EVALUATION_SUBMISSION_NOT_FOUND(2019, "评测提交不存在", HttpStatus.NOT_FOUND),
 
     // 认证相关异常 (2100-2199)
     AUTHENTICATION_FAILED(2100, "认证失败", HttpStatus.BAD_REQUEST),
