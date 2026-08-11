@@ -67,7 +67,49 @@ tags:
   description: 管理员对用户账号的管理、批量操作、缓存清理、全局搜索与数据导出
 - name: 系统监控
   description: 服务健康检查等运维接口
+- name: 评测提交(公开)
+  description: 候选人派生仓 GitHub Actions 推送 autograder 加密报告单的公开入库端点(零认证)
 paths:
+  /api/public/evaluations:
+    post:
+      summary: 评测提交入库(Autograder Actions 推送)
+      deprecated: false
+      description: >-
+        公开端点(零认证,限频防刷,ADR-0001)。候选人派生仓 Actions 推送加密报告单:
+        服务器 Java 解密(AES-256-GCM,ADR-0002)、校验、按报告 sha256 幂等入库。
+        重复推送返回已存记录 id。身份键 github_username(来自 GitHub context)。
+      security: []
+      tags:
+      - 评测提交(公开)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - report
+              - github_username
+              properties:
+                report:
+                  type: string
+                  description: base64(autograding_report.json 原始字节)
+                github_username:
+                  type: string
+                  description: GitHub 登录名(来自 github.actor),可靠身份键
+                repository:
+                  type: string
+                  description: 候选人生成仓 URL
+                commit_sha:
+                  type: string
+                  description: 触发推送的 commit sha
+      responses:
+        '200':
+          description: 成功,返回提交 id(code/message/data)
+        '400':
+          description: 非法载荷 / 解密失败 / schema 不符
+        '429':
+          description: 请求过于频繁
   /api/auth/register:
     post:
       summary: 社团官网-注册

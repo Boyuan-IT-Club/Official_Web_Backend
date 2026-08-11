@@ -121,6 +121,12 @@ rate-limit:
       limit: 60
       window-seconds: 60
       key-type: USER
+    - name: evaluation-intake
+      pattern: /api/public/evaluations
+      method: POST
+      limit: 60
+      window-seconds: 60
+      key-type: IP
 
 jwt:
   secret: ${JWT_SECRET:}
