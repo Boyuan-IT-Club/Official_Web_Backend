@@ -14,6 +14,7 @@ import club.boyuan.official.persistence.mapper.ResumeMapper;
 import club.boyuan.official.persistence.mapper.UserMapper;
 import club.boyuan.official.persistence.mapper.UserRoleMapper;
 import club.boyuan.official.domain.user.service.IUserService;
+import club.boyuan.official.common.utils.GitHubAccountUtil;
 import club.boyuan.official.common.utils.JwtTokenUtil;
 import club.boyuan.official.common.utils.PasswordValidator;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -66,6 +67,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
         if (userMapper.selectByPhone(userDTO.getPhone()) != null) {
             logger.warn("添加用户失败，手机号已存在: {}", userDTO.getPhone());
             throw new BusinessException(BusinessExceptionEnum.PHONE_ALREADY_EXISTS);
+        }
+
+        // GitHub 账号归一化(可选):统一为登录名,并校验未被其他用户绑定
+        if (userDTO.getGithub() != null && !userDTO.getGithub().isBlank()) {
+            String normalizedGithub = GitHubAccountUtil.normalize(userDTO.getGithub());
+            GitHubAccountUtil.assertNotBound(userMapper, normalizedGithub, null);
+            userDTO.setGithub(normalizedGithub);
         }
 
         // 验证密码复杂度
@@ -133,8 +141,16 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
             logger.debug("专业更新为: {}", userDTO.getMajor());
         }
         if (userDTO.getGithub() != null) {
-            user.setGithub(userDTO.getGithub());
-            logger.debug("GitHub更新为: {}", userDTO.getGithub());
+            String normalizedGithub = GitHubAccountUtil.normalize(userDTO.getGithub());
+            if (normalizedGithub == null) {
+                user.setGithub(null);
+                logger.debug("GitHub账号已解绑，用户ID: {}", userDTO.getUserId());
+            } else {
+                GitHubAccountUtil.assertNotBound(userMapper, normalizedGithub, userDTO.getUserId());
+                userDTO.setGithub(normalizedGithub);
+                user.setGithub(normalizedGithub);
+                logger.debug("GitHub账号更新为: {}", normalizedGithub);
+            }
         }
         if (userDTO.getAvatar() != null) {
             user.setAvatar(userDTO.getAvatar());
