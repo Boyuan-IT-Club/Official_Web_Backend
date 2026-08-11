@@ -69,6 +69,8 @@ tags:
   description: 服务健康检查等运维接口
 - name: 评测提交(公开)
   description: 候选人派生仓 GitHub Actions 推送 autograder 加密报告单的公开入库端点(零认证)
+- name: 评测(用户)
+  description: 当前登录候选人查看自己的评测历史/最新/趋势
 paths:
   /api/public/evaluations:
     post:
@@ -110,6 +112,49 @@ paths:
           description: 非法载荷 / 解密失败 / schema 不符
         '429':
           description: 请求过于频繁
+  /api/evaluations/me:
+    get:
+      summary: 我的评测提交历史(分页)
+      deprecated: false
+      description: 当前登录候选人的全部评测提交,新→旧。
+      tags:
+      - 评测(用户)
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: page
+        in: query
+        schema: { type: integer, default: 0 }
+      - name: size
+        in: query
+        schema: { type: integer, default: 10 }
+      responses:
+        '200':
+          description: 分页的提交列表
+  /api/evaluations/me/latest:
+    get:
+      summary: 我的最新评测
+      deprecated: false
+      description: 最新一次提交;无则 data 为 null。
+      tags:
+      - 评测(用户)
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: 最新提交或 null
+  /api/evaluations/me/trend:
+    get:
+      summary: 我的得分趋势
+      deprecated: false
+      description: 得分随时间升序的点序列(供趋势图)。
+      tags:
+      - 评测(用户)
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: [{evaluatedAt, totalScore}]
   /api/auth/register:
     post:
       summary: 社团官网-注册
