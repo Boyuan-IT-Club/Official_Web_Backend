@@ -5,6 +5,9 @@ import club.boyuan.official.common.dto.PageResultDTO;
 import club.boyuan.official.domain.user.dto.UserDTO;
 import club.boyuan.official.persistence.entity.Resume;
 import club.boyuan.official.persistence.entity.User;
+import club.boyuan.official.persistence.entity.EvaluationSubmission;
+import club.boyuan.official.persistence.mapper.EvaluationSubmissionMapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import club.boyuan.official.common.exception.BusinessException;
 import club.boyuan.official.common.exception.BusinessExceptionEnum;
 import club.boyuan.official.persistence.entity.UserRole;
@@ -42,6 +45,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
     private final ResumeMapper resumeMapper;
     private final ResumeFieldValueMapper resumeFieldValueMapper;
     private final UserRoleMapper userRoleMapper;
+    private final EvaluationSubmissionMapper evaluationSubmissionMapper;
     private final BCryptPasswordEncoder passwordEncoder;
     private final JwtTokenUtil jwtTokenUtil;
     private final UserConverter userConverter;
@@ -150,6 +154,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
                 userDTO.setGithub(normalizedGithub);
                 user.setGithub(normalizedGithub);
                 logger.debug("GitHub账号更新为: {}", normalizedGithub);
+                // 回填认领:该 github 的历史未认领提交归属到用户
+                EvaluationSubmission patch = new EvaluationSubmission();
+                patch.setUserId(userDTO.getUserId());
+                evaluationSubmissionMapper.update(patch, new LambdaUpdateWrapper<EvaluationSubmission>()
+                        .eq(EvaluationSubmission::getGithubUsername, normalizedGithub)
+                        .isNull(EvaluationSubmission::getUserId));
+                logger.info("绑定 GitHub {} 后回填认领未认领提交,用户ID: {}", normalizedGithub, userDTO.getUserId());
             }
         }
         if (userDTO.getAvatar() != null) {
