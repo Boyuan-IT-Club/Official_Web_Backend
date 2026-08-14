@@ -136,6 +136,15 @@ public enum BusinessExceptionEnum {
     INTERVIEW_PREFERENCE_TIME_INVALID(3611, "所选时间窗无效或不属于该周期", HttpStatus.BAD_REQUEST),
     INTERVIEW_SCHEDULE_NOT_FOUND(3612, "面试安排不存在", HttpStatus.BAD_REQUEST),
 
+    // 面试评价与协同相关异常 (3700-3799)
+    EVALUATION_BOARD_NOT_OPENED(3701, "该周期的评价表尚未开启", HttpStatus.BAD_REQUEST),
+    EVALUATION_BOARD_LOCKED(3702, "评价表已锁定，无法修改", HttpStatus.CONFLICT),
+    EVALUATION_NO_ROSTER(3703, "该周期尚无已分配的面试名单，请先完成一键分配", HttpStatus.BAD_REQUEST),
+    EVALUATION_DIMENSION_DUPLICATE(3704, "评分维度名称重复", HttpStatus.BAD_REQUEST),
+    EVALUATION_DIMENSION_NOT_FOUND(3705, "评分维度不存在", HttpStatus.BAD_REQUEST),
+    EVALUATION_INTERVIEWER_NOT_FOUND(3706, "指定的面试官不存在", HttpStatus.BAD_REQUEST),
+    EVALUATION_SERVICE_TOKEN_INVALID(3707, "服务间调用凭证无效", HttpStatus.UNAUTHORIZED),
+
     // 活动相关异常 (7000-7099)
     ACTIVITY_NOT_FOUND(7001, "活动不存在", HttpStatus.BAD_REQUEST),
     ACTIVITY_CREATE_FAILED(7002, "创建活动失败", HttpStatus.BAD_REQUEST),

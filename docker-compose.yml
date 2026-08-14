@@ -72,6 +72,8 @@ services:
       - RABBITMQ_USERNAME=${RABBITMQ_USERNAME:-guest}
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
       - SERVER_PORT=8080
+      # 协同服务调用 /api/internal/** 的服务令牌；未配置时后端一律拒绝这些内部接口
+      - COLLAB_SERVICE_TOKEN=${COLLAB_SERVICE_TOKEN}
       # 添加中文环境支持
       - LANG=zh_CN.UTF-8
       - LANGUAGE=zh_CN:zh
@@ -83,6 +85,41 @@ services:
       - mysql
       - redis
       - rabbitmq
+    networks:
+      - official-network
+
+  # 面试评价表的实时协同服务（Yjs / Hocuspocus）。
+  #
+  # 必须固定单实例：文档以 Y.Doc 形式存在内存里，若在 A/B 两节点各跑一份，
+  # 两边持有互不同步的副本，面试官会看不见彼此的编辑。因此只在 Node A 起这个服务，
+  # nginx 的 /collab/ 也只指向本机 3100。要横向扩容需先接 Hocuspocus 的 Redis 扩展。
+  #
+  # 端口只绑 127.0.0.1：外部流量一律经 nginx 进来，容器端口不直接暴露公网。
+  official-collab:
+    image: ${DOCKERHUB_USERNAME:-boyuanclub}/official-collab-server:latest
+    container_name: ${PROJECT_NAME:-official}-collab
+    ports:
+      - "127.0.0.1:${COLLAB_PORT:-3100}:3100"
+    environment:
+      - COLLAB_PORT=3100
+      # 与后端同一把密钥，用于校验浏览器带来的 JWT
+      - JWT_SECRET=${JWT_SECRET}
+      - COLLAB_SERVICE_TOKEN=${COLLAB_SERVICE_TOKEN}
+      - BACKEND_BASE_URL=http://official:8080
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=${DB_ROOT_PASSWORD}
+      - DB_NAME=${DB_NAME:-official}
+      - DB_POOL_SIZE=5
+      - STORE_DEBOUNCE_MS=2000
+      - MATERIALIZE_DEBOUNCE_MS=30000
+      - RECONCILE_INTERVAL_MS=300000
+      - TZ=Asia/Shanghai
+    depends_on:
+      - mysql
+      - official
+    restart: always
     networks:
       - official-network
 

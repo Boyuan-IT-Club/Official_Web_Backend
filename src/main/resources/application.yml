@@ -126,6 +126,12 @@ jwt:
   secret: ${JWT_SECRET:}
   expiration: ${JWT_EXPIRATION:86400000}
 
+# 协同评价服务（Hocuspocus）：与本服务共享 JWT 密钥做连接鉴权，
+# 回写评价与拉取播种数据则走 /api/internal/**，用下面这把独立的服务令牌。
+# 未配置时内部接口一律拒绝，不会退化为匿名可访问。
+collab:
+  service-token: ${COLLAB_SERVICE_TOKEN:}
+
 # 飞书开放平台（多维表格导入）
 feishu:
   app-id: ${FEISHU_APP_ID:}
