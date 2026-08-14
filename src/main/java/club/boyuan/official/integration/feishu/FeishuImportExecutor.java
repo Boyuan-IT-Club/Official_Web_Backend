@@ -5,6 +5,7 @@ import club.boyuan.official.integration.feishu.dto.FeishuLocationImportResultDTO
 import club.boyuan.official.integration.feishu.dto.ImportFeishuRequestDTO;
 import club.boyuan.official.integration.feishu.dto.ImportFeishuResponseDTO;
 import club.boyuan.official.persistence.entity.InterviewSchedule;
+import club.boyuan.official.persistence.entity.InterviewSession;
 import club.boyuan.official.persistence.entity.InterviewSlot;
 import club.boyuan.official.persistence.entity.Resume;
 import club.boyuan.official.common.exception.BusinessException;
@@ -12,6 +13,9 @@ import club.boyuan.official.common.exception.BusinessExceptionEnum;
 import club.boyuan.official.persistence.mapper.ResumeMapper;
 import club.boyuan.official.domain.interview.service.IInterviewScheduleService;
 import club.boyuan.official.domain.interview.service.IInterviewSlotService;
+import club.boyuan.official.domain.interview.service.ILocationTableService;
+import club.boyuan.official.domain.interview.service.impl.LocationTableServiceImpl;
+import club.boyuan.official.persistence.mapper.InterviewSessionMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -44,6 +48,8 @@ public class FeishuImportExecutor {
 
     private final IInterviewScheduleService interviewScheduleService;
     private final IInterviewSlotService interviewSlotService;
+    private final InterviewSessionMapper interviewSessionMapper;
+    private final ILocationTableService locationTableService;
     private final ResumeMapper resumeMapper;
     private final ResumeFieldReader resumeFieldReader;
     private final FeishuBitableClient feishuBitableClient;
@@ -52,6 +58,8 @@ public class FeishuImportExecutor {
 
     public FeishuImportExecutor(IInterviewScheduleService interviewScheduleService,
                                 IInterviewSlotService interviewSlotService,
+                                InterviewSessionMapper interviewSessionMapper,
+                                ILocationTableService locationTableService,
                                 ResumeMapper resumeMapper,
                                 ResumeFieldReader resumeFieldReader,
                                 FeishuBitableClient feishuBitableClient,
@@ -59,6 +67,8 @@ public class FeishuImportExecutor {
                                 @Qualifier("feishuBucketExecutor") Executor feishuBucketExecutor) {
         this.interviewScheduleService = interviewScheduleService;
         this.interviewSlotService = interviewSlotService;
+        this.interviewSessionMapper = interviewSessionMapper;
+        this.locationTableService = locationTableService;
         this.resumeMapper = resumeMapper;
         this.resumeFieldReader = resumeFieldReader;
         this.feishuBitableClient = feishuBitableClient;
@@ -81,7 +91,7 @@ public class FeishuImportExecutor {
 
         if (plan.buckets.isEmpty()) {
             throw new BusinessException(BusinessExceptionEnum.FEISHU_TABLE_URL_MISSING,
-                    "没有可导入的记录：请为 interview_slot 配置 feishu_table_url 或在请求中传入 feishuTableUrl");
+                    "没有可导入的记录：请先在「飞书同步」页为各面试地点配置多维表格链接，或在请求中传入 feishuTableUrl 以把所有地点合并推到同一张表");
         }
 
         ImportFeishuResponseDTO response = new ImportFeishuResponseDTO();
@@ -156,6 +166,12 @@ public class FeishuImportExecutor {
     }
 
     private PreloadContext preload(List<InterviewSchedule> schedules, Integer cycleId) {
+        // 方案B 的地点在 interview_session 上；slot 分支只为兼容还带 slot_id 的历史排期而保留
+        List<Integer> sessionIds = schedules.stream()
+                .map(InterviewSchedule::getSessionId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
         List<Integer> slotIds = schedules.stream()
                 .map(InterviewSchedule::getSlotId)
                 .filter(Objects::nonNull)
@@ -180,7 +196,13 @@ public class FeishuImportExecutor {
         Map<Integer, ResumeFieldReader.ResumeSnapshot> snapshotByResumeId =
                 resumeFieldReader.readSnapshots(resumeById.values(), cycleId);
 
-        return new PreloadContext(slotById, snapshotByResumeId);
+        Map<Integer, InterviewSession> sessionById = sessionIds.isEmpty()
+                ? Map.of()
+                : interviewSessionMapper.selectBatchIds(sessionIds).stream()
+                .collect(Collectors.toMap(InterviewSession::getSessionId, Function.identity(), (a, b) -> a));
+
+        return new PreloadContext(slotById, sessionById, locationTableService.urlMapOf(cycleId),
+                snapshotByResumeId);
     }
 
     private BucketPlan buildBuckets(List<InterviewSchedule> schedules,
@@ -190,15 +212,21 @@ public class FeishuImportExecutor {
         int skipped = 0;
 
         for (InterviewSchedule schedule : schedules) {
-            InterviewSlot slot = preload.slotById.get(schedule.getSlotId());
-            if (slot == null) {
+            InterviewSession session = schedule.getSessionId() == null
+                    ? null
+                    : preload.sessionById.get(schedule.getSessionId());
+            InterviewSlot slot = schedule.getSlotId() == null
+                    ? null
+                    : preload.slotById.get(schedule.getSlotId());
+            if (session == null && slot == null) {
+                log.warn("跳过 scheduleId={}：既没有场次也没有旧时段，无法判断地点", schedule.getScheduleId());
                 skipped++;
                 continue;
             }
-            String locationKey = resolveLocationKey(slot);
-            String tableUrl = resolveTableUrl(request, slot);
+            String locationKey = resolveLocationKey(session, slot);
+            String tableUrl = resolveTableUrl(request, locationKey, preload.tableUrlByLocation, slot);
             if (!StringUtils.hasText(tableUrl)) {
-                log.warn("跳过 scheduleId={}，地点 {} 未配置 feishuTableUrl", schedule.getScheduleId(), locationKey);
+                log.warn("跳过 scheduleId={}，地点「{}」未配置飞书表格链接", schedule.getScheduleId(), locationKey);
                 skipped++;
                 continue;
             }
@@ -327,25 +355,51 @@ public class FeishuImportExecutor {
                 .setMessage(message);
     }
 
-    private String resolveTableUrl(ImportFeishuRequestDTO request, InterviewSlot slot) {
+    /**
+     * 取该地点该用哪张飞书表格。优先级：
+     *   1. 请求里显式给的 URL —— 这是「覆盖」语义：所有地点都推到同一张表，会抹平分桶，仅供临时合表使用
+     *   2. 「周期 × 地点」配置表（正常路径）
+     *   3. 旧 interview_slot.feishu_table_url —— 只为还带 slot_id 的历史排期兜底
+     */
+    private String resolveTableUrl(ImportFeishuRequestDTO request,
+                                   String locationKey,
+                                   Map<String, String> tableUrlByLocation,
+                                   InterviewSlot slot) {
         if (StringUtils.hasText(request.getFeishuTableUrl())) {
             return request.getFeishuTableUrl().trim();
         }
-        return slot.getFeishuTableUrl();
+        String configured = tableUrlByLocation.get(locationKey);
+        if (StringUtils.hasText(configured)) {
+            return configured;
+        }
+        return slot == null ? null : slot.getFeishuTableUrl();
     }
 
-    private String resolveLocationKey(InterviewSlot slot) {
-        if (StringUtils.hasText(slot.getLocation())) {
-            return slot.getLocation().trim();
+    /**
+     * 分桶键。方案B 的地点真源是 interview_session.location；
+     * 只有还带 slot_id 的历史排期才回退到旧时段表。
+     * 规整逻辑与 {@link LocationTableServiceImpl#normalize} 共用，
+     * 否则配置里的地点和分桶出来的地点会对不上。
+     */
+    private String resolveLocationKey(InterviewSession session, InterviewSlot slot) {
+        if (session != null && StringUtils.hasText(session.getLocation())) {
+            return LocationTableServiceImpl.normalize(session.getLocation());
         }
-        if (Objects.equals(slot.getInterviewType(), 2)) {
-            return "线上面试";
+        if (slot != null) {
+            if (StringUtils.hasText(slot.getLocation())) {
+                return LocationTableServiceImpl.normalize(slot.getLocation());
+            }
+            if (Objects.equals(slot.getInterviewType(), 2)) {
+                return "线上面试";
+            }
         }
-        return "未指定地点";
+        return LocationTableServiceImpl.FALLBACK_LOCATION;
     }
 
     private record PreloadContext(
             Map<Integer, InterviewSlot> slotById,
+            Map<Integer, InterviewSession> sessionById,
+            Map<String, String> tableUrlByLocation,
             Map<Integer, ResumeFieldReader.ResumeSnapshot> snapshotByResumeId) {
     }
 

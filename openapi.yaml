@@ -7311,6 +7311,149 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponse'
           headers: {}
+  /api/interview/feishu/cycles/{cycleId}/locations:
+    get:
+      summary: 列出各面试地点的飞书表格配置
+      deprecated: false
+      description: |-
+        推送与拉回都按【面试地点】分桶：每个地点对应一张飞书多维表格。地点取自 `interview_session.location`（方案B 的地点真源）。
+
+        返回里包含尚未配置链接的地点（推送时会跳过它们），以及每个地点的场次数、已分配人数、待推送人数，便于在管理端看出"哪个地点还没配、配了会推多少人"。
+
+        需要 `resume:audit` 权限。
+      tags:
+      - 面试管理/飞书同步
+      parameters:
+      - name: cycleId
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        location:
+                          type: string
+                        feishuTableUrl:
+                          type: string
+                          nullable: true
+                          description: null 表示尚未配置，推送会跳过该地点
+                        remark:
+                          type: string
+                          nullable: true
+                        sessionCount:
+                          type: integer
+                        scheduleCount:
+                          type: integer
+                        pendingCount:
+                          type: integer
+                          description: 尚未同步到飞书的人数
+    put:
+      summary: 保存某地点的飞书表格链接
+      deprecated: false
+      description: |-
+        同一地点的多个场次共用一条配置。`feishuTableUrl` 留空表示清除该地点的配置，之后推送会跳过该地点。
+
+        地点键在服务端统一规整（去空格；空值归入「未指定地点」），与推送分桶用的是同一函数，避免"教三-301 "和"教三-301"被当成两个地点。
+
+        需要 `resume:audit` 权限。
+      tags:
+      - 面试管理/飞书同步
+      parameters:
+      - name: cycleId
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - location
+              properties:
+                location:
+                  type: string
+                feishuTableUrl:
+                  type: string
+                  nullable: true
+                  description: 留空表示清除配置
+                remark:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: 保存成功，返回刷新后的地点配置列表
+  /api/interview/feishu/cycles/{cycleId}/pull-all:
+    post:
+      summary: 一键从所有已配链接的地点拉回结果
+      deprecated: false
+      description: |-
+        为每个已配置链接的地点各提交一个独立的拉回任务，返回 taskId 列表；未配链接的地点计入 `skippedLocations`。
+
+        刻意保持「一张表一个任务」：拉回的进度、失败行与错误信息天然按表格分开，塞进一个任务会让报错混在一起，出问题时分不清是哪个地点的表。
+
+        需要 `resume:audit` 权限。
+      tags:
+      - 面试管理/飞书同步
+      parameters:
+      - name: cycleId
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: updateUserDept
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: true
+        description: 录取后是否同步更新 user.dept_id
+      responses:
+        '200':
+          description: 提交成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      tasks:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            location:
+                              type: string
+                            taskId:
+                              type: integer
+                              format: int64
+                      skippedLocations:
+                        type: array
+                        items:
+                          type: string
   /api/interview/feishu/import:
     post:
       summary: 提交飞书导入任务（异步）
