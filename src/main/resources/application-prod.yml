@@ -47,6 +47,22 @@ spring:
 server:
   port: 8080
 
+# 只暴露巡检需要的两个端点：health 供 nginx 与负载均衡探活，
+# prometheus 供节点巡检脚本采集 JVM 堆、GC 与 HikariCP 连接池指标。
+# 8080 未对公网开放（由云安全组拦截），指标仅在内网可达；
+# 其余 actuator 端点保持关闭，避免泄露配置与环境变量。
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      show-details: never
+  metrics:
+    tags:
+      application: official
+
 mybatis:
   mapper-locations: classpath:mapper/*.xml
   type-aliases-package: club.boyuan.official.persistence.entity
