@@ -1,5 +1,7 @@
 package club.boyuan.official.domain.interview.service;
 
+import club.boyuan.official.domain.interview.dto.BatchDecisionRequestDTO;
+import club.boyuan.official.domain.interview.dto.BatchDecisionResponseDTO;
 import club.boyuan.official.domain.interview.dto.InterviewResultResponseDTO;
 import club.boyuan.official.domain.interview.dto.InterviewResultSaveDTO;
 import club.boyuan.official.domain.interview.dto.SendNotificationsRequestDTO;
@@ -25,4 +27,9 @@ public interface IInterviewResultService extends IService<InterviewResult> {
     InterviewResultResponseDTO list(Integer cycleId, String name, String decision, String department, Integer page, Integer size);
 
     InterviewResult update(Integer resultId, @Valid InterviewResultSaveDTO interviewResult);
+
+    /**
+     * 批量录取 / 批量标记未通过。单条 UPDATE 落库，同一批要么都改要么都不改。
+     */
+    BatchDecisionResponseDTO batchDecision(@Valid BatchDecisionRequestDTO request);
 }

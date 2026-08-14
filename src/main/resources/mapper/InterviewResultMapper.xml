@@ -31,9 +31,20 @@
                 AND ir.decision = #{decision}
             </if>
             <if test="department != null and department != ''">
-                AND d.name LIKE CONCAT('%', #{department}, '%')
+                AND d.dept_name LIKE CONCAT('%', #{department}, '%')
             </if>
         </where>
         ORDER BY ir.created_at DESC
+    </select>
+
+    <!-- 批量录取前的归属校验：只保留确实属于该周期的 result_id，
+         避免请求里夹带别届的 ID 被一起改掉（cycle_id 挂在 interview_schedule 上） -->
+    <select id="selectResultIdsInCycle" resultType="java.lang.Integer">
+        SELECT ir.result_id
+        FROM interview_result ir
+        JOIN interview_schedule isc ON ir.schedule_id = isc.schedule_id
+        WHERE isc.cycle_id = #{cycleId}
+        AND ir.result_id IN
+        <foreach collection="resultIds" item="id" open="(" separator="," close=")">#{id}</foreach>
     </select>
 </mapper>
