@@ -12,6 +12,7 @@ import club.boyuan.official.domain.user.service.IUserService;
 import club.boyuan.official.common.utils.ExcelExportUtil;
 import club.boyuan.official.common.utils.FileUploadUtil;
 import club.boyuan.official.common.utils.SecurityUtil;
+import club.boyuan.official.infra.storage.CosStorageService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.AllArgsConstructor;
@@ -29,9 +30,6 @@ import org.springframework.web.server.ResponseStatusException;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
@@ -48,6 +46,8 @@ public class UserController {
     private static final Logger logger = LoggerFactory.getLogger(UserController.class);
 
     private final IUserService userService;
+
+    private final CosStorageService cosStorageService;
 
     private final HttpServletRequest request;
 
@@ -72,35 +72,28 @@ public class UserController {
             // 获取当前用户
             Integer userId = getAuthenticatedUserId();
             User user = userService.getUserById(userId);
-            
-            // 保存旧头像路径
-            String oldAvatarPath = user.getAvatar();
-            
-            // 上传文件并获取路径（使用新的通用方法）
-            String avatarPath = FileUploadUtil.uploadFile(file, "avatars/", "image/");
-            
-            // 生成完整HTTP路径
-            String fullHttpPath = generateFullHttpPath(avatarPath, request.getServerName(), request.getServerPort());
-            
-            // 更新用户头像信息，使用新的专门方法避免密码被修改
-            User updatedUser = userService.updateAvatar(userId, avatarPath);
-            
-            // 删除旧头像文件（如果有）
-            if (oldAvatarPath != null && !oldAvatarPath.isEmpty()) {
-                try {
-                    Path oldAvatarFile = Paths.get(oldAvatarPath.substring(1)); // 去掉开头的 "/"
-                    Files.deleteIfExists(oldAvatarFile);
-                    logger.info("成功删除旧头像文件: {}", oldAvatarPath);
-                } catch (IOException e) {
-                    logger.warn("删除旧头像文件失败: {}", oldAvatarPath, e);
-                }
+            String oldAvatar = user.getAvatar();
+
+            // COS 未启用时降级为本地磁盘逻辑，保证本地开发与 CI 不依赖 COS
+            String avatarValue;
+            if (cosStorageService.isEnabled()) {
+                avatarValue = cosStorageService.uploadAvatar(file);
+                deleteOldAvatarIfNeeded(oldAvatar);
+            } else {
+                avatarValue = FileUploadUtil.uploadFile(file, "avatars/", "image/");
             }
+
+            String avatarUrl = cosStorageService.resolveAvatarUrl(avatarValue);
+
+            // 更新用户头像信息，使用新的专门方法避免密码被修改
+            userService.updateAvatar(userId, avatarValue);
             
             Map<String, String> responseData = new HashMap<>();
-            responseData.put("avatar", avatarPath);
-            responseData.put("fullHttpPath", fullHttpPath);
+            responseData.put("avatar", avatarUrl);
+            responseData.put("fullHttpPath", avatarUrl);
+            responseData.put("objectKey", avatarValue);
             
-            logger.info("用户ID为{}的用户成功上传头像，路径为{}", userId, avatarPath);
+            logger.info("用户ID为{}的用户成功上传头像，存储值: {}，访问地址: {}", userId, avatarValue, avatarUrl);
             return ResponseEntity.ok(ResponseMessage.success(responseData));
         } catch (IOException e) {
             logger.error("头像上传失败: 文件操作异常", e);
@@ -217,6 +210,7 @@ public class UserController {
         try {
             Integer userId = getAuthenticatedUserId();
             User user = userService.getUserById(userId);
+            user.setAvatar(cosStorageService.resolveAvatarUrl(user.getAvatar()));
             List<AwardExperience> awardExperiences = awardExperienceService.getByUserId(userId);
             Map<String, Object> responseData = new HashMap<>();
             responseData.put("user", user);
@@ -374,6 +368,23 @@ public class UserController {
         return user.getUserId();
     }
 
+    /**
+     * 删除旧头像对象。仅处理 COS 的 objectKey 格式，本地老路径和完整 URL 不处理。
+     */
+    private void deleteOldAvatarIfNeeded(String oldAvatar) {
+        if (oldAvatar == null || oldAvatar.isBlank()
+                || oldAvatar.startsWith("/uploads/")
+                || oldAvatar.startsWith("http://")
+                || oldAvatar.startsWith("https://")) {
+            return;
+        }
+        try {
+            cosStorageService.delete(oldAvatar);
+        } catch (Exception e) {
+            logger.warn("删除旧头像对象失败: {}", oldAvatar, e);
+        }
+    }
+
 
     // 验证管理员权限
     private boolean hasAdminRole(User user) {
@@ -421,6 +432,7 @@ public class UserController {
             if (userNew == null) {
                 throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
             }
+            userNew.setAvatar(cosStorageService.resolveAvatarUrl(userNew.getAvatar()));
             List<AwardExperience> awardExperiences = awardExperienceService.getByUserId(userId);
             Map<String, Object> responseData = new HashMap<>();
             responseData.put("user", userNew);

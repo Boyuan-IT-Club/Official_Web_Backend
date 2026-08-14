@@ -907,12 +907,16 @@ paths:
                     properties:
                       avatar:
                         type: string
-                        description: 头像相对路径
-                        example: /avatars/xxx.png
+                        description: 头像对外访问URL
+                        example: https://static.boyuan.club/avatars/xxx.png
                       fullHttpPath:
                         type: string
                         description: 头像完整访问URL
-                        example: http://localhost:8080/avatars/xxx.png
+                        example: https://static.boyuan.club/avatars/xxx.png
+                      objectKey:
+                        type: string
+                        description: 数据库中存储的对象键
+                        example: avatars/xxx.png
                     required:
                     - avatar
                     - fullHttpPath
@@ -922,6 +926,38 @@ paths:
                 - message
                 - data
           headers: {}
+  /api/files/{prefix}/{filename}:
+    get:
+      summary: 读取 COS 文件
+      deprecated: false
+      description: 后端中转读取 COS 对象（浏览器不直连私有桶）。头像访问对应 prefix=avatars。
+      tags:
+      - 个人信息页
+      parameters:
+      - name: prefix
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 对象键前缀，如 avatars
+      - name: filename
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 文件名，如 uuid.jpg
+      responses:
+        '200':
+          description: ''
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+          headers: {}
+        '404':
+          description: 文件不存在
+      security: []
   /uploads/avatars/4d86f534-b8ca-4b29-89c8-d0477de12b15.png:
     get:
       summary: 获取头像
