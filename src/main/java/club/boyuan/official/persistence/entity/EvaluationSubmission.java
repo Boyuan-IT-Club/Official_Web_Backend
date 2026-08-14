@@ -51,6 +51,9 @@ public class EvaluationSubmission {
     @TableField("task4_score")
     private Integer task4Score;
 
+    @TableField("task5_score")
+    private Integer task5Score;
+
     @TableField("report_json")
     private String reportJson;
 
@@ -169,6 +172,14 @@ public class EvaluationSubmission {
 
     public void setTask4Score(Integer task4Score) {
         this.task4Score = task4Score;
+    }
+
+    public Integer getTask5Score() {
+        return task5Score;
+    }
+
+    public void setTask5Score(Integer task5Score) {
+        this.task5Score = task5Score;
     }
 
     public String getReportJson() {

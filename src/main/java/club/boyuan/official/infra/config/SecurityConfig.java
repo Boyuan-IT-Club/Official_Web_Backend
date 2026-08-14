@@ -138,6 +138,10 @@ public class SecurityConfig {
         configuration.addAllowedOriginPattern("http://localhost:3000");
         configuration.addAllowedOriginPattern("https://localhost:3000");
         configuration.addAllowedOriginPattern("http://127.0.0.1:3000");
+        // 管理端本地 dev server(端口 3001)
+        configuration.addAllowedOriginPattern("http://localhost:3001");
+        configuration.addAllowedOriginPattern("https://localhost:3001");
+        configuration.addAllowedOriginPattern("http://127.0.0.1:3001");
         configuration.addAllowedOriginPattern("http://localhost:8080");
         configuration.addAllowedOriginPattern("https://localhost:8080");
         configuration.addAllowedOriginPattern("http://127.0.0.1:8080");

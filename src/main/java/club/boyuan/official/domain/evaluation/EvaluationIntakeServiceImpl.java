@@ -98,6 +98,7 @@ public class EvaluationIntakeServiceImpl implements IEvaluationIntakeService {
         submission.setTask2Score(report.taskScore("task2"));
         submission.setTask3Score(report.taskScore("task3"));
         submission.setTask4Score(report.taskScore("task4"));
+        submission.setTask5Score(report.taskScore("task5"));
         submission.setReportJson(plainJson);
         submission.setRepository(request.getRepository());
         submission.setCommitSha(request.getCommitSha());
