@@ -88,3 +88,11 @@ sms:
   verification-code:
     length: 6
     expiration-minutes: 5
+
+cos:
+  secret-id: ${COS_SECRET_ID:}
+  secret-key: ${COS_SECRET_KEY:}
+  region: ${COS_REGION:ap-shanghai}
+  bucket: ${COS_BUCKET:}
+  public-base-url: ${COS_PUBLIC_BASE_URL:}
+  avatar-prefix: ${COS_AVATAR_PREFIX:avatars/}
