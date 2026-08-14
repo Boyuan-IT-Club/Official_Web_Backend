@@ -48,6 +48,14 @@ export async function isLocked(docName) {
   return rows.length > 0 && rows[0].locked === 1;
 }
 
+/**
+ * 连通性探测，供 /collab/diag 自检使用。不暴露连接池本身，避免调用方绕过上面的封装。
+ */
+export async function pingDb() {
+  const conn = await pool.getConnection();
+  conn.release();
+}
+
 export async function closePool() {
   await pool.end();
 }

@@ -8427,6 +8427,38 @@ paths:
                 $ref: '#/components/schemas/ResponseMessageResumeDTO'
         '400':
           description: 非本人负责场次的候选人（2005）或面试安排不存在（3612）
+  /api/internal/evaluation/ping:
+    get:
+      summary: 服务令牌探活（内部）
+      deprecated: false
+      description: 供协同服务的自检端点 `GET /collab/diag` 判断「后端是否认这把服务令牌」。Hocuspocus 会把协同连接的任何失败都回报成 `permission-denied`，靠这个探活才能把「后端漏配 COLLAB_SERVICE_TOKEN」与「用户没有评价权限」区分开。鉴权用请求头 `X-Service-Token`。
+      tags:
+      - 内部服务接口
+      parameters:
+      - name: X-Service-Token
+        in: header
+        required: true
+        schema:
+          type: string
+        description: 服务间共享令牌
+      responses:
+        '200':
+          description: 令牌有效
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    type: string
+                    description: 固定为 pong
+        '401':
+          description: 令牌缺失或不匹配
+      security: []
   /api/internal/evaluation/board/{cycleId}/seed:
     get:
       summary: 拉取评价表播种数据（内部）
