@@ -6,6 +6,7 @@ import club.boyuan.official.domain.user.dto.UserDTO;
 import club.boyuan.official.persistence.entity.User;
 import club.boyuan.official.common.exception.BusinessExceptionEnum;
 import club.boyuan.official.domain.user.service.IUserService;
+import club.boyuan.official.infra.storage.CosStorageService;
 import club.boyuan.official.common.utils.RedisUtil;
 import club.boyuan.official.common.utils.SecurityUtil;
 import lombok.AllArgsConstructor;
@@ -35,6 +36,8 @@ import java.util.Map;
 public class AdminController {
 
     private final IUserService userService;
+
+    private final CosStorageService cosStorageService;
 
     private final club.boyuan.official.domain.user.service.UserRoleService userRoleService;
 
@@ -110,6 +113,7 @@ public class AdminController {
         // 填充 RBAC 角色（user 表的 role 列为注册期遗留字段，展示与分配统一走 user_role 关联）
         if (userPage != null && userPage.getContent() != null) {
             userPage.getContent().forEach(u -> {
+                u.setAvatar(cosStorageService.resolveAvatarUrl(u.getAvatar()));
                 try {
                     u.setRoles(userRoleService.getRolesByUserId(u.getUserId()));
                 } catch (Exception e) {
