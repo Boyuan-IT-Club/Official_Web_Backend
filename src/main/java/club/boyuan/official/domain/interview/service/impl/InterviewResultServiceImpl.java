@@ -1,5 +1,9 @@
 package club.boyuan.official.domain.interview.service.impl;
 
+import club.boyuan.official.common.exception.BusinessException;
+import club.boyuan.official.common.exception.BusinessExceptionEnum;
+import club.boyuan.official.domain.interview.dto.BatchDecisionRequestDTO;
+import club.boyuan.official.domain.interview.dto.BatchDecisionResponseDTO;
 import club.boyuan.official.domain.interview.dto.InterviewResultResponseDTO;
 import club.boyuan.official.domain.interview.dto.InterviewResultSaveDTO;
 import club.boyuan.official.domain.interview.dto.SendNotificationsRequestDTO;
@@ -20,10 +24,14 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * <p>
@@ -114,24 +122,7 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
 
     @Override
     public InterviewResult update(Integer resultId, InterviewResultSaveDTO interviewResult) {
-        //从 Spring Security 获取userId
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        Integer userId = null;
-        if (authentication != null) {
-            Object principal = authentication.getPrincipal();
-
-            if (principal instanceof String) {
-                // 如果是用户名，需要查询用户ID
-                String username = (String) principal;
-                User user = userService.getUserByUsername(username);
-                userId = user != null ? user.getUserId() : null;
-            } else if (principal instanceof UserDetails) {
-                // 如果是UserDetails，获取用户名再查询
-                String username = ((UserDetails) principal).getUsername();
-                User user = userService.getUserByUsername(username);
-                userId = user != null ? user.getUserId() : null;
-            }
-        }
+        Integer userId = currentUserId();
         if (userId != null) {
             interviewResult.setDecisionBy(userId);
         }
@@ -142,10 +133,79 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
                 .eq(InterviewResult::getResultId, resultId)
                 .set(interviewResult.getDecision()!=null, InterviewResult::getDecision, interviewResult.getDecision())
                 .set(interviewResult.getAssignedDeptId()!=null, InterviewResult::getAssignedDeptId, interviewResult.getAssignedDeptId())
-                .set(InterviewResult::getDecisionBy, interviewResult.getDecisionBy());
+                .set(InterviewResult::getDecisionBy, interviewResult.getDecisionBy())
+                // decision_at 没有数据库层的自动更新，此前一直没人写它，导致管理端「决定时间」永远是空
+                .set(interviewResult.getDecision()!=null, InterviewResult::getDecisionAt, LocalDateTime.now());
         this.update(updateWrapper);
         return this.getById(resultId);
 
+    }
+
+    /**
+     * 批量录取 / 批量标记未通过。
+     *
+     * 一条 UPDATE ... IN (...) 落库，同一批要么都改要么都不改，不做 N 次单条更新——
+     * 逐条更新在中途失败时会留下一半录取、一半待录入的半成品状态。
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public BatchDecisionResponseDTO batchDecision(BatchDecisionRequestDTO request) {
+        // decision 的取值范围由 DTO 上的 @Min/@Max 声明式校验拦住（返回 400），这里只管业务规则
+        Integer decision = request.getDecision();
+        if (decision == 1 && request.getAssignedDeptId() == null) {
+            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "批量录取时必须指定录取部门");
+        }
+
+        // 结果的周期挂在 interview_schedule 上，先过滤出确实属于本周期的 ID，
+        // 夹带的别届 ID 计入 skipped 而不是跟着一起被改
+        List<Integer> requested = request.getResultIds();
+        List<Integer> valid = baseMapper.selectResultIdsInCycle(request.getCycleId(), requested);
+        Set<Integer> validSet = new HashSet<>(valid);
+        List<Integer> skipped = new ArrayList<>();
+        for (Integer id : requested) {
+            if (!validSet.contains(id)) {
+                skipped.add(id);
+            }
+        }
+        if (valid.isEmpty()) {
+            log.warn("批量录取无有效目标，cycleId={}，请求 {} 条全部不属于该周期", request.getCycleId(), requested.size());
+            return new BatchDecisionResponseDTO(0, skipped);
+        }
+
+        LambdaUpdateWrapper<InterviewResult> wrapper = new LambdaUpdateWrapper<>();
+        wrapper.in(InterviewResult::getResultId, valid)
+                .set(InterviewResult::getDecision, decision)
+                // 标记未通过时清空录取部门，否则会残留上一次误录取的部门
+                .set(InterviewResult::getAssignedDeptId, decision == 1 ? request.getAssignedDeptId() : null)
+                .set(InterviewResult::getDecisionBy, currentUserId())
+                .set(InterviewResult::getDecisionAt, LocalDateTime.now());
+        this.update(wrapper);
+
+        log.info("批量录取完成，cycleId={}，decision={}，deptId={}，更新 {} 条，跳过 {} 条",
+                request.getCycleId(), decision, request.getAssignedDeptId(), valid.size(), skipped.size());
+        return new BatchDecisionResponseDTO(valid.size(), skipped);
+    }
+
+    /**
+     * 从 Spring Security 上下文取当前用户ID，用于记录决定人。
+     */
+    private Integer currentUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            return null;
+        }
+        Object principal = authentication.getPrincipal();
+        String username = null;
+        if (principal instanceof String) {
+            username = (String) principal;
+        } else if (principal instanceof UserDetails) {
+            username = ((UserDetails) principal).getUsername();
+        }
+        if (username == null) {
+            return null;
+        }
+        User user = userService.getUserByUsername(username);
+        return user != null ? user.getUserId() : null;
     }
 
     //sms尚未开通，短信通知功能留白

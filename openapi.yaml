@@ -7572,6 +7572,78 @@ paths:
               schema:
                 $ref: '#/components/schemas/InterviewResultListResponse'
           headers: {}
+  /api/interview/result/batch-decision:
+    post:
+      summary: 批量录取 / 批量标记未通过
+      deprecated: false
+      description: |-
+        勾选候选人后一次性写入面试决定与录取部门，是管理端「结果与通知」录入结论的主要入口（逐条录入在几十上百人时不现实）。
+
+        `cycleId` 必传：结果所属周期挂在 `interview_schedule` 上，请求里只给 `resultIds` 无法判断归属。服务端据此过滤，不属于该周期的 ID 计入 `skipped` 逐条跳过，而不是整批失败。
+
+        `decision=1`（通过）时必须给 `assignedDeptId`；`decision=2`（未通过）时服务端会清空 `assigned_dept_id`，避免残留上一次误录取的部门。
+
+        同一批走一条 `UPDATE ... IN (...)`，要么都改要么都不改；同时写入决定人与决定时间。
+
+        需要 `resume:audit` 权限。
+      tags:
+      - 面试管理/结果与通知
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - cycleId
+              - resultIds
+              - decision
+              properties:
+                cycleId:
+                  type: integer
+                  description: 招募周期ID
+                resultIds:
+                  type: array
+                  items:
+                    type: integer
+                  description: 要批量处理的面试结果ID
+                decision:
+                  type: integer
+                  enum:
+                  - 1
+                  - 2
+                  description: 1 通过（录取） / 2 未通过
+                assignedDeptId:
+                  type: integer
+                  nullable: true
+                  description: 录取部门，decision=1 时必填
+      responses:
+        '200':
+          description: 操作成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      updated:
+                        type: integer
+                        description: 实际更新的条数
+                      skipped:
+                        type: array
+                        items:
+                          type: integer
+                        description: 不属于该周期或已不存在的 resultId
+        '400':
+          description: 参数校验失败（decision 越界、未选人、录取未指定部门等）
+        '403':
+          description: 无 resume:audit 权限
   /api/interview/result/update/{resultId}:
     put:
       summary: 修改录取结果
