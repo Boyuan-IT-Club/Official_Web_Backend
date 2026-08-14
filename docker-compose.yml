@@ -7,7 +7,9 @@ services:
       MYSQL_DATABASE: ${DB_NAME:-official}
       TZ: Asia/Shanghai
     ports:
-      - "${MYSQL_PORT:-3306}:${MYSQL_PORT:-3306}"
+      # 宿主机 MYSQL_PORT → 容器内固定 3306(容器内 MySQL 始终监听 3306)
+      # 生产默认 3306:3306;本地 .env MYSQL_PORT=3307 时为 3307:3306,与 .env.example 注释一致
+      - "${MYSQL_PORT:-3306}:3306"
     volumes:
       - ./volumes/mysql_data:/var/lib/mysql
       - ./mysql/conf:/etc/mysql/conf.d

@@ -61,7 +61,7 @@ public class EvaluationSubmission {
     private String commitSha;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    @TableField(value = "created_at", fill = com.baomidou.mybatisplus.annotation.FieldFill.INSERT)
+    @TableField("created_at")
     private LocalDateTime createdAt;
 
     public EvaluationSubmission() {
