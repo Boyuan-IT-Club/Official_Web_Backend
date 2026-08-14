@@ -37,6 +37,16 @@ public class InternalEvaluationController {
     private final IInterviewEvaluationService interviewEvaluationService;
 
     /**
+     * 服务令牌探活。协同服务的 /collab/diag 用它判断「后端是否认这把令牌」，
+     * 从而把"后端漏配 COLLAB_SERVICE_TOKEN"与"用户没有评价权限"区分开——
+     * 两者在浏览器里都表现为 Hocuspocus 的 permission-denied，光看界面无法分辨。
+     */
+    @GetMapping("/ping")
+    public ResponseEntity<ResponseMessage<String>> ping() {
+        return ResponseEntity.ok(ResponseMessage.success("pong"));
+    }
+
+    /**
      * 拉取播种数据：协同服务在文档首次加载或定时对账时调用，据此构造/刷新 Y.Doc 的行列。
      */
     @GetMapping("/board/{cycleId}/seed")
