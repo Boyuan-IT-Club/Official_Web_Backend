@@ -1,9 +1,9 @@
 -- 协同面试评价表（方案一）：面试评价从飞书多维表格迁回管理端，多位面试官在同一张表上实时协同。
 -- 编辑期真源是协同服务持有的 Y.Doc（CRDT），本迁移建立的是「快照存放处」与「物化落库目标」：
 --   collab_doc / collab_audit   —— 协同文档快照与写入审计
---   evaluation_dimension        —— 每届可配置的评分维度（表格的列定义）
---   interview_evaluation        —— 物化后的评价数据，下游汇总与录取决定只读这张表
---   session_interviewer         —— 场次绑定面试官，用于「我的待评价」过滤
+--   evaluation_dimension        —— 每届可配置的评分类别（表格的列定义）
+--   interview_evaluation        —— 物化后的评价数据，**一场面试一份，多位面试官共同编辑**
+--   session_interviewer         —— 场次绑定面试官，用于「我的场次」过滤与写入权限判定
 -- 落库后业务真源即为 MySQL，下游（评价汇总/结果与通知/AI 写回）感知不到上游是 CRDT。
 
 SET @db := DATABASE();
@@ -12,7 +12,7 @@ SET @db := DATABASE();
 -- 0. 修复 schema 漂移：interview_schedule.user_id
 --    InterviewSchedule 实体与方案B分配代码（SessionAssignmentServiceImpl）都在写 user_id，
 --    但 V6 建表未含该列、V7 只补了 session_id/dept_id，从未有迁移添加过它。
---    评价表要按 (schedule_id, interviewer_user_id) 组织并回查候选人，依赖该列，故在此幂等补齐。
+--    评价表按 schedule_id 组织并需回查候选人（姓名/部门等），依赖该列，故在此幂等补齐。
 -- ---------------------------------------------------------------------------
 SET @col_exists := (
     SELECT COUNT(*) FROM information_schema.COLUMNS
@@ -66,32 +66,39 @@ CREATE TABLE IF NOT EXISTS `evaluation_dimension`
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '面试评分维度模板（每届可配置）';
 
 -- ---------------------------------------------------------------------------
--- 2. 面试评价：一位面试官对一位候选人一行，由协同服务物化写入
---    scores 用 JSON 存 {dimensionId: score}，避免每加一个维度就改表结构；
+-- 2. 面试评价：**一位候选人一行，多位面试官共同编辑同一份**
+--    协作模式（已与业务确认）：同场次的几位面试官面同一个候选人，通常由其中一位主记录，
+--    但任何一位都可以补充记录、修改分数——针对一个候选人始终只有一份评价。
+--    因此唯一键是 schedule_id（不按面试官拆行），并发写同一字段由协同层的 CRDT 收敛，
+--    评语在编辑期是 Y.Text（字符级合并），物化到本表时落为纯文本。
+--    scores 用 JSON 存 {dimensionId: score}，避免每加一个评分类别就改表结构；
 --    total_score 按权重预先算好冗余存储，供汇总排序时不必在 SQL 里解 JSON。
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `interview_evaluation`
 (
-    `eval_id`             int      NOT NULL AUTO_INCREMENT COMMENT '评价ID',
-    `schedule_id`         int      NOT NULL COMMENT '面试安排ID',
-    `cycle_id`            int      NOT NULL COMMENT '招募周期ID（冗余，便于按届查询）',
-    `resume_id`           int      NOT NULL COMMENT '简历ID（冗余）',
-    `interviewer_user_id` int      NOT NULL COMMENT '面试官用户ID',
-    `scores`              json     NULL COMMENT '各维度得分 {dimensionId: score}',
-    `total_score`         decimal(6, 2) NULL COMMENT '按权重算好的加权总分（冗余）',
-    `comment`             text     NULL COMMENT '评语',
-    `recommendation`      tinyint  NULL COMMENT '1倾向通过 2待定 3不倾向',
-    `status`              tinyint  NOT NULL DEFAULT 1 COMMENT '1草稿 2已提交',
-    `ai_suggestion`       json     NULL COMMENT 'AI 总评（建议分/理由/风险点），由方案二写入，仅供参考',
-    `version`             bigint   NOT NULL DEFAULT 0 COMMENT '物化版本号（协同服务给出的单调值，通常为时间戳），用于丢弃迟到的旧快照',
-    `created_at`          datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    `updated_at`          datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `eval_id`        int      NOT NULL AUTO_INCREMENT COMMENT '评价ID',
+    `schedule_id`    int      NOT NULL COMMENT '面试安排ID（一场面试一份评价）',
+    `cycle_id`       int      NOT NULL COMMENT '招募周期ID（冗余，便于按届查询）',
+    `resume_id`      int      NOT NULL COMMENT '简历ID（冗余）',
+    `scores`         json     NULL COMMENT '各评分类别得分 {dimensionId: score}',
+    `total_score`    decimal(6, 2) NULL COMMENT '按权重算好的加权总分（冗余）',
+    `comment`        text     NULL COMMENT '面试记录与评语（多位面试官共同编辑的结果）',
+    `recommendation` tinyint  NULL COMMENT '共同结论：1倾向通过 2待定 3不倾向',
+    `status`         tinyint  NOT NULL DEFAULT 1 COMMENT '1进行中 2已定稿',
+    `ai_suggestion`  json     NULL COMMENT 'AI 总评（建议分/理由/风险点），由方案二写入，仅供参考',
+    `contributors`   json     NULL COMMENT '参与编辑过的面试官 userId 列表（由协同审计聚合，用于署名与追责）',
+    `last_edited_by` int      NULL COMMENT '最后修改人 userId',
+    `submitted_by`   int      NULL COMMENT '点击定稿的面试官 userId',
+    `submitted_at`   datetime NULL COMMENT '定稿时间',
+    `version`        bigint   NOT NULL DEFAULT 0 COMMENT '物化版本号（协同服务给出的单调值，通常为时间戳），用于丢弃迟到的旧快照',
+    `created_at`     datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at`     datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`eval_id`),
-    UNIQUE KEY `uk_schedule_interviewer` (`schedule_id`, `interviewer_user_id`),
+    UNIQUE KEY `uk_eval_schedule` (`schedule_id`),
     KEY `idx_eval_cycle` (`cycle_id`),
-    KEY `idx_eval_interviewer` (`interviewer_user_id`),
+    KEY `idx_eval_last_editor` (`last_edited_by`),
     CONSTRAINT `fk_eval_schedule` FOREIGN KEY (`schedule_id`) REFERENCES `interview_schedule` (`schedule_id`) ON DELETE CASCADE
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '面试评价（面试官×面试安排唯一）';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '面试评价（一场面试一份，多位面试官共同编辑）';
 
 -- ---------------------------------------------------------------------------
 -- 3. 场次绑定面试官：谁负责面哪一场
@@ -127,8 +134,9 @@ CREATE TABLE IF NOT EXISTS `collab_doc`
 
 -- ---------------------------------------------------------------------------
 -- 5. 协同写入审计
---    CRDT 协议层无法阻止已连接的客户端写任意单元格，权限靠「UI 约束 + 物化校验 + 审计」三层兜底，
---    这张表是第三层：记录每次变更由谁发起、影响了哪些行列键。
+--    同场次内是共享编辑（谁都可写），但跨场次的隔离 CRDT 协议层管不了——已连接的客户端理论上
+--    能写任意单元格。因此靠「UI 约束 + 物化校验（发起人须在该场次面试官名单内）+ 审计」三层兜底，
+--    这张表是第三层：记录每次变更由谁发起、影响了哪些行列键、是否因越权被丢弃。
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `collab_audit`
 (
@@ -149,10 +157,10 @@ CREATE TABLE IF NOT EXISTS `collab_audit`
 -- ---------------------------------------------------------------------------
 INSERT IGNORE INTO `permission` (`permission_id`, `permission_name`, `permission_code`, `resource_identifier`,
                                  `description`, `create_time`, `update_time`)
-VALUES (11, '面试评价', 'interview:evaluate', NULL, '面试官填写与修改自己负责的面试评价', NOW(), NOW());
+VALUES (11, '面试评价', 'interview:evaluate', NULL, '在自己负责的场次内填写与修改候选人面试评价（共享编辑）', NOW(), NOW());
 
 INSERT IGNORE INTO `role` (`role_id`, `role_name`, `role_code`, `description`, `status`, `create_time`, `update_time`)
-VALUES (5, '面试官', 'INTERVIEWER', '负责面试并填写评价，仅能读写自己的评价行', 1, NOW(), NOW());
+VALUES (5, '面试官', 'INTERVIEWER', '负责面试并记录评价；可读写自己所在场次的全部候选人评价（一场一份，与同场面试官共同编辑）', 1, NOW(), NOW());
 
 -- 面试官角色获得评价权限；管理员与超管一并获得（他们也要能进评价表）
 INSERT IGNORE INTO `role_permission` (`role_id`, `permission_id`, `create_time`)

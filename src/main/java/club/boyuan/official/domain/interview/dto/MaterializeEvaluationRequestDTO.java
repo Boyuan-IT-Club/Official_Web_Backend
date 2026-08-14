@@ -34,26 +34,28 @@ public class MaterializeEvaluationRequestDTO {
         @NotNull(message = "面试安排ID不能为空")
         private Integer scheduleId;
 
-        /** 这条评价归属的面试官，取自单元格键 '<colId>:<userId>' 中的 userId */
-        @NotNull(message = "面试官ID不能为空")
-        private Integer interviewerUserId;
-
         /**
-         * 实际写入这些单元格的用户（Yjs update 的 origin）。
-         * 与 interviewerUserId 不一致意味着有人写了别人的格子，服务端据此丢弃并记审计。
+         * 动过这一行的所有面试官（Yjs update 的 origin，由协同服务旁路记录）。
+         * 服务端逐个校验是否绑定在该行所属场次上，未绑定者剔除并记审计。
          */
-        @NotNull(message = "变更发起人不能为空")
-        private Integer originUserId;
+        private List<Integer> contributors;
+
+        /** 最后一次改动这一行的人 */
+        private Integer lastEditedBy;
+
+        /** 把状态改为「已定稿」的那个人 */
+        private Integer submittedBy;
 
         /** 各维度得分 {dimensionId: score} */
         private Map<Integer, BigDecimal> scores;
 
+        /** 面试记录与评语 */
         private String comment;
 
-        /** 1倾向通过 2待定 3不倾向 */
+        /** 共同结论：1倾向通过 2待定 3不倾向 */
         private Integer recommendation;
 
-        /** 1草稿 2已提交，为空按草稿处理 */
+        /** 1进行中 2已定稿，为空按进行中处理 */
         private Integer status;
 
         /** 单调递增的物化版本，用于丢弃迟到的旧快照 */

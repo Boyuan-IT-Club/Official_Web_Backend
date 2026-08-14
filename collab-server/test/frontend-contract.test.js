@@ -10,20 +10,17 @@ import { test } from 'node:test';
 import * as Y from 'yjs';
 import {
   COMMENT_COL,
-  NOTES_COL,
   RECOMMENDATION_COL,
   STATUS_COL,
   dimensionColId,
   materializeFromDoc,
   seedDoc,
 } from '../src/doc-model.js';
+import { createWriterTracker } from '../src/writer-tracker.js';
 
 const CYCLE_ID = 3;
 const ME = 7;
 const PEER = 9;
-
-/** 前端 collab.ts 里 scopedKey() 的等价实现 */
-const scopedKey = (colId, userId) => `${colId}:${userId}`;
 
 function seededDoc() {
   const doc = new Y.Doc();
@@ -52,20 +49,18 @@ function seededDoc() {
   return doc;
 }
 
-/** 模拟前端 writeScore / writeComment / writeRecommendation / writeStatus / writeNotes */
+/** 模拟前端 writeScore / writeComment / writeRecommendation / writeStatus */
 function frontendWrites(doc) {
   const rowMap = doc.getMap('rows').get('100');
   doc.transact(() => {
-    rowMap.set(scopedKey(dimensionColId(1), ME), 8);
-    rowMap.set(scopedKey(dimensionColId(2), ME), 6);
-    rowMap.get(scopedKey(COMMENT_COL, ME)).insert(0, '思路清楚');
-    rowMap.set(scopedKey(RECOMMENDATION_COL, ME), 1);
-    rowMap.set(scopedKey(STATUS_COL, ME), 2);
-    rowMap.get(NOTES_COL).insert(0, '会议室临时更换');
+    rowMap.set(dimensionColId(1), 8);
+    rowMap.set(dimensionColId(2), 6);
+    rowMap.get(COMMENT_COL).insert(0, '思路清楚');
+    rowMap.set(RECOMMENDATION_COL, 1);
   }, 'local');
 }
 
-test('前端写下的单元格能被完整物化', () => {
+test('前端写下的单元格能被完整物化成一条共享评价', () => {
   const doc = seededDoc();
   frontendWrites(doc);
 
@@ -73,27 +68,48 @@ test('前端写下的单元格能被完整物化', () => {
   assert.equal(docName, `eval-board:${CYCLE_ID}`);
   assert.equal(cycleId, CYCLE_ID);
 
-  // 另一位面试官一个字都没填，不该产生条目
   assert.equal(items.length, 1);
-  const mine = items[0];
-  assert.equal(mine.scheduleId, 100);
-  assert.equal(mine.interviewerUserId, ME);
-  assert.deepEqual(mine.scores, { 1: 8, 2: 6 });
-  assert.equal(mine.comment, '思路清楚');
-  assert.equal(mine.recommendation, 1);
-  assert.equal(mine.status, 2);
+  const evaluation = items[0];
+  assert.equal(evaluation.scheduleId, 100);
+  assert.deepEqual(evaluation.scores, { 1: 8, 2: 6 });
+  assert.equal(evaluation.comment, '思路清楚');
+  assert.equal(evaluation.recommendation, 1);
+  assert.equal(evaluation.status, 1);
 });
 
-test('公共备注是全员共享的，不算进任何人的评价条目', () => {
+test('同伴接着补内容，写在同一份评价上而不是另起一条', () => {
   const doc = seededDoc();
+  const tracker = createWriterTracker(doc);
   frontendWrites(doc);
+  tracker.commit(ME);
 
   const rowMap = doc.getMap('rows').get('100');
-  assert.equal(rowMap.get(NOTES_COL).toString(), '会议室临时更换');
+  doc.transact(() => {
+    rowMap.get(COMMENT_COL).insert(rowMap.get(COMMENT_COL).length, '；项目经历真实');
+    rowMap.set(dimensionColId(2), 7);
+  }, 'local');
+  tracker.commit(PEER);
 
-  const { items } = materializeFromDoc(doc, CYCLE_ID);
+  const { items } = materializeFromDoc(doc, CYCLE_ID, tracker);
+
   assert.equal(items.length, 1);
-  assert.ok(!('notes' in items[0]));
+  assert.equal(items[0].comment, '思路清楚；项目经历真实');
+  assert.equal(items[0].scores[2], 7);
+  assert.deepEqual(items[0].contributors, [ME, PEER]);
+});
+
+test('前端点定稿写 status，物化带上定稿人', () => {
+  const doc = seededDoc();
+  const tracker = createWriterTracker(doc);
+  frontendWrites(doc);
+  tracker.commit(ME);
+
+  doc.transact(() => doc.getMap('rows').get('100').set(STATUS_COL, 2), 'local');
+  tracker.commit(PEER);
+
+  const { items } = materializeFromDoc(doc, CYCLE_ID, tracker);
+  assert.equal(items[0].status, 2);
+  assert.equal(items[0].submittedBy, PEER);
 });
 
 test('清空评分时前端删键，物化结果里该维度随之消失', () => {
@@ -101,15 +117,21 @@ test('清空评分时前端删键，物化结果里该维度随之消失', () =>
   frontendWrites(doc);
 
   const rowMap = doc.getMap('rows').get('100');
-  doc.transact(() => rowMap.delete(scopedKey(dimensionColId(2), ME)), 'local');
+  doc.transact(() => rowMap.delete(dimensionColId(2)), 'local');
 
   const { items } = materializeFromDoc(doc, CYCLE_ID);
   assert.deepEqual(items[0].scores, { 1: 8 });
 });
 
-test('面试官姓名对照表随文档播种，前端据此显示「谁评的」', () => {
+test('面试官姓名对照表随文档播种，前端据此显示参与人署名', () => {
   const doc = seededDoc();
   assert.deepEqual(doc.getMap('meta').get('interviewerNames'), { [ME]: '张三', [PEER]: '李四' });
+});
+
+test('行上的面试官绑定决定前端能否编辑该行', () => {
+  const doc = seededDoc();
+  const info = doc.getMap('rows').get('100').get('_info');
+  assert.deepEqual(info.get('interviewerUserIds'), [ME, PEER]);
 });
 
 test('前端的加权总分算法与 Java 物化侧一致', () => {

@@ -124,8 +124,8 @@ function scheduleMaterialize(documentName, document) {
 }
 
 /**
- * 把文档里的评价回写业务库。Java 侧会逐条校验 originUserId，
- * 越权条目被丢弃并记审计，这里只负责如实上报「谁写了哪一格」。
+ * 把文档里的评价回写业务库。Java 侧会逐个校验参与人是否绑定在该场次上，
+ * 未绑定者被剔除并记审计，这里只负责如实上报 tracker 记下的参与人。
  */
 export async function flushMaterialize(documentName, document) {
   const state = docStates.get(documentName);
@@ -134,7 +134,7 @@ export async function flushMaterialize(documentName, document) {
   }
   state.dirty = false;
 
-  const payload = materializeFromDoc(document, state.cycleId, state.tracker.writers);
+  const payload = materializeFromDoc(document, state.cycleId, state.tracker);
   if (payload.items.length === 0) {
     return;
   }

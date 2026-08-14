@@ -34,10 +34,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -100,6 +103,18 @@ public class InterviewEvaluationServiceImpl implements IInterviewEvaluationServi
                 : interviewScheduleMapper.selectBatchIds(scheduleIds).stream()
                 .collect(Collectors.toMap(InterviewSchedule::getScheduleId, Function.identity(), (a, b) -> a));
 
+        // 场次 → 绑定的面试官，用于判定「这个人有没有资格改这一行」
+        Map<Integer, Set<Integer>> interviewersBySession = loadInterviewersBySession(schedules.values());
+
+        // 协同服务重启后 tracker 从零开始，这一轮带来的参与人只是重启之后动过手的那批。
+        // 署名要的是「一共有谁参与过」，因此取回库中已记录的并集，而不是直接覆盖。
+        Map<Integer, List<Integer>> existingContributors = scheduleIds.isEmpty() ? Collections.emptyMap()
+                : interviewEvaluationMapper.selectList(new LambdaQueryWrapper<InterviewEvaluation>()
+                        .in(InterviewEvaluation::getScheduleId, scheduleIds))
+                .stream()
+                .collect(Collectors.toMap(InterviewEvaluation::getScheduleId,
+                        e -> parseContributors(e.getContributors()), (a, b) -> a));
+
         MaterializeEvaluationResultDTO result = new MaterializeEvaluationResultDTO();
         Map<Integer, List<Integer>> acceptedByUser = new LinkedHashMap<>();
         Map<Integer, List<Integer>> rejectedByUser = new LinkedHashMap<>();
@@ -107,23 +122,36 @@ public class InterviewEvaluationServiceImpl implements IInterviewEvaluationServi
         for (MaterializeEvaluationRequestDTO.EvaluationItem item : request.getItems()) {
             InterviewSchedule schedule = schedules.get(item.getScheduleId());
             if (schedule == null || !cycleId.equals(schedule.getCycleId())) {
-                reject(result, rejectedByUser, item,
+                rejectRow(result, rejectedByUser, item,
                         "面试安排 " + item.getScheduleId() + " 不存在或不属于周期 " + cycleId);
                 continue;
             }
 
-            // CRDT 协议层拦不住越权写入，这里是第二道闸：单元格键上的面试官必须就是实际写入者
-            if (!Objects.equals(item.getOriginUserId(), item.getInterviewerUserId())) {
-                reject(result, rejectedByUser, item,
-                        "用户 " + item.getOriginUserId() + " 试图写入面试官 " + item.getInterviewerUserId()
-                                + " 在安排 " + item.getScheduleId() + " 上的评价");
-                continue;
+            // CRDT 协议层拦不住越权写入，这里是第二道闸：改这一行的人必须绑定在该行所属场次上。
+            //
+            // 共编模型下无法把某个字段的值回滚给特定的人——多人写同一格，CRDT 收敛后已分不出谁写了哪个字符。
+            // 因此这里的处理是：仍然落库（否则一个捣乱者就能让整场面试的记录都写不进去），
+            // 但把未授权者从 contributors 里剔除、单独记一条 rejected 审计，由管理员事后追查。
+            Set<Integer> allowed = interviewersBySession.getOrDefault(schedule.getSessionId(), Collections.emptySet());
+            Set<Integer> contributors = new LinkedHashSet<>(
+                    existingContributors.getOrDefault(item.getScheduleId(), Collections.emptyList()));
+            for (Integer contributor : item.getContributors() == null ? List.<Integer>of() : item.getContributors()) {
+                if (allowed.contains(contributor)) {
+                    contributors.add(contributor);
+                } else {
+                    result.setRejected(result.getRejected() + 1);
+                    result.getRejectReasons().add("用户 " + contributor + " 未绑定在安排 "
+                            + item.getScheduleId() + " 所属场次上，已从参与人中剔除");
+                    rejectedByUser.computeIfAbsent(contributor, k -> new ArrayList<>()).add(item.getScheduleId());
+                }
             }
 
-            interviewEvaluationMapper.upsertMaterialized(buildEntity(item, schedule, cycleId, weights));
+            interviewEvaluationMapper.upsertMaterialized(
+                    buildEntity(item, schedule, cycleId, weights, contributors, allowed));
             result.setAccepted(result.getAccepted() + 1);
-            acceptedByUser.computeIfAbsent(item.getOriginUserId(), k -> new ArrayList<>())
-                    .add(item.getScheduleId());
+            for (Integer contributor : contributors) {
+                acceptedByUser.computeIfAbsent(contributor, k -> new ArrayList<>()).add(item.getScheduleId());
+            }
         }
 
         writeAudit(expectedDocName, acceptedByUser, 0);
@@ -155,22 +183,23 @@ public class InterviewEvaluationServiceImpl implements IInterviewEvaluationServi
             return summary;
         }
 
-        Map<Integer, List<InterviewEvaluation>> evaluationsBySchedule = interviewEvaluationMapper.selectList(
+        // 一场面试一份评价，按 schedule_id 取即可
+        Map<Integer, InterviewEvaluation> evaluationBySchedule = interviewEvaluationMapper.selectList(
                         new LambdaQueryWrapper<InterviewEvaluation>()
                                 .eq(InterviewEvaluation::getCycleId, cycleId))
                 .stream()
-                .collect(Collectors.groupingBy(InterviewEvaluation::getScheduleId));
+                .collect(Collectors.toMap(InterviewEvaluation::getScheduleId, Function.identity(), (a, b) -> a));
 
-        Map<Integer, Integer> expectedBySchedule = countExpectedEvaluations(roster);
-        Map<Integer, User> users = loadUsers(roster, evaluationsBySchedule);
+        Map<Integer, Integer> assignedBySchedule = countExpectedEvaluations(roster);
+        Map<Integer, User> users = loadUsers(roster, evaluationBySchedule.values());
         Map<Integer, Integer> resumeToUser = resolveMissingUserIds(roster);
         Map<Integer, Department> departments = loadDepartments(roster);
 
         for (InterviewSchedule schedule : roster) {
             summary.getCandidates().add(buildCandidateSummary(
-                    schedule, dimensions,
-                    evaluationsBySchedule.getOrDefault(schedule.getScheduleId(), Collections.emptyList()),
-                    expectedBySchedule.getOrDefault(schedule.getScheduleId(), 0),
+                    schedule,
+                    evaluationBySchedule.get(schedule.getScheduleId()),
+                    assignedBySchedule.getOrDefault(schedule.getScheduleId(), 0),
                     users, resumeToUser, departments));
         }
         return summary;
@@ -178,9 +207,8 @@ public class InterviewEvaluationServiceImpl implements IInterviewEvaluationServi
 
     private EvaluationSummaryDTO.CandidateSummary buildCandidateSummary(
             InterviewSchedule schedule,
-            List<EvaluationDimension> dimensions,
-            List<InterviewEvaluation> evaluations,
-            int expectedCount,
+            InterviewEvaluation evaluation,
+            int assignedInterviewerCount,
             Map<Integer, User> users,
             Map<Integer, Integer> resumeToUser,
             Map<Integer, Department> departments) {
@@ -198,72 +226,89 @@ public class InterviewEvaluationServiceImpl implements IInterviewEvaluationServi
         candidateSummary.setCandidateName(candidate == null ? null : candidate.getName());
         candidateSummary.setDeptName(department == null ? null : department.getDeptName());
         candidateSummary.setInterviewTime(schedule.getInterviewTime());
-        candidateSummary.setExpectedCount(expectedCount);
+        candidateSummary.setAssignedInterviewerCount(assignedInterviewerCount);
 
-        Map<Integer, List<BigDecimal>> scoresByDimension = new LinkedHashMap<>();
-        List<BigDecimal> totals = new ArrayList<>();
-        int submitted = 0;
-
-        for (InterviewEvaluation evaluation : evaluations) {
-            Map<Integer, BigDecimal> scores = parseScores(evaluation.getScores());
-            EvaluationSummaryDTO.InterviewerEvaluation detail = new EvaluationSummaryDTO.InterviewerEvaluation();
-            detail.setInterviewerUserId(evaluation.getInterviewerUserId());
-            User interviewer = users.get(evaluation.getInterviewerUserId());
-            detail.setInterviewerName(interviewer == null ? null : interviewer.getName());
-            detail.setScores(scores);
-            detail.setTotalScore(evaluation.getTotalScore());
-            detail.setComment(evaluation.getComment());
-            detail.setRecommendation(evaluation.getRecommendation());
-            detail.setStatus(evaluation.getStatus());
-            candidateSummary.getEvaluations().add(detail);
-
-            if (InterviewEvaluation.STATUS_SUBMITTED == (evaluation.getStatus() == null ? 0 : evaluation.getStatus())) {
-                submitted++;
-            }
-            if (evaluation.getRecommendation() != null) {
-                candidateSummary.getRecommendationCounts().merge(evaluation.getRecommendation(), 1, Integer::sum);
-            }
-            if (evaluation.getTotalScore() != null) {
-                totals.add(evaluation.getTotalScore());
-            }
-            scores.forEach((dimensionId, score) -> {
-                if (score != null) {
-                    scoresByDimension.computeIfAbsent(dimensionId, k -> new ArrayList<>()).add(score);
-                }
-            });
+        if (evaluation == null) {
+            return candidateSummary;
         }
 
-        candidateSummary.setSubmittedCount(submitted);
-        for (EvaluationDimension dimension : dimensions) {
-            List<BigDecimal> values = scoresByDimension.get(dimension.getDimensionId());
-            if (values != null && !values.isEmpty()) {
-                candidateSummary.getDimensionAverages().put(dimension.getDimensionId(), average(values));
-            }
-        }
-        if (!totals.isEmpty()) {
-            candidateSummary.setAverageTotalScore(average(totals));
+        candidateSummary.setScores(parseScores(evaluation.getScores()));
+        candidateSummary.setTotalScore(evaluation.getTotalScore());
+        candidateSummary.setComment(evaluation.getComment());
+        candidateSummary.setRecommendation(evaluation.getRecommendation());
+        candidateSummary.setStatus(evaluation.getStatus());
+        candidateSummary.setLastEditedBy(evaluation.getLastEditedBy());
+        candidateSummary.setLastEditedByName(userName(users, evaluation.getLastEditedBy()));
+        candidateSummary.setSubmittedBy(evaluation.getSubmittedBy());
+        candidateSummary.setSubmittedByName(userName(users, evaluation.getSubmittedBy()));
+        candidateSummary.setSubmittedAt(evaluation.getSubmittedAt());
+
+        for (Integer contributorId : parseContributors(evaluation.getContributors())) {
+            EvaluationSummaryDTO.Contributor contributor = new EvaluationSummaryDTO.Contributor();
+            contributor.setUserId(contributorId);
+            contributor.setName(userName(users, contributorId));
+            candidateSummary.getContributors().add(contributor);
         }
         return candidateSummary;
+    }
+
+    private String userName(Map<Integer, User> users, Integer userId) {
+        User user = userId == null ? null : users.get(userId);
+        return user == null ? null : user.getName();
     }
 
     private InterviewEvaluation buildEntity(MaterializeEvaluationRequestDTO.EvaluationItem item,
                                             InterviewSchedule schedule,
                                             Integer cycleId,
-                                            Map<Integer, BigDecimal> weights) {
+                                            Map<Integer, BigDecimal> weights,
+                                            Collection<Integer> contributors,
+                                            Set<Integer> allowed) {
         Map<Integer, BigDecimal> scores = item.getScores() == null
                 ? Collections.emptyMap()
                 : item.getScores();
+        int status = item.getStatus() == null ? InterviewEvaluation.STATUS_DRAFT : item.getStatus();
+        // 定稿人同样要校验绑定，否则未授权者点一下定稿就能把自己署上去
+        Integer submittedBy = status == InterviewEvaluation.STATUS_SUBMITTED
+                && item.getSubmittedBy() != null && allowed.contains(item.getSubmittedBy())
+                ? item.getSubmittedBy()
+                : null;
+        Integer lastEditedBy = item.getLastEditedBy() != null && allowed.contains(item.getLastEditedBy())
+                ? item.getLastEditedBy()
+                : null;
         return new InterviewEvaluation()
                 .setScheduleId(item.getScheduleId())
                 .setCycleId(cycleId)
                 .setResumeId(schedule.getResumeId())
-                .setInterviewerUserId(item.getInterviewerUserId())
                 .setScores(writeScores(scores))
                 .setTotalScore(weightedTotal(scores, weights))
                 .setComment(item.getComment())
                 .setRecommendation(item.getRecommendation())
-                .setStatus(item.getStatus() == null ? InterviewEvaluation.STATUS_DRAFT : item.getStatus())
+                .setStatus(status)
+                .setContributors(writeContributors(contributors))
+                .setLastEditedBy(lastEditedBy)
+                .setSubmittedBy(submittedBy)
+                .setSubmittedAt(submittedBy == null ? null : LocalDateTime.now())
                 .setVersion(item.getVersion());
+    }
+
+    /**
+     * 场次 → 绑定的面试官集合。空集合意味着该场次还没绑人，此时任何写入都会被剔除，
+     * 这是刻意的：没绑面试官的场次不该出现评价数据，出现了就该被看见。
+     */
+    private Map<Integer, Set<Integer>> loadInterviewersBySession(Collection<InterviewSchedule> schedules) {
+        Set<Integer> sessionIds = schedules.stream()
+                .map(InterviewSchedule::getSessionId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (sessionIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Integer, Set<Integer>> bySession = new HashMap<>();
+        for (SessionInterviewer binding : sessionInterviewerMapper.selectList(
+                new LambdaQueryWrapper<SessionInterviewer>().in(SessionInterviewer::getSessionId, sessionIds))) {
+            bySession.computeIfAbsent(binding.getSessionId(), k -> new LinkedHashSet<>()).add(binding.getUserId());
+        }
+        return bySession;
     }
 
     /**
@@ -287,14 +332,16 @@ public class InterviewEvaluationServiceImpl implements IInterviewEvaluationServi
         return scored ? total.setScale(2, RoundingMode.HALF_UP) : null;
     }
 
-    private void reject(MaterializeEvaluationResultDTO result,
-                        Map<Integer, List<Integer>> rejectedByUser,
-                        MaterializeEvaluationRequestDTO.EvaluationItem item,
-                        String reason) {
+    /** 整行丢弃：安排本身有问题（不存在/跨周期），记在所有参与人名下 */
+    private void rejectRow(MaterializeEvaluationResultDTO result,
+                           Map<Integer, List<Integer>> rejectedByUser,
+                           MaterializeEvaluationRequestDTO.EvaluationItem item,
+                           String reason) {
         result.setRejected(result.getRejected() + 1);
         result.getRejectReasons().add(reason);
-        rejectedByUser.computeIfAbsent(item.getOriginUserId(), k -> new ArrayList<>())
-                .add(item.getScheduleId());
+        for (Integer contributor : item.getContributors() == null ? List.<Integer>of() : item.getContributors()) {
+            rejectedByUser.computeIfAbsent(contributor, k -> new ArrayList<>()).add(item.getScheduleId());
+        }
     }
 
     private void writeAudit(String docName, Map<Integer, List<Integer>> scheduleIdsByUser, int rejected) {
@@ -336,16 +383,21 @@ public class InterviewEvaluationServiceImpl implements IInterviewEvaluationServi
     }
 
     private Map<Integer, User> loadUsers(List<InterviewSchedule> roster,
-                                         Map<Integer, List<InterviewEvaluation>> evaluationsBySchedule) {
+                                         Collection<InterviewEvaluation> evaluations) {
         Set<Integer> userIds = roster.stream()
                 .map(InterviewSchedule::getUserId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
-        evaluationsBySchedule.values().stream()
-                .flatMap(List::stream)
-                .map(InterviewEvaluation::getInterviewerUserId)
-                .filter(Objects::nonNull)
-                .forEach(userIds::add);
+        // 汇总要显示参与人/最后修改人/定稿人的姓名，这些 id 都得一并取回来
+        for (InterviewEvaluation evaluation : evaluations) {
+            userIds.addAll(parseContributors(evaluation.getContributors()));
+            if (evaluation.getLastEditedBy() != null) {
+                userIds.add(evaluation.getLastEditedBy());
+            }
+            if (evaluation.getSubmittedBy() != null) {
+                userIds.add(evaluation.getSubmittedBy());
+            }
+        }
         userIds.addAll(resolveMissingUserIds(roster).values());
         if (userIds.isEmpty()) {
             return Collections.emptyMap();
@@ -411,6 +463,27 @@ public class InterviewEvaluationServiceImpl implements IInterviewEvaluationServi
         } catch (Exception e) {
             log.warn("评分 JSON 解析失败，按空处理：{}", json, e);
             return Collections.emptyMap();
+        }
+    }
+
+    private String writeContributors(Collection<Integer> contributors) {
+        try {
+            return objectMapper.writeValueAsString(contributors == null ? List.of() : contributors);
+        } catch (Exception e) {
+            throw new BusinessException(BusinessExceptionEnum.SYSTEM_ERROR, "参与人序列化失败：" + e.getMessage());
+        }
+    }
+
+    private List<Integer> parseContributors(String json) {
+        if (json == null || json.isBlank()) {
+            return Collections.emptyList();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<Integer>>() {
+            });
+        } catch (Exception e) {
+            log.warn("参与人 JSON 解析失败，按空处理：{}", json, e);
+            return Collections.emptyList();
         }
     }
 }

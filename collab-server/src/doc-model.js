@@ -6,39 +6,33 @@ import * as Y from 'yjs';
  *   meta:    Y.Map    { cycleId, locked, seededAt, interviewerNames }
  *   columns: Y.Array<Y.Map>  列定义
  *   rows:    Y.Map<scheduleId, Y.Map>
- *              ├─ _info                  候选人只读快照（服务端播种与刷新）
- *              ├─ '<colId>'              共享单元格（公共备注）
- *              └─ '<colId>:<userId>'     scoped 单元格，键上带面试官
+ *              ├─ _info        候选人只读快照（服务端播种与刷新）
+ *              └─ '<colId>'    单元格，一行只有一份
  *
- * scoped 列每位面试官各有一格，UI 只把自己那格渲染为可编辑；
- * 真正的越权拦截在物化时由 Java 依据 origin 完成，见 materializeFromDoc。
+ * 协作模式：同场次的几位面试官面同一个候选人，针对一个候选人只有一份评价，
+ * 任何一位绑定在该场次上的面试官都可以补充记录、修改分数，并发写同一字段由 CRDT 收敛。
+ * 因此单元格键上不带面试官后缀——「谁改过」由服务端的 writer-tracker 旁路记录，
+ * 而不是编在键名里（编在键名里的话，客户端可以随便伪造成别人）。
  */
 
-const SCOPED_SUFFIX_SEPARATOR = ':';
-
-/** 评语列：用 Y.Text 承载，支持两人同时编辑同一格的字符级合并 */
+/** 评语列：用 Y.Text 承载，支持多人同时编辑的字符级合并 */
 export const COMMENT_COL = 'comment';
-/** 推荐意见列：1倾向通过 2待定 3不倾向 */
+/** 推荐意见列（共同结论）：1倾向通过 2待定 3不倾向 */
 export const RECOMMENDATION_COL = 'recommendation';
-/** 提交状态：1草稿 2已提交 */
+/** 状态：1进行中 2已定稿 */
 export const STATUS_COL = 'status';
-/** 全员共享的公共备注 */
-export const NOTES_COL = 'notes';
 
 /** 评分维度列的键前缀，形如 dim:12 */
 const DIMENSION_COL_PREFIX = 'dim';
+const DIMENSION_SEPARATOR = ':';
 
 export function dimensionColId(dimensionId) {
-  return `${DIMENSION_COL_PREFIX}${SCOPED_SUFFIX_SEPARATOR}${dimensionId}`;
+  return `${DIMENSION_COL_PREFIX}${DIMENSION_SEPARATOR}${dimensionId}`;
 }
 
 function parseDimensionColId(colId) {
-  const parts = colId.split(SCOPED_SUFFIX_SEPARATOR);
-  return parts[0] === DIMENSION_COL_PREFIX ? Number(parts[1]) : null;
-}
-
-function scopedKey(colId, userId) {
-  return `${colId}${SCOPED_SUFFIX_SEPARATOR}${userId}`;
+  const parts = colId.split(DIMENSION_SEPARATOR);
+  return parts[0] === DIMENSION_COL_PREFIX && parts.length === 2 ? Number(parts[1]) : null;
 }
 
 function buildColumns(seed) {
@@ -49,7 +43,6 @@ function buildColumns(seed) {
     type: 'score',
     maxScore: dimension.maxScore,
     weight: Number(dimension.weight),
-    scoped: true,
     width: 90,
     order: dimension.sortOrder ?? index + 1,
   }));
@@ -57,17 +50,15 @@ function buildColumns(seed) {
   const base = columns.length;
   columns.push({
     id: COMMENT_COL,
-    label: '评语',
+    label: '面试记录与评语',
     type: 'text',
-    scoped: true,
-    width: 280,
+    width: 320,
     order: base + 1,
   });
   columns.push({
     id: RECOMMENDATION_COL,
     label: '推荐意见',
     type: 'select',
-    scoped: true,
     options: [
       { value: 1, label: '倾向通过' },
       { value: 2, label: '待定' },
@@ -75,14 +66,6 @@ function buildColumns(seed) {
     ],
     width: 110,
     order: base + 2,
-  });
-  columns.push({
-    id: NOTES_COL,
-    label: '公共备注',
-    type: 'text',
-    scoped: false,
-    width: 240,
-    order: base + 3,
   });
   return columns;
 }
@@ -98,23 +81,21 @@ function writeRowInfo(rowMap, row) {
   info.set('deptName', row.deptName);
   info.set('sessionId', row.sessionId);
   info.set('interviewTime', row.interviewTime);
+  // 前端据此判断「我是否负责这场」来决定该行可否编辑
   info.set('interviewerUserIds', row.interviewerUserIds ?? []);
   info.set('removed', false);
   rowMap.set('_info', info);
 }
 
 /**
- * 为该行的每位面试官预建可编辑单元格。
+ * 预建评语格。
  *
- * 评语格提前建好 Y.Text 而不是等首次输入时再建，是为了避开一个 CRDT 陷阱：
+ * 提前建好 Y.Text 而不是等首次输入时再建，是为了避开一个 CRDT 陷阱：
  * 两个客户端同时在空格子里创建 Y.Text 会各建一个，合并时只留下一个，另一人刚敲的字直接消失。
  */
-function ensureInterviewerCells(rowMap, interviewerUserIds) {
-  for (const userId of interviewerUserIds ?? []) {
-    const commentKey = scopedKey(COMMENT_COL, userId);
-    if (!(rowMap.get(commentKey) instanceof Y.Text)) {
-      rowMap.set(commentKey, new Y.Text());
-    }
+function ensureSharedCells(rowMap) {
+  if (!(rowMap.get(COMMENT_COL) instanceof Y.Text)) {
+    rowMap.set(COMMENT_COL, new Y.Text());
   }
 }
 
@@ -142,8 +123,7 @@ export function seedDoc(doc, seed) {
       const rowMap = new Y.Map();
       rows.set(String(row.scheduleId), rowMap);
       writeRowInfo(rowMap, row);
-      ensureInterviewerCells(rowMap, row.interviewerUserIds);
-      rowMap.set(NOTES_COL, new Y.Text());
+      ensureSharedCells(rowMap);
     }
   }, 'seed');
 }
@@ -172,14 +152,11 @@ export function reconcileDoc(doc, seed) {
       if (!rowMap) {
         rowMap = new Y.Map();
         rows.set(key, rowMap);
-        writeRowInfo(rowMap, row);
-        rowMap.set(NOTES_COL, new Y.Text());
         added += 1;
-      } else {
-        // 候选人快照与面试官绑定可能变化，刷新只读部分，不动已填单元格
-        writeRowInfo(rowMap, row);
       }
-      ensureInterviewerCells(rowMap, row.interviewerUserIds);
+      // 候选人快照与面试官绑定可能变化，刷新只读部分，不动已填单元格
+      writeRowInfo(rowMap, row);
+      ensureSharedCells(rowMap);
     }
 
     for (const key of [...rows.keys()]) {
@@ -201,13 +178,20 @@ function cellValue(value) {
 }
 
 /**
- * 从文档解析出待物化的评价条目：一行 × 一位面试官 = 一条。
+ * 从文档解析出待物化的评价条目：一行 = 一条。
+ *
+ * contributors / lastEditedBy / submittedBy 全部取自服务端旁路记录的 tracker，
+ * 不信客户端自报——Java 侧还会逐个校验这些人是否绑定在该行所属场次上。
  *
  * @param doc      Y.Doc
  * @param cycleId  周期ID
- * @param writers  Map<cellKey, userId>，服务端记录的单元格最后写入者，用于填 originUserId
+ * @param tracker  createWriterTracker 的返回值
  */
-export function materializeFromDoc(doc, cycleId, writers = new Map()) {
+export function materializeFromDoc(doc, cycleId, tracker = {}) {
+  const writers = tracker.writers ?? new Map();
+  const contributorsByRow = tracker.contributorsByRow ?? new Map();
+  const lastEditorByRow = tracker.lastEditorByRow ?? new Map();
+
   const rows = doc.getMap('rows');
   const items = [];
   const version = Date.now();
@@ -221,63 +205,45 @@ export function materializeFromDoc(doc, cycleId, writers = new Map()) {
       continue;
     }
 
-    const scheduleId = Number(rowKey);
-    const byInterviewer = new Map();
+    const item = {
+      scheduleId: Number(rowKey),
+      scores: {},
+      comment: null,
+      recommendation: null,
+      status: 1,
+      contributors: [...(contributorsByRow.get(rowKey) ?? [])],
+      lastEditedBy: lastEditorByRow.get(rowKey) ?? null,
+      submittedBy: null,
+      version,
+    };
 
     for (const [cellKey, rawValue] of rowMap.entries()) {
-      if (cellKey === '_info' || !cellKey.includes(SCOPED_SUFFIX_SEPARATOR)) {
+      if (cellKey === '_info') {
         continue;
       }
-      const separatorIndex = cellKey.lastIndexOf(SCOPED_SUFFIX_SEPARATOR);
-      const colId = cellKey.slice(0, separatorIndex);
-      const interviewerUserId = Number(cellKey.slice(separatorIndex + 1));
-      if (!Number.isInteger(interviewerUserId)) {
-        continue;
-      }
-
-      if (!byInterviewer.has(interviewerUserId)) {
-        byInterviewer.set(interviewerUserId, {
-          scheduleId,
-          interviewerUserId,
-          // 无记录时回退为单元格归属者：该值只可能来自服务端播种或重启前已校验过的快照
-          originUserId: writers.get(`${rowKey}/${cellKey}`) ?? interviewerUserId,
-          scores: {},
-          comment: null,
-          recommendation: null,
-          status: 1,
-          version,
-        });
-      }
-      const item = byInterviewer.get(interviewerUserId);
-
-      // 同一位面试官只要有任一格是别人写的，整条按越权上报，交由 Java 丢弃并记审计
-      const writer = writers.get(`${rowKey}/${cellKey}`);
-      if (writer !== undefined && writer !== interviewerUserId) {
-        item.originUserId = writer;
-      }
-
       const value = cellValue(rawValue);
-      const dimensionId = parseDimensionColId(colId);
+      const dimensionId = parseDimensionColId(cellKey);
       if (dimensionId !== null) {
         if (value !== null && value !== undefined && value !== '') {
           item.scores[dimensionId] = Number(value);
         }
-      } else if (colId === COMMENT_COL) {
+      } else if (cellKey === COMMENT_COL) {
         item.comment = value === '' ? null : value;
-      } else if (colId === RECOMMENDATION_COL) {
+      } else if (cellKey === RECOMMENDATION_COL) {
         item.recommendation = value === null || value === undefined ? null : Number(value);
-      } else if (colId === STATUS_COL) {
+      } else if (cellKey === STATUS_COL) {
         item.status = Number(value) === 2 ? 2 : 1;
+        if (item.status === 2) {
+          item.submittedBy = writers.get(`${rowKey}/${STATUS_COL}`) ?? null;
+        }
       }
     }
 
-    for (const item of byInterviewer.values()) {
-      const untouched = Object.keys(item.scores).length === 0
-        && !item.comment
-        && item.recommendation === null;
-      if (!untouched) {
-        items.push(item);
-      }
+    const untouched = Object.keys(item.scores).length === 0
+      && !item.comment
+      && item.recommendation === null;
+    if (!untouched) {
+      items.push(item);
     }
   }
 

@@ -8459,10 +8459,13 @@ paths:
     post:
       summary: 物化回写面试评价（内部）
       deprecated: false
-      description: '协同服务把 Y.Doc 解析出的评价批量 upsert 进 `interview_evaluation`（唯一键 `schedule_id + interviewer_user_id`）。
+      description: '协同服务把 Y.Doc 解析出的评价批量 upsert 进 `interview_evaluation`（唯一键 `schedule_id`：一场面试只有一份评价，
+        由该场次的几位面试官共同维护）。
 
-        服务端逐条校验 `originUserId` 必须等于 `interviewerUserId`——CRDT 协议层拦不住越权写入，这里是把关的那一道；不符的条目被丢弃、记入
-        `collab_audit` 并在响应里说明，不影响同批次的合法数据。
+        服务端逐个校验 `contributors`、`lastEditedBy`、`submittedBy` 里的人是否绑定在该行所属场次上——CRDT 协议层拦不住越权写入，这里是把关的那一道。
+        未绑定者被剔除出参与人、记入 `collab_audit`（rejected=1）并在响应里说明；评价本身照常落库，避免一个捣乱者让整场面试的记录都写不进去。
+
+        `contributors` 与库中已有的参与人取并集：协同服务重启后旁路记录从零开始，直接覆盖会让重启前参与过的人从署名里消失。
 
         `version` 取协同服务给出的单调值（通常为时间戳），低于库中版本的迟到快照不会覆盖已保存的数据。评价表锁定时整批拒绝。
 
@@ -9908,7 +9911,7 @@ components:
           type: array
           items:
             type: integer
-          description: 该场次绑定的面试官，scoped 列按此展开为 `<colId>:<userId>` 键
+          description: 该场次绑定的面试官，决定谁能编辑这一行；协同服务写进行的 `_info.interviewerUserIds`
     EvaluationBoardSeed:
       type: object
       properties:
@@ -9933,7 +9936,7 @@ components:
           type: object
           additionalProperties:
             type: string
-          description: '本表涉及的面试官 `{userId: 姓名}`。行里只存 userId，前端要显示「谁评的」就得有这份对照表；协同服务把它写进文档 `meta.interviewerNames`'
+          description: '本表涉及的面试官 `{userId: 姓名}`。行里只存 userId，前端要显示参与人署名就得有这份对照表；协同服务把它写进文档 `meta.interviewerNames`'
           example:
             '7': 张三
             '9': 李四
@@ -9988,13 +9991,20 @@ components:
       properties:
         scheduleId:
           type: integer
-          description: 面试安排 ID
-        interviewerUserId:
+          description: 面试安排 ID，共编模型下一场面试只有一条
+        contributors:
+          type: array
+          items:
+            type: integer
+          description: 参与编辑过这份评价的面试官（由协同服务在服务端旁路记录，客户端无法伪造）。未绑定该场次的会被剔除并记审计
+        lastEditedBy:
           type: integer
-          description: 这条评价归属的面试官，取自单元格键 `<colId>:<userId>` 中的 userId
-        originUserId:
+          nullable: true
+          description: 最后一次改动这份评价的人，未绑定该场次时置空
+        submittedBy:
           type: integer
-          description: 实际写入这些单元格的用户（由协同服务在服务端记录，客户端无法伪造）。与 interviewerUserId 不一致即判越权并丢弃
+          nullable: true
+          description: 点下定稿的人，未绑定该场次时置空
         scores:
           type: object
           additionalProperties:
@@ -10003,21 +10013,20 @@ components:
         comment:
           type: string
           nullable: true
+          description: 面试记录与评语，由本场面试官共同编写
         recommendation:
           type: integer
           nullable: true
-          description: 1倾向通过 2待定 3不倾向
+          description: 共同结论，1倾向通过 2待定 3不倾向
         status:
           type: integer
-          description: 1草稿 2已提交，为空按草稿处理
+          description: 1进行中 2已定稿，为空按进行中处理
         version:
           type: integer
           format: int64
           description: 单调递增的物化版本（通常为时间戳），低于库中版本时不覆盖
       required:
       - scheduleId
-      - interviewerUserId
-      - originUserId
       - version
     MaterializeEvaluationRequest:
       type: object
@@ -10053,12 +10062,12 @@ components:
               description: 成功写入的条目数
             rejected:
               type: integer
-              description: 被丢弃的条目数（越权或行不属于本周期）
+              description: 被剔除的参与人数与被丢弃的行数之和（未绑定该场次，或行不属于本周期）
             rejectReasons:
               type: array
               items:
                 type: string
-              description: 被丢弃条目的说明
+              description: 剔除与丢弃的说明
       required:
       - code
       - message
@@ -10078,50 +10087,55 @@ components:
           type: string
         interviewTime:
           type: string
-        dimensionAverages:
+        scores:
           type: object
           additionalProperties:
             type: number
-          description: 各维度在所有面试官间的均分，键为 dimensionId
-        averageTotalScore:
+          description: 各维度得分，键为 dimensionId。共编模型下一位候选人只有一份评价，不再是均分
+        totalScore:
           type: number
           nullable: true
-          description: 该候选人所有面试官加权总分的均值
-        recommendationCounts:
-          type: object
-          additionalProperties:
-            type: integer
-          description: 推荐意见分布，键为 1/2/3
-        submittedCount:
+          description: 加权总分 = Σ(维度得分 × 维度权重)
+        comment:
+          type: string
+          nullable: true
+          description: 本场面试官共同写下的面试记录与评语
+        recommendation:
           type: integer
-        expectedCount:
+          nullable: true
+          description: 共同结论，1倾向通过 2待定 3不倾向
+        status:
           type: integer
-          description: 应有的评价数（该场次绑定的面试官人数）
-        evaluations:
+          nullable: true
+          description: 1进行中 2已定稿；尚无评价时为空
+        contributors:
           type: array
+          description: 参与编辑过这份评价的面试官，用于署名
           items:
             type: object
             properties:
-              interviewerUserId:
+              userId:
                 type: integer
-              interviewerName:
+              name:
                 type: string
-              scores:
-                type: object
-                additionalProperties:
-                  type: number
-              totalScore:
-                type: number
-                nullable: true
-              comment:
-                type: string
-                nullable: true
-              recommendation:
-                type: integer
-                nullable: true
-              status:
-                type: integer
-                description: 1草稿 2已提交
+        assignedInterviewerCount:
+          type: integer
+          description: 该场次绑定的面试官人数
+        lastEditedBy:
+          type: integer
+          nullable: true
+        lastEditedByName:
+          type: string
+          nullable: true
+        submittedBy:
+          type: integer
+          nullable: true
+        submittedByName:
+          type: string
+          nullable: true
+        submittedAt:
+          type: string
+          nullable: true
     ResponseMessageEvaluationSummary:
       type: object
       properties:

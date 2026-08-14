@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
 
 /**
  * <p>
- * 面试评价：一位面试官对一位候选人一行。
+ * 面试评价：一场面试一份，同场次的多位面试官共同编辑。
  * 由协同服务从 Y.Doc 物化写入；编辑期真源是 CRDT 文档，落库后业务真源是本表，
  * 下游（评价汇总、结果与通知、AI 写回）只读这张表，感知不到上游是协同文档。
  * </p>
@@ -30,11 +30,11 @@ public class InterviewEvaluation implements Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
-     * 草稿
+     * 进行中
      */
     public static final int STATUS_DRAFT = 1;
     /**
-     * 已提交
+     * 已定稿
      */
     public static final int STATUS_SUBMITTED = 2;
 
@@ -60,12 +60,6 @@ public class InterviewEvaluation implements Serializable {
     private Integer resumeId;
 
     /**
-     * 面试官用户ID
-     */
-    @TableField("interviewer_user_id")
-    private Integer interviewerUserId;
-
-    /**
      * 各维度得分，JSON：{dimensionId: score}
      */
     @TableField("scores")
@@ -78,19 +72,19 @@ public class InterviewEvaluation implements Serializable {
     private BigDecimal totalScore;
 
     /**
-     * 评语
+     * 面试记录与评语（多位面试官共同编辑的结果）
      */
     @TableField("comment")
     private String comment;
 
     /**
-     * 推荐意见：1倾向通过 2待定 3不倾向
+     * 共同结论：1倾向通过 2待定 3不倾向
      */
     @TableField("recommendation")
     private Integer recommendation;
 
     /**
-     * 1草稿 2已提交
+     * 1进行中 2已定稿
      */
     @TableField("status")
     private Integer status;
@@ -100,6 +94,31 @@ public class InterviewEvaluation implements Serializable {
      */
     @TableField("ai_suggestion")
     private String aiSuggestion;
+
+    /**
+     * 参与编辑过的面试官 userId 列表，JSON 数组。
+     * 由协同服务旁路记录、Java 侧校验场次绑定后落库，用于署名与追责。
+     */
+    @TableField("contributors")
+    private String contributors;
+
+    /**
+     * 最后修改人 userId
+     */
+    @TableField("last_edited_by")
+    private Integer lastEditedBy;
+
+    /**
+     * 点击定稿的面试官 userId
+     */
+    @TableField("submitted_by")
+    private Integer submittedBy;
+
+    /**
+     * 定稿时间
+     */
+    @TableField("submitted_at")
+    private LocalDateTime submittedAt;
 
     /**
      * 物化版本号（协同服务给出的单调值，通常为时间戳），用于丢弃迟到的旧快照
