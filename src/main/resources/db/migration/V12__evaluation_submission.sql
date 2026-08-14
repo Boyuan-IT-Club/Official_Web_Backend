@@ -1,5 +1,6 @@
 -- 评测提交:候选人 push 派生仓后由 Actions 推送、官网解密入库
 -- 身份键 github_username(来自 Actions context,可靠);user_id/cycle_id 可空(未认领/未归周期由管理员关联)
+-- 总分 500 = task1-5 各 100(工具仓 2026-08-11 起 5-task 制)
 CREATE TABLE IF NOT EXISTS `evaluation_submission`
 (
     `id`             BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',

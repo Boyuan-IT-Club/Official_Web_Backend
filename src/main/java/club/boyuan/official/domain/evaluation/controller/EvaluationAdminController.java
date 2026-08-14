@@ -2,6 +2,8 @@ package club.boyuan.official.domain.evaluation.controller;
 
 import club.boyuan.official.common.dto.PageResultDTO;
 import club.boyuan.official.common.dto.ResponseMessage;
+import club.boyuan.official.common.exception.BusinessException;
+import club.boyuan.official.common.exception.BusinessExceptionEnum;
 import club.boyuan.official.domain.evaluation.IEvaluationAdminService;
 import club.boyuan.official.domain.evaluation.dto.CandidateRow;
 import club.boyuan.official.persistence.entity.EvaluationSubmission;
@@ -65,7 +67,17 @@ public class EvaluationAdminController {
     public ResponseEntity<ResponseMessage<EvaluationSubmission>> claim(
             @PathVariable Long id,
             @RequestBody Map<String, Object> body) {
-        Integer userId = body.get("userId") == null ? null : Integer.valueOf(body.get("userId").toString());
+        // 非数字 userId → NumberFormatException 前先校验,返回 400(review J1)
+        Object raw = body.get("userId");
+        if (raw == null) {
+            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "userId 不能为空");
+        }
+        final Integer userId;
+        try {
+            userId = Integer.valueOf(raw.toString());
+        } catch (NumberFormatException e) {
+            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "userId 必须是数字");
+        }
         EvaluationSubmission submission = adminService.claim(id, userId);
         return ResponseEntity.ok(new ResponseMessage<>(200, "评测提交认领成功", submission));
     }

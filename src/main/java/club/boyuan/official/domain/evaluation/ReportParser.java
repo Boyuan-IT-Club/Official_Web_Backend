@@ -10,13 +10,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  */
 public final class ReportParser {
 
+    /** 复用实例,避免每次解析 new ObjectMapper(review J2) */
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
     private ReportParser() {
     }
 
     public static Report parse(String plainJson) {
         Report report;
         try {
-            report = new ObjectMapper().readValue(plainJson, Report.class);
+            report = MAPPER.readValue(plainJson, Report.class);
         } catch (Exception e) {
             throw new BusinessException(BusinessExceptionEnum.INVALID_REPORT, "报告单明文解析失败: " + e.getMessage());
         }

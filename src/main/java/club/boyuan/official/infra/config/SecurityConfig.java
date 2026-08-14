@@ -134,14 +134,11 @@ public class SecurityConfig {
         configuration.addAllowedOriginPattern("http://official.boyuan.club");
         configuration.addAllowedOriginPattern("https://official.boyuan.club");
         configuration.addAllowedOriginPattern("https://admin.boyuan.club");
-        // 本地开发 / 直连
-        configuration.addAllowedOriginPattern("http://localhost:3000");
-        configuration.addAllowedOriginPattern("https://localhost:3000");
-        configuration.addAllowedOriginPattern("http://127.0.0.1:3000");
-        // 管理端本地 dev server(端口 3001)
-        configuration.addAllowedOriginPattern("http://localhost:3001");
-        configuration.addAllowedOriginPattern("https://localhost:3001");
-        configuration.addAllowedOriginPattern("http://127.0.0.1:3001");
+        // 本地开发 / 直连:任意端口(dev server 3000/3001 或自定义 PORT 都覆盖)
+        configuration.addAllowedOriginPattern("http://localhost:*");
+        configuration.addAllowedOriginPattern("https://localhost:*");
+        configuration.addAllowedOriginPattern("http://127.0.0.1:*");
+        configuration.addAllowedOriginPattern("https://127.0.0.1:*");
         configuration.addAllowedOriginPattern("http://localhost:8080");
         configuration.addAllowedOriginPattern("https://localhost:8080");
         configuration.addAllowedOriginPattern("http://127.0.0.1:8080");

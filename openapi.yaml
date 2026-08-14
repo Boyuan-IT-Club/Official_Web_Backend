@@ -8621,6 +8621,132 @@ paths:
                 properties: {}
           headers: {}
       security: []
+  /api/admin/evaluations/candidates:
+    get:
+      summary: 评测候选人聚合列表(总览/榜单)
+      deprecated: false
+      description: >-
+        按 github_username 分组,一人一行。认领态/姓名/部门按 user_id 关联;
+        未认领时姓名回退 github 用户名。部门 = 用户当前部门或该周期第一志愿部门。
+        sortBy: latest|maxScore|submissionCount;claimed: all|claimed|unclaimed。
+      tags:
+      - 评测提交(公开)
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: cycleId
+        in: query
+        schema: { type: integer }
+      - name: deptId
+        in: query
+        schema: { type: integer }
+      - name: minScore
+        in: query
+        schema: { type: integer }
+      - name: maxScore
+        in: query
+        schema: { type: integer }
+      - name: claimed
+        in: query
+        schema: { type: string, default: all }
+      - name: sortBy
+        in: query
+        schema: { type: string, default: latest }
+      - name: page
+        in: query
+        schema: { type: integer, default: 0 }
+      - name: size
+        in: query
+        schema: { type: integer, default: 10 }
+      responses:
+        '200':
+          description: 分页的候选人聚合行
+  /api/admin/evaluations/candidates/{key}/submissions:
+    get:
+      summary: 候选人评测提交历史
+      deprecated: false
+      description: key = userId 数字或 github_username。
+      tags:
+      - 评测提交(公开)
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: key
+        in: path
+        required: true
+        schema: { type: string }
+      responses:
+        '200':
+          description: 提交列表(新→旧)
+  /api/admin/evaluations/submissions/{id}:
+    get:
+      summary: 评测提交详情(含报告明文)
+      deprecated: false
+      tags:
+      - 评测提交(公开)
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer }
+      responses:
+        '200':
+          description: 提交详情(含 report_json)
+  /api/admin/evaluations/submissions/{id}/claim:
+    put:
+      summary: 认领未认领提交到用户
+      deprecated: false
+      tags:
+      - 评测提交(公开)
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              properties:
+                userId:
+                  type: integer
+      responses:
+        '200':
+          description: 认领成功,返回更新后的提交
+  /api/user/me/github-account:
+    put:
+      summary: 绑定 GitHub 账号(登录名)
+      deprecated: false
+      description: >-
+        绑定/改绑/解绑 GitHub 登录名。输入 URL 或裸登录名统一归一化存储;
+        绑定后自动回填认领该登录名的未认领提交。空串 = 解绑。
+        复用既有资料更新链路,此处为文档化别名。
+      tags:
+      - 个人信息页
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [githubAccount]
+              properties:
+                githubAccount:
+                  type: string
+      responses:
+        '200':
+          description: 绑定成功
+        '400':
+          description: 已被其他用户绑定
 components:
   schemas:
     RescheduleRequest:

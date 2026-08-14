@@ -26,6 +26,9 @@ public final class ReportDecryptor {
     private static final int IV_LENGTH = 12;
     private static final int TAG_LENGTH_BITS = 128;
 
+    /** 复用实例:信封解析频繁调用,避免每次 new ObjectMapper(review J2) */
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
     private ReportDecryptor() {
     }
 
@@ -51,7 +54,7 @@ public final class ReportDecryptor {
     public static String decrypt(String envelopeJson) {
         EncryptedPayload payload;
         try {
-            payload = new ObjectMapper().readValue(envelopeJson, EncryptedPayload.class);
+            payload = MAPPER.readValue(envelopeJson, EncryptedPayload.class);
         } catch (Exception e) {
             throw new BusinessException(BusinessExceptionEnum.INVALID_REPORT, "报告单格式无效: " + e.getMessage());
         }

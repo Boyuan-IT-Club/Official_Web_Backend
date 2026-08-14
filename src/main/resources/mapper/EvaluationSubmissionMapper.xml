@@ -2,12 +2,17 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="club.boyuan.official.persistence.mapper.EvaluationSubmissionMapper">
 
-    <!-- 候选人聚合:按 github_username 分组;部门 = COALESCE(用户当前部门, 该周期第一志愿部门) -->
+    <!-- 候选人聚合:按 github_username 分组,一人一行。
+         认领语义:user 关联走 s.user_id(认领接口写入的键),不再走 github 字符串匹配——
+         否则手工认领 github 与目标用户不匹配的提交后,管理端视图与用户端 /me 不一致(S1)。
+         未认领(user_id NULL)时 userName 回退 github_username。
+         部门:COALESCE(用户当前部门, 该周期第一志愿部门);GROUP BY 不含 deptName,
+         用 MAX() 取其一,避免同候选人跨部门偏好被拆成多行(S2)。 -->
     <sql id="candidateGrouped">
         SELECT s.github_username AS githubUsername,
                u.user_id         AS userId,
-               u.name            AS userName,
-               COALESCE(d.dept_name, vd.dept_name) AS deptName,
+               COALESCE(u.name, s.github_username) AS userName,
+               MAX(COALESCE(d.dept_name, vd.dept_name)) AS deptName,
                MAX(s.total_score) AS maxTotalScore,
                MAX(s.evaluated_at) AS lastEvaluatedAt,
                COUNT(*)          AS submissionCount,
@@ -17,7 +22,7 @@
                 ORDER BY s2.evaluated_at DESC, s2.id DESC
                 LIMIT 1)         AS latestTotalScore
         FROM evaluation_submission s
-                 LEFT JOIN user u ON u.github = s.github_username
+                 LEFT JOIN user u ON u.user_id = s.user_id
                  LEFT JOIN department d ON d.dept_id = u.dept_id
                  LEFT JOIN resume r ON r.user_id = u.user_id AND r.cycle_id = s.cycle_id
                  LEFT JOIN interview_preference ip ON ip.resume_id = r.resume_id
@@ -28,7 +33,7 @@
             <if test="claimed == 'claimed'">AND u.user_id IS NOT NULL</if>
             <if test="claimed == 'unclaimed'">AND u.user_id IS NULL</if>
         </where>
-        GROUP BY s.github_username, u.user_id, u.name, COALESCE(d.dept_name, vd.dept_name)
+        GROUP BY s.github_username, u.user_id, u.name
         <if test="minScore != null or maxScore != null">
             HAVING
             <if test="minScore != null">MAX(s.total_score) &gt;= #{minScore}</if>

@@ -103,7 +103,18 @@ public class EvaluationIntakeServiceImpl implements IEvaluationIntakeService {
         submission.setRepository(request.getRepository());
         submission.setCommitSha(request.getCommitSha());
 
-        submissionMapper.insert(submission);
+        try {
+            submissionMapper.insert(submission);
+        } catch (org.springframework.dao.DuplicateKeyException e) {
+            // 并发重复推送:唯一键 uk_report_sha 兜底,重查返回已存记录(幂等语义,review J5)
+            EvaluationSubmission raced = submissionMapper.selectOne(
+                    new LambdaQueryWrapper<EvaluationSubmission>().eq(EvaluationSubmission::getReportSha, sha));
+            if (raced != null) {
+                log.info("并发重复推送被唯一键拦截,返回已存: report_sha={}", sha);
+                return raced;
+            }
+            throw e;
+        }
         log.info("评测提交入库: report_sha={}, github={}, userId={}, cycleId={}, total={}",
                 sha, submission.getGithubUsername(), userId, cycleId, report.getTotalScore());
         return submission;
