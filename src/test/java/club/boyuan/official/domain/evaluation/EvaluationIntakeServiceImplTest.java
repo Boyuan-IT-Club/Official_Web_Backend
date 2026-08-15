@@ -134,4 +134,14 @@ class EvaluationIntakeServiceImplTest {
         req.setGithubUsername("alice");
         assertThrows(BusinessException.class, () -> service.ingest(req));
     }
+
+    @Test
+    void ingestRejectsOversizedReport() {
+        EvaluationIntakeRequest req = new EvaluationIntakeRequest();
+        req.setGithubUsername("alice");
+        req.setReport("A".repeat(EvaluationIntakeServiceImpl.MAX_REPORT_BASE64_LENGTH + 1));
+
+        assertThrows(BusinessException.class, () -> service.ingest(req));
+        verify(submissionMapper, never()).insert(any(EvaluationSubmission.class));
+    }
 }

@@ -110,6 +110,8 @@ paths:
           description: 成功,返回提交 id(code/message/data)
         '400':
           description: 非法载荷 / 解密失败 / schema 不符
+        '413':
+          description: 请求体/报告单载荷过大(上限 1MiB / base64 后 256KiB)
         '429':
           description: 请求过于频繁
   /api/evaluations/me:
@@ -8720,6 +8722,8 @@ paths:
       responses:
         '200':
           description: 认领成功,返回更新后的提交
+        '409':
+          description: 该提交已被认领(不允许重复认领/改归属)
   /api/user/me/github-account:
     put:
       summary: 绑定 GitHub 账号(登录名)

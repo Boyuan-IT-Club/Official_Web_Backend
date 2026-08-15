@@ -81,4 +81,16 @@ class EvaluationAdminServiceImplTest {
     void claimMissingUserIdThrows() {
         assertThrows(BusinessException.class, () -> service.claim(1L, null));
     }
+
+    @Test
+    void claimAlreadyClaimedThrows() {
+        EvaluationSubmission s = new EvaluationSubmission();
+        s.setId(1L);
+        s.setUserId(9); // 已被其他用户认领
+        when(userMapper.selectById(7)).thenReturn(new User());
+        when(submissionMapper.selectById(1L)).thenReturn(s);
+
+        assertThrows(BusinessException.class, () -> service.claim(1L, 7));
+        verify(submissionMapper, never()).updateById(any(EvaluationSubmission.class));
+    }
 }

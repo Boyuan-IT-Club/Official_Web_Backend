@@ -124,9 +124,9 @@ rate-limit:
     - name: evaluation-intake
       pattern: /api/public/evaluations
       method: POST
-      limit: 60
+      limit: 300
       window-seconds: 60
-      key-type: IP
+      key-type: REMOTE_ADDR
 
 jwt:
   secret: ${JWT_SECRET:}

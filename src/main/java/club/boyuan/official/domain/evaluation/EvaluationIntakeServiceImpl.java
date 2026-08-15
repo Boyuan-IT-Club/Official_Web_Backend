@@ -34,7 +34,11 @@ public class EvaluationIntakeServiceImpl implements IEvaluationIntakeService {
 
     private final EvaluationSubmissionMapper submissionMapper;
     private final UserMapper userMapper;
+    /** base64 报告单长度上限(约 192KB 解码后);正常报告单 <10KB */
+    static final int MAX_REPORT_BASE64_LENGTH = 256 * 1024;
+
     private final RecruitmentCycleMapper cycleMapper;
+
 
     @Override
     @Transactional
@@ -44,6 +48,9 @@ public class EvaluationIntakeServiceImpl implements IEvaluationIntakeService {
         }
         if (request.getGithubUsername() == null || request.getGithubUsername().isBlank()) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "github_username 不能为空");
+        }
+        if (request.getReport().length() > MAX_REPORT_BASE64_LENGTH) {
+            throw new BusinessException(BusinessExceptionEnum.PAYLOAD_TOO_LARGE, "report 载荷过大");
         }
 
         byte[] reportBytes;

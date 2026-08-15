@@ -55,3 +55,6 @@ docs/feishu-wiki/
 
 # 本地中间件数据卷(docker compose)
 volumes/
+
+# 本地联调覆盖,勿提交
+docker-compose.override.yml

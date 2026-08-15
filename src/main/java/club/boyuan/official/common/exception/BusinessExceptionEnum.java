@@ -37,6 +37,8 @@ public enum BusinessExceptionEnum {
     GITHUB_ALREADY_BOUND(2017, "该 GitHub 账号已被其他用户绑定", HttpStatus.BAD_REQUEST),
     INVALID_REPORT(2018, "报告单无效", HttpStatus.BAD_REQUEST),
     EVALUATION_SUBMISSION_NOT_FOUND(2019, "评测提交不存在", HttpStatus.NOT_FOUND),
+    EVALUATION_SUBMISSION_ALREADY_CLAIMED(2020, "该评测提交已被认领", HttpStatus.CONFLICT),
+    PAYLOAD_TOO_LARGE(2021, "请求体过大", HttpStatus.PAYLOAD_TOO_LARGE),
 
     // 认证相关异常 (2100-2199)
     AUTHENTICATION_FAILED(2100, "认证失败", HttpStatus.BAD_REQUEST),

@@ -85,6 +85,9 @@ public class EvaluationAdminServiceImpl implements IEvaluationAdminService {
         if (submission == null) {
             throw new BusinessException(BusinessExceptionEnum.EVALUATION_SUBMISSION_NOT_FOUND);
         }
+        if (submission.getUserId() != null) {
+            throw new BusinessException(BusinessExceptionEnum.EVALUATION_SUBMISSION_ALREADY_CLAIMED);
+        }
         submission.setUserId(userId);
         submissionMapper.updateById(submission);
         log.info("评测提交 {}(github={}) 已认领到用户 {}", id, submission.getGithubUsername(), userId);
