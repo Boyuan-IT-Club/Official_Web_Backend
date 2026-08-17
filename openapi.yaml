@@ -8799,6 +8799,11 @@ paths:
         由该场次的几位面试官共同维护）。
 
         服务端逐个校验 `contributors`、`lastEditedBy`、`submittedBy` 里的人是否绑定在该行所属场次上——CRDT 协议层拦不住越权写入，这里是把关的那一道。
+
+        自 V12 起每个维度可以有独立评语：请求里的 `dimensionNotes`（{dimensionId: text}）与 `dimensionWriters`（{dimensionId:
+        userId}）分别落到 `interview_evaluation.dimension_notes` 与 `dimension_writers`。维度作者取自协同服务的单元格级写入记录（Yjs
+        update 的 origin，不是客户端自报），并同样要过「是否绑定在该场次」的校验，未绑定者不给署名。原有 `comment` 退化为可选的总体结论，`scores`
+        结构不变（{dimensionId: score}），因此评价汇总、结果与通知等既有读取方不受影响。
         未绑定者被剔除出参与人、记入 `collab_audit`（rejected=1）并在响应里说明；评价本身照常落库，避免一个捣乱者让整场面试的记录都写不进去。
 
         `contributors` 与库中已有的参与人取并集：协同服务重启后旁路记录从零开始，直接覆盖会让重启前参与过的人从署名里消失。
