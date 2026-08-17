@@ -41,6 +41,15 @@ public class EvaluationSummaryDTO {
         /** 各维度得分 {dimensionId: score}，共编模型下一位候选人只有一份，不再是均分 */
         private Map<Integer, BigDecimal> scores = new LinkedHashMap<>();
 
+        /** 各维度独立评语 {dimensionId: text} */
+        private Map<Integer, String> dimensionNotes = new LinkedHashMap<>();
+
+        /**
+         * 各维度评价的作者 {dimensionId: {userId, name}}。
+         * 管理端据此显示「技术能力这项是张三评的」，而不是只知道整行有谁动过手。
+         */
+        private Map<Integer, Contributor> dimensionWriters = new LinkedHashMap<>();
+
         private BigDecimal totalScore;
 
         /** 面试记录与评语 */

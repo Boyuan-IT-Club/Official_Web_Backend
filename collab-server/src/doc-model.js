@@ -30,9 +30,31 @@ export function dimensionColId(dimensionId) {
   return `${DIMENSION_COL_PREFIX}${DIMENSION_SEPARATOR}${dimensionId}`;
 }
 
+/**
+ * 每个维度自己的文字评语键，形如 dim:12:note。
+ *
+ * 原先整行只有一个 comment 总评框，面试官得把四个维度的话揉进一段里，
+ * 事后也分不清哪句针对哪一项、是谁写的。改成每维度一格后，
+ * 署名天然落到维度级——writer-tracker 本来就按单元格记录写入者。
+ */
+export function dimensionNoteColId(dimensionId) {
+  return `${DIMENSION_COL_PREFIX}${DIMENSION_SEPARATOR}${dimensionId}${DIMENSION_SEPARATOR}${NOTE_SUFFIX}`;
+}
+
+const NOTE_SUFFIX = 'note';
+
+/** 解析评分格：dim:12 → 12；dim:12:note 不是评分格，返回 null */
 function parseDimensionColId(colId) {
   const parts = colId.split(DIMENSION_SEPARATOR);
   return parts[0] === DIMENSION_COL_PREFIX && parts.length === 2 ? Number(parts[1]) : null;
+}
+
+/** 解析评语格：dim:12:note → 12；其余返回 null */
+function parseDimensionNoteColId(colId) {
+  const parts = colId.split(DIMENSION_SEPARATOR);
+  return parts[0] === DIMENSION_COL_PREFIX && parts.length === 3 && parts[2] === NOTE_SUFFIX
+    ? Number(parts[1])
+    : null;
 }
 
 function buildColumns(seed) {
@@ -93,9 +115,17 @@ function writeRowInfo(rowMap, row) {
  * 提前建好 Y.Text 而不是等首次输入时再建，是为了避开一个 CRDT 陷阱：
  * 两个客户端同时在空格子里创建 Y.Text 会各建一个，合并时只留下一个，另一人刚敲的字直接消失。
  */
-function ensureSharedCells(rowMap) {
+function ensureSharedCells(rowMap, dimensionIds = []) {
   if (!(rowMap.get(COMMENT_COL) instanceof Y.Text)) {
     rowMap.set(COMMENT_COL, new Y.Text());
+  }
+  // 每个维度的评语格同样要提前建好：两个客户端同时在空格子里创建 Y.Text
+  // 会各建一个，合并时只留下一个，另一人刚敲的字直接消失
+  for (const dimensionId of dimensionIds) {
+    const key = dimensionNoteColId(dimensionId);
+    if (!(rowMap.get(key) instanceof Y.Text)) {
+      rowMap.set(key, new Y.Text());
+    }
   }
 }
 
@@ -118,12 +148,13 @@ export function seedDoc(doc, seed) {
       return map;
     }));
 
+    const dimensionIds = (seed.columns ?? []).map((d) => d.dimensionId);
     const rows = doc.getMap('rows');
     for (const row of seed.rows) {
       const rowMap = new Y.Map();
       rows.set(String(row.scheduleId), rowMap);
       writeRowInfo(rowMap, row);
-      ensureSharedCells(rowMap);
+      ensureSharedCells(rowMap, dimensionIds);
     }
   }, 'seed');
 }
@@ -143,6 +174,7 @@ export function reconcileDoc(doc, seed) {
     // 面试官绑定可能被管理员改动，对账时一并刷新姓名对照表
     meta.set('interviewerNames', seed.interviewerNames ?? {});
 
+    const dimensionIds = (seed.columns ?? []).map((d) => d.dimensionId);
     const rows = doc.getMap('rows');
     const seedIds = new Set(seed.rows.map((row) => String(row.scheduleId)));
 
@@ -156,7 +188,8 @@ export function reconcileDoc(doc, seed) {
       }
       // 候选人快照与面试官绑定可能变化，刷新只读部分，不动已填单元格
       writeRowInfo(rowMap, row);
-      ensureSharedCells(rowMap);
+      // 维度可能被管理员新增，对账时为新维度补建评语格
+      ensureSharedCells(rowMap, dimensionIds);
     }
 
     for (const key of [...rows.keys()]) {
@@ -208,6 +241,9 @@ export function materializeFromDoc(doc, cycleId, tracker = {}) {
     const item = {
       scheduleId: Number(rowKey),
       scores: {},
+      // 每维度评语与其作者：{dimensionId: text} / {dimensionId: userId}
+      dimensionNotes: {},
+      dimensionWriters: {},
       comment: null,
       recommendation: null,
       status: 1,
@@ -223,9 +259,24 @@ export function materializeFromDoc(doc, cycleId, tracker = {}) {
       }
       const value = cellValue(rawValue);
       const dimensionId = parseDimensionColId(cellKey);
+      const noteDimensionId = parseDimensionNoteColId(cellKey);
       if (dimensionId !== null) {
         if (value !== null && value !== undefined && value !== '') {
           item.scores[dimensionId] = Number(value);
+          // 谁打的这个分：单元格粒度，供管理端展示「这一项是谁评的」
+          const writer = writers.get(`${rowKey}/${cellKey}`);
+          if (writer !== undefined) {
+            item.dimensionWriters[dimensionId] = writer;
+          }
+        }
+      } else if (noteDimensionId !== null) {
+        if (value !== null && value !== undefined && value !== '') {
+          item.dimensionNotes[noteDimensionId] = value;
+          const writer = writers.get(`${rowKey}/${cellKey}`);
+          if (writer !== undefined) {
+            // 评语的作者优先于分数的作者：写字的人比打分的人更能代表这条评价
+            item.dimensionWriters[noteDimensionId] = writer;
+          }
         }
       } else if (cellKey === COMMENT_COL) {
         item.comment = value === '' ? null : value;
@@ -240,6 +291,7 @@ export function materializeFromDoc(doc, cycleId, tracker = {}) {
     }
 
     const untouched = Object.keys(item.scores).length === 0
+      && Object.keys(item.dimensionNotes).length === 0
       && !item.comment
       && item.recommendation === null;
     if (!untouched) {

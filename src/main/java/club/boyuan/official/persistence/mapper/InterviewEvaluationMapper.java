@@ -22,13 +22,19 @@ public interface InterviewEvaluationMapper extends BaseMapper<InterviewEvaluatio
      * @return 影响行数（插入为 1，更新为 2，无变化为 0）
      */
     @Insert("INSERT INTO interview_evaluation " +
-            "(schedule_id, cycle_id, resume_id, scores, total_score, comment, recommendation, status, " +
+            "(schedule_id, cycle_id, resume_id, scores, dimension_notes, dimension_writers, total_score, " +
+            "comment, recommendation, status, " +
             "contributors, last_edited_by, submitted_by, submitted_at, version) " +
-            "VALUES (#{scheduleId}, #{cycleId}, #{resumeId}, #{scores}, #{totalScore}, " +
+            "VALUES (#{scheduleId}, #{cycleId}, #{resumeId}, #{scores}, #{dimensionNotes}, " +
+            "#{dimensionWriters}, #{totalScore}, " +
             "#{comment}, #{recommendation}, #{status}, #{contributors}, #{lastEditedBy}, " +
             "#{submittedBy}, #{submittedAt}, #{version}) " +
             "ON DUPLICATE KEY UPDATE " +
             "scores = IF(VALUES(version) >= version, VALUES(scores), scores), " +
+            "dimension_notes = IF(VALUES(version) >= version, VALUES(dimension_notes), dimension_notes), " +
+            // 维度作者与 contributors 同理用 COALESCE 兜底：协同服务重启后这一轮带不出署名，
+            // 此时保留库里已记录的，不要用 null 把它冲掉
+            "dimension_writers = IF(VALUES(version) >= version, COALESCE(VALUES(dimension_writers), dimension_writers), dimension_writers), " +
             "total_score = IF(VALUES(version) >= version, VALUES(total_score), total_score), " +
             "comment = IF(VALUES(version) >= version, VALUES(comment), comment), " +
             "recommendation = IF(VALUES(version) >= version, VALUES(recommendation), recommendation), " +

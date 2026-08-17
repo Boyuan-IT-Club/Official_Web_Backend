@@ -49,7 +49,24 @@ public class MaterializeEvaluationRequestDTO {
         /** 各维度得分 {dimensionId: score} */
         private Map<Integer, BigDecimal> scores;
 
-        /** 面试记录与评语 */
+        /**
+         * 各维度独立评语 {dimensionId: text}。
+         *
+         * 原先整行只有一个 comment 总评框，面试官得把几个维度的话揉进一段里，
+         * 事后分不清哪句针对哪一项。改成每维度一格后这里承载它们，
+         * comment 退化为可选的总体结论。
+         */
+        private Map<Integer, String> dimensionNotes;
+
+        /**
+         * 各维度评价的作者 {dimensionId: userId}。
+         *
+         * 取自协同服务的单元格级写入记录（writer-tracker 本就按格记录，
+         * 不是客户端自报，无法伪造）。管理端据此显示「这一项是谁评的」。
+         */
+        private Map<Integer, Integer> dimensionWriters;
+
+        /** 总体评语（可选，维度评语之外的整体结论） */
         private String comment;
 
         /** 共同结论：1倾向通过 2待定 3不倾向 */

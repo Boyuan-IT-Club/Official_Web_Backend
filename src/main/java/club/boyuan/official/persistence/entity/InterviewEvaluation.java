@@ -65,6 +65,14 @@ public class InterviewEvaluation implements Serializable {
     @TableField("scores")
     private String scores;
 
+    /** 各维度独立评语 {dimensionId: text}，JSON */
+    @TableField("dimension_notes")
+    private String dimensionNotes;
+
+    /** 各维度评价的作者 {dimensionId: userId}，JSON。来源为协同服务的单元格级写入记录 */
+    @TableField("dimension_writers")
+    private String dimensionWriters;
+
     /**
      * 按权重算好的加权总分（冗余，供汇总排序时不必解 JSON）
      */

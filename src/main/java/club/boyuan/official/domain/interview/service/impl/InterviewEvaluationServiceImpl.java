@@ -234,6 +234,8 @@ public class InterviewEvaluationServiceImpl implements IInterviewEvaluationServi
 
         candidateSummary.setScores(parseScores(evaluation.getScores()));
         candidateSummary.setTotalScore(evaluation.getTotalScore());
+        candidateSummary.setDimensionNotes(parseStringMap(evaluation.getDimensionNotes()));
+        candidateSummary.setDimensionWriters(buildDimensionWriters(evaluation.getDimensionWriters(), users));
         candidateSummary.setComment(evaluation.getComment());
         candidateSummary.setRecommendation(evaluation.getRecommendation());
         candidateSummary.setStatus(evaluation.getStatus());
@@ -275,12 +277,28 @@ public class InterviewEvaluationServiceImpl implements IInterviewEvaluationServi
         Integer lastEditedBy = item.getLastEditedBy() != null && allowed.contains(item.getLastEditedBy())
                 ? item.getLastEditedBy()
                 : null;
+        // 维度评语的作者同样要过绑定校验：未绑定该场次的人写的内容仍然落库
+        // （否则一个捣乱者能让整场记录都写不进去），但不给他署名
+        Map<Integer, Integer> dimensionWriters = new LinkedHashMap<>();
+        if (item.getDimensionWriters() != null) {
+            item.getDimensionWriters().forEach((dimensionId, userId) -> {
+                if (userId != null && allowed.contains(userId)) {
+                    dimensionWriters.put(dimensionId, userId);
+                }
+            });
+        }
+        Map<Integer, String> dimensionNotes = item.getDimensionNotes() == null
+                ? Collections.emptyMap()
+                : item.getDimensionNotes();
+
         return new InterviewEvaluation()
                 .setScheduleId(item.getScheduleId())
                 .setCycleId(cycleId)
                 .setResumeId(schedule.getResumeId())
                 .setScores(writeScores(scores))
                 .setTotalScore(weightedTotal(scores, weights))
+                .setDimensionNotes(writeJson(dimensionNotes, "维度评语"))
+                .setDimensionWriters(writeJson(dimensionWriters, "维度作者"))
                 .setComment(item.getComment())
                 .setRecommendation(item.getRecommendation())
                 .setStatus(status)
@@ -443,6 +461,57 @@ public class InterviewEvaluationServiceImpl implements IInterviewEvaluationServi
     private BigDecimal average(List<BigDecimal> values) {
         BigDecimal sum = values.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
         return sum.divide(BigDecimal.valueOf(values.size()), 2, RoundingMode.HALF_UP);
+    }
+
+    /** 解析 {dimensionId: text} */
+    private Map<Integer, String> parseStringMap(String json) {
+        if (json == null || json.isBlank()) {
+            return Collections.emptyMap();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<Map<Integer, String>>() {});
+        } catch (Exception e) {
+            log.warn("维度评语解析失败，按空处理：{}", e.getMessage());
+            return Collections.emptyMap();
+        }
+    }
+
+    /** 解析 {dimensionId: userId} 并补上姓名，供管理端显示「这一项是谁评的」 */
+    private Map<Integer, EvaluationSummaryDTO.Contributor> buildDimensionWriters(String json,
+                                                                                Map<Integer, User> users) {
+        if (json == null || json.isBlank()) {
+            return Collections.emptyMap();
+        }
+        Map<Integer, Integer> raw;
+        try {
+            raw = objectMapper.readValue(json, new TypeReference<Map<Integer, Integer>>() {});
+        } catch (Exception e) {
+            log.warn("维度作者解析失败，按空处理：{}", e.getMessage());
+            return Collections.emptyMap();
+        }
+        Map<Integer, EvaluationSummaryDTO.Contributor> result = new LinkedHashMap<>();
+        raw.forEach((dimensionId, userId) -> {
+            if (userId == null) {
+                return;
+            }
+            EvaluationSummaryDTO.Contributor c = new EvaluationSummaryDTO.Contributor();
+            c.setUserId(userId);
+            c.setName(userName(users, userId));
+            result.put(dimensionId, c);
+        });
+        return result;
+    }
+
+    /** 通用 JSON 序列化：空表存 null，避免库里落一堆 "{}" */
+    private String writeJson(Map<?, ?> value, String what) {
+        if (value == null || value.isEmpty()) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception e) {
+            throw new BusinessException(BusinessExceptionEnum.SYSTEM_ERROR, what + "序列化失败：" + e.getMessage());
+        }
     }
 
     private String writeScores(Map<Integer, BigDecimal> scores) {
