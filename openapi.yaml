@@ -71,7 +71,96 @@ tags:
   description: 管理员对用户账号的管理、批量操作、缓存清理、全局搜索与数据导出
 - name: 系统监控
   description: 服务健康检查等运维接口
+- name: 评测提交(公开)
+  description: 候选人派生仓 GitHub Actions 推送 autograder 加密报告单的公开入库端点(零认证)
+- name: 评测(用户)
+  description: 当前登录候选人查看自己的评测历史/最新/趋势
 paths:
+  /api/public/evaluations:
+    post:
+      summary: 评测提交入库(Autograder Actions 推送)
+      deprecated: false
+      description: >-
+        公开端点(零认证,限频防刷,ADR-0001)。候选人派生仓 Actions 推送加密报告单:
+        服务器 Java 解密(AES-256-GCM,ADR-0002)、校验、按报告 sha256 幂等入库。
+        重复推送返回已存记录 id。身份键 github_username(来自 GitHub context)。
+      security: []
+      tags:
+      - 评测提交(公开)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - report
+              - github_username
+              properties:
+                report:
+                  type: string
+                  description: base64(autograding_report.json 原始字节)
+                github_username:
+                  type: string
+                  description: GitHub 登录名(来自 github.actor),可靠身份键
+                repository:
+                  type: string
+                  description: 候选人生成仓 URL
+                commit_sha:
+                  type: string
+                  description: 触发推送的 commit sha
+      responses:
+        '200':
+          description: 成功,返回提交 id(code/message/data)
+        '400':
+          description: 非法载荷 / 解密失败 / schema 不符
+        '413':
+          description: 请求体/报告单载荷过大(上限 1MiB / base64 后 256KiB)
+        '429':
+          description: 请求过于频繁
+  /api/evaluations/me:
+    get:
+      summary: 我的评测提交历史(分页)
+      deprecated: false
+      description: 当前登录候选人的全部评测提交,新→旧。
+      tags:
+      - 评测(用户)
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: page
+        in: query
+        schema: { type: integer, default: 0 }
+      - name: size
+        in: query
+        schema: { type: integer, default: 10 }
+      responses:
+        '200':
+          description: 分页的提交列表
+  /api/evaluations/me/latest:
+    get:
+      summary: 我的最新评测
+      deprecated: false
+      description: 最新一次提交;无则 data 为 null。
+      tags:
+      - 评测(用户)
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: 最新提交或 null
+  /api/evaluations/me/trend:
+    get:
+      summary: 我的得分趋势
+      deprecated: false
+      description: 得分随时间升序的点序列(供趋势图)。
+      tags:
+      - 评测(用户)
+      security:
+      - bearerAuth: []
+      responses:
+        '200':
+          description: [{evaluatedAt, totalScore}]
   /api/auth/register:
     post:
       summary: 社团官网-注册
@@ -9176,6 +9265,134 @@ paths:
                 properties: {}
           headers: {}
       security: []
+  /api/admin/evaluations/candidates:
+    get:
+      summary: 评测候选人聚合列表(总览/榜单)
+      deprecated: false
+      description: >-
+        按 github_username 分组,一人一行。认领态/姓名/部门按 user_id 关联;
+        未认领时姓名回退 github 用户名。部门 = 用户当前部门或该周期第一志愿部门。
+        sortBy: latest|maxScore|submissionCount;claimed: all|claimed|unclaimed。
+      tags:
+      - 评测提交(公开)
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: cycleId
+        in: query
+        schema: { type: integer }
+      - name: deptId
+        in: query
+        schema: { type: integer }
+      - name: minScore
+        in: query
+        schema: { type: integer }
+      - name: maxScore
+        in: query
+        schema: { type: integer }
+      - name: claimed
+        in: query
+        schema: { type: string, default: all }
+      - name: sortBy
+        in: query
+        schema: { type: string, default: latest }
+      - name: page
+        in: query
+        schema: { type: integer, default: 0 }
+      - name: size
+        in: query
+        schema: { type: integer, default: 10 }
+      responses:
+        '200':
+          description: 分页的候选人聚合行
+  /api/admin/evaluations/candidates/{key}/submissions:
+    get:
+      summary: 候选人评测提交历史
+      deprecated: false
+      description: key = userId 数字或 github_username。
+      tags:
+      - 评测提交(公开)
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: key
+        in: path
+        required: true
+        schema: { type: string }
+      responses:
+        '200':
+          description: 提交列表(新→旧)
+  /api/admin/evaluations/submissions/{id}:
+    get:
+      summary: 评测提交详情(含报告明文)
+      deprecated: false
+      tags:
+      - 评测提交(公开)
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer }
+      responses:
+        '200':
+          description: 提交详情(含 report_json)
+  /api/admin/evaluations/submissions/{id}/claim:
+    put:
+      summary: 认领未认领提交到用户
+      deprecated: false
+      tags:
+      - 评测提交(公开)
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              properties:
+                userId:
+                  type: integer
+      responses:
+        '200':
+          description: 认领成功,返回更新后的提交
+        '409':
+          description: 该提交已被认领(不允许重复认领/改归属)
+  /api/user/me/github-account:
+    put:
+      summary: 绑定 GitHub 账号(登录名)
+      deprecated: false
+      description: >-
+        绑定/改绑/解绑 GitHub 登录名。输入 URL 或裸登录名统一归一化存储;
+        绑定后自动回填认领该登录名的未认领提交。空串 = 解绑。
+        复用既有资料更新链路,此处为文档化别名。
+      tags:
+      - 个人信息页
+      security:
+      - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [githubAccount]
+              properties:
+                githubAccount:
+                  type: string
+      responses:
+        '200':
+          description: 绑定成功
+        '400':
+          description: 已被其他用户绑定
 components:
   schemas:
     RescheduleRequest:

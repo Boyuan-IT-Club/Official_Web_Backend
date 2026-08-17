@@ -66,3 +66,17 @@ DDD 顶层语义分区，包根 `club.boyuan.official`：
 
 - `docs/feishu-wiki/v2/00-快速开始/00-9-配置清单-需填写.md` 已 gitignore，含真实服务器密码与密钥，**严禁提交或复制其内容到任何会提交的文件**。
 - `.deploy/` 目录（部署私钥）同样已 gitignore，禁止提交。
+
+## Agent skills
+
+### Issue tracker
+
+Issues 在本仓库的 GitHub Issues(前端的票也跟踪在此)。见 `docs/agents/issue-tracker.md`。
+
+### Triage labels
+
+默认五标签:needs-triage / needs-info / ready-for-agent / ready-for-human / wontfix。见 `docs/agents/triage-labels.md`。
+
+### Domain docs
+
+单上下文:`CONTEXT.md`(领域词汇表)+ `docs/adr/` 在仓库根。见 `docs/agents/domain.md`。

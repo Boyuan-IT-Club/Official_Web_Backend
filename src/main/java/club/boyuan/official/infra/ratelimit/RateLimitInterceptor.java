@@ -67,6 +67,9 @@ public class RateLimitInterceptor implements HandlerInterceptor {
                 return "user:" + auth.getName();
             }
         }
+        if (keyType == RateLimitKeyType.REMOTE_ADDR) {
+            return "remote:" + request.getRemoteAddr();
+        }
         return "ip:" + resolveClientIp(request);
     }
 

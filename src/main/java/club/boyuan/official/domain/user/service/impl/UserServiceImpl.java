@@ -5,6 +5,9 @@ import club.boyuan.official.common.dto.PageResultDTO;
 import club.boyuan.official.domain.user.dto.UserDTO;
 import club.boyuan.official.persistence.entity.Resume;
 import club.boyuan.official.persistence.entity.User;
+import club.boyuan.official.persistence.entity.EvaluationSubmission;
+import club.boyuan.official.persistence.mapper.EvaluationSubmissionMapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import club.boyuan.official.common.exception.BusinessException;
 import club.boyuan.official.common.exception.BusinessExceptionEnum;
 import club.boyuan.official.persistence.entity.UserRole;
@@ -14,6 +17,7 @@ import club.boyuan.official.persistence.mapper.ResumeMapper;
 import club.boyuan.official.persistence.mapper.UserMapper;
 import club.boyuan.official.persistence.mapper.UserRoleMapper;
 import club.boyuan.official.domain.user.service.IUserService;
+import club.boyuan.official.common.utils.GitHubAccountUtil;
 import club.boyuan.official.common.utils.JwtTokenUtil;
 import club.boyuan.official.common.utils.PasswordValidator;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -41,6 +45,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
     private final ResumeMapper resumeMapper;
     private final ResumeFieldValueMapper resumeFieldValueMapper;
     private final UserRoleMapper userRoleMapper;
+    private final EvaluationSubmissionMapper evaluationSubmissionMapper;
     private final BCryptPasswordEncoder passwordEncoder;
     private final JwtTokenUtil jwtTokenUtil;
     private final UserConverter userConverter;
@@ -66,6 +71,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
         if (userMapper.selectByPhone(userDTO.getPhone()) != null) {
             logger.warn("添加用户失败，手机号已存在: {}", userDTO.getPhone());
             throw new BusinessException(BusinessExceptionEnum.PHONE_ALREADY_EXISTS);
+        }
+
+        // GitHub 账号归一化(可选):统一为登录名,并校验未被其他用户绑定
+        if (userDTO.getGithub() != null && !userDTO.getGithub().isBlank()) {
+            String normalizedGithub = GitHubAccountUtil.normalize(userDTO.getGithub());
+            GitHubAccountUtil.assertNotBound(userMapper, normalizedGithub, null);
+            userDTO.setGithub(normalizedGithub);
         }
 
         // 验证密码复杂度
@@ -133,8 +145,23 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
             logger.debug("专业更新为: {}", userDTO.getMajor());
         }
         if (userDTO.getGithub() != null) {
-            user.setGithub(userDTO.getGithub());
-            logger.debug("GitHub更新为: {}", userDTO.getGithub());
+            String normalizedGithub = GitHubAccountUtil.normalize(userDTO.getGithub());
+            if (normalizedGithub == null) {
+                user.setGithub(null);
+                logger.debug("GitHub账号已解绑，用户ID: {}", userDTO.getUserId());
+            } else {
+                GitHubAccountUtil.assertNotBound(userMapper, normalizedGithub, userDTO.getUserId());
+                userDTO.setGithub(normalizedGithub);
+                user.setGithub(normalizedGithub);
+                logger.debug("GitHub账号更新为: {}", normalizedGithub);
+                // 回填认领:该 github 的历史未认领提交归属到用户
+                EvaluationSubmission patch = new EvaluationSubmission();
+                patch.setUserId(userDTO.getUserId());
+                evaluationSubmissionMapper.update(patch, new LambdaUpdateWrapper<EvaluationSubmission>()
+                        .eq(EvaluationSubmission::getGithubUsername, normalizedGithub)
+                        .isNull(EvaluationSubmission::getUserId));
+                logger.info("绑定 GitHub {} 后回填认领未认领提交,用户ID: {}", normalizedGithub, userDTO.getUserId());
+            }
         }
         if (userDTO.getAvatar() != null) {
             user.setAvatar(userDTO.getAvatar());
