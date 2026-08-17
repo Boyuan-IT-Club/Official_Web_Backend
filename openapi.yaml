@@ -8800,7 +8800,7 @@ paths:
 
         服务端逐个校验 `contributors`、`lastEditedBy`、`submittedBy` 里的人是否绑定在该行所属场次上——CRDT 协议层拦不住越权写入，这里是把关的那一道。
 
-        自 V12 起每个维度可以有独立评语：请求里的 `dimensionNotes`（{dimensionId: text}）与 `dimensionWriters`（{dimensionId:
+        自 V17 起每个维度可以有独立评语：请求里的 `dimensionNotes`（{dimensionId: text}）与 `dimensionWriters`（{dimensionId:
         userId}）分别落到 `interview_evaluation.dimension_notes` 与 `dimension_writers`。维度作者取自协同服务的单元格级写入记录（Yjs
         update 的 origin，不是客户端自报），并同样要过「是否绑定在该场次」的校验，未绑定者不给署名。原有 `comment` 退化为可选的总体结论，`scores`
         结构不变（{dimensionId: score}），因此评价汇总、结果与通知等既有读取方不受影响。

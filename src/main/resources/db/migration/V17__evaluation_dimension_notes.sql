@@ -1,5 +1,9 @@
 -- 面试评价：每个维度独立的文字评语与作者。
 --
+-- 版本号说明：本脚本最初写作 V12，但并行开发中 V12__evaluation_submission.sql 先合入且已在
+-- 生产执行，Flyway 见到同一版本号两个脚本会直接启动失败（"Found more than one migration
+-- with version 12"）。因此改用 V17。新增迁移前先看一眼生产的 flyway_schema_history 最大版本。
+--
 -- 背景：V10 建的 interview_evaluation 只有一个 comment 总评框，面试官得把
 -- 「技术能力」「项目经历」「沟通表达」「意愿匹配」几项的话揉进一段文字里，
 -- 事后既分不清哪句针对哪一项，也看不出是谁写的（哪怕 contributors 记了参与人，
