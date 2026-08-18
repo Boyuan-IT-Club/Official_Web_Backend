@@ -185,4 +185,11 @@
         WHERE is_active = 1
     </update>
 
+    <select id="findOpenForApplication" resultMap="RecruitmentCycleResultMap">
+        SELECT * FROM recruitment_cycle
+        WHERE is_active = 1
+          AND #{today} BETWEEN start_date AND end_date
+        ORDER BY start_date DESC, cycle_id DESC
+    </select>
+
 </mapper>

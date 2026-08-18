@@ -4079,6 +4079,79 @@ paths:
                 - message
                 - data
           headers: {}
+  /api/cycles/open:
+    get:
+      summary: 当前开放投递的周期
+      deprecated: false
+      description: >-
+        返回「现在真的可以投递」的招募周期列表：is_active = 1 且今天落在
+        start_date ~ end_date 之间，按 start_date 倒序（前端以第一项为默认选中）。
+
+        与 /api/cycles/active/{isActive} 的区别：is_active 只表示「是否启用」，
+        往届周期为了能查历史简历通常也保持启用，所以「启用中」不等于「现在能投」。
+        用户端不要再用 active 接口取第一条来判断当前周期。
+
+        本接口以起止日期为权威，不看 status 列 —— status 只有
+        /api/cycles/update-statuses 这个手动接口会刷新，没有定时任务，实际长期陈旧。
+      tags:
+      - 招聘活动相关接口（管理员专属）
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: 业务状态码（200 表示成功）
+                  message:
+                    type: string
+                    description: 提示信息
+                  data:
+                    type: array
+                    description: 当前开放投递的周期，可能为空数组（此时无周期在招）
+                    items:
+                      type: object
+                      properties:
+                        cycleId:
+                          type: integer
+                          description: 招募周期 ID
+                        cycleName:
+                          type: string
+                          description: 周期名称
+                        academicYear:
+                          type: string
+                          description: 学年
+                        description:
+                          type: string
+                          nullable: true
+                          description: 周期说明
+                        startDate:
+                          type: string
+                          description: 开始日期（yyyy-MM-dd）
+                        endDate:
+                          type: string
+                          description: 截止日期（yyyy-MM-dd）
+                        fieldCount:
+                          type: integer
+                          description: >-
+                            该周期已配置的简历字段数。为 0 表示报名表单还没配，
+                            投递页无内容可填 —— /api/resumes/fields/{cycleId}
+                            在无定义时返回 200 + 空数组且不报错，前端需据此提示，
+                            否则表现为一张空白表单。
+                      required:
+                      - cycleId
+                      - cycleName
+                      - startDate
+                      - endDate
+                      - fieldCount
+                required:
+                - code
+                - message
+                - data
+          headers: {}
   /api/cycles/page:
     get:
       summary: 分页获取招募周期
