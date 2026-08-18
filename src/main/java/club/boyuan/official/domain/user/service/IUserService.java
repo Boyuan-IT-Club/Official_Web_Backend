@@ -55,4 +55,11 @@ public interface IUserService extends IService<User> {
      * @return 更新的用户数量
      */
     int batchUpdateUserMembership(List<Integer> userIds, Boolean isMember);
+
+    /**
+     * 管理端统计卡用的全库计数。
+     */
+    long countUsersByMembership(boolean isMember);
+
+    long countFrozenUsers();
 }

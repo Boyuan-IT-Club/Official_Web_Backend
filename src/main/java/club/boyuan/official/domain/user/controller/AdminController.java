@@ -2,6 +2,7 @@ package club.boyuan.official.domain.user.controller;
 
 import club.boyuan.official.common.dto.PageResultDTO;
 import club.boyuan.official.common.dto.ResponseMessage;
+import club.boyuan.official.domain.user.dto.AdminUserPageDTO;
 import club.boyuan.official.domain.user.dto.UserDTO;
 import club.boyuan.official.persistence.entity.User;
 import club.boyuan.official.common.exception.BusinessExceptionEnum;
@@ -101,8 +102,11 @@ public class AdminController {
     /**
      * 获取用户列表接口（分页 + 条件查询）
      */
+    // 只读放宽:admin:manage(超管,可读可写)或 user:view(管理员,只读)。
+    // 本控制器其余接口一律保持 admin:manage —— 只读角色能看不能改的边界就在这里,
+    // 新增写接口时不要顺手抄这一行。
     @GetMapping("/users")
-    @PreAuthorize("hasAuthority('admin:manage')")
+    @PreAuthorize("hasAnyAuthority('admin:manage', 'user:view')")
     public ResponseEntity<ResponseMessage<?>> getUsers(
             @RequestParam(required = false) String role,
             @RequestParam(required = false) String dept,
@@ -121,7 +125,14 @@ public class AdminController {
                 }
             });
         }
-        return ResponseEntity.ok(ResponseMessage.success(userPage));
+        // 统计卡的三个计数走全库,与当前分页/筛选无关;此前后端不返回这三个键,
+        // 前端 data?.memberCount 恒为 undefined,四张卡里三张一直是 0
+        AdminUserPageDTO body = new AdminUserPageDTO(
+                userPage,
+                userService.countUsersByMembership(true),
+                userService.countUsersByMembership(false),
+                userService.countFrozenUsers());
+        return ResponseEntity.ok(ResponseMessage.success(body));
     }
 
     /**
