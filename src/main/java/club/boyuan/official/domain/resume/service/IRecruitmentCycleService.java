@@ -1,5 +1,6 @@
 package club.boyuan.official.domain.resume.service;
 
+import club.boyuan.official.domain.resume.dto.OpenCycleDTO;
 import club.boyuan.official.common.dto.PageResultDTO;
 import club.boyuan.official.persistence.entity.RecruitmentCycle;
 
@@ -76,6 +77,12 @@ public interface IRecruitmentCycleService {
      * @param currentDate 当前日期
      */
     void updateRecruitmentCycleStatusesBasedOnDate(LocalDate currentDate);
+
+    /**
+     * 当前开放投递的周期列表(启用中 + 今天在起止日期内),每项带简历字段数。
+     * 同时开放多个时按 start_date 倒序,前端以第一项为默认选中。
+     */
+    List<OpenCycleDTO> getOpenCyclesForApplication();
     
     /**
      * 批量更新招募周期

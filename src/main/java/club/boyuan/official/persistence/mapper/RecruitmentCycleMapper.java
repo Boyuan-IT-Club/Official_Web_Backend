@@ -112,4 +112,15 @@ public interface RecruitmentCycleMapper extends BaseMapper<RecruitmentCycle> {
      * @return 影响行数
      */
     int updateStatusBasedOnDate(@Param("currentDate") LocalDate currentDate);
+
+    /**
+     * 当前开放投递的周期:启用中,且今天落在起止日期内。
+     *
+     * 刻意不看 status 列:它虽有 1未开始/2进行中/3已结束 的语义,但只有一个手动
+     * 管理接口会刷新它(没有定时任务),实际数据长期陈旧。起止日期是管理端唯一
+     * 真正维护的字段,所以以日期为权威。
+     *
+     * 按 start_date 倒序:同时开放多个时,较新的排前面做默认选中。
+     */
+    List<RecruitmentCycle> findOpenForApplication(@Param("today") LocalDate today);
 }

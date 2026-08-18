@@ -1,5 +1,6 @@
 package club.boyuan.official.domain.resume.service.impl;
 
+import club.boyuan.official.domain.resume.dto.OpenCycleDTO;
 import club.boyuan.official.common.dto.PageResultDTO;
 import club.boyuan.official.persistence.entity.RecruitmentCycle;
 import club.boyuan.official.persistence.mapper.RecruitmentCycleMapper;
@@ -166,6 +167,25 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
         }
     }
     
+    @Override
+    public List<OpenCycleDTO> getOpenCyclesForApplication() {
+        LocalDate today = LocalDate.now();
+        List<RecruitmentCycle> open = recruitmentCycleMapper.findOpenForApplication(today);
+        logger.debug("当前开放投递的周期数: {}，日期: {}", open.size(), today);
+        return open.stream()
+                .map(c -> {
+                    int fieldCount = 0;
+                    try {
+                        fieldCount = fieldDefinitionService.getFieldDefinitionsByCycleId(c.getCycleId()).size();
+                    } catch (Exception e) {
+                        // 字段数只用于提示「该周期未配置表单」，取不到不该让整个列表失败
+                        logger.warn("统计周期{}的简历字段数失败: {}", c.getCycleId(), e.getMessage());
+                    }
+                    return new OpenCycleDTO(c, fieldCount);
+                })
+                .toList();
+    }
+
     @Override
     public void updateRecruitmentCycleStatusesBasedOnDate(LocalDate currentDate) {
         logger.info("根据当前日期更新招募周期状态，当前日期: {}", currentDate);
