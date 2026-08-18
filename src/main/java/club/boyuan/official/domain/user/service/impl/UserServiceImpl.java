@@ -8,6 +8,7 @@ import club.boyuan.official.persistence.entity.User;
 import club.boyuan.official.persistence.entity.EvaluationSubmission;
 import club.boyuan.official.persistence.mapper.EvaluationSubmissionMapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import club.boyuan.official.common.exception.BusinessException;
 import club.boyuan.official.common.exception.BusinessExceptionEnum;
 import club.boyuan.official.persistence.entity.UserRole;
@@ -147,6 +148,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
         if (userDTO.getGithub() != null) {
             String normalizedGithub = GitHubAccountUtil.normalize(userDTO.getGithub());
             if (normalizedGithub == null) {
+                // updateById 默认忽略 null 字段(setGithub(null) 不会进 UPDATE SQL,线上事故:解绑 200 但值不变);
+                // 显式 UPDATE ... SET github = NULL 才能真正解绑
+                userMapper.update(null, new UpdateWrapper<User>()
+                        .eq("user_id", user.getUserId())
+                        .set("github", null));
                 user.setGithub(null);
                 logger.debug("GitHub账号已解绑，用户ID: {}", userDTO.getUserId());
             } else {

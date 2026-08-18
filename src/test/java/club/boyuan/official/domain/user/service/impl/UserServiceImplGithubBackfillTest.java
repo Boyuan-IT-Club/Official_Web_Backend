@@ -12,6 +12,7 @@ import club.boyuan.official.persistence.mapper.ResumeMapper;
 import club.boyuan.official.persistence.mapper.UserMapper;
 import club.boyuan.official.persistence.mapper.UserRoleMapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -54,5 +55,28 @@ class UserServiceImplGithubBackfillTest {
 
         // 归一化后回填:update submission set user_id=7 where github_username='alice' and user_id is null
         verify(evaluationSubmissionMapper).update(any(EvaluationSubmission.class), any(LambdaUpdateWrapper.class));
+    }
+
+    @Test
+    void githubUnbindWritesExplicitNullInsteadOfIgnoring() {
+        UserServiceImpl service = new UserServiceImpl(userMapper, awardExperienceMapper, resumeMapper,
+                resumeFieldValueMapper, userRoleMapper, evaluationSubmissionMapper,
+                passwordEncoder, jwtTokenUtil, userConverter);
+
+        User user = new User();
+        user.setUserId(7);
+        when(userMapper.selectById(7)).thenReturn(user);
+
+        UserDTO dto = new UserDTO();
+        dto.setUserId(7);
+        dto.setGithub("   "); // 空白 → 归一化 null → 解绑
+
+        service.edit(dto);
+
+        // 解绑必须显式调用 update(SET github = NULL),而非依赖 updateById(默认忽略 null 字段)
+        verify(userMapper).update(org.mockito.ArgumentMatchers.isNull(), any(UpdateWrapper.class));
+        // 解绑不触发回填认领
+        verify(evaluationSubmissionMapper, org.mockito.Mockito.never())
+                .update(any(EvaluationSubmission.class), any(LambdaUpdateWrapper.class));
     }
 }
