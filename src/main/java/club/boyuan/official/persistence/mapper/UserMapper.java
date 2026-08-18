@@ -61,6 +61,13 @@ public interface UserMapper extends BaseMapper<User> {
      * @return 更新的记录数
      */
     int batchUpdateMembershipByIds(@Param("userIds") List<Integer> userIds, @Param("isMember") Boolean isMember);
+
+    /**
+     * 管理端统计卡用的全库计数(不随分页/筛选变化)。
+     */
+    long countByMembership(@Param("isMember") boolean isMember);
+
+    long countFrozen();
     
     /**
      * 根据用户ID列表查询用户

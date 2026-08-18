@@ -2116,21 +2116,14 @@ paths:
                     description: 提示信息
                   data:
                     type: object
+                    description: >-
+                      分页结果。字段名沿用后端 PageResultDTO：列表在 content，
+                      总数在 totalElements（此前文档写的 total/users/page 与实现不符，已按实现更正）。
+                      memberCount/nonMemberCount/frozenCount 为全库统计，不随分页与筛选变化。
                     properties:
-                      total:
-                        type: integer
-                        description: 总数
-                      totalPages:
-                        type: integer
-                        description: 总页数
-                      pageSize:
-                        type: integer
-                        description: 每页数量
-                      page:
-                        type: integer
-                        description: 页码（从 1 开始）
-                      users:
+                      content:
                         type: array
+                        description: 当前页用户列表
                         items:
                           type: object
                           properties:
@@ -2140,65 +2133,102 @@ paths:
                             username:
                               type: string
                               description: 用户名
-                            password:
-                              type: string
-                              description: 密码
                             name:
                               type: string
+                              nullable: true
                               description: 姓名
                             email:
                               type: string
                               description: 邮箱
                             phone:
                               type: string
+                              nullable: true
                               description: 手机号
-                            createTime:
+                            role:
                               type: string
-                              description: 创建时间
-                            status:
-                              type: integer
-                              description: 状态
+                              nullable: true
+                              description: 遗留角色占位列；实际角色看 roles
                             major:
                               type: string
+                              nullable: true
                               description: 专业
                             github:
                               type: string
+                              nullable: true
                               description: GitHub 主页
                             deptId:
                               type: integer
-                              description: 部门 ID
+                              nullable: true
+                              description: 部门 ID（V6 建表的外键，与 dept 并存且未同步）
+                            dept:
+                              type: string
+                              nullable: true
+                              description: 社员所属部门名称；管理端读写与筛选走本字段
+                            isMember:
+                              type: boolean
+                              nullable: true
+                              description: 是否已录取为社员
                             avatar:
                               type: string
-                              description: 头像 URL
+                              nullable: true
+                              description: 头像 URL（已解析为可访问地址）
+                            status:
+                              type: integer
+                              description: 账号状态：0 冻结，1 正常
                             isDeleted:
                               type: integer
                               description: 是否已删除（逻辑删除标记）
+                            createTime:
+                              type: string
+                              description: 创建时间
                             updateTime:
                               type: string
                               description: 更新时间
+                            roles:
+                              type: array
+                              nullable: true
+                              description: RBAC 角色（由 user_role 关联填充）
+                              items:
+                                type: object
                           required:
                           - userId
                           - username
-                          - password
-                          - name
                           - email
-                          - phone
-                          - createTime
                           - status
-                          - major
-                          - github
-                          - deptId
-                          - avatar
                           - isDeleted
-                          - updateTime
-                        description: 用户列表
+                      totalElements:
+                        type: integer
+                        description: 符合条件的总记录数
+                      totalPages:
+                        type: integer
+                        description: 总页数
+                      currentPage:
+                        type: integer
+                        description: 当前页码（从 0 开始）
+                      pageSize:
+                        type: integer
+                        description: 每页数量
+                      first:
+                        type: boolean
+                        description: 是否首页
+                      last:
+                        type: boolean
+                        description: 是否末页
+                      memberCount:
+                        type: integer
+                        description: 全库社员数
+                      nonMemberCount:
+                        type: integer
+                        description: 全库非社员数（含 is_member 为 NULL 的历史行）
+                      frozenCount:
+                        type: integer
+                        description: 全库已冻结账号数
                     required:
-                    - total
+                    - content
+                    - totalElements
                     - totalPages
+                    - currentPage
                     - pageSize
-                    - page
-                    - users
-                    description: 响应数据
                 required:
                 - code
                 - message

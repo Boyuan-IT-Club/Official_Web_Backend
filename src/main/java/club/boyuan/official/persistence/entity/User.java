@@ -10,6 +10,7 @@ import com.baomidou.mybatisplus.annotation.FieldFill;
 import java.time.LocalDateTime;
 import java.util.List;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 @TableName("user") // MyBatis-Plus 表映射注解
 public class User {
@@ -19,7 +20,17 @@ public class User {
     @TableField("username") // MyBatis-Plus 字段映射
     private String username;
 
+    /**
+     * 密码哈希。
+     *
+     * WRITE_ONLY:可以从 JSON 反序列化进来,但绝不序列化出去。
+     * 在此之前 GET /api/admin/users 会把全部用户的 bcrypt 哈希原样返回
+     * (列表 SQL 明确 SELECT 了 password,实体又没有任何 Json 注解),
+     * 任何能打开「用户与角色」页的账号都能从接口响应里拿到全站哈希。
+     * 用 WRITE_ONLY 而非 @JsonIgnore,以免影响可能存在的反序列化调用方。
+     */
     @TableField("password")
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String password;
 
     @TableField("name")
@@ -42,6 +53,26 @@ public class User {
 
     @TableField("dept_id")
     private Integer deptId;
+
+    /**
+     * 社员所属部门名称。
+     *
+     * 与 deptId 并存是历史结果：dept_id 是 V6 建表时的外键，而 dept(varchar)
+     * 是后来手工加到生产库的，管理端的批量分配部门、列表查询与筛选全走 dept。
+     * 两者未做同步，改动这块前先确认调用方读的是哪一个。
+     */
+    @TableField("dept")
+    private String dept;
+
+    /**
+     * 是否已录取为社员。
+     *
+     * 用 getIsMember() 而非 isMember()：Jackson 对 isXxx() 形式的读方法会把
+     * 属性名截成 member，前端读的是 isMember，键名一错就恒为 undefined
+     * ——表现就是「部门」列永远显示非社员。
+     */
+    @TableField("is_member")
+    private Boolean isMember;
 
     @TableField("avatar")
     private String avatar;
@@ -158,6 +189,22 @@ public class User {
 
     public void setDeptId(Integer deptId) {
         this.deptId = deptId;
+    }
+
+    public String getDept() {
+        return dept;
+    }
+
+    public void setDept(String dept) {
+        this.dept = dept;
+    }
+
+    public Boolean getIsMember() {
+        return isMember;
+    }
+
+    public void setIsMember(Boolean isMember) {
+        this.isMember = isMember;
     }
 
     public String getAvatar() {

@@ -414,6 +414,16 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
     }
 
     @Override
+    public long countUsersByMembership(boolean isMember) {
+        return userMapper.countByMembership(isMember);
+    }
+
+    @Override
+    public long countFrozenUsers() {
+        return userMapper.countFrozen();
+    }
+
+    @Override
     public User getUserById(Integer userId) {
         return userMapper.selectById(userId);
     }
