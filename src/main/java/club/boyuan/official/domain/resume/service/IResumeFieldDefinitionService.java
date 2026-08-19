@@ -46,4 +46,15 @@ public interface IResumeFieldDefinitionService {
      * @param fieldId 字段ID
      */
     void deleteFieldDefinition(Integer fieldId);
+
+    /**
+     * 按模板为某周期初始化字段定义:只补该周期尚不存在的 field_key,已存在的一律不动。
+     *
+     * 刻意忽略模板里带的 fieldId —— 前端本地默认模板的 fieldId 是 1..20 的顺序编号,
+     * 与真实行毫无关系。之前缺了这个接口,前端「加载默认配置」拿到 404 后回退到
+     * 本地模板再走批量更新,导致 updateById 按那些假 ID 覆盖了错误的行(见 ADR/事故记录)。
+     *
+     * @return 初始化后该周期的全部字段定义
+     */
+    List<ResumeFieldDefinition> initFieldDefinitions(Integer cycleId, List<ResumeFieldDefinition> templates);
 }

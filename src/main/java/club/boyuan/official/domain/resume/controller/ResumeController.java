@@ -127,6 +127,24 @@ public class ResumeController {
     }
 
     /**
+     * 按模板初始化某周期的字段定义:只补该周期尚不存在的 field_key,已存在的一律不动。
+     *
+     * 这个接口此前不存在,而前端「加载默认配置」一直在调它 —— 每次 404,
+     * 前端便回退到本地默认模板再走批量更新。那份模板的 fieldId 是 1..20 的顺序编号,
+     * 与真实行毫无关系,于是把线上字段定义整体错位覆盖了(姓名/学号/性别 直接消失,
+     * 「年级」那一格里存着姓名)。补上它,让「加载默认配置」走一条只新增、不覆盖的路径。
+     */
+    @PostMapping("/fields/{cycleId}/init")
+    @PreAuthorize("hasAnyAuthority('cycle:manage', 'resume:audit')")
+    public ResponseEntity<ResponseMessage<List<ResumeFieldDefinition>>> initFieldDefinitions(
+            @PathVariable Integer cycleId,
+            @RequestBody List<ResumeFieldDefinition> templates) {
+        logger.info("初始化周期 {} 的字段定义，模板数量: {}", cycleId, templates == null ? 0 : templates.size());
+        List<ResumeFieldDefinition> result = fieldDefinitionService.initFieldDefinitions(cycleId, templates);
+        return ResponseEntity.ok(new ResponseMessage<>(200, "字段定义初始化成功", result));
+    }
+
+    /**
      * 批量更新字段定义
      */
     @PutMapping("/fields/batch")
