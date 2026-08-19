@@ -29,6 +29,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * 协同面试评价表的管理接口。
@@ -45,7 +46,18 @@ import java.util.List;
 public class InterviewEvaluationController {
 
     /** 管理员权限码：可读全部、可配置维度、可锁定 */
-    private static final String ADMIN_AUTHORITY = "resume:audit";
+    /**
+     * 「评价表管理级」的判定依据:决定能否跨场次查看候选人简历。
+     *
+     * 权限拆分后这件事归 interview:board:manage,但拆分是渐进的 ——
+     * 阶段一签发的旧令牌里只有 resume:audit,所以两者任一即可,
+     * 等旧令牌全部过期后可以只留 interview:board:manage。
+     *
+     * 这不是注解而是代码里的常量,按 @PreAuthorize 搜索会漏掉它:
+     * 只改注解不改这里,会让管理员在接口层放行、却在方法内部被当成普通面试官。
+     */
+    private static final Set<String> BOARD_ADMIN_AUTHORITIES =
+            Set.of("interview:board:manage", "resume:audit");
 
     private final IEvaluationBoardService evaluationBoardService;
     private final IEvaluationDimensionService evaluationDimensionService;
@@ -123,12 +135,12 @@ public class InterviewEvaluationController {
                                                                      @PathVariable Integer scheduleId) {
         User viewer = userService.getUserByUsername(SecurityUtil.getCurrentUsername());
         return ResponseEntity.ok(ResponseMessage.success(evaluationBoardService.getCandidateResume(
-                cycleId, scheduleId, viewer.getUserId(), hasAuthority(ADMIN_AUTHORITY))));
+                cycleId, scheduleId, viewer.getUserId(), hasBoardAdminAuthority())));
     }
 
-    private static boolean hasAuthority(String authority) {
+    private static boolean hasBoardAdminAuthority() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         return authentication != null && authentication.getAuthorities().stream()
-                .anyMatch(granted -> authority.equals(granted.getAuthority()));
+                .anyMatch(granted -> BOARD_ADMIN_AUTHORITIES.contains(granted.getAuthority()));
     }
 }

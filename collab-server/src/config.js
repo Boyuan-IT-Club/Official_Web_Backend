@@ -44,7 +44,12 @@ export const config = {
 };
 
 /** 进入评价表所需的权限码，任一即可 */
-export const REQUIRED_PERMISSIONS = ['interview:evaluate', 'resume:audit'];
+// 能连上评价表并写入的权限。权限拆分后管理侧归 interview:board:manage，
+// 但阶段一签发的旧令牌里只有 resume:audit，故两者并存；旧令牌全部过期后可去掉 resume:audit。
+export const REQUIRED_PERMISSIONS = ['interview:evaluate', 'interview:board:manage', 'resume:audit'];
 
 /** 管理员权限码：可读全部、可配置维度、可锁定 */
-export const ADMIN_PERMISSION = 'resume:audit';
+// 管理级：能跨场次读写、能在锁定后仍写入。同上，过渡期两者任一即可。
+// 注意这是协同服务侧的判定，后端的 @PreAuthorize 覆盖不到这里 ——
+// 只改注解不改这两个常量，管理员会在评价表里失去管理级身份。
+export const ADMIN_PERMISSIONS = ['interview:board:manage', 'resume:audit'];

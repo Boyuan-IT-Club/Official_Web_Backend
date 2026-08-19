@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { ADMIN_PERMISSION, REQUIRED_PERMISSIONS, config } from './config.js';
+import { ADMIN_PERMISSIONS, REQUIRED_PERMISSIONS, config } from './config.js';
 
 /**
  * 校验前端带来的 JWT，与 Java 后端同一把 HS256 密钥。
@@ -29,7 +29,7 @@ export function authenticateToken(token) {
   return {
     userId,
     username: claims.sub,
-    isAdmin: permissions.includes(ADMIN_PERMISSION),
+    isAdmin: ADMIN_PERMISSIONS.some((code) => permissions.includes(code)),
   };
 }
 

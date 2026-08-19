@@ -42,7 +42,7 @@ export const DIAG_CODES = {
   },
   NO_PERMISSION: {
     title: '当前账号没有面试评价权限',
-    hint: '需要 interview:evaluate 或 resume:audit 权限，请管理员在「用户与角色」中分配。',
+    hint: '需要 interview:evaluate 或 interview:board:manage 权限，请管理员在「用户与角色」中分配。',
   },
   UNKNOWN: {
     title: '未归类的错误',
