@@ -46,4 +46,12 @@ public interface IEvaluationBoardService {
      * @param admin        持有 {@code resume:audit} 时可越过绑定关系查看全部
      */
     ResumeDTO getCandidateResume(Integer cycleId, Integer scheduleId, Integer viewerUserId, boolean admin);
+
+    /**
+     * 该用户是否为指定周期的面试官(在该周期下至少绑定了一个场次)。
+     *
+     * 协同服务用它做按周期的准入:此前只要持有 interview:evaluate 就能打开任意
+     * eval-board:{cycleId} 文档,A 周期的面试官因此能看到 B 周期的全部候选人名单与分数。
+     */
+    boolean isInterviewerOfCycle(Integer cycleId, Integer userId);
 }

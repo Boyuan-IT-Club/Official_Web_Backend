@@ -2,7 +2,7 @@ import { Hocuspocus } from '@hocuspocus/server';
 import * as Y from 'yjs';
 import { config } from './config.js';
 import { authenticateToken, parseCycleId } from './auth.js';
-import { fetchSeed, materialize } from './backend-api.js';
+import { fetchSeed, materialize, isInterviewerOfCycle } from './backend-api.js';
 import { isLocked, loadDoc, saveState } from './db.js';
 import { materializeFromDoc, reconcileDoc, seedDoc } from './doc-model.js';
 import { createWriterTracker } from './writer-tracker.js';
@@ -44,6 +44,22 @@ export function createServer() {
         error.noPermission = true;
         recordDocError(documentName, error);
         throw error;
+      }
+
+      // 按周期准入：持有 interview:evaluate 只说明"是面试官"，不说明"是这个周期的面试官"。
+      // 缺这一步的话，A 周期的面试官能打开 eval-board:B 看到 B 周期的全部候选人与分数。
+      // 管理员(resume:audit)跨周期是职责所需，直接放行。
+      //
+      // 刻意放在 loadDoc 之前：否则会先抛出"该周期评价表尚未开启"，
+      // 等于向无关人员泄露了别的周期开没开表。
+      if (!user.isAdmin) {
+        const allowed = await isInterviewerOfCycle(cycleId, user.userId);
+        if (!allowed) {
+          const error = new Error(`用户 ${user.userId} 不是周期 ${cycleId} 的面试官`);
+          error.notCycleInterviewer = true;
+          recordDocError(documentName, error);
+          throw error;
+        }
       }
 
       const doc = await loadDoc(documentName);

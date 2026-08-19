@@ -14,6 +14,7 @@ import club.boyuan.official.persistence.entity.InterviewSchedule;
 import club.boyuan.official.persistence.entity.RecruitmentCycle;
 import club.boyuan.official.persistence.entity.Resume;
 import club.boyuan.official.persistence.entity.SessionInterviewer;
+import club.boyuan.official.persistence.entity.InterviewSession;
 import club.boyuan.official.persistence.entity.User;
 import club.boyuan.official.persistence.mapper.CollabDocMapper;
 import club.boyuan.official.persistence.mapper.DepartmentMapper;
@@ -22,6 +23,7 @@ import club.boyuan.official.persistence.mapper.InterviewScheduleMapper;
 import club.boyuan.official.persistence.mapper.RecruitmentCycleMapper;
 import club.boyuan.official.persistence.mapper.ResumeMapper;
 import club.boyuan.official.persistence.mapper.SessionInterviewerMapper;
+import club.boyuan.official.persistence.mapper.InterviewSessionMapper;
 import club.boyuan.official.persistence.mapper.UserMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
@@ -62,6 +64,7 @@ public class EvaluationBoardServiceImpl implements IEvaluationBoardService {
     private final InterviewScheduleMapper interviewScheduleMapper;
     private final RecruitmentCycleMapper recruitmentCycleMapper;
     private final SessionInterviewerMapper sessionInterviewerMapper;
+    private final InterviewSessionMapper interviewSessionMapper;
     private final ResumeMapper resumeMapper;
     private final UserMapper userMapper;
     private final DepartmentMapper departmentMapper;
@@ -160,6 +163,29 @@ public class EvaluationBoardServiceImpl implements IEvaluationBoardService {
         }
 
         return resumeService.getResumeWithFieldValuesById(schedule.getResumeId());
+    }
+
+    @Override
+    public boolean isInterviewerOfCycle(Integer cycleId, Integer userId) {
+        if (cycleId == null || userId == null) {
+            return false;
+        }
+        // 该用户绑定的全部场次 -> 取出其中属于本周期的
+        List<SessionInterviewer> bindings = sessionInterviewerMapper.selectList(
+                new LambdaQueryWrapper<SessionInterviewer>().eq(SessionInterviewer::getUserId, userId));
+        if (bindings.isEmpty()) {
+            return false;
+        }
+        List<Integer> sessionIds = bindings.stream()
+                .map(SessionInterviewer::getSessionId)
+                .filter(Objects::nonNull)
+                .toList();
+        if (sessionIds.isEmpty()) {
+            return false;
+        }
+        return interviewSessionMapper.exists(new LambdaQueryWrapper<InterviewSession>()
+                .in(InterviewSession::getSessionId, sessionIds)
+                .eq(InterviewSession::getCycleId, cycleId));
     }
 
     private boolean isInterviewerOf(Integer sessionId, Integer userId) {

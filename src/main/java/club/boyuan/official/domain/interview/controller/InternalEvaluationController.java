@@ -55,6 +55,24 @@ public class InternalEvaluationController {
     }
 
     /**
+     * 该用户是否为本周期的面试官(在该周期下至少绑定了一个场次)。
+     *
+     * 协同服务在 onAuthenticate 里调用它做按周期准入。此前只校验「有没有
+     * interview:evaluate 权限」,不校验「是不是这个周期的面试官」——
+     * A 周期的面试官可以打开 eval-board:B,看到 B 周期的全部候选人名单与分数。
+     * 持有 resume:audit 的管理员不需要走这里,协同服务直接放行。
+     */
+    @GetMapping("/cycles/{cycleId}/interviewers/{userId}")
+    public ResponseEntity<ResponseMessage<Boolean>> isInterviewerOfCycle(@PathVariable Integer cycleId,
+                                                                        @PathVariable Integer userId) {
+        boolean ok = evaluationBoardService.isInterviewerOfCycle(cycleId, userId);
+        if (!ok) {
+            log.info("用户 {} 不是周期 {} 的面试官，协同服务将拒绝其连接", userId, cycleId);
+        }
+        return ResponseEntity.ok(ResponseMessage.success(ok));
+    }
+
+    /**
      * 物化回写：把 Y.Doc 解析出的评价批量 upsert 进业务库。
      * 越权条目逐条丢弃并记审计，不影响同批次的合法数据。
      */

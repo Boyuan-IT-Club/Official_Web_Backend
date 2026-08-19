@@ -60,6 +60,14 @@ export function fetchSeed(cycleId) {
 }
 
 /**
+ * 该用户是否为本周期的面试官(在该周期下至少绑定了一个场次)。
+ * 用于 onAuthenticate 的按周期准入,管理员(resume:audit)不走这里。
+ */
+export function isInterviewerOfCycle(cycleId, userId) {
+  return call(`/api/internal/evaluation/cycles/${cycleId}/interviewers/${userId}`);
+}
+
+/**
  * 物化回写。返回 { accepted, rejected, rejectReasons }。
  */
 export function materialize(payload) {

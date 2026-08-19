@@ -20,7 +20,11 @@ export const DIAG_CODES = {
     title: '该周期的评价表尚未开启',
     hint: '请管理员在「面试评价表」页点「开启评价表」后重试。',
   },
-  BACKEND_UNAUTHORIZED: {
+  NOT_CYCLE_INTERVIEWER: {
+    title: '你不是该招募周期的面试官',
+    hint: '评价表按周期隔离。请管理员在「面试场次」里把你绑定到该周期的某个场次后重试。',
+  },
+    BACKEND_UNAUTHORIZED: {
     title: '协同服务未通过后端的服务间认证',
     hint: '后端容器缺少 COLLAB_SERVICE_TOKEN，或与协同服务的取值不一致。检查两个容器的该环境变量后重启后端。',
   },
@@ -53,6 +57,7 @@ export const DIAG_CODES = {
 export function classify(error) {
   if (!error) return 'UNKNOWN';
   if (error.boardNotOpened) return 'BOARD_NOT_OPENED';
+  if (error.notCycleInterviewer) return 'NOT_CYCLE_INTERVIEWER';
   if (error.noPermission) return 'NO_PERMISSION';
   switch (error.kind) {
     case 'unauthorized':
