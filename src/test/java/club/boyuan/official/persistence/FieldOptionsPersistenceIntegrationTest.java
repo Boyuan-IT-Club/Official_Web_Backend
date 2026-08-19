@@ -1,6 +1,8 @@
 package club.boyuan.official.persistence;
 
+import club.boyuan.official.persistence.entity.RecruitmentCycle;
 import club.boyuan.official.persistence.entity.ResumeFieldDefinition;
+import club.boyuan.official.persistence.mapper.RecruitmentCycleMapper;
 import club.boyuan.official.persistence.mapper.ResumeFieldDefinitionMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,17 +29,30 @@ import static org.junit.jupiter.api.Assertions.*;
 @SpringBootTest
 class FieldOptionsPersistenceIntegrationTest {
 
-    /** 与真实数据错开,避免与任何招募周期撞号 */
-    private static final int TEST_CYCLE_ID = 990901;
-
     @Autowired
     private ResumeFieldDefinitionMapper mapper;
+
+    @Autowired
+    private RecruitmentCycleMapper cycleMapper;
 
     @Test
     @DisplayName("options 经 BaseMapper 与自定义 XML 查询都能原样读回")
     void optionsSurviveBothQueryPaths() {
+        // resume_field_definition.cycle_id 有外键指向 recruitment_cycle,
+        // 塞一个编造的周期号会撞 resume_field_definition_ibfk_1,必须先建父行。
+        RecruitmentCycle cycle = new RecruitmentCycle();
+        cycle.setCycleName("测试-选项持久化");
+        cycle.setAcademicYear("2099-2100");
+        cycle.setStartDate(java.time.LocalDate.now().minusDays(1));
+        cycle.setEndDate(java.time.LocalDate.now().plusDays(1));
+        cycle.setIsActive(0);   // 不设启用,免得影响「当前开放周期」相关的其它测试
+        cycle.setStatus(1);
+        cycleMapper.insert(cycle);
+        final Integer testCycleId = cycle.getCycleId();
+        assertNotNull(testCycleId, "插入周期后应回填主键");
+
         ResumeFieldDefinition row = new ResumeFieldDefinition();
-        row.setCycleId(TEST_CYCLE_ID);
+        row.setCycleId(testCycleId);
         row.setFieldKey("gender");
         row.setFieldLabel("性别");
         row.setFieldType("radio");
@@ -65,7 +80,7 @@ class FieldOptionsPersistenceIntegrationTest {
 
             // 非选项类字段允许为空，不该被强制写成空数组
             ResumeFieldDefinition plain = new ResumeFieldDefinition();
-            plain.setCycleId(TEST_CYCLE_ID);
+            plain.setCycleId(testCycleId);
             plain.setFieldKey("name");
             plain.setFieldLabel("姓名");
             plain.setFieldType("text");
@@ -81,6 +96,7 @@ class FieldOptionsPersistenceIntegrationTest {
             }
         } finally {
             mapper.deleteById(id);
+            cycleMapper.deleteById(testCycleId);
         }
     }
 }
