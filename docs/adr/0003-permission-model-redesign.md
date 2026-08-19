@@ -19,7 +19,7 @@
 
 五个具体问题:
 
-1. **`resume:audit` 是伪装成权限的超级用户位。** 29 处引用分布在 9 个控制器,覆盖简历字段定义、
+1. **`resume:audit` 是伪装成权限的超级用户位。** 29 处引用分布在 10 个控制器,覆盖简历字段定义、
    简历状态与删除、飞书地点映射与推拉、评价表开启与锁定、评分维度配置、录取结果、改期审批、
    一键分配、场次与预约总览。没法只让某人"批简历"而不让他改录取结果 —— 共用同一个码。
 2. **管理员碰不到用户。** 用户相关写操作全挂 `admin:manage`,而该码只给超管(V6 种子)。
@@ -33,7 +33,7 @@
 
 ## Status
 
-proposed（权限拆分部分待评审）· 其中收紧类决定已 accepted 并随 #162 落地
+accepted · 阶段一(#163)与阶段二(#164 + 前端 #71)已落地,阶段三待做
 
 ## Decision
 
@@ -41,12 +41,16 @@ proposed（权限拆分部分待评审）· 其中收紧类决定已 accepted �
 
 `resume:audit` 的 29 处按职责拆成六份:
 
-| 新权限码 | 职责 | 处数 |
+下表的「注解数」是 `@PreAuthorize` 的出现次数,不等于接口数 —— 类级注解会覆盖该控制器的
+全部接口。例如 `interview:result` 只有 1 处类级注解,但它管着 5 个接口。
+(本文初稿把这两个口径混着写了,以下为实测更正值。)
+
+| 新权限码 | 职责 | 注解数 |
 | --- | --- | --- |
 | `resume:audit`(收窄) | 改简历状态、删除简历 | 2 |
 | `cycle:manage`(并入) | 简历字段定义 —— 字段本就按周期定义 | 4 |
-| `interview:schedule` | 场次、时间窗、一键分配与导出、改期审批、预约总览 | 7 |
-| `interview:result` | 录取结果读写、群发通知邮件 | 2 |
+| `interview:schedule` | 场次、时间窗、一键分配与导出、改期审批、预约总览 | 8 |
+| `interview:result` | 录取结果读写、群发通知邮件 | 1（类级,覆盖 5 个接口） |
 | `interview:board:manage` | 评价表开启与锁定、维度配置、加权总分 | 7 |
 | `feishu:sync` | 飞书地点映射、推送面试安排、拉回录取表格 | 7 |
 
@@ -74,13 +78,20 @@ proposed（权限拆分部分待评审）· 其中收紧类决定已 accepted �
 (`/api/interview/evaluation/cycles/{cycleId}/candidates/{scheduleId}/resume`)本身就接受
 `interview:evaluate`,并在代码里按场次限定范围。给 `resume:view` 等于放开全站简历。
 
-### 两处注解之外的硬编码必须同步改
+### 三处注解之外的硬编码必须同步改
 
 - `collab-server/src/config.js`: `REQUIRED_PERMISSIONS = ['interview:evaluate','resume:audit']`
   与 `ADMIN_PERMISSION = 'resume:audit'` —— 写评价的真实路径走协同服务,不在注解覆盖范围内。
   不改会让管理员因 `resume:audit` 语义收窄而失去评价表管理级身份。
-- `InterviewEvaluationController` 第 48 行 `private static final String ADMIN_AUTHORITY = "resume:audit"`
-  —— 不是注解,按 `@PreAuthorize` 搜索会漏掉。
+- `InterviewEvaluationController` 的 `ADMIN_AUTHORITY = "resume:audit"` 常量
+  —— 不是注解,按 `@PreAuthorize` 搜索会漏掉。只改注解不改它,管理员会在接口层放行、
+  却在方法内部被当成普通面试官(它决定能否跨场次查看候选人简历)。
+- `collab-server/src/diag.js` 的提示文案原本叫用户去要 `resume:audit`,拆分后该改为
+  `interview:board:manage` —— 不改不会出错,但会把人指向一个错的权限。
+
+另有一处初稿没提到的遗漏:`InterviewScheduleController.autoAssignInterviewsByCycleId`
+也用 `resume:audit`,且写成 `hasAuthority(('resume:audit'))` —— 双层括号,
+SpEL 里能跑(`('x')` 只是带括号的字符串字面量),按常规形式搜索容易漏掉。
 
 ## Considered Options
 
@@ -90,23 +101,57 @@ proposed（权限拆分部分待评审）· 其中收紧类决定已 accepted �
   也一并给出去 —— 管理员可以自己造管理员,权限边界失效。
 - **按角色写死判断(去掉 RBAC)**:角色少时更直观,但每加一种职责就要改代码,
   与已有的 `role_permission` 表和 JWT 声明冲突。
-- **按职责重划权限码(本决策)**:一次性成本约 50 处注解 + 1 个 Flyway 迁移,
-  换来后续新角色靠配置拼装、不改代码。
+- **按职责重划权限码(本决策)**:实测一次性成本 47 处注解 + 2 个 Flyway 迁移(V23/V24)
+  + 3 处注解之外的常量,换来后续新角色靠配置拼装、不改代码。
 
 ## Migration
 
 三步均可独立部署,任一步后系统可用,存量账号全程不掉权限。
 
-1. **加新码、双授权、不删旧的。** 迁移脚本插入新码并绑定角色;注解改为
-   `hasAnyAuthority('interview:schedule','resume:audit')` 形式。此时任何账号的可达接口集合不变。
-   沿用"按 `permission_code` 判存在、不写死 `permission_id`"的写法 —— 写死 ID 正是
-   V10/V13 撞号(`evaluation:view` 被 `INSERT IGNORE` 静默跳过)的原因,见 V18。
-2. **切准入与协同服务,收回旧码。** 前端准入改判 `console:access`;同步改 collab-server
-   两个常量与后端那个 `ADMIN_AUTHORITY` 常量;从 `role_permission` 移除旧码绑定。
-   社员将不再能登入管理后台 —— 本次唯一的行为回退,需提前告知。已登录用户须重新登录,
-   权限码写在 JWT 里。
-3. **清理。** 注解去掉兼容用旧码;删除废弃权限的 `permission` 行与残留绑定。
-   可等一个招新周期结束后再做。
+### 阶段一 —— 已落地(V23,#163)
+
+加新码、双授权、不删旧的。注解改为 `hasAnyAuthority('interview:schedule', 'resume:audit')`
+形式,共 47 处。此阶段部署后任何账号的可达接口集合都没有变化。
+
+映射不是按行号硬编码,而是解析每处注解下方最近的方法名后重写 —— 行号会随编辑漂移,
+方法名不会。
+
+迁移脚本沿用"按 `permission_code` 判存在、不写死 `permission_id`"的写法 ——
+写死 ID 正是 V10/V13 撞号(`evaluation:view` 被 `INSERT IGNORE` 静默跳过)的原因,见 V18。
+
+同期新增 `PermissionSeedConsistencyTest`:断言每个被 `@PreAuthorize` 引用的权限码都能在
+迁移脚本里找到。守的是那类静默失效 —— 注解要求某个码而它从未进过 `permission` 表时,
+Spring 只对所有人 403,不会有任何提示。纯文本比对,不需要 Spring 上下文与数据库。
+
+### 阶段二 —— 已落地(V24 + 前端 #71,#164)
+
+切准入与协同服务,收回废弃码。
+
+- 前端准入从"权限码数量 > 0"改判 `console:access`
+- `InterviewEvaluationController` 的 `ADMIN_AUTHORITY` 改为集合
+  `{interview:board:manage, resume:audit}`
+- `collab-server` 的 `REQUIRED_PERMISSIONS` 增加 `interview:board:manage`;
+  `ADMIN_PERMISSION` 改为 `ADMIN_PERMISSIONS` 集合;diag 提示文案跟上
+- V24 收回 `admin:manage`(已拆)、`member:manage`、`award:manage`(两者 0 引用)的授权。
+  刻意不动 `resume:audit` 与 `role:assign` —— 它们是收窄保留,仍是新模型里的正式权限
+
+**为什么没有出现中途失权**:JWT 的 `permissionCodes` 是登录时烙进令牌的,V24 只影响
+此后新签发的令牌;而注解仍同时接受新旧码,所以在线用户在令牌过期前照常工作。
+
+**刻意留下的三处过渡兼容**(等旧令牌全部过期后即可拆除):
+
+| 位置 | 兼容内容 |
+| --- | --- |
+| 前端 `jwt.ts` | `LEGACY_CONSOLE_PERMISSIONS` 列表 —— 只认 `console:access` 会把当时在线的管理员挡在门外,且提示是"该账号没有管理权限",完全误导。列表是明确枚举的管理类权限,`resume:view` 刻意不在其中(那正是社员曾能进后台的原因) |
+| 后端 `BOARD_ADMIN_AUTHORITIES` | 并存 `resume:audit` |
+| `collab-server` 两个常量 | 并存 `resume:audit` |
+
+### 阶段三 —— 待做
+
+注解去掉兼容用的旧码;删除 `admin:manage` / `member:manage` / `award:manage` 的
+`permission` 行与残留绑定;拆掉上表那三处过渡兼容。
+
+此步纯清理,且会撤掉过渡期的安全垫,建议等一个招募周期结束、旧令牌确定全部过期后再做。
 
 ## Resolved
 
