@@ -39,7 +39,7 @@ public class InterviewAssignmentController {
      * @return 面试时间分配结果
      */
     @PostMapping("/assign/{cycleId}")
-    @PreAuthorize("hasAuthority('resume:audit')")
+    @PreAuthorize("hasAnyAuthority('interview:schedule', 'resume:audit')")
     public ResponseEntity<ResponseMessage<InterviewAssignmentResultDTO>> assignInterviews(
             @PathVariable Integer cycleId) {
         try {
@@ -68,7 +68,7 @@ public class InterviewAssignmentController {
      * 将指定招募周期的面试分配结果导出为Excel（仅管理员）
      */
     @GetMapping("/assign/{cycleId}/export")
-    @PreAuthorize("hasAuthority('resume:audit')")
+    @PreAuthorize("hasAnyAuthority('interview:schedule', 'resume:audit')")
     public ResponseEntity<byte[]> exportAssignedInterviews(
             @PathVariable Integer cycleId) {
         try {

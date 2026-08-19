@@ -29,7 +29,7 @@ import java.util.List;
 // 本类此前没有任何类级/方法级鉴权，只落到 SecurityConfig 的 anyRequest().authenticated()，
 // 也就是任何登录用户（含学生本人）都能改自己的录取结果、群发通知、拉取全体结果名单。
 // 与同域的 SessionAssignmentController 对齐，统一收到 resume:audit 之下。
-@PreAuthorize("hasAuthority('resume:audit')")
+@PreAuthorize("hasAnyAuthority('interview:result', 'resume:audit')")
 public class InterviewResultController {
 
     private final IInterviewResultService interviewResultService;

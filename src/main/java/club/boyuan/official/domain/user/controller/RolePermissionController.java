@@ -40,7 +40,7 @@ public class RolePermissionController {
      * @return 分配结果
      */
     @PostMapping
-    @PreAuthorize("hasAuthority('role:assign')")
+    @PreAuthorize("hasAnyAuthority('permission:manage', 'role:assign')")
     public ResponseEntity<ResponseMessage<Boolean>> assignPermissions(@RequestParam int roleId, @RequestParam List<Integer> permissionIds) {
         try {
             logger.info("为角色分配权限，角色ID: {}, 权限IDs: {}", roleId, permissionIds);
@@ -65,7 +65,7 @@ public class RolePermissionController {
      * @return 分配结果
      */
     @PostMapping("/{roleId}/permissions/{permissionId}")
-    @PreAuthorize("hasAuthority('role:assign')")
+    @PreAuthorize("hasAnyAuthority('permission:manage', 'role:assign')")
     public ResponseEntity<ResponseMessage<Boolean>> addPermissionToRole(@PathVariable int roleId, @PathVariable int permissionId) {
         try {
             logger.info("为角色添加单个权限，角色ID: {}, 权限ID: {}", roleId, permissionId);
@@ -90,7 +90,7 @@ public class RolePermissionController {
      * @return 移除结果
      */
     @DeleteMapping("/{roleId}/permissions/{permissionId}")
-    @PreAuthorize("hasAuthority('role:assign')")
+    @PreAuthorize("hasAnyAuthority('permission:manage', 'role:assign')")
     public ResponseEntity<ResponseMessage<Boolean>> removePermissionFromRole(@PathVariable int roleId, @PathVariable int permissionId) {
         try {
             logger.info("从角色移除权限，角色ID: {}, 权限ID: {}", roleId, permissionId);
@@ -139,7 +139,7 @@ public class RolePermissionController {
      * @return 角色列表
      */
     @GetMapping("/permission/{permissionId}/roles")
-    @PreAuthorize("hasAuthority('role:assign')")
+    @PreAuthorize("hasAnyAuthority('permission:manage', 'role:assign')")
     public ResponseEntity<ResponseMessage<List<Role>>> getRolesByPermissionId(@PathVariable int permissionId) {
         try {
             logger.info("获取拥有指定权限的角色列表，权限ID: {}", permissionId);
@@ -163,7 +163,7 @@ public class RolePermissionController {
      * @return 分配结果
      */
     @PostMapping("/batch")
-    @PreAuthorize("hasAuthority('role:assign')")
+    @PreAuthorize("hasAnyAuthority('permission:manage', 'role:assign')")
     public ResponseEntity<ResponseMessage<Boolean>> batchAssignPermissions(@RequestParam List<Integer> roleIds, @RequestParam List<Integer> permissionIds) {
         try {
             logger.info("批量分配权限给多个角色，角色IDs: {}, 权限IDs: {}", roleIds, permissionIds);

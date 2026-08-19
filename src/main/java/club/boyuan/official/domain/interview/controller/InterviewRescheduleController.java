@@ -113,7 +113,7 @@ public class InterviewRescheduleController {
      * 管理员按周期查询改期申请列表（可按状态过滤，默认全部）。
      */
     @GetMapping("/admin/list")
-    @PreAuthorize("hasAuthority('resume:audit')")
+    @PreAuthorize("hasAnyAuthority('interview:schedule', 'resume:audit')")
     public ResponseEntity<ResponseMessage<List<InterviewRescheduleRequest>>> adminList(
             @RequestParam Integer cycleId,
             @RequestParam(required = false) Integer status) {
@@ -131,7 +131,7 @@ public class InterviewRescheduleController {
      * 管理员处理改期申请：status=1 同意（随后在「分配与调剂」人工重排）；status=2 拒绝。
      */
     @PutMapping("/admin/{requestId}/handle")
-    @PreAuthorize("hasAuthority('resume:audit')")
+    @PreAuthorize("hasAnyAuthority('interview:schedule', 'resume:audit')")
     public ResponseEntity<ResponseMessage<InterviewRescheduleRequest>> handle(
             @PathVariable Integer requestId,
             @RequestBody Map<String, Object> body) {

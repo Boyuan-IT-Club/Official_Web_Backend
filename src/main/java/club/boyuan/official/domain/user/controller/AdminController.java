@@ -50,7 +50,7 @@ public class AdminController {
      * 管理员添加账号接口
      */
     @PostMapping("/users")
-    @PreAuthorize("hasAuthority('admin:manage')")
+    @PreAuthorize("hasAnyAuthority('user:manage', 'admin:manage')")
     public ResponseEntity<ResponseMessage<?>> addUser(@RequestBody UserDTO userDTO) {
         User existingUser = userService.getUserByUsername(userDTO.getUsername());
         if (existingUser != null) {
@@ -72,7 +72,7 @@ public class AdminController {
      * 为用户赋予管理员权限接口
      */
     @PostMapping("/users/{userId}/grant-admin")
-    @PreAuthorize("hasAuthority('admin:manage')")
+    @PreAuthorize("hasAnyAuthority('admin:grant', 'admin:manage')")
     public ResponseEntity<ResponseMessage<?>> grantAdminPermission(@PathVariable Integer userId) {
         String adminUsername = SecurityUtil.getCurrentUsername();
         User adminUser = userService.getUserByUsername(adminUsername);
@@ -139,7 +139,7 @@ public class AdminController {
      * 用户状态管理接口
      */
     @PutMapping("/users/{userId}/status")
-    @PreAuthorize("hasAuthority('admin:manage')")
+    @PreAuthorize("hasAnyAuthority('user:manage', 'admin:manage')")
     public ResponseEntity<ResponseMessage<?>> updateUserStatus(
             @PathVariable Integer userId,
             @RequestBody Map<String, String> statusRequest) {
@@ -164,7 +164,7 @@ public class AdminController {
      * 冻结/解冻用户接口
      */
     @PutMapping("/users/{userId}/freeze")
-    @PreAuthorize("hasAuthority('admin:manage')")
+    @PreAuthorize("hasAnyAuthority('user:manage', 'admin:manage')")
     public ResponseEntity<ResponseMessage<?>> freezeUser(
             @PathVariable Integer userId,
             @RequestBody Map<String, String> statusRequest) {
@@ -185,7 +185,7 @@ public class AdminController {
      * 修改用户会员状态接口（录取/取消录取）
      */
     @PutMapping("/users/{userId}/membership")
-    @PreAuthorize("hasAuthority('admin:manage')")
+    @PreAuthorize("hasAnyAuthority('user:manage', 'admin:manage')")
     public ResponseEntity<ResponseMessage<?>> updateUserMembership(
             @PathVariable Integer userId,
             @RequestBody Map<String, Boolean> membershipRequest) {
@@ -206,7 +206,7 @@ public class AdminController {
      * 批量冻结/解冻用户接口
      */
     @PutMapping("/users/batch-status")
-    @PreAuthorize("hasAuthority('admin:manage')")
+    @PreAuthorize("hasAnyAuthority('user:manage', 'admin:manage')")
     public ResponseEntity<ResponseMessage<?>> batchUpdateUserStatus(
             @RequestBody Map<String, Object> statusRequest) {
         String status = (String) statusRequest.get("status");
@@ -238,7 +238,7 @@ public class AdminController {
      * 批量修改用户部门接口
      */
     @PutMapping("/users/batch-dept")
-    @PreAuthorize("hasAuthority('admin:manage')")
+    @PreAuthorize("hasAnyAuthority('user:manage', 'admin:manage')")
     public ResponseEntity<ResponseMessage<?>> batchUpdateUserDept(
             @RequestBody Map<String, Object> deptRequest) {
         String dept = (String) deptRequest.get("dept");
@@ -269,7 +269,7 @@ public class AdminController {
      * 批量修改用户会员状态接口（录取/取消录取）
      */
     @PutMapping("/users/batch-membership")
-    @PreAuthorize("hasAuthority('admin:manage')")
+    @PreAuthorize("hasAnyAuthority('user:manage', 'admin:manage')")
     public ResponseEntity<ResponseMessage<?>> batchUpdateUserMembership(
             @RequestBody Map<String, Object> membershipRequest) {
         Boolean isMember = (Boolean) membershipRequest.get("isMember");
@@ -301,7 +301,7 @@ public class AdminController {
      * 清理Redis缓存接口
      */
     @PostMapping("/cache/clear")
-    @PreAuthorize("hasAuthority('admin:manage')")
+    @PreAuthorize("hasAnyAuthority('system:ops', 'admin:manage')")
     public ResponseEntity<ResponseMessage<?>> clearCache(
             @RequestBody(required = false) Map<String, String> cacheRequest) {
         String cacheType = cacheRequest != null ? cacheRequest.get("type") : "field_definition";
