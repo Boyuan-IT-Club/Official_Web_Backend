@@ -33,7 +33,7 @@
 
 ## Status
 
-proposed
+proposed（权限拆分部分待评审）· 其中收紧类决定已 accepted 并随 #162 落地
 
 ## Decision
 
@@ -62,10 +62,11 @@ proposed
 `member:manage` 与 `award:manage` 废弃(0 引用,语义分别被 `user:manage` 覆盖 / 走用户自助接口)。
 
 角色矩阵:超管持全部 18 项;管理员持除 `admin:grant`、`role:assign`、`permission:manage`、
-`system:ops` 外的 14 项(招新业务全部下放);面试官持 `console:access`、`interview:evaluate`、
-`evaluation:view`;社员与申请人不持任何后台权限。
+`system:ops`、`dept:manage` 外的 13 项(招新业务全部下放,部门管理见 Resolved 第 4 条);
+面试官持 `console:access`、`interview:evaluate`、`evaluation:view`;
+社员与申请人不持任何后台权限。
 
-超管与管理员的差别由此收敛为"决定谁有权限"和"动系统"两类。
+超管与管理员的差别由此收敛为"决定谁有权限"、"动系统"和"改组织架构"三类。
 
 ### 面试官为什么不给 resume:view
 
@@ -107,15 +108,42 @@ proposed
 3. **清理。** 注解去掉兼容用旧码;删除废弃权限的 `permission` 行与残留绑定。
    可等一个招新周期结束后再做。
 
-## Open Questions
+## Resolved
 
-需要业务侧决定,非技术选择:
+原 Open Questions 已由业务侧决定,并已先行落地(V22 + 相关代码,见 #162):
 
-1. 社员是否保留读全站简历的能力。本 ADR 按"移除"设计;若需老社员帮看简历,
-   更合适的是给那几个人加面试官角色,而不是给全体社员开权限。
-2. "录取为社员"是否同时授予社员角色。目前批量录取只写 `user.is_member`,不动 `user_role`,
-   两者完全独立。建议界面上明确区分"社员身份"与"后台角色"两个动作。
-3. 管理员是否可以定录取结果与群发通知。本 ADR 给了 `interview:result`;
-   若希望只由超管做,把这一格改为不授予即可 —— 这正是拆分带来的余地。
-4. 是否新增"招新组"角色(`console:access` + `resume:view` + `resume:audit` +
-   `interview:schedule`),给招新期临时帮忙的同学,结束即撤。不需改代码。
+1. **社员不保留读全站简历。** `resume:view` 已从社员角色移除。
+   连带效果:社员角色至此不持有任何权限码,而管理端准入是"权限码数量 > 0",
+   因此社员不再能登入管理后台 —— 期望行为。需要老社员帮看简历时,给那几个人加面试官角色。
+2. **"录取为社员"同时授予社员角色。** `syncMemberRole` 在批量与单个两条路径上
+   一并同步 `user_role`,开除社员时移除绑定。按 `role_code` 查 MEMBER,不写死 ID。
+3. **管理员可以定录取结果与群发通知。** 本就成立 —— `InterviewResultController` 是类级
+   `resume:audit`,管理员持有该权限,无需改动。本 ADR 的 `interview:result` 仍授予管理员。
+4. **部门增删改收归超管**(本 ADR 之后新增的决定)。`dept:manage` 已从管理员角色移除,
+   上文角色矩阵中管理员的该格随之改为不授予;超管与管理员的差别由四项变为五项。
+5. 是否新增"招新组"角色仍未决,不阻塞其余部分。
+
+## Addendum: 面试官的评价表按周期隔离(已修复)
+
+同期修复的一个越权问题,记录在此因为它属于同一套权限模型:
+
+`collab-server` 的 `onAuthenticate` 只校验令牌里有没有 `interview:evaluate`,
+不校验"这个人是不是这个周期的面试官"。协同文档名形如 `eval-board:{cycleId}`,
+于是 A 周期的面试官把周期号一改就能打开 B 周期的评价表,看到 B 周期全部候选人的
+名单与分数。候选人简历接口本身已按场次限定(`isInterviewerOf`),漏的是评价表这一层。
+
+修法:新增内部接口 `GET /api/internal/evaluation/cycles/{cycleId}/interviewers/{userId}`,
+判定依据是 `session_interviewer` join `interview_session` 后该用户在本周期是否绑定过场次;
+`onAuthenticate` 对非管理员调用它,不通过即拒,管理员跨周期是职责所需直接放行。
+该检查刻意放在 `loadDoc` 之前 —— 否则会先抛出"该周期评价表尚未开启",
+等于向无关人员泄露别的周期开没开表。新增 diag 码 `NOT_CYCLE_INTERVIEWER`,
+避免又一个无差别的 `permission-denied`。
+
+由 `CycleInterviewerScopeIntegrationTest` 锁住:绑定 A 周期场次的面试官对 B 周期必须为 false。
+
+## Addendum: 面试当日提醒已下线
+
+`InterviewReminderScheduler` 只保留前一日 12:00 那一轮。当天早上再发一封,
+对已收到前一日提醒的人是重复打扰,真忘了的人也来不及改安排。
+`InterviewNotificationType.DAY_REMINDER` 与邮件模板保留未删,
+`dispatchReminders` 仍接受该类型,将来要恢复只需加回一个 `@Scheduled` 方法。
