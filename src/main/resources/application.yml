@@ -165,7 +165,6 @@ interview:
   notification:
     enabled: true
     eve-reminder-cron: "0 0 12 * * ?"
-    day-reminder-cron: "0 0 8 * * ?"
 
 server:
   port: 8080

@@ -11,6 +11,7 @@ import club.boyuan.official.persistence.mapper.ResumeFieldValueMapper;
 import club.boyuan.official.persistence.mapper.ResumeMapper;
 import club.boyuan.official.persistence.mapper.UserMapper;
 import club.boyuan.official.persistence.mapper.UserRoleMapper;
+import club.boyuan.official.persistence.mapper.RoleMapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import org.junit.jupiter.api.Test;
@@ -31,6 +32,7 @@ class UserServiceImplGithubBackfillTest {
     @Mock private ResumeMapper resumeMapper;
     @Mock private ResumeFieldValueMapper resumeFieldValueMapper;
     @Mock private UserRoleMapper userRoleMapper;
+    @Mock private RoleMapper roleMapper;
     @Mock private EvaluationSubmissionMapper evaluationSubmissionMapper;
     @Mock private BCryptPasswordEncoder passwordEncoder;
     @Mock private JwtTokenUtil jwtTokenUtil;
@@ -39,7 +41,7 @@ class UserServiceImplGithubBackfillTest {
     @Test
     void githubBindBackfillsUnclaimedSubmissions() {
         UserServiceImpl service = new UserServiceImpl(userMapper, awardExperienceMapper, resumeMapper,
-                resumeFieldValueMapper, userRoleMapper, evaluationSubmissionMapper,
+                resumeFieldValueMapper, userRoleMapper, roleMapper, evaluationSubmissionMapper,
                 passwordEncoder, jwtTokenUtil, userConverter);
 
         User user = new User();
@@ -60,7 +62,7 @@ class UserServiceImplGithubBackfillTest {
     @Test
     void githubUnbindWritesExplicitNullInsteadOfIgnoring() {
         UserServiceImpl service = new UserServiceImpl(userMapper, awardExperienceMapper, resumeMapper,
-                resumeFieldValueMapper, userRoleMapper, evaluationSubmissionMapper,
+                resumeFieldValueMapper, userRoleMapper, roleMapper, evaluationSubmissionMapper,
                 passwordEncoder, jwtTokenUtil, userConverter);
 
         User user = new User();

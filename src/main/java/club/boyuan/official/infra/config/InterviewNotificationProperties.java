@@ -18,6 +18,4 @@ public class InterviewNotificationProperties {
     /** 面试前一天 12:00（Asia/Shanghai） */
     private String eveReminderCron = "0 0 12 * * ?";
 
-    /** 面试当天 08:00（Asia/Shanghai） */
-    private String dayReminderCron = "0 0 8 * * ?";
 }
