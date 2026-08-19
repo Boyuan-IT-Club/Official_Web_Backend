@@ -12,6 +12,11 @@
         <result column="is_required" property="isRequired"/>
         <result column="sort_order" property="sortOrder"/>
         <result column="is_active" property="isActive"/>
+        <!-- options 是 JSON 列，必须显式声明 TypeHandler：
+             实体上的 @TableField(typeHandler=...) 只作用于 BaseMapper 的查询，
+             自定义 XML 的 resultMap 不会自动继承它，漏掉就永远读出 null -->
+        <result column="options" property="options"
+                typeHandler="com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
     </resultMap>

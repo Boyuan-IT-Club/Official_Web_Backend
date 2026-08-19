@@ -173,6 +173,7 @@ public class ResumeFieldDefinitionServiceImpl implements IResumeFieldDefinitionS
             row.setIsRequired(t.getIsRequired());
             row.setSortOrder(t.getSortOrder());
             row.setIsActive(t.getIsActive() == null ? Boolean.TRUE : t.getIsActive());
+            row.setOptions(t.getOptions());   // V25 起该列存在，选项随初始化一起落库
             resumeFieldDefinitionMapper.insert(row);
             existing.add(t.getFieldKey());
             created++;
