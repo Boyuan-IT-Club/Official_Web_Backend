@@ -38,7 +38,7 @@ public class PermissionController {
      * @return 创建成功的权限DTO
      */
     @PostMapping
-    @PreAuthorize("hasAuthority('role:assign')")
+    @PreAuthorize("hasAnyAuthority('permission:manage', 'role:assign')")
     public ResponseEntity<ResponseMessage<PermissionDTO>> createPermission(@Validated @RequestBody PermissionDTO permissionDTO) {
         try {
             logger.info("创建权限: {}", permissionDTO.getPermissionName());
@@ -63,7 +63,7 @@ public class PermissionController {
      * @return 更新后的权限DTO
      */
     @PutMapping("/{permissionId}")
-    @PreAuthorize("hasAuthority('role:assign')")
+    @PreAuthorize("hasAnyAuthority('permission:manage', 'role:assign')")
     public ResponseEntity<ResponseMessage<PermissionDTO>> updatePermission(@PathVariable int permissionId, @Validated @RequestBody PermissionDTO permissionDTO) {
         try {
             logger.info("更新权限: {}", permissionId);
@@ -88,7 +88,7 @@ public class PermissionController {
      * @return 成功响应
      */
     @DeleteMapping("/{permissionId}")
-    @PreAuthorize("hasAuthority('role:assign')")
+    @PreAuthorize("hasAnyAuthority('permission:manage', 'role:assign')")
     public ResponseEntity<ResponseMessage<Void>> deletePermission(@PathVariable int permissionId) {
         try {
             logger.info("删除权限: {}", permissionId);

@@ -106,7 +106,7 @@ public class ResumeController {
      * 创建字段定义
      */
     @PostMapping("/fields")
-    @PreAuthorize("hasAuthority('resume:audit')")
+    @PreAuthorize("hasAnyAuthority('cycle:manage', 'resume:audit')")
     public ResponseEntity<ResponseMessage<ResumeFieldDefinition>> createFieldDefinition(
             @RequestBody ResumeFieldDefinition fieldDefinition) {
         logger.info("创建字段定义");
@@ -118,7 +118,7 @@ public class ResumeController {
      * 更新字段定义
      */
     @PutMapping("/fields")
-    @PreAuthorize("hasAuthority('resume:audit')")
+    @PreAuthorize("hasAnyAuthority('cycle:manage', 'resume:audit')")
     public ResponseEntity<ResponseMessage<ResumeFieldDefinition>> updateFieldDefinition(
             @RequestBody ResumeFieldDefinition fieldDefinition) {
         logger.info("更新字段定义，字段ID: {}", fieldDefinition.getFieldId());
@@ -130,7 +130,7 @@ public class ResumeController {
      * 批量更新字段定义
      */
     @PutMapping("/fields/batch")
-    @PreAuthorize("hasAuthority('resume:audit')")
+    @PreAuthorize("hasAnyAuthority('cycle:manage', 'resume:audit')")
     public ResponseEntity<ResponseMessage<List<ResumeFieldDefinition>>> batchUpdateFieldDefinitions(
             @RequestBody List<ResumeFieldDefinition> fieldDefinitions) {
         logger.info("批量更新字段定义，字段数量: {}", fieldDefinitions.size());
@@ -142,7 +142,7 @@ public class ResumeController {
      * 删除字段定义
      */
     @DeleteMapping("/fields/{fieldId}")
-    @PreAuthorize("hasAuthority('resume:audit')")
+    @PreAuthorize("hasAnyAuthority('cycle:manage', 'resume:audit')")
     public ResponseEntity<ResponseMessage<String>> deleteFieldDefinition(@PathVariable Integer fieldId) {
         logger.info("管理员{}删除字段定义，字段ID: {}", SecurityUtil.getCurrentUsername(), fieldId);
         fieldDefinitionService.deleteFieldDefinition(fieldId);

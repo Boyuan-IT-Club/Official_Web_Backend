@@ -40,7 +40,7 @@ public class RoleController {
      * @return 创建成功的角色DTO
      */
     @PostMapping
-    @PreAuthorize("hasAuthority('role:assign')")
+    @PreAuthorize("hasAnyAuthority('permission:manage', 'role:assign')")
     public ResponseEntity<ResponseMessage<RoleDTO>> createRole(@Validated @RequestBody RoleDTO roleDTO) {
         try {
             logger.info("创建角色: {}", roleDTO.getRoleName());
@@ -65,7 +65,7 @@ public class RoleController {
      * @return 更新后的角色DTO
      */
     @PutMapping("/{roleId}")
-    @PreAuthorize("hasAuthority('role:assign')")
+    @PreAuthorize("hasAnyAuthority('permission:manage', 'role:assign')")
     public ResponseEntity<ResponseMessage<RoleDTO>> updateRole(@PathVariable int roleId, @Validated @RequestBody RoleDTO roleDTO) {
         try {
             logger.info("更新角色: {}", roleId);
@@ -90,7 +90,7 @@ public class RoleController {
      * @return 成功响应
      */
     @DeleteMapping("/{roleId}")
-    @PreAuthorize("hasAuthority('role:assign')")
+    @PreAuthorize("hasAnyAuthority('permission:manage', 'role:assign')")
     public ResponseEntity<ResponseMessage<Void>> deleteRole(@PathVariable int roleId) {
         try {
             logger.info("删除角色: {}", roleId);

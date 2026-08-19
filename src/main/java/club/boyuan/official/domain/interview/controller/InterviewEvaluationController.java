@@ -56,7 +56,7 @@ public class InterviewEvaluationController {
      * 开启该周期的协同评价表。已开启时原样返回，重复点击不报错。
      */
     @PostMapping("/cycles/{cycleId}/board")
-    @PreAuthorize("hasAuthority('resume:audit')")
+    @PreAuthorize("hasAnyAuthority('interview:board:manage', 'resume:audit')")
     public ResponseEntity<ResponseMessage<EvaluationBoardDTO>> openBoard(@PathVariable Integer cycleId) {
         return ResponseEntity.ok(ResponseMessage.success(evaluationBoardService.openBoard(cycleId)));
     }
@@ -65,7 +65,7 @@ public class InterviewEvaluationController {
      * 查询评价表状态。面试官需要据此拿到 docName 才能连上协同服务，故一并放行。
      */
     @GetMapping("/cycles/{cycleId}/board")
-    @PreAuthorize("hasAnyAuthority('resume:audit','interview:evaluate')")
+    @PreAuthorize("hasAnyAuthority('interview:board:manage', 'interview:evaluate', 'resume:audit')")
     public ResponseEntity<ResponseMessage<EvaluationBoardDTO>> getBoard(@PathVariable Integer cycleId) {
         return ResponseEntity.ok(ResponseMessage.success(evaluationBoardService.getBoard(cycleId)));
     }
@@ -74,7 +74,7 @@ public class InterviewEvaluationController {
      * 锁定/解锁评价表：锁定后协同服务拒绝一切写入，全员只读。
      */
     @PutMapping("/cycles/{cycleId}/board/lock")
-    @PreAuthorize("hasAuthority('resume:audit')")
+    @PreAuthorize("hasAnyAuthority('interview:board:manage', 'resume:audit')")
     public ResponseEntity<ResponseMessage<EvaluationBoardDTO>> setLocked(@PathVariable Integer cycleId,
                                                                         @RequestParam boolean locked) {
         return ResponseEntity.ok(ResponseMessage.success(evaluationBoardService.setLocked(cycleId, locked)));
@@ -84,7 +84,7 @@ public class InterviewEvaluationController {
      * 查询该周期的评分维度模板。
      */
     @GetMapping("/cycles/{cycleId}/dimensions")
-    @PreAuthorize("hasAnyAuthority('resume:audit','interview:evaluate')")
+    @PreAuthorize("hasAnyAuthority('interview:board:manage', 'interview:evaluate', 'resume:audit')")
     public ResponseEntity<ResponseMessage<List<EvaluationDimensionDTO>>> listDimensions(
             @PathVariable Integer cycleId) {
         return ResponseEntity.ok(ResponseMessage.success(evaluationDimensionService.listByCycle(cycleId)));
@@ -94,7 +94,7 @@ public class InterviewEvaluationController {
      * 覆盖式保存评分维度模板：请求中未出现的既有维度会被删除。
      */
     @PutMapping("/cycles/{cycleId}/dimensions")
-    @PreAuthorize("hasAuthority('resume:audit')")
+    @PreAuthorize("hasAnyAuthority('interview:board:manage', 'resume:audit')")
     public ResponseEntity<ResponseMessage<List<EvaluationDimensionDTO>>> saveDimensions(
             @PathVariable Integer cycleId,
             @Valid @RequestBody SaveEvaluationDimensionsRequestDTO request) {
@@ -106,7 +106,7 @@ public class InterviewEvaluationController {
      * 全周期评价汇总：候选人 × 面试官矩阵，供录取决定参考。
      */
     @GetMapping("/cycles/{cycleId}/summary")
-    @PreAuthorize("hasAuthority('resume:audit')")
+    @PreAuthorize("hasAnyAuthority('interview:board:manage', 'resume:audit')")
     public ResponseEntity<ResponseMessage<EvaluationSummaryDTO>> summary(@PathVariable Integer cycleId) {
         return ResponseEntity.ok(ResponseMessage.success(interviewEvaluationService.summary(cycleId)));
     }
@@ -118,7 +118,7 @@ public class InterviewEvaluationController {
      * 他能看到的恰好是自己要面的那几个人。
      */
     @GetMapping("/cycles/{cycleId}/candidates/{scheduleId}/resume")
-    @PreAuthorize("hasAnyAuthority('resume:audit','interview:evaluate')")
+    @PreAuthorize("hasAnyAuthority('interview:board:manage', 'interview:evaluate', 'resume:audit')")
     public ResponseEntity<ResponseMessage<ResumeDTO>> candidateResume(@PathVariable Integer cycleId,
                                                                      @PathVariable Integer scheduleId) {
         User viewer = userService.getUserByUsername(SecurityUtil.getCurrentUsername());

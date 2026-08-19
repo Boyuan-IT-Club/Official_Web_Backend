@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/interview/admin")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("hasAuthority('resume:audit')")
+@PreAuthorize("hasAnyAuthority('interview:schedule', 'resume:audit')")
 public class InterviewSessionAdminController {
 
     private final IInterviewTimeSlotService interviewTimeSlotService;
