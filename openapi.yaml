@@ -7934,7 +7934,10 @@ paths:
     post:
       summary: 发送录取通知
       deprecated: false
-      description: 发送录取通知给候选人
+      description: >-
+        按 resultIds 批量发送结果通知邮件（通过=录取通知，未通过=感谢信）。
+        每封发送成功即更新该结果行的 notified_at（最近一次发送时间），
+        列表接口据此展示「已通知/未通知」；重发会刷新该时间。
       tags:
       - 面试结果模块
       requestBody:

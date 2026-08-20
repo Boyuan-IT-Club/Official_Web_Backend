@@ -99,6 +99,11 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
                 }
                 if(sent){
                     sendCount++;
+                    // 通知留痕：只动 notified_at 一列。没有这行时发送完全无痕 ——
+                    // 管理端看不出谁通知过，重复点发送会对同一批人原样重发。
+                    this.update(new LambdaUpdateWrapper<InterviewResult>()
+                            .eq(InterviewResult::getResultId, resultId)
+                            .set(InterviewResult::getNotifiedAt, LocalDateTime.now()));
                 }else{
                     failedCount++;
                 }
