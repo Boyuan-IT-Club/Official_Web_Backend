@@ -150,16 +150,35 @@ public class ResumeFieldDefinitionServiceImpl implements IResumeFieldDefinitionS
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "字段模板不能为空");
         }
 
-        Set<String> existing = resumeFieldDefinitionMapper
+        Map<String, ResumeFieldDefinition> existing = resumeFieldDefinitionMapper
                 .selectList(new LambdaQueryWrapper<ResumeFieldDefinition>()
                         .eq(ResumeFieldDefinition::getCycleId, cycleId))
                 .stream()
-                .map(ResumeFieldDefinition::getFieldKey)
-                .collect(Collectors.toSet());
+                .collect(Collectors.toMap(ResumeFieldDefinition::getFieldKey,
+                        d -> d, (a, b) -> a));
 
         int created = 0;
+        int backfilled = 0;
         for (ResumeFieldDefinition t : templates) {
-            if (t.getFieldKey() == null || t.getFieldKey().isBlank() || existing.contains(t.getFieldKey())) {
+            if (t.getFieldKey() == null || t.getFieldKey().isBlank()) {
+                continue;
+            }
+            ResumeFieldDefinition found = existing.get(t.getFieldKey());
+            if (found != null) {
+                // 字段已存在:不动 key/label/type(那是"只补不存在"的承诺),
+                // 但把空着的 options 回填上。场景:options 列(V25)上线之前就点过
+                // 「加载默认配置」的周期,行都在、选项全是 NULL —— 再点一次只会
+                // 全部跳过,选项永远补不上,管理员只能逐个字段手敲。
+                // 只在现值为 NULL 时回填,绝不覆盖管理员配置过的选项。
+                if (found.getOptions() == null
+                        && t.getOptions() != null && !t.getOptions().isEmpty()) {
+                    ResumeFieldDefinition patch = new ResumeFieldDefinition();
+                    patch.setFieldId(found.getFieldId());
+                    patch.setOptions(t.getOptions());
+                    resumeFieldDefinitionMapper.updateById(patch);
+                    clearCacheByFieldId(found.getFieldId());
+                    backfilled++;
+                }
                 continue;
             }
             ResumeFieldDefinition row = new ResumeFieldDefinition();
@@ -175,12 +194,12 @@ public class ResumeFieldDefinitionServiceImpl implements IResumeFieldDefinitionS
             row.setIsActive(t.getIsActive() == null ? Boolean.TRUE : t.getIsActive());
             row.setOptions(t.getOptions());   // V25 起该列存在，选项随初始化一起落库
             resumeFieldDefinitionMapper.insert(row);
-            existing.add(t.getFieldKey());
+            existing.put(t.getFieldKey(), row);
             created++;
         }
 
-        logger.info("周期 {} 初始化字段定义完成：新建 {} 个，跳过已存在 {} 个",
-                cycleId, created, templates.size() - created);
+        logger.info("周期 {} 初始化字段定义完成：新建 {} 个，为已存在字段回填选项 {} 个",
+                cycleId, created, backfilled);
         return getFieldDefinitionsByCycleId(cycleId);
     }
 
