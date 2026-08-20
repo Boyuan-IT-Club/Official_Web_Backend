@@ -74,5 +74,14 @@ public interface UserMapper extends BaseMapper<User> {
      * @param userIds 用户ID列表
      * @return 用户列表
      */
-    List<User> selectByIds(@Param("userIds") List<Integer> userIds);
+    /**
+     * 按 ID 批量查用户。
+     *
+     * 不能叫 selectByIds：MyBatis-Plus 3.5.9 的 BaseMapper 内置了同名方法
+     * （参数名是 coll），而同名 XML 语句会顶掉内置实现 —— 于是任何走
+     * IService.listByIds() 的调用（飞书导入就是）都会带着 coll 撞上这条
+     * 要 userIds 的 XML，报 "Parameter 'userIds' not found"。
+     * 线上飞书同步/拉取整条链路因此全挂。自定义方法名必须避开内置名。
+     */
+    List<User> selectUsersByIds(@Param("userIds") List<Integer> userIds);
 }

@@ -283,14 +283,14 @@ public class EvaluationBoardServiceImpl implements IEvaluationBoardService {
     }
 
     /**
-     * 按 ID 批量取用户，必须走 {@link UserMapper#selectByIds} 这个自定义查询。
+     * 按 ID 批量取用户，必须走 {@link UserMapper#selectUsersByIds} 这个自定义查询。
      * <p>
      * MyBatis-Plus 的通用查询（{@code selectBatchIds} / {@code selectList}）在 User 上都用不了：
      * 实体声明了 {@code @TableField("role")}，而 user 表在 V6 之后已无 role 列（角色移到 user_role），
      * 通用查询拼出的列清单会撞上「Unknown column 'role'」。自定义 XML 用显式 resultMap 避开了这点。
      */
     private List<User> selectUsersByIds(Collection<Integer> userIds) {
-        return userMapper.selectByIds(new ArrayList<>(userIds));
+        return userMapper.selectUsersByIds(new ArrayList<>(userIds));
     }
 
     private List<InterviewSchedule> listRoster(Integer cycleId) {

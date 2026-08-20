@@ -163,7 +163,7 @@
         AND is_deleted = 0
     </update>
     
-    <select id="selectByIds" resultMap="UserResultMap">
+    <select id="selectUsersByIds" resultMap="UserResultMap">
         SELECT *
         FROM user
         WHERE user_id IN

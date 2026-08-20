@@ -420,9 +420,9 @@ public class InterviewEvaluationServiceImpl implements IInterviewEvaluationServi
         if (userIds.isEmpty()) {
             return Collections.emptyMap();
         }
-        // 必须走自定义的 selectByIds：User 实体带着已不存在的 role 列，
+        // 必须走自定义的 selectUsersByIds：User 实体带着已不存在的 role 列，
         // MyBatis-Plus 的通用查询会拼出「Unknown column 'role'」
-        return userMapper.selectByIds(new ArrayList<>(userIds)).stream()
+        return userMapper.selectUsersByIds(new ArrayList<>(userIds)).stream()
                 .collect(Collectors.toMap(User::getUserId, Function.identity(), (a, b) -> a));
     }
 

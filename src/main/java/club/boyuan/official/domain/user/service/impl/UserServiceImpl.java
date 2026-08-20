@@ -351,7 +351,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
         }
         
         // 检查用户是否存在且不是管理员
-        List<User> users = userMapper.selectByIds(userIds);
+        List<User> users = userMapper.selectUsersByIds(userIds);
         for (User user : users) {
             if (user == null) {
                 throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
@@ -379,7 +379,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
         }
         
         // 检查用户是否存在且不是管理员
-        List<User> users = userMapper.selectByIds(userIds);
+        List<User> users = userMapper.selectUsersByIds(userIds);
         for (User user : users) {
             if (user == null) {
                 throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
@@ -407,7 +407,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
         }
         
         // 检查用户是否存在且不是管理员
-        List<User> users = userMapper.selectByIds(userIds);
+        List<User> users = userMapper.selectUsersByIds(userIds);
         for (User user : users) {
             if (user == null) {
                 throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
