@@ -110,6 +110,89 @@ public class FeishuBitableClient {
     /**
      * 批量新增行，返回与入参顺序一致的 record_id 列表。
      */
+    /**
+     * 确保这些列在目标表里都存在,缺的按文本类型自动补建。
+     *
+     * 飞书多维表格 API 不会在写入时自动建列 —— 写不存在的列名会整批返回
+     * FieldNameNotFound。管理员往往只给一张空表(默认只有一个「文本」字段)的链接,
+     * 于是推送整批失败,界面还只说「同步失败」。推送前先对齐表结构。
+     *
+     * 只新增、不改类型、不删多余列:全部按文本(type=1)建,足够承载导出内容,
+     * 也不会动管理员在飞书里已经建好的其它列。
+     */
+    public void ensureFieldsExist(String tableUrl, java.util.Collection<String> requiredFieldNames) {
+        ensureConfigured();
+        if (requiredFieldNames == null || requiredFieldNames.isEmpty()) {
+            return;
+        }
+        FeishuTableUrlParser.ParsedTable parsed = FeishuTableUrlParser.parse(tableUrl);
+        String token = getTenantAccessToken();
+
+        java.util.Set<String> existing = listFieldNames(parsed, token);
+        String base = feishuProperties.getApiBaseUrl()
+                + "/open-apis/bitable/v1/apps/" + parsed.appToken()
+                + "/tables/" + parsed.tableId() + "/fields";
+
+        int created = 0;
+        for (String name : requiredFieldNames) {
+            if (name == null || name.isBlank() || existing.contains(name)) {
+                continue;
+            }
+            // type=1 多行文本；用 Map 而非拼串,交给 postJson 序列化转义
+            String resp = feishuApiInvoker.postJson(base, token, Map.of("field_name", name, "type", 1));
+            JsonNode root;
+            try {
+                root = objectMapper.readTree(resp);
+            } catch (Exception e) {
+                throw new BusinessException(BusinessExceptionEnum.FEISHU_IMPORT_FAILED,
+                        "创建飞书列「" + name + "」时响应解析失败");
+            }
+            int code = root.path("code").asInt(-1);
+            if (code != 0) {
+                // 并发下别的推送可能刚建过同名列,这种重复报错忽略即可
+                String msg = root.path("msg").asText("");
+                // 飞书对已存在的列名返回 FieldNameDuplicated（实测 code 1254014）；
+                // 并发推送下可能刚被别的任务建过,视为成功。
+                if (msg.contains("Duplicated") || msg.contains("exist") || msg.contains("已存在")) {
+                    existing.add(name);
+                    continue;
+                }
+                throw new BusinessException(BusinessExceptionEnum.FEISHU_IMPORT_FAILED,
+                        "自动创建飞书列「" + name + "」失败: " + msg);
+            }
+            existing.add(name);
+            created++;
+        }
+        if (created > 0) {
+            log.info("飞书表 {} 自动补建 {} 个缺失列", parsed.tableId(), created);
+        }
+    }
+
+    /** 读取表的全部字段名(建列前对齐用) */
+    private java.util.Set<String> listFieldNames(FeishuTableUrlParser.ParsedTable parsed, String token) {
+        String url = feishuProperties.getApiBaseUrl()
+                + "/open-apis/bitable/v1/apps/" + parsed.appToken()
+                + "/tables/" + parsed.tableId() + "/fields?page_size=100";
+        String resp = feishuApiInvoker.get(url, token);
+        java.util.Set<String> names = new java.util.HashSet<>();
+        try {
+            JsonNode root = objectMapper.readTree(resp);
+            if (root.path("code").asInt(-1) != 0) {
+                throw new BusinessException(BusinessExceptionEnum.FEISHU_IMPORT_FAILED,
+                        "读取飞书表字段失败: " + root.path("msg").asText("未知错误"));
+            }
+            for (JsonNode it : root.path("data").path("items")) {
+                String n = it.path("field_name").asText(null);
+                if (n != null) names.add(n);
+            }
+        } catch (BusinessException be) {
+            throw be;
+        } catch (Exception e) {
+            throw new BusinessException(BusinessExceptionEnum.FEISHU_IMPORT_FAILED, "读取飞书表字段响应解析失败");
+        }
+        return names;
+    }
+
     public FeishuBatchWriteResult batchCreateRecords(String tableUrl, List<Map<String, Object>> rows) {
         if (rows == null || rows.isEmpty()) {
             return new FeishuBatchWriteResult(0, List.of());
