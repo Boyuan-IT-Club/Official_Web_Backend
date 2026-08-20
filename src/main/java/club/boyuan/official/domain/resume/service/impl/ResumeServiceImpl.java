@@ -1,6 +1,7 @@
 package club.boyuan.official.domain.resume.service.impl;
 
 import club.boyuan.official.persistence.mapper.RecruitmentCycleMapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import club.boyuan.official.common.dto.PageResultDTO;
 import club.boyuan.official.domain.resume.dto.ResumeDTO;
 import club.boyuan.official.domain.resume.dto.ResumeFieldValueDTO;
@@ -276,6 +277,7 @@ public class ResumeServiceImpl implements IResumeService {
                 dto.setUserId(resume.getUserId());
                 dto.setCycleId(resume.getCycleId());
                 dto.setStatus(resume.getStatus());
+                dto.setResumeScore(resume.getResumeScore());
                 dto.setSubmittedAt(resume.getSubmittedAt());
                 dto.setCreatedAt(resume.getCreatedAt());
                 dto.setUpdatedAt(resume.getUpdatedAt());
@@ -323,6 +325,7 @@ public class ResumeServiceImpl implements IResumeService {
                 dto.setUserId(resume.getUserId());
                 dto.setCycleId(resume.getCycleId());
                 dto.setStatus(resume.getStatus());
+                dto.setResumeScore(resume.getResumeScore());
                 dto.setSubmittedAt(resume.getSubmittedAt());
                 dto.setCreatedAt(resume.getCreatedAt());
                 dto.setUpdatedAt(resume.getUpdatedAt());
@@ -364,6 +367,7 @@ public class ResumeServiceImpl implements IResumeService {
             resumeDTO.setUserId(resume.getUserId());
             resumeDTO.setCycleId(resume.getCycleId());
             resumeDTO.setStatus(resume.getStatus());
+            resumeDTO.setResumeScore(resume.getResumeScore());
             resumeDTO.setSubmittedAt(resume.getSubmittedAt());
             resumeDTO.setCreatedAt(resume.getCreatedAt());
             resumeDTO.setUpdatedAt(resume.getUpdatedAt());
@@ -395,6 +399,7 @@ public class ResumeServiceImpl implements IResumeService {
             resumeDTO.setUserId(resume.getUserId());
             resumeDTO.setCycleId(resume.getCycleId());
             resumeDTO.setStatus(resume.getStatus());
+            resumeDTO.setResumeScore(resume.getResumeScore());
             resumeDTO.setSubmittedAt(resume.getSubmittedAt());
             resumeDTO.setCreatedAt(resume.getCreatedAt());
             resumeDTO.setUpdatedAt(resume.getUpdatedAt());
@@ -410,11 +415,29 @@ public class ResumeServiceImpl implements IResumeService {
         }
     }
     
-    /**
-     * 根据简历ID获取简化版字段信息（仅包含字段标签和字段值）
-     * @param resumeId 简历ID
-     * @return 简化版字段信息列表
-     */
+        @Override
+    public Resume updateResumeScore(Integer resumeId, Integer score) {
+        if (resumeId == null || score == null) {
+            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
+        }
+        if (score < 0 || score > 100) {
+            throw new BusinessException(BusinessExceptionEnum.PARAMETER_VALIDATION_FAILED,
+                    "简历评分需在 0~100 之间，收到: " + score);
+        }
+        Resume resume = resumeMapper.selectById(resumeId);
+        if (resume == null) {
+            throw new BusinessException(BusinessExceptionEnum.RESUME_NOT_FOUND);
+        }
+        // 显式 UpdateWrapper 只动 resume_score —— updateById 走整个实体，
+        // 会把并发窗口里其它字段的旧值一起写回去
+        resumeMapper.update(null, new LambdaUpdateWrapper<Resume>()
+                .eq(Resume::getResumeId, resumeId)
+                .set(Resume::getResumeScore, score));
+        resume.setResumeScore(score);
+        logger.info("简历评分已更新，简历ID: {}，分数: {}", resumeId, score);
+        return resume;
+    }
+
     /**
      * 周期必须处于开放投递状态：未删除、启用中、今天在起止日期内。
      *
@@ -438,6 +461,12 @@ public class ResumeServiceImpl implements IResumeService {
             throw new BusinessException(BusinessExceptionEnum.RESUME_CYCLE_CLOSED);
         }
     }
+
+/**
+     * 根据简历ID获取简化版字段信息（仅包含字段标签和字段值）
+     * @param resumeId 简历ID
+     * @return 简化版字段信息列表
+     */
 
     private List<SimpleResumeFieldDTO> getSimpleFieldValuesByResumeId(Integer resumeId) {
         try {

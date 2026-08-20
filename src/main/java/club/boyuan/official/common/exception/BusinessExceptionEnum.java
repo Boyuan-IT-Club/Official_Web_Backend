@@ -141,6 +141,7 @@ public enum BusinessExceptionEnum {
     INTERVIEW_PREFERENCE_TIME_REQUIRED(3610, "请至少勾选一个可接受的时间窗", HttpStatus.BAD_REQUEST),
     INTERVIEW_PREFERENCE_TIME_INVALID(3611, "所选时间窗无效或不属于该周期", HttpStatus.BAD_REQUEST),
     INTERVIEW_SCHEDULE_NOT_FOUND(3612, "面试安排不存在", HttpStatus.BAD_REQUEST),
+    INTERVIEW_PREFERENCE_LOCKED_BY_SCHEDULE(3613, "面试已安排，志愿与可面试时间不可再修改；如需调整请在申请中心提交改期申请", HttpStatus.CONFLICT),
 
     // 面试评价与协同相关异常 (3700-3799)
     EVALUATION_BOARD_NOT_OPENED(3701, "该周期的评价表尚未开启", HttpStatus.BAD_REQUEST),
