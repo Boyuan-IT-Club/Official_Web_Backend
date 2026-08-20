@@ -25,6 +25,10 @@ import java.util.concurrent.atomic.AtomicReference;
 @Slf4j
 public class FeishuBitableClient {
 
+    /** 飞书字段类型:1=多行文本, 2=数字（其余类型本类不做转换） */
+    private static final int FIELD_TYPE_TEXT = 1;
+    private static final int FIELD_TYPE_NUMBER = 2;
+
     private final FeishuProperties feishuProperties;
     private final ObjectMapper objectMapper;
     private final FeishuApiInvoker feishuApiInvoker;
@@ -119,23 +123,26 @@ public class FeishuBitableClient {
      *
      * 只新增、不改类型、不删多余列:全部按文本(type=1)建,足够承载导出内容,
      * 也不会动管理员在飞书里已经建好的其它列。
+     *
+     * @return 表内全部列的 名称 -> 飞书字段类型,供写入前把值转成该列能接受的类型
      */
-    public void ensureFieldsExist(String tableUrl, java.util.Collection<String> requiredFieldNames) {
+    public java.util.Map<String, Integer> ensureFieldsExist(
+            String tableUrl, java.util.Collection<String> requiredFieldNames) {
         ensureConfigured();
         if (requiredFieldNames == null || requiredFieldNames.isEmpty()) {
-            return;
+            return java.util.Map.of();
         }
         FeishuTableUrlParser.ParsedTable parsed = FeishuTableUrlParser.parse(tableUrl);
         String token = getTenantAccessToken();
 
-        java.util.Set<String> existing = listFieldNames(parsed, token);
+        java.util.Map<String, Integer> existing = listFieldTypes(parsed, token);
         String base = feishuProperties.getApiBaseUrl()
                 + "/open-apis/bitable/v1/apps/" + parsed.appToken()
                 + "/tables/" + parsed.tableId() + "/fields";
 
         int created = 0;
         for (String name : requiredFieldNames) {
-            if (name == null || name.isBlank() || existing.contains(name)) {
+            if (name == null || name.isBlank() || existing.containsKey(name)) {
                 continue;
             }
             // type=1 多行文本；用 Map 而非拼串,交给 postJson 序列化转义
@@ -154,27 +161,70 @@ public class FeishuBitableClient {
                 // 飞书对已存在的列名返回 FieldNameDuplicated（实测 code 1254014）；
                 // 并发推送下可能刚被别的任务建过,视为成功。
                 if (msg.contains("Duplicated") || msg.contains("exist") || msg.contains("已存在")) {
-                    existing.add(name);
+                    // 重复说明列已在（并发推送），但本次没读到它的类型，按文本处理
+                    existing.putIfAbsent(name, FIELD_TYPE_TEXT);
                     continue;
                 }
                 throw new BusinessException(BusinessExceptionEnum.FEISHU_IMPORT_FAILED,
                         "自动创建飞书列「" + name + "」失败: " + msg);
             }
-            existing.add(name);
+            existing.put(name, FIELD_TYPE_TEXT);
             created++;
         }
         if (created > 0) {
             log.info("飞书表 {} 自动补建 {} 个缺失列", parsed.tableId(), created);
         }
+        return existing;
     }
 
-    /** 读取表的全部字段名(建列前对齐用) */
-    private java.util.Set<String> listFieldNames(FeishuTableUrlParser.ParsedTable parsed, String token) {
+    /**
+     * 把整行的值转成各列实际类型能接受的形式。
+     *
+     * 起因:自动建的列都是文本(type=1),而 resumeScore 是 int —— 往文本列写数字,
+     * 飞书返回 TextFieldConvFail(code 1254060),整批失败。
+     * 按列的真实类型转换而不是一律 toString:管理员可能手动把「简历评分」改成
+     * 数字列,那时要写数字才对。未知类型不动,管理员自己清楚他建的是什么。
+     */
+    public static Map<String, Object> coerceRow(Map<String, Object> row, java.util.Map<String, Integer> fieldTypes) {
+        if (row == null || row.isEmpty()) {
+            return row;
+        }
+        Map<String, Object> out = new HashMap<>(row.size());
+        row.forEach((k, v) -> {
+            int type = fieldTypes == null ? FIELD_TYPE_TEXT : fieldTypes.getOrDefault(k, FIELD_TYPE_TEXT);
+            out.put(k, coerceValue(v, type));
+        });
+        return out;
+    }
+
+    private static Object coerceValue(Object v, int type) {
+        switch (type) {
+            case FIELD_TYPE_TEXT:
+                return v == null ? "" : String.valueOf(v);
+            case FIELD_TYPE_NUMBER:
+                if (v == null || "".equals(v)) {
+                    return null;   // 空数字列留空，别写 "" 进去
+                }
+                if (v instanceof Number) {
+                    return v;
+                }
+                try {
+                    return Double.valueOf(String.valueOf(v).trim());
+                } catch (NumberFormatException e) {
+                    return null;   // 非数字内容写不进数字列，留空而不是整批失败
+                }
+            default:
+                return v;          // 单选/多选/日期等交给飞书自己校验
+        }
+    }
+
+    /** 读取表的全部字段名与类型(建列对齐 + 写入前值类型转换都要用) */
+    private java.util.Map<String, Integer> listFieldTypes(FeishuTableUrlParser.ParsedTable parsed, String token) {
         String url = feishuProperties.getApiBaseUrl()
                 + "/open-apis/bitable/v1/apps/" + parsed.appToken()
                 + "/tables/" + parsed.tableId() + "/fields?page_size=100";
         String resp = feishuApiInvoker.get(url, token);
-        java.util.Set<String> names = new java.util.HashSet<>();
+        java.util.Map<String, Integer> names = new java.util.HashMap<>();
         try {
             JsonNode root = objectMapper.readTree(resp);
             if (root.path("code").asInt(-1) != 0) {
@@ -183,7 +233,7 @@ public class FeishuBitableClient {
             }
             for (JsonNode it : root.path("data").path("items")) {
                 String n = it.path("field_name").asText(null);
-                if (n != null) names.add(n);
+                if (n != null) names.put(n, it.path("type").asInt(FIELD_TYPE_TEXT));
             }
         } catch (BusinessException be) {
             throw be;
