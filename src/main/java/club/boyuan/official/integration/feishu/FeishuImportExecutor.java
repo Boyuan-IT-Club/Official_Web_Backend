@@ -281,18 +281,25 @@ public class FeishuImportExecutor {
             java.util.Set<String> requiredCols = new java.util.LinkedHashSet<>();
             createPlans.forEach(r -> requiredCols.addAll(r.fields().keySet()));
             updatePlans.forEach(r -> requiredCols.addAll(r.fields().keySet()));
+            java.util.Map<String, Integer> colTypes = java.util.Map.of();
             if (!requiredCols.isEmpty()) {
-                feishuBitableClient.ensureFieldsExist(bucket.tableUrl, requiredCols);
+                colTypes = feishuBitableClient.ensureFieldsExist(bucket.tableUrl, requiredCols);
             }
+            // 值也要按列的真实类型转 —— 自动建的列是文本，而 resumeScore 是 int，
+            // 往文本列写数字会整批 TextFieldConvFail（线上实测 code 1254060）
+            final java.util.Map<String, Integer> types = colTypes;
             if (!createPlans.isEmpty()) {
-                List<Map<String, Object>> rows = createPlans.stream().map(ScheduledRow::fields).toList();
+                List<Map<String, Object>> rows = createPlans.stream()
+                        .map(r -> FeishuBitableClient.coerceRow(r.fields(), types))
+                        .toList();
                 FeishuBatchWriteResult created = feishuBitableClient.batchCreateRecords(bucket.tableUrl, rows);
                 imported += created.count();
                 persistCreateResults(createPlans, created.recordIds());
             }
             if (!updatePlans.isEmpty()) {
                 List<FeishuBitableClient.RecordUpdate> updates = updatePlans.stream()
-                        .map(r -> new FeishuBitableClient.RecordUpdate(r.recordId(), r.fields()))
+                        .map(r -> new FeishuBitableClient.RecordUpdate(
+                                r.recordId(), FeishuBitableClient.coerceRow(r.fields(), types)))
                         .toList();
                 FeishuBatchWriteResult updated = feishuBitableClient.batchUpdateRecords(bucket.tableUrl, updates);
                 imported += updated.count();
