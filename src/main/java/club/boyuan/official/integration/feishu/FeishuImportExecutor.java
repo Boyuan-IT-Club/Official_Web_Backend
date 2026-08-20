@@ -274,6 +274,16 @@ public class FeishuImportExecutor {
 
         int imported = 0;
         try {
+            // 写记录前先对齐表结构:飞书不会自动建列,写不存在的列名会整批
+            // FieldNameNotFound。管理员常给一张只有默认「文本」列的空表,缺列自动补建。
+            // 用实际要写的所有列名(取自本批行的 key 并集),而不是写死清单 ——
+            // 将来 buildFields 增删列这里自动跟随。
+            java.util.Set<String> requiredCols = new java.util.LinkedHashSet<>();
+            createPlans.forEach(r -> requiredCols.addAll(r.fields().keySet()));
+            updatePlans.forEach(r -> requiredCols.addAll(r.fields().keySet()));
+            if (!requiredCols.isEmpty()) {
+                feishuBitableClient.ensureFieldsExist(bucket.tableUrl, requiredCols);
+            }
             if (!createPlans.isEmpty()) {
                 List<Map<String, Object>> rows = createPlans.stream().map(ScheduledRow::fields).toList();
                 FeishuBatchWriteResult created = feishuBitableClient.batchCreateRecords(bucket.tableUrl, rows);
