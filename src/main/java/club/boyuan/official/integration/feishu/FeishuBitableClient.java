@@ -211,7 +211,8 @@ public class FeishuBitableClient {
         if (row == null || row.isEmpty()) {
             return row;
         }
-        Map<String, Object> out = new HashMap<>(row.size());
+        // LinkedHashMap：转换不能打乱列序 —— ensureFieldsExist 按这个顺序建列
+        Map<String, Object> out = new java.util.LinkedHashMap<>(row.size());
         row.forEach((k, v) -> {
             int type = fieldTypes == null ? FIELD_TYPE_TEXT : fieldTypes.getOrDefault(k, FIELD_TYPE_TEXT);
             Object coerced = coerceValue(v, type);

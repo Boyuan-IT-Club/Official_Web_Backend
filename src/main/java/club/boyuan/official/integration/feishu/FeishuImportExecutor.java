@@ -347,7 +347,10 @@ public class FeishuImportExecutor {
         ResumeFieldReader.ResumeSnapshot snapshot = snapshotByResumeId.getOrDefault(
                 schedule.getResumeId(), ResumeFieldReader.ResumeSnapshot.empty());
 
-        Map<String, Object> fields = new HashMap<>();
+        // 必须有序：这个 put 顺序既是飞书里的列顺序（自动建列按它逐个建），
+        // 也是面试官从左到右填表的顺序。用 HashMap 时列顺序随机，
+        // 线上实际建出了「自我介绍」在最左、「姓名」在中间的乱序表。
+        Map<String, Object> fields = new LinkedHashMap<>();
         fields.put(FeishuBitableColumns.NAME, snapshot.name());
         fields.put(FeishuBitableColumns.INTENDED_DEPT, snapshot.intendedDepartments());
         fields.put(FeishuBitableColumns.GRADE, snapshot.grade());
