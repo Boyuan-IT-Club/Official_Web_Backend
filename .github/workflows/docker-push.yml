@@ -13,6 +13,16 @@ on:
       - 'docs/**'
   workflow_dispatch:
 
+# 生产部署串行化：同一时刻只允许一个部署在跑，后来的排队等待。
+# 缺这个闸的实际事故：连续合并两个 PR 触发两个部署并行，第二个在 Node B
+# 删 official-app 容器时撞上第一个正在删同一容器
+# （"removal of container ... is already in progress"），部署失败，
+# 集群停在旧版本而 main 已是新提交。
+# cancel-in-progress 必须为 false —— 取消一个删了一半容器的部署比排队危险得多。
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 env:
   DOCKER_USERNAME: boyuanclub
   IMAGE_NAME: official-core-api
