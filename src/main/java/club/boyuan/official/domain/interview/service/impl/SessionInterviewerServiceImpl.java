@@ -46,9 +46,9 @@ public class SessionInterviewerServiceImpl implements ISessionInterviewerService
 
         Set<Integer> distinctIds = new LinkedHashSet<>(userIds == null ? Collections.emptyList() : userIds);
         if (!distinctIds.isEmpty()) {
-            // 必须走自定义的 selectByIds：User 实体带着已不存在的 role 列，
+            // 必须走自定义的 selectUsersByIds：User 实体带着已不存在的 role 列，
             // MyBatis-Plus 的通用查询会拼出「Unknown column 'role'」
-            List<User> users = userMapper.selectByIds(new ArrayList<>(distinctIds));
+            List<User> users = userMapper.selectUsersByIds(new ArrayList<>(distinctIds));
             Set<Integer> foundIds = users.stream().map(User::getUserId).collect(Collectors.toSet());
             List<Integer> missing = distinctIds.stream()
                     .filter(id -> !foundIds.contains(id))
