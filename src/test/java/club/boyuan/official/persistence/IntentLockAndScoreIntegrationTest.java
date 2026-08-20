@@ -4,6 +4,9 @@ import club.boyuan.official.common.exception.BusinessException;
 import club.boyuan.official.common.exception.BusinessExceptionEnum;
 import club.boyuan.official.domain.interview.dto.SubmitInterviewPreferenceRequestDTO;
 import club.boyuan.official.domain.interview.service.IInterviewPreferenceService;
+import club.boyuan.official.domain.interview.service.IInterviewResultService;
+import club.boyuan.official.persistence.entity.InterviewResult;
+import club.boyuan.official.persistence.mapper.InterviewResultMapper;
 import club.boyuan.official.domain.resume.service.IResumeService;
 import club.boyuan.official.persistence.entity.InterviewSchedule;
 import club.boyuan.official.persistence.entity.InterviewTimeSlot;
@@ -33,6 +36,8 @@ import static org.junit.jupiter.api.Assertions.*;
  *    已取消(status=2)的安排不拦:取消后重排前学生应能改意向。
  *
  * 二、简历打分。
+ *
+ * 三、站内生成结果名单 + 周期关闭后拒收简历（与上面共用同一套数据）。
  *    resume_score 列此前只有飞书导出在读,全后端没有写入口 —— 管理端没有打分的地方。
  */
 @SpringBootTest
@@ -50,6 +55,12 @@ class IntentLockAndScoreIntegrationTest {
 
     @Autowired
     private IResumeService resumeService;
+
+    @Autowired
+    private IInterviewResultService resultService;
+
+    @Autowired
+    private InterviewResultMapper resultMapper;
 
     @Autowired
     private RecruitmentCycleMapper cycleMapper;
@@ -142,6 +153,35 @@ class IntentLockAndScoreIntegrationTest {
                     "不存在的简历必须拒绝");
             assertEquals(85, resumeMapper.selectById(rid).getResumeScore(),
                     "被拒的打分不得留下任何写入");
+
+            // 6) 周期关闭（本测试周期 is_active=0）：提交简历必须被拒
+            BusinessException closed = assertThrows(BusinessException.class,
+                    () -> resumeService.submitResume(rid),
+                    "周期未开放时提交必须被拒 —— 前端藏入口挡不住直接调接口");
+            assertEquals(BusinessExceptionEnum.RESUME_CYCLE_CLOSED.getCode(), closed.getCode());
+
+            // 7) 周期开放（启用且窗口覆盖今天）：提交恢复正常
+            RecruitmentCycle reopen = new RecruitmentCycle();
+            reopen.setCycleId(cycleId);
+            reopen.setIsActive(1);
+            cycleMapper.updateById(reopen);
+            assertDoesNotThrow(() -> resumeService.submitResume(rid),
+                    "周期开放时提交应照常成功");
+
+            // 8) 站内生成结果名单：把安排恢复为生效，再 seed
+            schedule.setStatus(SCHEDULE_ACTIVE);
+            scheduleMapper.updateById(schedule);
+            final Integer cid2 = cycleId;
+            assertEquals(1, resultService.seedFromSchedules(cid2),
+                    "一条生效安排应生成一行待定结果 —— 此前结果行只有飞书拉取会建");
+            InterviewResult seededRow = resultMapper.selectOne(
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<InterviewResult>()
+                            .eq(InterviewResult::getScheduleId, schedule.getScheduleId()));
+            assertNotNull(seededRow, "结果行应已创建");
+            assertEquals(0, seededRow.getDecision(), "新生成的结果应为待定（decision=0）");
+            assertEquals(SEEDED_USER_ID, seededRow.getUserId(), "候选人应取自安排");
+            assertEquals(0, resultService.seedFromSchedules(cid2),
+                    "重复生成必须幂等 —— 已有结果行（含飞书拉的）一律不动");
         } finally {
             // 意向与安排随简历级联删（fk_pref_resume / fk_schedule_resume 均为 CASCADE）
             if (resumeId != null) {
