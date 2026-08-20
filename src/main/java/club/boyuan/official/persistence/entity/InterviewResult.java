@@ -74,5 +74,9 @@ public class InterviewResult implements Serializable {
     @TableField("updated_at")
     private LocalDateTime updatedAt;
 
+    /** 最近一次结果通知的发送时间；NULL = 从未通知。重发时更新（V27） */
+    @TableField("notified_at")
+    private LocalDateTime notifiedAt;
+
 
 }

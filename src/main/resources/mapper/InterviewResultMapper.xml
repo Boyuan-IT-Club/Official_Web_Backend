@@ -13,6 +13,7 @@
         ir.decision_at,
         ir.created_at,
         ir.updated_at,
+        ir.notified_at,
         isc.cycle_id,
         u.name as user_name,
         d.dept_name as department_name
