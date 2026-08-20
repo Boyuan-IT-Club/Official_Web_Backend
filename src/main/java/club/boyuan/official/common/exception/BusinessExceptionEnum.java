@@ -67,6 +67,7 @@ public enum BusinessExceptionEnum {
     RESUME_UPDATE_FAILED(3006, "简历更新失败", HttpStatus.BAD_REQUEST),
     RESUME_DELETE_FAILED(3007, "简历删除失败", HttpStatus.BAD_REQUEST),
     RESUME_SUBMIT_FAILED(3008, "简历提交失败", HttpStatus.BAD_REQUEST),
+    RESUME_CYCLE_CLOSED(3010, "该招募周期未开放投递（已停用、已删除或不在起止日期内）", HttpStatus.BAD_REQUEST),
     RESUME_QUERY_FAILED(3009, "简历查询失败", HttpStatus.BAD_REQUEST),
 
     // 简历字段定义相关异常 (3100-3199)

@@ -1,6 +1,7 @@
 package club.boyuan.official.domain.interview.controller;
 
 
+import java.util.Map;
 import club.boyuan.official.common.dto.*;
 import club.boyuan.official.domain.interview.dto.*;
 import club.boyuan.official.persistence.entity.InterviewResult;
@@ -61,6 +62,18 @@ public class InterviewResultController {
                 requestDTO.getAssignedDeptId(), requestDTO.getResultIds().size());
         BatchDecisionResponseDTO responseDTO = interviewResultService.batchDecision(requestDTO);
         return ResponseEntity.ok(ResponseMessage.success(responseDTO));
+    }
+
+    /**
+     * 从本周期的生效面试安排生成结果名单（decision=0 待定），已有结果行的安排跳过。
+     * 此前结果行只有飞书拉取会创建 —— 不接飞书「结果与通知」就是空的。
+     * 生成后用下方的单行更新 / 批量录取即可全站内定结果，飞书变成可选项。
+     */
+    @PostMapping("/seed-from-schedules")
+    public ResponseEntity<ResponseMessage<Map<String, Integer>>> seedFromSchedules(
+            @RequestParam Integer cycleId) {
+        int created = interviewResultService.seedFromSchedules(cycleId);
+        return ResponseEntity.ok(ResponseMessage.success(Map.of("created", created)));
     }
 
     @GetMapping("/list")

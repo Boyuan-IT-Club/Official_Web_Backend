@@ -1,5 +1,6 @@
 package club.boyuan.official.domain.resume.service.impl;
 
+import club.boyuan.official.persistence.mapper.RecruitmentCycleMapper;
 import club.boyuan.official.common.dto.PageResultDTO;
 import club.boyuan.official.domain.resume.dto.ResumeDTO;
 import club.boyuan.official.domain.resume.dto.ResumeFieldValueDTO;
@@ -34,6 +35,7 @@ public class ResumeServiceImpl implements IResumeService {
     private static final Logger logger = LoggerFactory.getLogger(ResumeServiceImpl.class);
     
     private final ResumeMapper resumeMapper;
+    private final RecruitmentCycleMapper recruitmentCycleMapper;
     private final ResumeFieldValueMapper resumeFieldValueMapper;
     private final IResumeFieldDefinitionService fieldDefinitionService;
     private final RedisTemplate<String, Object> redisTemplate;
@@ -80,6 +82,7 @@ public class ResumeServiceImpl implements IResumeService {
     @Transactional
     public Resume createResume(Resume resume) {
         logger.info("创建简历，用户ID: {}，年份: {}", resume.getUserId(), resume.getCycleId());
+        requireCycleOpen(resume.getCycleId());
         try {
             resumeMapper.insert(resume);
             // 清除相关缓存
@@ -137,6 +140,9 @@ public class ResumeServiceImpl implements IResumeService {
         try {
             Resume resume = resumeMapper.findById(resumeId);
             if (resume != null) {
+                // 周期关闭后不再接收提交。放在这里而不是只藏前端入口：
+                // 前端把开放周期从切换器里拿掉只是看不见，直接调接口照样能投。
+                requireCycleOpen(resume.getCycleId());
                 resume.setStatus(2); // 设置为已提交状态
                 resume.setSubmittedAt(LocalDateTime.now());
                 resumeMapper.updateById(resume);
@@ -409,6 +415,30 @@ public class ResumeServiceImpl implements IResumeService {
      * @param resumeId 简历ID
      * @return 简化版字段信息列表
      */
+    /**
+     * 周期必须处于开放投递状态：未删除、启用中、今天在起止日期内。
+     *
+     * 管理员想停止收简历时，改结束日期到昨天或停用周期即可 —— 这里保证
+     * 后端真的会拒收，而不是只靠前端把入口藏起来。
+     * 只拦「新建」与「提交」两个动作；已有草稿的编辑不拦（内容留着无害，
+     * 反正提交不进来），已提交简历的展示/审核完全不受影响。
+     */
+    private void requireCycleOpen(Integer cycleId) {
+        if (cycleId == null) {
+            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
+        }
+        club.boyuan.official.persistence.entity.RecruitmentCycle cycle = recruitmentCycleMapper.selectById(cycleId);
+        boolean open = cycle != null
+                && !Integer.valueOf(1).equals(cycle.getIsDeleted())
+                && Integer.valueOf(1).equals(cycle.getIsActive())
+                && cycle.getStartDate() != null && cycle.getEndDate() != null
+                && !java.time.LocalDate.now().isBefore(cycle.getStartDate())
+                && !java.time.LocalDate.now().isAfter(cycle.getEndDate());
+        if (!open) {
+            throw new BusinessException(BusinessExceptionEnum.RESUME_CYCLE_CLOSED);
+        }
+    }
+
     private List<SimpleResumeFieldDTO> getSimpleFieldValuesByResumeId(Integer resumeId) {
         try {
             List<ResumeFieldValue> fieldValues = resumeFieldValueMapper.findByResumeId(resumeId);
