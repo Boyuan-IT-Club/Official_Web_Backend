@@ -138,12 +138,17 @@ public class ResumeServiceImpl implements IResumeService {
     @Transactional
     public Resume submitResume(Integer resumeId) {
         logger.info("提交简历，简历ID: {}", resumeId);
+        // 周期关闭后不再接收提交。放在这里而不是只藏前端入口：
+        // 前端把开放周期从切换器里拿掉只是看不见，直接调接口照样能投。
+        // 必须在 try 之外 —— 下面的 catch(Exception) 会把一切重包装成
+        // RESUME_SUBMIT_FAILED(3008)，把守卫的专属错误码 3010 吞掉（CI 实测抓到）。
+        Resume guarded = resumeMapper.findById(resumeId);
+        if (guarded != null) {
+            requireCycleOpen(guarded.getCycleId());
+        }
         try {
             Resume resume = resumeMapper.findById(resumeId);
             if (resume != null) {
-                // 周期关闭后不再接收提交。放在这里而不是只藏前端入口：
-                // 前端把开放周期从切换器里拿掉只是看不见，直接调接口照样能投。
-                requireCycleOpen(resume.getCycleId());
                 resume.setStatus(2); // 设置为已提交状态
                 resume.setSubmittedAt(LocalDateTime.now());
                 resumeMapper.updateById(resume);
