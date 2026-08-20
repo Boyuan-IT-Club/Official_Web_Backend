@@ -25,6 +25,9 @@ class FeishuRowCoercionTest {
     private static final int TEXT = 1;
     private static final int NUMBER = 2;
     private static final int SINGLE_SELECT = 3;
+    private static final int MULTI_SELECT = 4;
+    private static final int CHECKBOX = 7;
+    private static final int DATE = 5;
 
     @Test
     @DisplayName("文本列：整数被转成字符串（这正是线上 TextFieldConvFail 的原因）")
@@ -77,14 +80,72 @@ class FeishuRowCoercionTest {
     }
 
     @Test
-    @DisplayName("未知类型（单选等）原样透传，不擅自改管理员建好的列")
-    void unknownTypesPassThrough() {
+    @DisplayName("复选框：空值省略而不是写空串（线上 CheckboxFieldConvFail 的原因）")
+    void checkboxEmptyIsOmitted() {
         Map<String, Object> row = new LinkedHashMap<>();
+        row.put("预选", "");
         row.put("是否调剂", "是");
 
-        Map<String, Object> out = FeishuBitableClient.coerceRow(row, Map.of("是否调剂", SINGLE_SELECT));
+        Map<String, Object> out = FeishuBitableClient.coerceRow(
+                row, Map.of("预选", CHECKBOX, "是否调剂", CHECKBOX));
 
-        assertEquals("是", out.get("是否调剂"));
+        assertFalse(out.containsKey("预选"),
+                "空值必须整键省略 —— 往复选框写 \"\" 会让整批 CheckboxFieldConvFail");
+        assertEquals(Boolean.TRUE, out.get("是否调剂"), "「是」应转成布尔 true");
+    }
+
+    @Test
+    @DisplayName("多选：斜杠分隔的部门串转成数组")
+    void multiSelectSplitsIntoArray() {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("意向部门", "技术部 / 项目部");
+
+        Map<String, Object> out = FeishuBitableClient.coerceRow(row, Map.of("意向部门", MULTI_SELECT));
+
+        assertEquals(java.util.List.of("技术部", "项目部"), out.get("意向部门"),
+                "多选列只接受数组 —— formatIntendedDepartments 产出的是 \"甲 / 乙\"");
+    }
+
+    @Test
+    @DisplayName("单选与日期：空值省略，非空透传")
+    void singleSelectAndDateOmitEmpty() {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("所属部门（教室）", "");
+        row.put("面试日期", "");
+        row.put("年级选项", "大一");
+
+        Map<String, Object> out = FeishuBitableClient.coerceRow(row,
+                Map.of("所属部门（教室）", SINGLE_SELECT, "面试日期", DATE, "年级选项", SINGLE_SELECT));
+
+        assertFalse(out.containsKey("所属部门（教室）"), "单选不接受空串");
+        assertFalse(out.containsKey("面试日期"), "日期不接受空串");
+        assertEquals("大一", out.get("年级选项"));
+    }
+
+    @Test
+    @DisplayName("真实模板表的混合类型：一行全过，不漏不炸")
+    void realTemplateMixedTypes() {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("姓名", "丁华烨");
+        row.put("意向部门", "技术部 / 项目部");
+        row.put("简历评分", 85);
+        row.put("预选", "");
+        row.put("是否调剂", "");
+        row.put("面试评价", "");
+
+        // 类型取自社团真实模板表（实测）
+        Map<String, Integer> types = Map.of(
+                "姓名", TEXT, "意向部门", MULTI_SELECT, "简历评分", TEXT,
+                "预选", CHECKBOX, "是否调剂", CHECKBOX, "面试评价", TEXT);
+
+        Map<String, Object> out = FeishuBitableClient.coerceRow(row, types);
+
+        assertEquals("丁华烨", out.get("姓名"));
+        assertEquals(java.util.List.of("技术部", "项目部"), out.get("意向部门"));
+        assertEquals("85", out.get("简历评分"), "文本型评分列要收字符串");
+        assertEquals("", out.get("面试评价"), "文本列的空值写空串是合法的");
+        assertFalse(out.containsKey("预选"), "复选框空值省略");
+        assertFalse(out.containsKey("是否调剂"), "复选框空值省略");
     }
 
     @Test

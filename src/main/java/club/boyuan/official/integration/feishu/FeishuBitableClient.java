@@ -25,9 +25,19 @@ import java.util.concurrent.atomic.AtomicReference;
 @Slf4j
 public class FeishuBitableClient {
 
-    /** 飞书字段类型:1=多行文本, 2=数字（其余类型本类不做转换） */
+    /** 飞书字段类型（实测自社团模板表）:1=文本 2=数字 3=单选 4=多选 7=复选框 */
     private static final int FIELD_TYPE_TEXT = 1;
     private static final int FIELD_TYPE_NUMBER = 2;
+    private static final int FIELD_TYPE_SINGLE_SELECT = 3;
+    private static final int FIELD_TYPE_MULTI_SELECT = 4;
+    private static final int FIELD_TYPE_CHECKBOX = 7;
+
+    /** 多选值的分隔符:formatIntendedDepartments 产出 "技术部 / 项目部",也容忍逗号 */
+    private static final java.util.regex.Pattern MULTI_SPLIT = java.util.regex.Pattern.compile("[/,、]");
+
+    /** 建列时按表串行,避免"先读后建"竞态在同表建出重复列 */
+    private static final java.util.concurrent.ConcurrentMap<String, Object> TABLE_LOCKS =
+            new java.util.concurrent.ConcurrentHashMap<>();
 
     private final FeishuProperties feishuProperties;
     private final ObjectMapper objectMapper;
@@ -135,6 +145,18 @@ public class FeishuBitableClient {
         FeishuTableUrlParser.ParsedTable parsed = FeishuTableUrlParser.parse(tableUrl);
         String token = getTenantAccessToken();
 
+        // 同表串行:并发推送时两个任务各自"先读后建",都读到不存在就会各建一遍,
+        // 在生产表上实测建出了 6 个重复列(姓名/年级/预选/是否调剂/第二、三类问题)。
+        // 跨节点仍有极小窗口,靠飞书自身的 FieldNameDuplicated 兜底。
+        Object lock = TABLE_LOCKS.computeIfAbsent(parsed.tableId(), k -> new Object());
+        synchronized (lock) {
+            return ensureFieldsLocked(parsed, token, requiredFieldNames);
+        }
+    }
+
+    private java.util.Map<String, Integer> ensureFieldsLocked(
+            FeishuTableUrlParser.ParsedTable parsed, String token,
+            java.util.Collection<String> requiredFieldNames) {
         java.util.Map<String, Integer> existing = listFieldTypes(parsed, token);
         String base = feishuProperties.getApiBaseUrl()
                 + "/open-apis/bitable/v1/apps/" + parsed.appToken()
@@ -192,30 +214,14 @@ public class FeishuBitableClient {
         Map<String, Object> out = new HashMap<>(row.size());
         row.forEach((k, v) -> {
             int type = fieldTypes == null ? FIELD_TYPE_TEXT : fieldTypes.getOrDefault(k, FIELD_TYPE_TEXT);
-            out.put(k, coerceValue(v, type));
+            Object coerced = coerceValue(v, type);
+            // OMIT 表示这一格不写 —— 复选框/单选/多选不接受空串,
+            // 写空串会整批报 XxxFieldConvFail;省略等于"留空不动"。
+            if (coerced != OMIT) {
+                out.put(k, coerced);
+            }
         });
         return out;
-    }
-
-    private static Object coerceValue(Object v, int type) {
-        switch (type) {
-            case FIELD_TYPE_TEXT:
-                return v == null ? "" : String.valueOf(v);
-            case FIELD_TYPE_NUMBER:
-                if (v == null || "".equals(v)) {
-                    return null;   // 空数字列留空，别写 "" 进去
-                }
-                if (v instanceof Number) {
-                    return v;
-                }
-                try {
-                    return Double.valueOf(String.valueOf(v).trim());
-                } catch (NumberFormatException e) {
-                    return null;   // 非数字内容写不进数字列，留空而不是整批失败
-                }
-            default:
-                return v;          // 单选/多选/日期等交给飞书自己校验
-        }
     }
 
     /** 读取表的全部字段名与类型(建列对齐 + 写入前值类型转换都要用) */
@@ -233,7 +239,9 @@ public class FeishuBitableClient {
             }
             for (JsonNode it : root.path("data").path("items")) {
                 String n = it.path("field_name").asText(null);
-                if (n != null) names.put(n, it.path("type").asInt(FIELD_TYPE_TEXT));
+                if (n != null) {
+                    names.put(n, it.path("type").asInt(FIELD_TYPE_TEXT));
+                }
             }
         } catch (BusinessException be) {
             throw be;
@@ -241,6 +249,56 @@ public class FeishuBitableClient {
             throw new BusinessException(BusinessExceptionEnum.FEISHU_IMPORT_FAILED, "读取飞书表字段响应解析失败");
         }
         return names;
+    }
+
+    /** 省略标记:该格不写入(区别于"写一个空值") */
+    private static final Object OMIT = new Object();
+
+    private static Object coerceValue(Object v, int type) {
+        String raw = v == null ? "" : String.valueOf(v).trim();
+        switch (type) {
+            case FIELD_TYPE_TEXT:
+                return v == null ? "" : String.valueOf(v);
+            case FIELD_TYPE_NUMBER:
+                if (raw.isEmpty()) {
+                    return OMIT;
+                }
+                if (v instanceof Number) {
+                    return v;
+                }
+                try {
+                    return Double.valueOf(raw);
+                } catch (NumberFormatException e) {
+                    return OMIT;   // 非数字内容不写，别让整批连坐
+                }
+            case FIELD_TYPE_MULTI_SELECT: {
+                if (raw.isEmpty()) {
+                    return OMIT;
+                }
+                // "技术部 / 项目部" -> ["技术部","项目部"]；多选列只接受数组
+                List<String> parts = new ArrayList<>();
+                for (String part : MULTI_SPLIT.split(raw)) {
+                    String t = part.trim();
+                    if (!t.isEmpty()) {
+                        parts.add(t);
+                    }
+                }
+                return parts.isEmpty() ? OMIT : parts;
+            }
+            case FIELD_TYPE_SINGLE_SELECT:
+                return raw.isEmpty() ? OMIT : raw;
+            case FIELD_TYPE_CHECKBOX:
+                if (raw.isEmpty()) {
+                    return OMIT;   // 留空即未勾选，写 "" 会 CheckboxFieldConvFail
+                }
+                if (v instanceof Boolean) {
+                    return v;
+                }
+                return "是".equals(raw) || "true".equalsIgnoreCase(raw) || "1".equals(raw) || "y".equalsIgnoreCase(raw);
+            default:
+                // 日期/人员/附件等：空值不写，非空原样交给飞书校验
+                return raw.isEmpty() ? OMIT : v;
+        }
     }
 
     public FeishuBatchWriteResult batchCreateRecords(String tableUrl, List<Map<String, Object>> rows) {
