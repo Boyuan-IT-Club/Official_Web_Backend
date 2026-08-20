@@ -53,6 +53,16 @@ public class RecruitmentCycle {
     @TableField("is_active")
     private Integer isActive;
 
+    /**
+     * 软删除标记（V26）：1 = 已删除，列表/搜索/开放周期查询全部过滤，但按 ID 点查仍返回。
+     *
+     * 刻意不用 MyBatis-Plus 的 @TableLogic：它会让 BaseMapper.selectById 也自动过滤，
+     * 而历史简历详情、评价表都要按 ID 解析已删周期的名称 —— 自动过滤正好破坏这条路径。
+     * 过滤范围由各查询语句显式控制（见 RecruitmentCycleMapper.xml）。
+     */
+    @TableField("is_deleted")
+    private Integer isDeleted;
+
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @TableField(value = "created_at", fill = FieldFill.INSERT) // 自动填充创建时间
     private LocalDateTime createdAt;
@@ -136,6 +146,14 @@ public class RecruitmentCycle {
 
     public void setIsActive(Integer isActive) {
         this.isActive = isActive;
+    }
+
+    public Integer getIsDeleted() {
+        return isDeleted;
+    }
+
+    public void setIsDeleted(Integer isDeleted) {
+        this.isDeleted = isDeleted;
     }
 
     public LocalDateTime getCreatedAt() {

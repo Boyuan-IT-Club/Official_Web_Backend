@@ -86,8 +86,11 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
                 throw new IllegalArgumentException("招募周期不存在");
             }
             
-            recruitmentCycleMapper.deleteById(cycleId);
-            logger.info("招募周期删除成功，ID: {}", cycleId);
+            // 软删除：resume.cycle_id 是 RESTRICT（有简历的周期硬删直接报外键错），
+            // 而 interview_session 等又是 CASCADE（硬删会静默清掉面试数据）——
+            // 两头都不允许硬删。软删后周期从列表与开放周期里消失，历史数据全部保留。
+            recruitmentCycleMapper.softDeleteByIds(java.util.List.of(cycleId));
+            logger.info("招募周期已软删除，ID: {}", cycleId);
         } catch (Exception e) {
             logger.error("删除招募周期失败，ID: {}", cycleId, e);
             throw e;
@@ -159,8 +162,8 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
                 return;
             }
             
-            int deletedCount = recruitmentCycleMapper.batchDelete(cycleIds);
-            logger.info("批量删除招募周期完成，删除数量: {}", deletedCount);
+            int deletedCount = recruitmentCycleMapper.softDeleteByIds(cycleIds);
+            logger.info("批量软删除招募周期完成，置位数量: {}", deletedCount);
         } catch (Exception e) {
             logger.error("批量删除招募周期失败，IDs: {}", cycleIds, e);
             throw e;

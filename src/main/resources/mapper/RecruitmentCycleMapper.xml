@@ -11,11 +11,13 @@
         <result property="academicYear" column="academic_year"/>
         <result property="status" column="status"/>
         <result property="isActive" column="is_active"/>
+        <result property="isDeleted" column="is_deleted"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
     </resultMap>
 
-    <!-- 自定义查询方法 -->
+    <!-- 按 ID 点查刻意不过滤 is_deleted：历史简历详情、评价表都要按 ID 解析
+         已删周期的名称。"已删除"只意味着从列表和开放周期里消失。 -->
     <select id="findById" parameterType="java.lang.Integer" resultMap="RecruitmentCycleResultMap">
         SELECT * FROM recruitment_cycle
         WHERE cycle_id = #{cycleId}
@@ -23,33 +25,40 @@
 
     <select id="findAll" resultMap="RecruitmentCycleResultMap">
         SELECT * FROM recruitment_cycle
+        WHERE is_deleted = 0
         ORDER BY created_at DESC
     </select>
 
     <select id="findByStatus" parameterType="java.lang.Integer" resultMap="RecruitmentCycleResultMap">
         SELECT * FROM recruitment_cycle
-        WHERE status = #{status}
+        WHERE status = #{status} AND is_deleted = 0
         ORDER BY created_at DESC
     </select>
 
     <select id="findByIsActive" parameterType="java.lang.Integer" resultMap="RecruitmentCycleResultMap">
         SELECT * FROM recruitment_cycle
-        WHERE is_active = #{isActive}
+        WHERE is_active = #{isActive} AND is_deleted = 0
         ORDER BY created_at DESC
     </select>
 
     <select id="findByAcademicYear" parameterType="java.lang.String" resultMap="RecruitmentCycleResultMap">
         SELECT * FROM recruitment_cycle
-        WHERE academic_year = #{academicYear}
+        WHERE academic_year = #{academicYear} AND is_deleted = 0
     </select>
 
-    <delete id="batchDelete" parameterType="java.util.List">
-        DELETE FROM recruitment_cycle
+    <!-- 软删除：单删与批删共用。同时置 is_active = 0，
+         让 updateStatusBasedOnDate 等按 is_active 圈定范围的语句自然跳过它。
+         这里没有硬删语句是刻意的 —— interview_session/interview_time_slot 对周期
+         是 ON DELETE CASCADE，硬删会静默连带清掉整个周期的面试数据。 -->
+    <update id="softDeleteByIds" parameterType="java.util.List">
+        UPDATE recruitment_cycle
+        SET is_deleted = 1, is_active = 0, updated_at = NOW()
         WHERE cycle_id IN
         <foreach collection="cycleIds" item="cycleId" open="(" separator="," close=")">
             #{cycleId}
         </foreach>
-    </delete>
+        AND is_deleted = 0
+    </update>
 
     <!-- 批量更新：CASE WHEN 单语句实现（JDBC 默认禁止 foreach separator=";" 的多语句拼接） -->
     <update id="batchUpdate" parameterType="java.util.List">
@@ -99,6 +108,7 @@
 
     <select id="findAllWithPaginationAndSorting" resultMap="RecruitmentCycleResultMap">
         SELECT * FROM recruitment_cycle
+        WHERE is_deleted = 0
         ORDER BY
         <choose>
             <when test="sortBy != null and sortBy != ''">
@@ -122,6 +132,7 @@
     <select id="findByConditions" resultMap="RecruitmentCycleResultMap">
         SELECT * FROM recruitment_cycle
         <where>
+            AND is_deleted = 0
             <if test="cycleName != null and cycleName != ''">
                 AND cycle_name LIKE CONCAT('%', #{cycleName}, '%')
             </if>
@@ -158,6 +169,7 @@
     <select id="countByConditions" resultType="java.lang.Long">
         SELECT COUNT(*) FROM recruitment_cycle
         <where>
+            AND is_deleted = 0
             <if test="cycleName != null and cycleName != ''">
                 AND cycle_name LIKE CONCAT('%', #{cycleName}, '%')
             </if>
@@ -182,12 +194,13 @@
             ELSE status
         END,
         updated_at = NOW()
-        WHERE is_active = 1
+        WHERE is_active = 1 AND is_deleted = 0
     </update>
 
     <select id="findOpenForApplication" resultMap="RecruitmentCycleResultMap">
         SELECT * FROM recruitment_cycle
         WHERE is_active = 1
+          AND is_deleted = 0
           AND #{today} BETWEEN start_date AND end_date
         ORDER BY start_date DESC, cycle_id DESC
     </select>
