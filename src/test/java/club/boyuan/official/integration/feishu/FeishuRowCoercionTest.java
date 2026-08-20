@@ -158,4 +158,42 @@ class FeishuRowCoercionTest {
         assertEquals("42", FeishuBitableClient.coerceRow(row, null).get("没在类型表里"),
                 "类型表为 null 也不能崩，按文本兜底");
     }
+
+    @Test
+    @DisplayName("转换后必须保持列序 —— 自动建列按这个顺序建，乱序会建出乱序的表")
+    void coercionPreservesColumnOrder() {
+        // 与 buildRow 的 put 顺序一致：面试官从左到右填表的顺序
+        java.util.List<String> expected = java.util.List.of(
+                "姓名", "意向部门", "年级", "专业", "自我介绍",
+                "第一类问题", "第二类问题", "第三类问题", "面试评价",
+                "简历评分", "预选", "是否调剂", "记录人");
+
+        Map<String, Object> row = new LinkedHashMap<>();
+        expected.forEach(k -> row.put(k, "x"));
+
+        Map<String, Object> out = FeishuBitableClient.coerceRow(row, Map.of());
+
+        assertEquals(expected, new java.util.ArrayList<>(out.keySet()),
+                "coerceRow 用无序 Map 会打乱列序 —— 线上因此建出了「自我介绍」在最左、"
+                        + "「姓名」在中间的表");
+    }
+
+    @Test
+    @DisplayName("省略空值不该破坏其余列的顺序")
+    void omissionKeepsRemainingOrder() {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("姓名", "丁华烨");
+        row.put("预选", "");          // 复选框空值 -> 省略
+        row.put("年级", "大一");
+        row.put("是否调剂", "");      // 复选框空值 -> 省略
+        row.put("记录人", "");
+
+        Map<String, Object> out = FeishuBitableClient.coerceRow(row,
+                Map.of("姓名", TEXT, "预选", CHECKBOX, "年级", TEXT,
+                        "是否调剂", CHECKBOX, "记录人", TEXT));
+
+        assertEquals(java.util.List.of("姓名", "年级", "记录人"),
+                new java.util.ArrayList<>(out.keySet()),
+                "被省略的键消失，其余键保持原有相对顺序");
+    }
 }
