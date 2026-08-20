@@ -3544,11 +3544,67 @@ paths:
                 - message
                 - data
           headers: {}
+  /api/resumes/{resumeId}/score:
+    put:
+      summary: 简历打分
+      deprecated: false
+      description: >-
+        管理员为简历打分（0~100），落库到 resume.resume_score。
+        该列此前只有飞书导出在读，没有任何写入口 —— 管理端因此没有打分的地方。
+        权限与改状态/删除同属 resume:audit（打分正是「审核简历」的一部分）。
+      tags:
+      - 简历相关接口
+      parameters:
+      - name: resumeId
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                score:
+                  type: integer
+                  description: 0~100
+              required:
+              - score
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: 业务状态码（200 表示成功）
+                  message:
+                    type: string
+                    description: 提示信息
+                  data:
+                    type: object
+                    properties:
+                      resumeId:
+                        type: integer
+                      resumeScore:
+                        type: integer
+                required:
+                - code
+                - message
+                - data
+          headers: {}
+
   /api/resumes/cycle/{cycleId}/submit:
     post:
       summary: 提交简历
       deprecated: false
-      description: 提交当前用户在指定周期的简历，提交后进入待审核状态。
+      description: >-
+        提交简历。周期必须处于开放投递状态（未删除、启用中、今天在起止日期内），
+        否则返回 3010 该招募周期未开放投递 —— 管理员停用周期或改结束日期即可停止收简历。
       tags:
       - 简历相关功能——普通用户
       parameters:
@@ -7895,6 +7951,51 @@ paths:
               schema:
                 $ref: '#/components/schemas/SendNotificationsResponse'
           headers: {}
+  /api/interview/result/seed-from-schedules:
+    post:
+      summary: 从面试安排生成结果名单
+      deprecated: false
+      description: >-
+        为指定周期的全部生效面试安排（status=1）各生成一行待定结果（decision=0），
+        已有结果行的安排一律跳过（幂等）。此前结果行只有飞书拉取会创建 ——
+        不接飞书「结果与通知」就是空的；生成后用单行更新/批量录取即可全站内定结果，
+        飞书变为可选项。
+      tags:
+      - 面试结果
+      parameters:
+      - name: cycleId
+        in: query
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: 业务状态码（200 表示成功）
+                  message:
+                    type: string
+                    description: 提示信息
+                  data:
+                    type: object
+                    properties:
+                      created:
+                        type: integer
+                        description: 本次新建的结果行数（已存在的不计）
+                    required:
+                    - created
+                required:
+                - code
+                - message
+                - data
+          headers: {}
+
   /api/interview/result/list:
     get:
       summary: 查看录取结果

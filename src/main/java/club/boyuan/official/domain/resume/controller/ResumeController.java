@@ -1,5 +1,6 @@
 package club.boyuan.official.domain.resume.controller;
 
+import java.util.Map;
 import club.boyuan.official.common.dto.PageResultDTO;
 import club.boyuan.official.common.dto.ResponseMessage;
 import club.boyuan.official.domain.resume.dto.ResumeDTO;
@@ -297,6 +298,27 @@ public class ResumeController {
     /**
      * 更新简历状态（管理员）
      */
+    /**
+     * 简历打分（0~100）。resume_score 列此前只有飞书导出在读，没有任何写入口。
+     * 权限与改状态/删除同属收窄后的 resume:audit —— 打分正是「审核简历」的一部分。
+     */
+    @PutMapping("/{resumeId}/score")
+    @PreAuthorize("hasAuthority('resume:audit')")
+    public ResponseEntity<ResponseMessage<ResumeDTO>> updateResumeScore(
+            @PathVariable Integer resumeId,
+            @RequestBody Map<String, Integer> body) {
+        Integer score = body == null ? null : body.get("score");
+        logger.info("更新简历评分，简历ID: {}，分数: {}", resumeId, score);
+        Resume updated = resumeService.updateResumeScore(resumeId, score);
+        ResumeDTO dto = new ResumeDTO();
+        dto.setResumeId(updated.getResumeId());
+        dto.setUserId(updated.getUserId());
+        dto.setCycleId(updated.getCycleId());
+        dto.setStatus(updated.getStatus());
+        dto.setResumeScore(updated.getResumeScore());
+        return ResponseEntity.ok(new ResponseMessage<>(200, "简历评分已更新", dto));
+    }
+
     @PutMapping("/{resumeId}/status/{status}")
     @PreAuthorize("hasAuthority('resume:audit')")
     public ResponseEntity<ResponseMessage<?>> updateResumeStatus(

@@ -1,5 +1,10 @@
 package club.boyuan.official.domain.interview.service.impl;
 
+import java.util.stream.Collectors;
+import club.boyuan.official.persistence.mapper.ResumeMapper;
+import club.boyuan.official.persistence.mapper.InterviewScheduleMapper;
+import club.boyuan.official.persistence.entity.Resume;
+import club.boyuan.official.persistence.entity.InterviewSchedule;
 import club.boyuan.official.common.exception.BusinessException;
 import club.boyuan.official.common.exception.BusinessExceptionEnum;
 import club.boyuan.official.domain.interview.dto.BatchDecisionRequestDTO;
@@ -47,6 +52,10 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
 
     @Autowired
     private IUserService userService;
+    @Autowired
+    private InterviewScheduleMapper interviewScheduleMapper;
+    @Autowired
+    private ResumeMapper resumeMapper;
     @Autowired
     private InterviewNotificationService interviewNotificationService;
     @Override
@@ -189,6 +198,57 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
     /**
      * 从 Spring Security 上下文取当前用户ID，用于记录决定人。
      */
+    @Override
+    @Transactional
+    public int seedFromSchedules(Integer cycleId) {
+        if (cycleId == null) {
+            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
+        }
+        List<InterviewSchedule> schedules = interviewScheduleMapper.selectList(
+                new LambdaQueryWrapper<InterviewSchedule>()
+                        .eq(InterviewSchedule::getCycleId, cycleId)
+                        .eq(InterviewSchedule::getStatus, 1));
+        if (schedules.isEmpty()) {
+            return 0;
+        }
+
+        Set<Integer> scheduleIds = schedules.stream()
+                .map(InterviewSchedule::getScheduleId)
+                .collect(Collectors.toSet());
+        Set<Integer> seeded = baseMapper.selectList(
+                        new LambdaQueryWrapper<InterviewResult>()
+                                .in(InterviewResult::getScheduleId, scheduleIds))
+                .stream()
+                .map(InterviewResult::getScheduleId)
+                .collect(Collectors.toSet());
+
+        int created = 0;
+        for (InterviewSchedule schedule : schedules) {
+            if (seeded.contains(schedule.getScheduleId())) {
+                continue;   // 已有结果行（无论站内建的还是飞书拉的）一律不动
+            }
+            Integer userId = schedule.getUserId();
+            if (userId == null && schedule.getResumeId() != null) {
+                // user_id 是后补列，历史安排可能为空，用简历兜底
+                Resume resume = resumeMapper.selectById(schedule.getResumeId());
+                userId = resume != null ? resume.getUserId() : null;
+            }
+            if (userId == null) {
+                log.warn("安排 {} 无法解析候选人，跳过生成结果行", schedule.getScheduleId());
+                continue;
+            }
+            InterviewResult row = new InterviewResult()
+                    .setScheduleId(schedule.getScheduleId())
+                    .setUserId(userId)
+                    .setDecision(0);   // 0=待定，等管理员在「结果与通知」里定
+            baseMapper.insert(row);
+            created++;
+        }
+        log.info("周期 {} 从面试安排生成结果名单：新建 {} 行，跳过已存在 {} 行",
+                cycleId, created, schedules.size() - created);
+        return created;
+    }
+
     private Integer currentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null) {

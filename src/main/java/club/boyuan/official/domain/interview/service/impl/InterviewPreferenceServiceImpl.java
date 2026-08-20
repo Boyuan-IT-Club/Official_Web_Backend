@@ -1,5 +1,7 @@
 package club.boyuan.official.domain.interview.service.impl;
 
+import club.boyuan.official.persistence.mapper.InterviewScheduleMapper;
+import club.boyuan.official.persistence.entity.InterviewSchedule;
 import club.boyuan.official.common.exception.BusinessException;
 import club.boyuan.official.common.exception.BusinessExceptionEnum;
 import club.boyuan.official.domain.interview.dto.InterviewPreferenceDTO;
@@ -45,11 +47,24 @@ public class InterviewPreferenceServiceImpl extends ServiceImpl<InterviewPrefere
     private final IInterviewTimeSlotService interviewTimeSlotService;
     private final InterviewPreferenceTimeMapper preferenceTimeMapper;
     private final DepartmentMapper departmentMapper;
+    private final InterviewScheduleMapper interviewScheduleMapper;
 
     @Override
     @Transactional
     public InterviewPreferenceDTO submitPreference(Integer userId, SubmitInterviewPreferenceRequestDTO request) {
         Resume resume = requireSubmittedResume(userId, request.getCycleId());
+
+        // 面试一旦安排（status=1）就锁定意向：算法已按旧志愿排完场次，
+        // 此时再改志愿/时间窗不会生效，只会让学生以为改了、面试官按旧安排等人。
+        // 正确的调整通道是改期申请（InterviewRescheduleController）。
+        // 已取消（status=2）不拦 —— 取消后重排前学生应能改意向。
+        boolean scheduled = interviewScheduleMapper.exists(new LambdaQueryWrapper<InterviewSchedule>()
+                .eq(InterviewSchedule::getResumeId, resume.getResumeId())
+                .eq(InterviewSchedule::getCycleId, request.getCycleId())
+                .eq(InterviewSchedule::getStatus, 1));
+        if (scheduled) {
+            throw new BusinessException(BusinessExceptionEnum.INTERVIEW_PREFERENCE_LOCKED_BY_SCHEDULE);
+        }
 
         Integer firstDeptId = request.getFirstDeptId();
         Integer secondDeptId = request.getSecondDeptId();
