@@ -46,11 +46,12 @@ public interface RecruitmentCycleMapper extends BaseMapper<RecruitmentCycle> {
     RecruitmentCycle findByAcademicYear(String academicYear);
     
     /**
-     * 批量删除招募周期
-     * @param cycleIds 招募周期ID列表
-     * @return 影响行数
+     * 软删除（单删与批删共用）：置 is_deleted = 1 并同时停用。
+     * 没有硬删方法是刻意的 —— interview_session/interview_time_slot 对周期是
+     * ON DELETE CASCADE，硬删会静默连带清掉整个周期的面试数据。
+     * @return 实际置位的行数（已删除的行不重复计数）
      */
-    int batchDelete(@Param("cycleIds") List<Integer> cycleIds);
+    int softDeleteByIds(@Param("cycleIds") List<Integer> cycleIds);
     
     /**
      * 批量更新招募周期

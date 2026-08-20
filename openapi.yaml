@@ -3731,6 +3731,45 @@ paths:
                 - message
                 - data
           headers: {}
+    delete:
+      summary: 删除招募周期（软删除）
+      deprecated: false
+      description: >-
+        软删除：周期从列表、搜索与开放投递中消失，但简历、面试场次等历史数据全部保留，
+        按 ID 的点查仍可返回该周期（用于历史简历解析周期名）。
+        带简历的周期也可删除。此前为物理删除——有简历时因外键直接失败，
+        无简历时会级联清掉整个周期的面试数据，两种行为均已废除。
+      tags:
+      - 招聘活动相关接口（管理员专属）
+      parameters:
+      - name: cycleId
+        in: path
+        description: 招募周期ID
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: 业务状态码（200 表示成功）
+                  message:
+                    type: string
+                    description: 提示信息
+                  data:
+                    type: string
+                    description: 响应数据
+                required:
+                - code
+                - message
+                - data
+          headers: {}
   /api/cycles:
     get:
       summary: 查询招募周期
@@ -4038,41 +4077,6 @@ paths:
                         type: string
                         format: date-time
                         description: 更新时间
-                    description: 响应数据
-                required:
-                - code
-                - message
-                - data
-          headers: {}
-    delete:
-      summary: 删除招募周期
-      deprecated: false
-      description: 删除招募周期。
-      tags:
-      - 招聘活动相关接口（管理员专属）
-      parameters:
-      - name: cycleId
-        in: path
-        description: 招募周期ID
-        required: true
-        schema:
-          type: integer
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  code:
-                    type: integer
-                    description: 业务状态码（200 表示成功）
-                  message:
-                    type: string
-                    description: 提示信息
-                  data:
-                    type: string
                     description: 响应数据
                 required:
                 - code
@@ -4474,6 +4478,44 @@ paths:
                 - code
                 - message
                 - data
+          headers: {}
+    delete:
+      summary: 批量删除招募周期（软删除）
+      deprecated: false
+      description: >-
+        与单删同语义的软删除：周期从列表、搜索与开放投递中消失，简历与面试数据保留，
+        按 ID 点查仍可返回。此前该接口存在但未收录进本文档。
+      tags:
+      - 招聘活动相关接口（管理员专属）
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: integer
+              description: 要删除的周期 ID 列表
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: 业务状态码（200 表示成功）
+                  message:
+                    type: string
+                    description: 提示信息
+                  data:
+                    type: string
+                    nullable: true
+                    description: 响应数据
+                required:
+                - code
+                - message
           headers: {}
   /api/roles:
     post:
