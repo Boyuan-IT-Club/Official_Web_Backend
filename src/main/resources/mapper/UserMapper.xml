@@ -100,6 +100,12 @@
             <if test="status != null">
                 AND status = #{status, jdbcType=BOOLEAN}
             </if>
+            <!-- 管理端「姓名或学号」搜索框此前发的 keyword 后端根本不接，
+                 搜索框点了没反应。username 就是学号。 -->
+            <if test="keyword != null and keyword != ''">
+                AND (name LIKE CONCAT('%', #{keyword}, '%')
+                     OR username LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
         </where>
         LIMIT #{pageable.offset}, #{pageable.pageSize}
     </select>
@@ -117,6 +123,12 @@
             </if>
             <if test="status != null">
                 AND status = #{status, jdbcType=BOOLEAN}
+            </if>
+            <!-- 管理端「姓名或学号」搜索框此前发的 keyword 后端根本不接，
+                 搜索框点了没反应。username 就是学号。 -->
+            <if test="keyword != null and keyword != ''">
+                AND (name LIKE CONCAT('%', #{keyword}, '%')
+                     OR username LIKE CONCAT('%', #{keyword}, '%'))
             </if>
         </where>
     </select>

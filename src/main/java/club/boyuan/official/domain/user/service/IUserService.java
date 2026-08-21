@@ -21,7 +21,12 @@ public interface IUserService extends IService<User> {
     User getUserByPhone(String phone);
     User register(UserDTO userDTO);
     User updateUserStatus(Integer userId, String status);
-    PageResultDTO<User> getUsersByConditions(String role, String dept, String status, Pageable pageable, User currentUser);
+    /**
+     * 按条件分页查用户。keyword 匹配姓名或学号(username)。
+     * keyword 是后加的 —— 管理端搜索框此前发的这个参数后端不接，点了没反应。
+     */
+    PageResultDTO<User> getUsersByConditions(String role, String dept, String status,
+                                             String keyword, Pageable pageable, User currentUser);
     /**
      * 更新用户头像
      * @param userId 用户ID
