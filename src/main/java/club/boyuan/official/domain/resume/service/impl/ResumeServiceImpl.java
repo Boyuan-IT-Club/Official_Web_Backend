@@ -476,14 +476,23 @@ public class ResumeServiceImpl implements IResumeService {
     private List<SimpleResumeFieldDTO> getSimpleFieldValuesByResumeId(Integer resumeId) {
         try {
             List<ResumeFieldValue> fieldValues = resumeFieldValueMapper.findByResumeId(resumeId);
-            
-            return fieldValues.stream().map(fieldValue -> {
-                ResumeFieldDefinition fieldDefinition = null;
-                if (fieldValue.getFieldId() != null) {
-                    fieldDefinition = fieldDefinitionService.getFieldDefinitionById(fieldValue.getFieldId());
-                }
-                return toSimpleResumeFieldDTO(fieldValue, fieldDefinition);
-            }).collect(Collectors.toList());
+            if (fieldValues.isEmpty()) {
+                return new ArrayList<>();
+            }
+            // 一次批量取回全部字段定义。原来是每个字段值单独调
+            // getFieldDefinitionById —— 一份简历约 20 个字段就是 20 次 Redis
+            // 往返，而面试官打分时一位位点开候选人，这代价每次重复付。
+            java.util.Set<Integer> fieldIds = fieldValues.stream()
+                    .map(ResumeFieldValue::getFieldId)
+                    .filter(java.util.Objects::nonNull)
+                    .collect(Collectors.toSet());
+            java.util.Map<Integer, ResumeFieldDefinition> defs =
+                    fieldDefinitionService.getFieldDefinitionsByIds(fieldIds);
+
+            return fieldValues.stream()
+                    .map(fv -> toSimpleResumeFieldDTO(fv,
+                            fv.getFieldId() == null ? null : defs.get(fv.getFieldId())))
+                    .collect(Collectors.toList());
         } catch (Exception e) {
             logger.error("获取简化版字段信息失败，简历ID: {}", resumeId, e);
             throw new BusinessException(BusinessExceptionEnum.DATABASE_QUERY_FAILED);
