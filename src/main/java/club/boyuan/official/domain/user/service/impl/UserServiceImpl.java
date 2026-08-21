@@ -209,11 +209,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
     }
 
     @Override
-    public PageResultDTO<User> getUsersByConditions(String role, String dept, String status, Pageable pageable, User currentUser) {
+    public PageResultDTO<User> getUsersByConditions(String role, String dept, String status,
+                                                    String keyword, Pageable pageable, User currentUser) {
         // 权限检查由调用方的 @PreAuthorize 注解统一管理
         
         // 查询总记录数
-        long totalElements = userMapper.countByRoleAndDeptAndStatus(role, dept, status);
+        long totalElements = userMapper.countByRoleAndDeptAndStatus(role, dept, status, keyword);
         
         // 计算总页数
         int pageSize = pageable.getPageSize();
@@ -226,7 +227,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
             return new PageResultDTO<>(List.of(), totalElements, totalPages, pageNumber, pageSize, pageNumber == 0, pageNumber >= totalPages - 1);
         }
         
-        List<User> userList = userMapper.findByRoleAndDeptAndStatus(role, dept, status, pageable);
+        List<User> userList = userMapper.findByRoleAndDeptAndStatus(role, dept, status, keyword, pageable);
         boolean isFirst = pageNumber == 0;
         boolean isLast = pageNumber >= totalPages - 1;
         return new PageResultDTO<>(userList, totalElements, totalPages, pageNumber, pageSize, isFirst, isLast);

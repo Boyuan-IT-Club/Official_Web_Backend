@@ -27,14 +27,16 @@ public interface UserMapper extends BaseMapper<User> {
     
     List<User> selectAll();
     
-    List<User> findByRoleAndDeptAndStatus(@Param("role") String role, 
-                                          @Param("dept") String dept, 
-                                          @Param("status") String status, 
+    List<User> findByRoleAndDeptAndStatus(@Param("role") String role,
+                                          @Param("dept") String dept,
+                                          @Param("status") String status,
+                                          @Param("keyword") String keyword,
                                           Pageable pageable);
                                           
-    long countByRoleAndDeptAndStatus(@Param("role") String role, 
-                                     @Param("dept") String dept, 
-                                     @Param("status") String status);
+    long countByRoleAndDeptAndStatus(@Param("role") String role,
+                                     @Param("dept") String dept,
+                                     @Param("status") String status,
+                                     @Param("keyword") String keyword);
     
     List<User> searchUsers(@Param("keyword") String keyword);
     
