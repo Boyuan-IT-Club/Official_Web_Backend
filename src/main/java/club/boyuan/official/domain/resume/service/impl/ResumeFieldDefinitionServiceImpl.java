@@ -47,6 +47,29 @@ public class ResumeFieldDefinitionServiceImpl implements IResumeFieldDefinitionS
     }
     
     @Override
+    public java.util.Map<Integer, ResumeFieldDefinition> getFieldDefinitionsByIds(
+            java.util.Collection<Integer> fieldIds) {
+        if (fieldIds == null || fieldIds.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        java.util.Set<Integer> ids = fieldIds.stream()
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        if (ids.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        // 一次 IN 查询代替 N 次单点缓存查询
+        java.util.List<ResumeFieldDefinition> list = resumeFieldDefinitionMapper.selectBatchIds(ids);
+        java.util.Map<Integer, ResumeFieldDefinition> result = new java.util.HashMap<>(list.size());
+        for (ResumeFieldDefinition d : list) {
+            if (d != null && d.getFieldId() != null) {
+                result.put(d.getFieldId(), d);
+            }
+        }
+        return result;
+    }
+
+    @Override
     public ResumeFieldDefinition getFieldDefinitionById(Integer fieldId) {
         logger.debug("根据ID{}查询简历字段定义", fieldId);
         try {

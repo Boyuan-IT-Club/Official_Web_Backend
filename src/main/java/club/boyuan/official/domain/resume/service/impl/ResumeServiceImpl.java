@@ -276,6 +276,10 @@ public class ResumeServiceImpl implements IResumeService {
             // 缓存未命中，从数据库查询
             List<Resume> resumes = resumeMapper.queryResumes(name, major, expectedDepartment, cycleId, status);
             List<ResumeDTO> result = new ArrayList<>();
+            // 一次批量取回本页所有简历的字段值，替掉循环里的逐份查询
+            java.util.Map<Integer, List<SimpleResumeFieldDTO>> fieldsByResume =
+                    getSimpleFieldValuesByResumeIds(
+                            resumes.stream().map(Resume::getResumeId).collect(Collectors.toList()));
             for (Resume resume : resumes) {
                 ResumeDTO dto = new ResumeDTO();
                 dto.setResumeId(resume.getResumeId());
@@ -287,8 +291,8 @@ public class ResumeServiceImpl implements IResumeService {
                 dto.setCreatedAt(resume.getCreatedAt());
                 dto.setUpdatedAt(resume.getUpdatedAt());
                 // 可选：添加简化字段信息
-                List<SimpleResumeFieldDTO> simpleFields = getSimpleFieldValuesByResumeId(resume.getResumeId());
-                dto.setSimpleFields(simpleFields);
+                dto.setSimpleFields(fieldsByResume.getOrDefault(
+                        resume.getResumeId(), java.util.Collections.emptyList()));
                 result.add(dto);
             }
             
@@ -324,6 +328,10 @@ public class ResumeServiceImpl implements IResumeService {
             
             // 转换为DTO
             List<ResumeDTO> result = new ArrayList<>();
+            // 一次批量取回本页所有简历的字段值，替掉循环里的逐份查询
+            java.util.Map<Integer, List<SimpleResumeFieldDTO>> fieldsByResume =
+                    getSimpleFieldValuesByResumeIds(
+                            resumes.stream().map(Resume::getResumeId).collect(Collectors.toList()));
             for (Resume resume : resumes) {
                 ResumeDTO dto = new ResumeDTO();
                 dto.setResumeId(resume.getResumeId());
@@ -335,8 +343,8 @@ public class ResumeServiceImpl implements IResumeService {
                 dto.setCreatedAt(resume.getCreatedAt());
                 dto.setUpdatedAt(resume.getUpdatedAt());
                 // 可选：添加简化字段信息
-                List<SimpleResumeFieldDTO> simpleFields = getSimpleFieldValuesByResumeId(resume.getResumeId());
-                dto.setSimpleFields(simpleFields);
+                dto.setSimpleFields(fieldsByResume.getOrDefault(
+                        resume.getResumeId(), java.util.Collections.emptyList()));
                 result.add(dto);
             }
             
@@ -473,17 +481,64 @@ public class ResumeServiceImpl implements IResumeService {
      * @return 简化版字段信息列表
      */
 
+    /**
+     * 批量取多份简历的简化字段值，返回 resumeId -> 字段列表。
+     *
+     * 列表页原来是每份简历一次 findByResumeId、再逐字段查定义 ——
+     * 一页 100 份简历就是 100 次值查询 + 上千次定义查找。
+     * 这里两次查询搞定（值一次 IN、定义一次 IN）。
+     */
+    private java.util.Map<Integer, List<SimpleResumeFieldDTO>> getSimpleFieldValuesByResumeIds(
+            java.util.Collection<Integer> resumeIds) {
+        if (resumeIds == null || resumeIds.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        java.util.Set<Integer> ids = resumeIds.stream()
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (ids.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        List<ResumeFieldValue> all = resumeFieldValueMapper.findByResumeIds(ids);
+        if (all.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        java.util.Map<Integer, ResumeFieldDefinition> defs = fieldDefinitionService.getFieldDefinitionsByIds(
+                all.stream().map(ResumeFieldValue::getFieldId)
+                        .filter(java.util.Objects::nonNull).collect(Collectors.toSet()));
+
+        java.util.Map<Integer, List<SimpleResumeFieldDTO>> byResume = new java.util.HashMap<>();
+        for (ResumeFieldValue fv : all) {
+            if (fv.getResumeId() == null) {
+                continue;
+            }
+            byResume.computeIfAbsent(fv.getResumeId(), k -> new ArrayList<>())
+                    .add(toSimpleResumeFieldDTO(fv,
+                            fv.getFieldId() == null ? null : defs.get(fv.getFieldId())));
+        }
+        return byResume;
+    }
+
     private List<SimpleResumeFieldDTO> getSimpleFieldValuesByResumeId(Integer resumeId) {
         try {
             List<ResumeFieldValue> fieldValues = resumeFieldValueMapper.findByResumeId(resumeId);
-            
-            return fieldValues.stream().map(fieldValue -> {
-                ResumeFieldDefinition fieldDefinition = null;
-                if (fieldValue.getFieldId() != null) {
-                    fieldDefinition = fieldDefinitionService.getFieldDefinitionById(fieldValue.getFieldId());
-                }
-                return toSimpleResumeFieldDTO(fieldValue, fieldDefinition);
-            }).collect(Collectors.toList());
+            if (fieldValues.isEmpty()) {
+                return new ArrayList<>();
+            }
+            // 一次批量取回全部字段定义。原来是每个字段值单独调
+            // getFieldDefinitionById —— 一份简历约 20 个字段就是 20 次 Redis
+            // 往返，而面试官打分时一位位点开候选人，这代价每次重复付。
+            java.util.Set<Integer> fieldIds = fieldValues.stream()
+                    .map(ResumeFieldValue::getFieldId)
+                    .filter(java.util.Objects::nonNull)
+                    .collect(Collectors.toSet());
+            java.util.Map<Integer, ResumeFieldDefinition> defs =
+                    fieldDefinitionService.getFieldDefinitionsByIds(fieldIds);
+
+            return fieldValues.stream()
+                    .map(fv -> toSimpleResumeFieldDTO(fv,
+                            fv.getFieldId() == null ? null : defs.get(fv.getFieldId())))
+                    .collect(Collectors.toList());
         } catch (Exception e) {
             logger.error("获取简化版字段信息失败，简历ID: {}", resumeId, e);
             throw new BusinessException(BusinessExceptionEnum.DATABASE_QUERY_FAILED);

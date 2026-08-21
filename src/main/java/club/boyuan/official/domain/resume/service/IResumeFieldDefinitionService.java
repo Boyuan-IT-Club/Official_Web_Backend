@@ -57,4 +57,13 @@ public interface IResumeFieldDefinitionService {
      * @return 初始化后该周期的全部字段定义
      */
     List<ResumeFieldDefinition> initFieldDefinitions(Integer cycleId, List<ResumeFieldDefinition> templates);
+
+    /**
+     * 批量按 ID 取字段定义,返回 fieldId -> 定义。
+     *
+     * 组装一份简历要用到约 20 个字段定义,逐个调 getFieldDefinitionById 就是
+     * 20 次 Redis 往返(N+1);面试时一位位点开候选人,这个代价每次都付一遍。
+     * 本方法一次 IN 查询取回,自身不再走单点缓存。
+     */
+    java.util.Map<Integer, ResumeFieldDefinition> getFieldDefinitionsByIds(java.util.Collection<Integer> fieldIds);
 }
