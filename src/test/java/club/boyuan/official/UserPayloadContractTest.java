@@ -68,7 +68,7 @@ class UserPayloadContractTest {
         Set<String> unmapped = new LinkedHashSet<>();
         for (String raw : columnList.split(",")) {
             String col = raw.trim();
-            if (col.isEmpty() || col.equals("*")) {
+            if (col.isEmpty() || col.equals("*") || col.endsWith(".*")) {
                 continue;
             }
             if (!mapped.contains(col)) {

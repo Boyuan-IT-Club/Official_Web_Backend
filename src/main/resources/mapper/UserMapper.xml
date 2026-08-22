@@ -86,51 +86,78 @@
         WHERE is_deleted = 0
     </select>
 
+    <!-- 用户列表：RBAC 分组(roleGroup) + 角色(roleId) + 部门名(dept) + 状态(status:active/frozen) + 关键字(keyword) 筛选。
+         用 EXISTS/NOT EXISTS 子查询表达角色关系，避免 LEFT JOIN 造成多角色用户重复行。 -->
+    <sql id="userFilterWhere">
+        u.is_deleted = 0
+        <if test="roleGroup != null and roleGroup != ''">
+            <choose>
+                <when test="roleGroup == 'admin'">
+                    AND EXISTS (SELECT 1 FROM user_role ur JOIN role ro ON ro.role_id = ur.role_id
+                                WHERE ur.user_id = u.user_id AND ro.role_code IN ('SUPER_ADMIN','ADMIN'))
+                </when>
+                <when test="roleGroup == 'member'">
+                    AND EXISTS (SELECT 1 FROM user_role ur JOIN role ro ON ro.role_id = ur.role_id
+                                WHERE ur.user_id = u.user_id AND ro.role_code = 'MEMBER')
+                </when>
+                <when test="roleGroup == 'nonmember'">
+                    AND (EXISTS (SELECT 1 FROM user_role ur JOIN role ro ON ro.role_id = ur.role_id
+                                 WHERE ur.user_id = u.user_id AND ro.role_code = 'APPLICANT')
+                         OR NOT EXISTS (SELECT 1 FROM user_role ur WHERE ur.user_id = u.user_id))
+                </when>
+            </choose>
+        </if>
+        <if test="roleId != null">
+            AND EXISTS (SELECT 1 FROM user_role ur WHERE ur.user_id = u.user_id AND ur.role_id = #{roleId})
+        </if>
+        <if test="dept != null and dept != ''">
+            AND EXISTS (SELECT 1 FROM department d WHERE d.dept_id = u.dept_id AND d.dept_name = #{dept})
+        </if>
+        <if test="status != null and status != ''">
+            <choose>
+                <when test="status == 'frozen'">AND u.status = 0</when>
+                <otherwise>AND u.status = 1</otherwise>
+            </choose>
+        </if>
+        <if test="keyword != null and keyword != ''">
+            AND (u.username LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.name LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.email LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.phone LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </sql>
+
     <select id="findByRoleAndDeptAndStatus" resultMap="UserResultMap">
-        SELECT user_id, username, password, email, role, name, phone, dept, avatar, create_time, status, is_member
-        FROM user
+        SELECT u.*
+        FROM user u
         <where>
-            AND is_deleted = 0
-            <if test="role != null and role != ''">
-                AND role = #{role}
-            </if>
-            <if test="dept != null and dept != ''">
-                AND dept = #{dept}
-            </if>
-            <if test="status != null">
-                AND status = #{status, jdbcType=BOOLEAN}
-            </if>
-            <!-- 管理端「姓名或学号」搜索框此前发的 keyword 后端根本不接，
-                 搜索框点了没反应。username 就是学号。 -->
-            <if test="keyword != null and keyword != ''">
-                AND (name LIKE CONCAT('%', #{keyword}, '%')
-                     OR username LIKE CONCAT('%', #{keyword}, '%'))
-            </if>
+            <include refid="userFilterWhere"/>
         </where>
         LIMIT #{pageable.offset}, #{pageable.pageSize}
     </select>
 
     <select id="countByRoleAndDeptAndStatus" resultType="java.lang.Long">
         SELECT COUNT(*)
-        FROM user
+        FROM user u
         <where>
-            AND is_deleted = 0
-            <if test="role != null and role != ''">
-                AND role = #{role}
-            </if>
-            <if test="dept != null and dept != ''">
-                AND dept = #{dept}
-            </if>
-            <if test="status != null">
-                AND status = #{status, jdbcType=BOOLEAN}
-            </if>
-            <!-- 管理端「姓名或学号」搜索框此前发的 keyword 后端根本不接，
-                 搜索框点了没反应。username 就是学号。 -->
-            <if test="keyword != null and keyword != ''">
-                AND (name LIKE CONCAT('%', #{keyword}, '%')
-                     OR username LIKE CONCAT('%', #{keyword}, '%'))
-            </if>
+            <include refid="userFilterWhere"/>
         </where>
+    </select>
+
+    <!-- 用户分类统计：单条 SQL 聚合，一次返回总数/冻结/管理员/社员/非社员 -->
+    <select id="countUserBuckets" resultType="map">
+        SELECT
+            COUNT(*) AS total,
+            COALESCE(SUM(u.status = 0), 0) AS frozen,
+            COALESCE(SUM(CASE WHEN EXISTS(SELECT 1 FROM user_role ur JOIN role ro ON ro.role_id = ur.role_id
+                                WHERE ur.user_id = u.user_id AND ro.role_code IN ('SUPER_ADMIN','ADMIN')) THEN 1 ELSE 0 END), 0) AS adminCount,
+            COALESCE(SUM(CASE WHEN EXISTS(SELECT 1 FROM user_role ur JOIN role ro ON ro.role_id = ur.role_id
+                                WHERE ur.user_id = u.user_id AND ro.role_code = 'MEMBER') THEN 1 ELSE 0 END), 0) AS memberCount,
+            COALESCE(SUM(CASE WHEN EXISTS(SELECT 1 FROM user_role ur JOIN role ro ON ro.role_id = ur.role_id
+                                WHERE ur.user_id = u.user_id AND ro.role_code = 'APPLICANT')
+                          OR NOT EXISTS(SELECT 1 FROM user_role ur WHERE ur.user_id = u.user_id) THEN 1 ELSE 0 END), 0) AS nonMemberCount
+        FROM user u
+        WHERE u.is_deleted = 0
     </select>
     
     <select id="searchUsers" parameterType="string" resultMap="UserResultMap">
@@ -139,8 +166,7 @@
         WHERE (username LIKE CONCAT('%', #{keyword}, '%') 
            OR name LIKE CONCAT('%', #{keyword}, '%') 
            OR email LIKE CONCAT('%', #{keyword}, '%') 
-           OR phone LIKE CONCAT('%', #{keyword}, '%') 
-           OR dept LIKE CONCAT('%', #{keyword}, '%'))
+           OR phone LIKE CONCAT('%', #{keyword}, '%'))
            AND is_deleted = 0
         LIMIT 20
     </select>
@@ -156,13 +182,14 @@
     </update>
     
     <update id="batchUpdateDeptByIds">
-        UPDATE user 
-        SET dept = #{dept}, update_time = NOW()
+        UPDATE user
+        SET dept_id = (SELECT dept_id FROM department WHERE dept_name = #{dept} LIMIT 1), update_time = NOW()
         WHERE user_id IN
         <foreach collection="userIds" item="userId" open="(" separator="," close=")">
             #{userId}
         </foreach>
         AND is_deleted = 0
+        AND EXISTS (SELECT 1 FROM department WHERE dept_name = #{dept})
     </update>
     
     <update id="batchUpdateMembershipByIds">

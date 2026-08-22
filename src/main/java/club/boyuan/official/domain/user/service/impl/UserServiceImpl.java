@@ -5,7 +5,6 @@ import club.boyuan.official.common.dto.PageResultDTO;
 import club.boyuan.official.domain.user.dto.UserDTO;
 import club.boyuan.official.persistence.entity.Resume;
 import club.boyuan.official.persistence.entity.User;
-import club.boyuan.official.persistence.entity.Role;
 import club.boyuan.official.persistence.entity.EvaluationSubmission;
 import club.boyuan.official.persistence.mapper.EvaluationSubmissionMapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -13,12 +12,13 @@ import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import club.boyuan.official.common.exception.BusinessException;
 import club.boyuan.official.common.exception.BusinessExceptionEnum;
 import club.boyuan.official.persistence.entity.UserRole;
+import club.boyuan.official.persistence.entity.Role;
 import club.boyuan.official.persistence.mapper.AwardExperienceMapper;
 import club.boyuan.official.persistence.mapper.ResumeFieldValueMapper;
 import club.boyuan.official.persistence.mapper.ResumeMapper;
 import club.boyuan.official.persistence.mapper.UserMapper;
-import club.boyuan.official.persistence.mapper.RoleMapper;
 import club.boyuan.official.persistence.mapper.UserRoleMapper;
+import club.boyuan.official.persistence.mapper.RoleMapper;
 import club.boyuan.official.domain.user.service.IUserService;
 import club.boyuan.official.common.utils.GitHubAccountUtil;
 import club.boyuan.official.common.utils.JwtTokenUtil;
@@ -34,6 +34,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import club.boyuan.official.common.utils.PermissionUtils;
@@ -209,12 +210,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
     }
 
     @Override
-    public PageResultDTO<User> getUsersByConditions(String role, String dept, String status,
-                                                    String keyword, Pageable pageable, User currentUser) {
+    public PageResultDTO<User> getUsersByConditions(String roleGroup, Integer roleId, String dept, String status, String keyword, Pageable pageable, User currentUser) {
         // 权限检查由调用方的 @PreAuthorize 注解统一管理
         
         // 查询总记录数
-        long totalElements = userMapper.countByRoleAndDeptAndStatus(role, dept, status, keyword);
+        long totalElements = userMapper.countByRoleAndDeptAndStatus(roleGroup, roleId, dept, status, keyword);
         
         // 计算总页数
         int pageSize = pageable.getPageSize();
@@ -227,10 +227,16 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
             return new PageResultDTO<>(List.of(), totalElements, totalPages, pageNumber, pageSize, pageNumber == 0, pageNumber >= totalPages - 1);
         }
         
-        List<User> userList = userMapper.findByRoleAndDeptAndStatus(role, dept, status, keyword, pageable);
+        List<User> userList = userMapper.findByRoleAndDeptAndStatus(roleGroup, roleId, dept, status, keyword, pageable);
         boolean isFirst = pageNumber == 0;
         boolean isLast = pageNumber >= totalPages - 1;
         return new PageResultDTO<>(userList, totalElements, totalPages, pageNumber, pageSize, isFirst, isLast);
+    }
+
+    @Override
+    public Map<String, Object> getUserStats() {
+        Map<String, Object> stats = userMapper.countUserBuckets();
+        return stats != null ? stats : Map.of();
     }
 
     @Override
@@ -312,7 +318,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
     }
 
     @Override
-    @Transactional
     public User updateUserMembership(Integer userId, Boolean isMember) {
         if (userId == null || isMember == null) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
@@ -326,16 +331,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
             throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
         }
         
-        // 这里原先注释成「User 类已经没有 isMember 字段」并直接 updateById(user)，
-        // 等于什么都没改却返回成功 —— 单个用户的录取/取消录取接口一直是空操作。
-        // 实体现已恢复 isMember 字段（见 V20 与 UserResultMap 的对齐），显式赋值再落库。
-        user.setIsMember(isMember);
+        // User类已经没有isMember字段，移除setIsMember调用
         int rows = userMapper.updateById(user);
         if (rows <= 0) {
             throw new BusinessException(BusinessExceptionEnum.USER_INFO_UPDATE_FAILED);
         }
-        // 社员身份与社员角色一并同步，与批量路径保持一致
-        syncMemberRole(List.of(userId), Boolean.TRUE.equals(isMember));
         logger.info("用户会员状态更新成功，用户ID: {}，会员状态: {}", user.getUserId(), isMember);
         return user;
     }
@@ -352,7 +352,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
         }
         
         // 检查用户是否存在且不是管理员
-        List<User> users = userMapper.selectUsersByIds(userIds);
+        List<User> users = userMapper.selectByIds(userIds);
         for (User user : users) {
             if (user == null) {
                 throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
@@ -380,7 +380,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
         }
         
         // 检查用户是否存在且不是管理员
-        List<User> users = userMapper.selectUsersByIds(userIds);
+        List<User> users = userMapper.selectByIds(userIds);
         for (User user : users) {
             if (user == null) {
                 throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
@@ -408,7 +408,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
         }
         
         // 检查用户是否存在且不是管理员
-        List<User> users = userMapper.selectUsersByIds(userIds);
+        List<User> users = userMapper.selectByIds(userIds);
         for (User user : users) {
             if (user == null) {
                 throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
@@ -420,22 +420,18 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
         }
         
         int updatedCount = userMapper.batchUpdateMembershipByIds(userIds, isMember);
-        // 社员身份与社员角色一并同步，见 syncMemberRole 的说明
-        syncMemberRole(userIds, Boolean.TRUE.equals(isMember));
         logger.info("批量更新用户会员状态成功，更新数量: {}，会员状态: {}", updatedCount, isMember);
+        // 同步社员角色：让「社员身份」与「社员角色」保持一致（ADR-0001：RBAC 角色是唯一来源）
+        syncMemberRole(userIds, isMember);
         return updatedCount;
     }
 
     /**
      * 让「社员身份」与「社员角色」保持一致。
      *
-     * 此前这两者完全独立:批量录取只写 user.is_member 标记,不动 user_role。
-     * 结果是管理员点了「录取为社员」,对方并不会因此获得社员角色的任何权限,
-     * 而界面上看不出区别 —— 按业务要求现在一并同步。
-     *
      * 按 role_code 查角色而不是写死 role_id:V6 种子里 MEMBER 是 3,但显式 ID
      * 正是 V10/V13 权限撞号的根因,这里不重复那个做法。
-     * 角色行不存在时只记日志不抛异常 —— 录取本身已经成功,不该因为角色缺失而整体回滚。
+     * 角色行不存在时只记日志不抛异常 —— 状态更新本身已经成功,不该因为角色缺失而整体回滚。
      */
     private void syncMemberRole(List<Integer> userIds, boolean isMember) {
         if (userIds == null || userIds.isEmpty()) {
@@ -467,16 +463,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
                     .eq(UserRole::getRoleId, memberRole.getRoleId()));
             logger.info("开除社员：已移除 {} 条社员角色绑定", removed);
         }
-    }
-
-    @Override
-    public long countUsersByMembership(boolean isMember) {
-        return userMapper.countByMembership(isMember);
-    }
-
-    @Override
-    public long countFrozenUsers() {
-        return userMapper.countFrozen();
     }
 
     @Override

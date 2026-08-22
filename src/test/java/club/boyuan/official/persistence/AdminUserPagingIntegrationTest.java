@@ -84,13 +84,13 @@ class AdminUserPagingIntegrationTest {
     void pagingSplitsByPageIndexNotOffset() {
         // 用 keyword 把范围限定在本测试造的人身上，不受库里其它数据影响
         PageResultDTO<User> first = userService.getUsersByConditions(
-                null, null, null, mark, PageRequest.of(0, 3, Sort.by("userId")), null);
+                null, null, null, null, mark, PageRequest.of(0, 3, Sort.by("userId")), null);
 
         assertEquals(SEEDED, first.getTotalElements(), "总数应为本测试造的人数");
         assertEquals(3, first.getContent().size(), "第一页应恰好 3 条");
 
         PageResultDTO<User> second = userService.getUsersByConditions(
-                null, null, null, mark, PageRequest.of(1, 3, Sort.by("userId")), null);
+                null, null, null, null, mark, PageRequest.of(1, 3, Sort.by("userId")), null);
 
         assertFalse(second.getContent().isEmpty(),
                 "第二页不能是空的 —— 这正是线上「点第2页啥都没有」的症状");
@@ -105,7 +105,7 @@ class AdminUserPagingIntegrationTest {
 
         // 末页只剩 1 人，验证边界不越界
         PageResultDTO<User> last = userService.getUsersByConditions(
-                null, null, null, mark, PageRequest.of(2, 3, Sort.by("userId")), null);
+                null, null, null, null, mark, PageRequest.of(2, 3, Sort.by("userId")), null);
         assertEquals(1, last.getContent().size(), "7 人按每页 3 条切，末页应只有 1 条");
     }
 
@@ -113,7 +113,7 @@ class AdminUserPagingIntegrationTest {
     @DisplayName("每页条数真的生效：要 5 条就给 5 条，不回落到默认 10")
     void pageSizeIsHonoured() {
         PageResultDTO<User> page = userService.getUsersByConditions(
-                null, null, null, mark, PageRequest.of(0, 5, Sort.by("userId")), null);
+                null, null, null, null, mark, PageRequest.of(0, 5, Sort.by("userId")), null);
 
         assertEquals(5, page.getContent().size(),
                 "每页条数被忽略时会回落到 10（本测试有 7 人，会返回 7 条）—— "
@@ -125,7 +125,7 @@ class AdminUserPagingIntegrationTest {
     void keywordFiltersByNameOrUsername() {
         // 按姓名
         PageResultDTO<User> byName = userService.getUsersByConditions(
-                null, null, null, mark, PageRequest.of(0, 50, Sort.by("userId")), null);
+                null, null, null, null, mark, PageRequest.of(0, 50, Sort.by("userId")), null);
         assertEquals(SEEDED, byName.getContent().size(), "按姓名应命中全部造出来的人");
         assertEquals(SEEDED, byName.getTotalElements(),
                 "计数查询也要带上 keyword，否则分页器会显示不存在的页数");
@@ -133,7 +133,7 @@ class AdminUserPagingIntegrationTest {
         // 按学号(username)
         String oneUsername = "pg_" + mark + "_3";
         PageResultDTO<User> byUsername = userService.getUsersByConditions(
-                null, null, null, oneUsername, PageRequest.of(0, 50, Sort.by("userId")), null);
+                null, null, null, null, oneUsername, PageRequest.of(0, 50, Sort.by("userId")), null);
         assertEquals(1, byUsername.getContent().size(),
                 "按学号搜索必须有结果 —— keyword 曾被后端整个忽略，搜索框形同虚设");
         assertEquals(oneUsername, byUsername.getContent().get(0).getUsername());
@@ -143,7 +143,7 @@ class AdminUserPagingIntegrationTest {
     @DisplayName("keyword 无匹配时返回空且总数为 0，而不是退化成全量")
     void keywordWithNoMatchReturnsEmpty() {
         PageResultDTO<User> none = userService.getUsersByConditions(
-                null, null, null, "绝不可能存在的关键词_zzz_9f3a",
+                null, null, null, null, "绝不可能存在的关键词_zzz_9f3a",
                 PageRequest.of(0, 10, Sort.by("userId")), null);
 
         assertTrue(none.getContent().isEmpty(), "无匹配就该是空列表");
