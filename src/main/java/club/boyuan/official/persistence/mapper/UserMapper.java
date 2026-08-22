@@ -7,6 +7,7 @@ import org.apache.ibatis.annotations.Param;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
+import java.util.Map;
 
 @Mapper
 public interface UserMapper extends BaseMapper<User> {
@@ -27,14 +28,21 @@ public interface UserMapper extends BaseMapper<User> {
     
     List<User> selectAll();
     
-    List<User> findByRoleAndDeptAndStatus(@Param("role") String role, 
-                                          @Param("dept") String dept, 
-                                          @Param("status") String status, 
+    List<User> findByRoleAndDeptAndStatus(@Param("roleGroup") String roleGroup,
+                                          @Param("roleId") Integer roleId,
+                                          @Param("dept") String dept,
+                                          @Param("status") String status,
+                                          @Param("keyword") String keyword,
                                           Pageable pageable);
-                                          
-    long countByRoleAndDeptAndStatus(@Param("role") String role, 
-                                     @Param("dept") String dept, 
-                                     @Param("status") String status);
+
+    long countByRoleAndDeptAndStatus(@Param("roleGroup") String roleGroup,
+                                     @Param("roleId") Integer roleId,
+                                     @Param("dept") String dept,
+                                     @Param("status") String status,
+                                     @Param("keyword") String keyword);
+
+    /** 用户分类统计：单条 SQL 聚合 total/frozen/adminCount/memberCount/nonMemberCount */
+    Map<String, Object> countUserBuckets();
     
     List<User> searchUsers(@Param("keyword") String keyword);
     

@@ -101,12 +101,14 @@ public class AdminController {
     @GetMapping("/users")
     @PreAuthorize("hasAuthority('admin:manage')")
     public ResponseEntity<ResponseMessage<?>> getUsers(
-            @RequestParam(required = false) String role,
+            @RequestParam(required = false) String roleGroup,
+            @RequestParam(required = false) Integer role,
             @RequestParam(required = false) String dept,
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) String keyword,
             @PageableDefault(size = 10, sort = "userId", direction = Sort.Direction.ASC) Pageable pageable) {
         User currentUser = userService.getUserByUsername(SecurityUtil.getCurrentUsername());
-        PageResultDTO<User> userPage = userService.getUsersByConditions(role, dept, status, pageable, currentUser);
+        PageResultDTO<User> userPage = userService.getUsersByConditions(roleGroup, role, dept, status, keyword, pageable, currentUser);
         // 填充 RBAC 角色（user 表的 role 列为注册期遗留字段，展示与分配统一走 user_role 关联）
         if (userPage != null && userPage.getContent() != null) {
             userPage.getContent().forEach(u -> {
@@ -118,6 +120,17 @@ public class AdminController {
             });
         }
         return ResponseEntity.ok(ResponseMessage.success(userPage));
+    }
+
+    /**
+     * 用户分类统计（全量）：total / frozen / adminCount / memberCount / nonMemberCount。
+     * 独立于分页列表，供统计卡片使用。
+     */
+    @GetMapping("/users/stats")
+    @PreAuthorize("hasAuthority('admin:manage')")
+    public ResponseEntity<ResponseMessage<?>> getUserStats() {
+        Map<String, Object> stats = userService.getUserStats();
+        return ResponseEntity.ok(ResponseMessage.success(stats));
     }
 
     /**

@@ -8,6 +8,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
+import java.util.Map;
 
 public interface IUserService extends IService<User> {
     /*增加用户*/
@@ -21,7 +22,9 @@ public interface IUserService extends IService<User> {
     User getUserByPhone(String phone);
     User register(UserDTO userDTO);
     User updateUserStatus(Integer userId, String status);
-    PageResultDTO<User> getUsersByConditions(String role, String dept, String status, Pageable pageable, User currentUser);
+    PageResultDTO<User> getUsersByConditions(String roleGroup, Integer roleId, String dept, String status, String keyword, Pageable pageable, User currentUser);
+    /** 用户分类统计（total/frozen/adminCount/memberCount/nonMemberCount），全量、单条 SQL 聚合 */
+    Map<String, Object> getUserStats();
     /**
      * 更新用户头像
      * @param userId 用户ID
