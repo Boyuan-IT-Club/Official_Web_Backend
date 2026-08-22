@@ -140,10 +140,10 @@ public class AdminController {
 
     /**
      * 用户分类统计（全量）：total / frozen / adminCount / memberCount / nonMemberCount。
-     * 独立于分页列表，供统计卡片使用。
+     * 独立于分页列表，供统计卡片使用。只读，故与 getUsers 同门槛（user:view 可看统计）。
      */
     @GetMapping("/users/stats")
-    @PreAuthorize("hasAuthority('admin:manage')")
+    @PreAuthorize("hasAnyAuthority('admin:manage', 'user:manage', 'user:view')")
     public ResponseEntity<ResponseMessage<?>> getUserStats() {
         Map<String, Object> stats = userService.getUserStats();
         return ResponseEntity.ok(ResponseMessage.success(stats));
