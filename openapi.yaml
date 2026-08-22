@@ -39,6 +39,10 @@ tags:
   description: 方案B：管理员维护时间窗与场次（部门 × 时间窗 × 地点 × 容量）
 - name: 面试场次分配（管理员）
   description: 方案B：一键分配、待人工调剂名单、可用场次查询与人工调剂
+- name: 面试评价协同
+  description: 协同面试评价表的开表、锁定、维度配置与汇总。单元格的实时编辑不走 REST，而是前端直连协同服务的 WebSocket `/collab`
+- name: 内部服务接口
+  description: 供协同服务调用，不面向浏览器。鉴权用请求头 `X-Service-Token`（与用户 JWT 无关）
 - name: 面试关联飞书模块
   description: 面试安排与飞书多维表格之间的导入（同步/异步）与结果导出
 - name: 面试结果模块
@@ -996,12 +1000,16 @@ paths:
                     properties:
                       avatar:
                         type: string
-                        description: 头像相对路径
-                        example: /avatars/xxx.png
+                        description: 头像对外访问URL
+                        example: https://static.boyuan.club/avatars/xxx.png
                       fullHttpPath:
                         type: string
                         description: 头像完整访问URL
-                        example: http://localhost:8080/avatars/xxx.png
+                        example: https://static.boyuan.club/avatars/xxx.png
+                      objectKey:
+                        type: string
+                        description: 数据库中存储的对象键
+                        example: avatars/xxx.png
                     required:
                     - avatar
                     - fullHttpPath
@@ -1011,6 +1019,38 @@ paths:
                 - message
                 - data
           headers: {}
+  /api/files/{prefix}/{filename}:
+    get:
+      summary: 读取 COS 文件
+      deprecated: false
+      description: 后端中转读取 COS 对象（浏览器不直连私有桶）。头像访问对应 prefix=avatars。
+      tags:
+      - 个人信息页
+      parameters:
+      - name: prefix
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 对象键前缀，如 avatars
+      - name: filename
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 文件名，如 uuid.jpg
+      responses:
+        '200':
+          description: ''
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+          headers: {}
+        '404':
+          description: 文件不存在
+      security: []
   /uploads/avatars/4d86f534-b8ca-4b29-89c8-d0477de12b15.png:
     get:
       summary: 获取头像
@@ -2076,21 +2116,14 @@ paths:
                     description: 提示信息
                   data:
                     type: object
+                    description: >-
+                      分页结果。字段名沿用后端 PageResultDTO：列表在 content，
+                      总数在 totalElements（此前文档写的 total/users/page 与实现不符，已按实现更正）。
+                      memberCount/nonMemberCount/frozenCount 为全库统计，不随分页与筛选变化。
                     properties:
-                      total:
-                        type: integer
-                        description: 总数
-                      totalPages:
-                        type: integer
-                        description: 总页数
-                      pageSize:
-                        type: integer
-                        description: 每页数量
-                      page:
-                        type: integer
-                        description: 页码（从 1 开始）
-                      users:
+                      content:
                         type: array
+                        description: 当前页用户列表
                         items:
                           type: object
                           properties:
@@ -2100,65 +2133,102 @@ paths:
                             username:
                               type: string
                               description: 用户名
-                            password:
-                              type: string
-                              description: 密码
                             name:
                               type: string
+                              nullable: true
                               description: 姓名
                             email:
                               type: string
                               description: 邮箱
                             phone:
                               type: string
+                              nullable: true
                               description: 手机号
-                            createTime:
+                            role:
                               type: string
-                              description: 创建时间
-                            status:
-                              type: integer
-                              description: 状态
+                              nullable: true
+                              description: 遗留角色占位列；实际角色看 roles
                             major:
                               type: string
+                              nullable: true
                               description: 专业
                             github:
                               type: string
+                              nullable: true
                               description: GitHub 主页
                             deptId:
                               type: integer
-                              description: 部门 ID
+                              nullable: true
+                              description: 部门 ID（V6 建表的外键，与 dept 并存且未同步）
+                            dept:
+                              type: string
+                              nullable: true
+                              description: 社员所属部门名称；管理端读写与筛选走本字段
+                            isMember:
+                              type: boolean
+                              nullable: true
+                              description: 是否已录取为社员
                             avatar:
                               type: string
-                              description: 头像 URL
+                              nullable: true
+                              description: 头像 URL（已解析为可访问地址）
+                            status:
+                              type: integer
+                              description: 账号状态：0 冻结，1 正常
                             isDeleted:
                               type: integer
                               description: 是否已删除（逻辑删除标记）
+                            createTime:
+                              type: string
+                              description: 创建时间
                             updateTime:
                               type: string
                               description: 更新时间
+                            roles:
+                              type: array
+                              nullable: true
+                              description: RBAC 角色（由 user_role 关联填充）
+                              items:
+                                type: object
                           required:
                           - userId
                           - username
-                          - password
-                          - name
                           - email
-                          - phone
-                          - createTime
                           - status
-                          - major
-                          - github
-                          - deptId
-                          - avatar
                           - isDeleted
-                          - updateTime
-                        description: 用户列表
+                      totalElements:
+                        type: integer
+                        description: 符合条件的总记录数
+                      totalPages:
+                        type: integer
+                        description: 总页数
+                      currentPage:
+                        type: integer
+                        description: 当前页码（从 0 开始）
+                      pageSize:
+                        type: integer
+                        description: 每页数量
+                      first:
+                        type: boolean
+                        description: 是否首页
+                      last:
+                        type: boolean
+                        description: 是否末页
+                      memberCount:
+                        type: integer
+                        description: 全库社员数
+                      nonMemberCount:
+                        type: integer
+                        description: 全库非社员数（含 is_member 为 NULL 的历史行）
+                      frozenCount:
+                        type: integer
+                        description: 全库已冻结账号数
                     required:
-                    - total
+                    - content
+                    - totalElements
                     - totalPages
+                    - currentPage
                     - pageSize
-                    - page
-                    - users
-                    description: 响应数据
                 required:
                 - code
                 - message
@@ -3474,11 +3544,67 @@ paths:
                 - message
                 - data
           headers: {}
+  /api/resumes/{resumeId}/score:
+    put:
+      summary: 简历打分
+      deprecated: false
+      description: >-
+        管理员为简历打分（0~100），落库到 resume.resume_score。
+        该列此前只有飞书导出在读，没有任何写入口 —— 管理端因此没有打分的地方。
+        权限与改状态/删除同属 resume:audit（打分正是「审核简历」的一部分）。
+      tags:
+      - 简历相关接口
+      parameters:
+      - name: resumeId
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                score:
+                  type: integer
+                  description: 0~100
+              required:
+              - score
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: 业务状态码（200 表示成功）
+                  message:
+                    type: string
+                    description: 提示信息
+                  data:
+                    type: object
+                    properties:
+                      resumeId:
+                        type: integer
+                      resumeScore:
+                        type: integer
+                required:
+                - code
+                - message
+                - data
+          headers: {}
+
   /api/resumes/cycle/{cycleId}/submit:
     post:
       summary: 提交简历
       deprecated: false
-      description: 提交当前用户在指定周期的简历，提交后进入待审核状态。
+      description: >-
+        提交简历。周期必须处于开放投递状态（未删除、启用中、今天在起止日期内），
+        否则返回 3010 该招募周期未开放投递 —— 管理员停用周期或改结束日期即可停止收简历。
       tags:
       - 简历相关功能——普通用户
       parameters:
@@ -3655,6 +3781,45 @@ paths:
                     - isActive
                     - createdAt
                     - updatedAt
+                    description: 响应数据
+                required:
+                - code
+                - message
+                - data
+          headers: {}
+    delete:
+      summary: 删除招募周期（软删除）
+      deprecated: false
+      description: >-
+        软删除：周期从列表、搜索与开放投递中消失，但简历、面试场次等历史数据全部保留，
+        按 ID 的点查仍可返回该周期（用于历史简历解析周期名）。
+        带简历的周期也可删除。此前为物理删除——有简历时因外键直接失败，
+        无简历时会级联清掉整个周期的面试数据，两种行为均已废除。
+      tags:
+      - 招聘活动相关接口（管理员专属）
+      parameters:
+      - name: cycleId
+        in: path
+        description: 招募周期ID
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: 业务状态码（200 表示成功）
+                  message:
+                    type: string
+                    description: 提示信息
+                  data:
+                    type: string
                     description: 响应数据
                 required:
                 - code
@@ -3974,19 +4139,22 @@ paths:
                 - message
                 - data
           headers: {}
-    delete:
-      summary: 删除招募周期
+  /api/cycles/open:
+    get:
+      summary: 当前开放投递的周期
       deprecated: false
-      description: 删除招募周期。
+      description: >-
+        返回「现在真的可以投递」的招募周期列表：is_active = 1 且今天落在
+        start_date ~ end_date 之间，按 start_date 倒序（前端以第一项为默认选中）。
+
+        与 /api/cycles/active/{isActive} 的区别：is_active 只表示「是否启用」，
+        往届周期为了能查历史简历通常也保持启用，所以「启用中」不等于「现在能投」。
+        用户端不要再用 active 接口取第一条来判断当前周期。
+
+        本接口以起止日期为权威，不看 status 列 —— status 只有
+        /api/cycles/update-statuses 这个手动接口会刷新，没有定时任务，实际长期陈旧。
       tags:
       - 招聘活动相关接口（管理员专属）
-      parameters:
-      - name: cycleId
-        in: path
-        description: 招募周期ID
-        required: true
-        schema:
-          type: integer
       responses:
         '200':
           description: ''
@@ -4002,8 +4170,43 @@ paths:
                     type: string
                     description: 提示信息
                   data:
-                    type: string
-                    description: 响应数据
+                    type: array
+                    description: 当前开放投递的周期，可能为空数组（此时无周期在招）
+                    items:
+                      type: object
+                      properties:
+                        cycleId:
+                          type: integer
+                          description: 招募周期 ID
+                        cycleName:
+                          type: string
+                          description: 周期名称
+                        academicYear:
+                          type: string
+                          description: 学年
+                        description:
+                          type: string
+                          nullable: true
+                          description: 周期说明
+                        startDate:
+                          type: string
+                          description: 开始日期（yyyy-MM-dd）
+                        endDate:
+                          type: string
+                          description: 截止日期（yyyy-MM-dd）
+                        fieldCount:
+                          type: integer
+                          description: >-
+                            该周期已配置的简历字段数。为 0 表示报名表单还没配，
+                            投递页无内容可填 —— /api/resumes/fields/{cycleId}
+                            在无定义时返回 200 + 空数组且不报错，前端需据此提示，
+                            否则表现为一张空白表单。
+                      required:
+                      - cycleId
+                      - cycleName
+                      - startDate
+                      - endDate
+                      - fieldCount
                 required:
                 - code
                 - message
@@ -4331,6 +4534,44 @@ paths:
                 - code
                 - message
                 - data
+          headers: {}
+    delete:
+      summary: 批量删除招募周期（软删除）
+      deprecated: false
+      description: >-
+        与单删同语义的软删除：周期从列表、搜索与开放投递中消失，简历与面试数据保留，
+        按 ID 点查仍可返回。此前该接口存在但未收录进本文档。
+      tags:
+      - 招聘活动相关接口（管理员专属）
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: integer
+              description: 要删除的周期 ID 列表
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: 业务状态码（200 表示成功）
+                  message:
+                    type: string
+                    description: 提示信息
+                  data:
+                    type: string
+                    nullable: true
+                    description: 响应数据
+                required:
+                - code
+                - message
           headers: {}
   /api/roles:
     post:
@@ -7360,6 +7601,149 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiResponse'
           headers: {}
+  /api/interview/feishu/cycles/{cycleId}/locations:
+    get:
+      summary: 列出各面试地点的飞书表格配置
+      deprecated: false
+      description: |-
+        推送与拉回都按【面试地点】分桶：每个地点对应一张飞书多维表格。地点取自 `interview_session.location`（方案B 的地点真源）。
+
+        返回里包含尚未配置链接的地点（推送时会跳过它们），以及每个地点的场次数、已分配人数、待推送人数，便于在管理端看出"哪个地点还没配、配了会推多少人"。
+
+        需要 `resume:audit` 权限。
+      tags:
+      - 面试管理/飞书同步
+      parameters:
+      - name: cycleId
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        location:
+                          type: string
+                        feishuTableUrl:
+                          type: string
+                          nullable: true
+                          description: null 表示尚未配置，推送会跳过该地点
+                        remark:
+                          type: string
+                          nullable: true
+                        sessionCount:
+                          type: integer
+                        scheduleCount:
+                          type: integer
+                        pendingCount:
+                          type: integer
+                          description: 尚未同步到飞书的人数
+    put:
+      summary: 保存某地点的飞书表格链接
+      deprecated: false
+      description: |-
+        同一地点的多个场次共用一条配置。`feishuTableUrl` 留空表示清除该地点的配置，之后推送会跳过该地点。
+
+        地点键在服务端统一规整（去空格；空值归入「未指定地点」），与推送分桶用的是同一函数，避免"教三-301 "和"教三-301"被当成两个地点。
+
+        需要 `resume:audit` 权限。
+      tags:
+      - 面试管理/飞书同步
+      parameters:
+      - name: cycleId
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - location
+              properties:
+                location:
+                  type: string
+                feishuTableUrl:
+                  type: string
+                  nullable: true
+                  description: 留空表示清除配置
+                remark:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: 保存成功，返回刷新后的地点配置列表
+  /api/interview/feishu/cycles/{cycleId}/pull-all:
+    post:
+      summary: 一键从所有已配链接的地点拉回结果
+      deprecated: false
+      description: |-
+        为每个已配置链接的地点各提交一个独立的拉回任务，返回 taskId 列表；未配链接的地点计入 `skippedLocations`。
+
+        刻意保持「一张表一个任务」：拉回的进度、失败行与错误信息天然按表格分开，塞进一个任务会让报错混在一起，出问题时分不清是哪个地点的表。
+
+        需要 `resume:audit` 权限。
+      tags:
+      - 面试管理/飞书同步
+      parameters:
+      - name: cycleId
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: updateUserDept
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: true
+        description: 录取后是否同步更新 user.dept_id
+      responses:
+        '200':
+          description: 提交成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      tasks:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            location:
+                              type: string
+                            taskId:
+                              type: integer
+                              format: int64
+                      skippedLocations:
+                        type: array
+                        items:
+                          type: string
   /api/interview/feishu/import:
     post:
       summary: 提交飞书导入任务（异步）
@@ -7550,7 +7934,10 @@ paths:
     post:
       summary: 发送录取通知
       deprecated: false
-      description: 发送录取通知给候选人
+      description: >-
+        按 resultIds 批量发送结果通知邮件（通过=录取通知，未通过=感谢信）。
+        每封发送成功即更新该结果行的 notified_at（最近一次发送时间），
+        列表接口据此展示「已通知/未通知」；重发会刷新该时间。
       tags:
       - 面试结果模块
       requestBody:
@@ -7567,6 +7954,51 @@ paths:
               schema:
                 $ref: '#/components/schemas/SendNotificationsResponse'
           headers: {}
+  /api/interview/result/seed-from-schedules:
+    post:
+      summary: 从面试安排生成结果名单
+      deprecated: false
+      description: >-
+        为指定周期的全部生效面试安排（status=1）各生成一行待定结果（decision=0），
+        已有结果行的安排一律跳过（幂等）。此前结果行只有飞书拉取会创建 ——
+        不接飞书「结果与通知」就是空的；生成后用单行更新/批量录取即可全站内定结果，
+        飞书变为可选项。
+      tags:
+      - 面试结果
+      parameters:
+      - name: cycleId
+        in: query
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: 业务状态码（200 表示成功）
+                  message:
+                    type: string
+                    description: 提示信息
+                  data:
+                    type: object
+                    properties:
+                      created:
+                        type: integer
+                        description: 本次新建的结果行数（已存在的不计）
+                    required:
+                    - created
+                required:
+                - code
+                - message
+                - data
+          headers: {}
+
   /api/interview/result/list:
     get:
       summary: 查看录取结果
@@ -7621,6 +8053,78 @@ paths:
               schema:
                 $ref: '#/components/schemas/InterviewResultListResponse'
           headers: {}
+  /api/interview/result/batch-decision:
+    post:
+      summary: 批量录取 / 批量标记未通过
+      deprecated: false
+      description: |-
+        勾选候选人后一次性写入面试决定与录取部门，是管理端「结果与通知」录入结论的主要入口（逐条录入在几十上百人时不现实）。
+
+        `cycleId` 必传：结果所属周期挂在 `interview_schedule` 上，请求里只给 `resultIds` 无法判断归属。服务端据此过滤，不属于该周期的 ID 计入 `skipped` 逐条跳过，而不是整批失败。
+
+        `decision=1`（通过）时必须给 `assignedDeptId`；`decision=2`（未通过）时服务端会清空 `assigned_dept_id`，避免残留上一次误录取的部门。
+
+        同一批走一条 `UPDATE ... IN (...)`，要么都改要么都不改；同时写入决定人与决定时间。
+
+        需要 `resume:audit` 权限。
+      tags:
+      - 面试管理/结果与通知
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - cycleId
+              - resultIds
+              - decision
+              properties:
+                cycleId:
+                  type: integer
+                  description: 招募周期ID
+                resultIds:
+                  type: array
+                  items:
+                    type: integer
+                  description: 要批量处理的面试结果ID
+                decision:
+                  type: integer
+                  enum:
+                  - 1
+                  - 2
+                  description: 1 通过（录取） / 2 未通过
+                assignedDeptId:
+                  type: integer
+                  nullable: true
+                  description: 录取部门，decision=1 时必填
+      responses:
+        '200':
+          description: 操作成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      updated:
+                        type: integer
+                        description: 实际更新的条数
+                      skipped:
+                        type: array
+                        items:
+                          type: integer
+                        description: 不属于该周期或已不存在的 resultId
+        '400':
+          description: 参数校验失败（decision 越界、未选人、录取未指定部门等）
+        '403':
+          description: 无 resume:audit 权限
   /api/interview/result/update/{resultId}:
     put:
       summary: 修改录取结果
@@ -8186,6 +8690,398 @@ paths:
                     items:
                       $ref: '#/components/schemas/InterviewSession'
                     description: 响应数据
+  /api/interview/admin/sessions/{sessionId}/interviewers:
+    put:
+      summary: 绑定场次面试官（管理员）
+      deprecated: false
+      description: 覆盖式绑定：请求中未出现的既有绑定会被解除，传空数组即解绑全部。绑定关系决定评价表里谁拥有自己的评分列、以及「我的待评价」如何过滤。需权限
+        `resume:audit`。
+      tags:
+      - 面试场次管理（管理员）
+      parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 面试场次 ID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userIds:
+                  type: array
+                  items:
+                    type: integer
+                  description: 面试官用户 ID 列表，传空数组表示解绑全部
+              required:
+              - userIds
+      responses:
+        '200':
+          description: 绑定成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                    description: 业务状态码（200 表示成功）
+                  message:
+                    type: string
+                    example: 操作成功
+                    description: 提示信息
+                  data:
+                    type: array
+                    items:
+                      type: integer
+                    description: 绑定后的面试官用户 ID 列表
+    get:
+      summary: 查询场次面试官（管理员）
+      deprecated: false
+      description: 返回该场次已绑定的面试官用户 ID 列表。需权限 `resume:audit`。
+      tags:
+      - 面试场次管理（管理员）
+      parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 面试场次 ID
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: 操作成功
+                  data:
+                    type: array
+                    items:
+                      type: integer
+                    description: 面试官用户 ID 列表
+  /api/interview/evaluation/cycles/{cycleId}/board:
+    post:
+      summary: 开启协同评价表（管理员）
+      deprecated: false
+      description: '建立该周期的协同文档记录（`collab_doc`），返回的 `docName` 即前端连接协同服务时使用的文档名。
+
+        要求该周期已完成一键分配（否则没有候选人可评）；若该周期尚未配置评分维度，会自动播下默认四项（技术能力/沟通表达/学习潜力/意愿匹配）。
+
+        已开启时原样返回，重复点击不会报错。需权限 `resume:audit`。
+
+        '
+      tags:
+      - 面试评价协同
+      parameters:
+      - name: cycleId
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 招募周期 ID
+      responses:
+        '200':
+          description: 开启成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseMessageEvaluationBoard'
+    get:
+      summary: 查询评价表状态
+      deprecated: false
+      description: 面试官需先取到 `docName` 与锁定状态才能连上协同服务，故本接口对 `interview:evaluate` 与 `resume:audit`
+        均放行。评价表未开启时返回业务码 3701。
+      tags:
+      - 面试评价协同
+      parameters:
+      - name: cycleId
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 招募周期 ID
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseMessageEvaluationBoard'
+  /api/interview/evaluation/cycles/{cycleId}/board/lock:
+    put:
+      summary: 锁定/解锁评价表（管理员）
+      deprecated: false
+      description: 锁定后协同服务拒绝一切写入、在线连接会被断开并以只读身份重连，通常在周期出结果后冻结评价。需权限 `resume:audit`。
+      tags:
+      - 面试评价协同
+      parameters:
+      - name: cycleId
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 招募周期 ID
+      - name: locked
+        in: query
+        required: true
+        schema:
+          type: boolean
+        description: true 锁定，false 解锁
+      responses:
+        '200':
+          description: 操作成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseMessageEvaluationBoard'
+  /api/interview/evaluation/cycles/{cycleId}/dimensions:
+    get:
+      summary: 查询评分维度模板
+      deprecated: false
+      description: 按 `sortOrder` 升序返回该周期的评分维度（即协同表格的评分列）。对 `interview:evaluate` 与 `resume:audit`
+        均放行。
+      tags:
+      - 面试评价协同
+      parameters:
+      - name: cycleId
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 招募周期 ID
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: 操作成功
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EvaluationDimension'
+    put:
+      summary: 保存评分维度模板（管理员）
+      deprecated: false
+      description: '覆盖式保存：请求中未出现的既有维度会被删除。带 `dimensionId` 表示更新，不带表示新增。
+
+        删除维度不会清理已物化的历史评分——该维度的分数仍保留在 `interview_evaluation.scores` 里，只是不再作为列展示、也不再计入新的加权总分。需权限
+        `resume:audit`。
+
+        '
+      tags:
+      - 面试评价协同
+      parameters:
+      - name: cycleId
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 招募周期 ID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dimensions:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/EvaluationDimension'
+                  description: 维度列表，至少一项
+              required:
+              - dimensions
+      responses:
+        '200':
+          description: 保存成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: 操作成功
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EvaluationDimension'
+  /api/interview/evaluation/cycles/{cycleId}/summary:
+    get:
+      summary: 评价汇总（管理员）
+      deprecated: false
+      description: 读物化后的 `interview_evaluation`，返回候选人 × 面试官矩阵：各维度均分、加权总分均值、推荐意见分布、已提交/应提交数。供「结果与通知」录入录取决定时参考。需权限
+        `resume:audit`。
+      tags:
+      - 面试评价协同
+      parameters:
+      - name: cycleId
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 招募周期 ID
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseMessageEvaluationSummary'
+  /api/interview/evaluation/cycles/{cycleId}/candidates/{scheduleId}/resume:
+    get:
+      summary: 评价表内速览候选人简历
+      deprecated: false
+      description: 面试官没有 `resume:view`、走不了简历库接口，但面试时必须看得到简历。此处按「该场次的面试官绑定」放行，范围恰好是他要面的那几个人；持
+        `resume:audit` 的管理员可查看全部。需权限 `resume:audit` 或 `interview:evaluate`。
+      tags:
+      - 面试评价协同
+      parameters:
+      - name: cycleId
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 招募周期 ID
+      - name: scheduleId
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 面试安排 ID（评价表的行键）
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseMessageResumeDTO'
+        '400':
+          description: 非本人负责场次的候选人（2005）或面试安排不存在（3612）
+  /api/internal/evaluation/ping:
+    get:
+      summary: 服务令牌探活（内部）
+      deprecated: false
+      description: 供协同服务的自检端点 `GET /collab/diag` 判断「后端是否认这把服务令牌」。Hocuspocus 会把协同连接的任何失败都回报成 `permission-denied`，靠这个探活才能把「后端漏配 COLLAB_SERVICE_TOKEN」与「用户没有评价权限」区分开。鉴权用请求头 `X-Service-Token`。
+      tags:
+      - 内部服务接口
+      parameters:
+      - name: X-Service-Token
+        in: header
+        required: true
+        schema:
+          type: string
+        description: 服务间共享令牌
+      responses:
+        '200':
+          description: 令牌有效
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    type: string
+                    description: 固定为 pong
+        '401':
+          description: 令牌缺失或不匹配
+      security: []
+  /api/internal/evaluation/board/{cycleId}/seed:
+    get:
+      summary: 拉取评价表播种数据（内部）
+      deprecated: false
+      description: 供协同服务在文档首次加载或定时对账时调用，返回列定义（评分维度）与行（已分配的面试名单快照，含每场绑定的面试官）。鉴权用请求头 `X-Service-Token`。
+      tags:
+      - 内部服务接口
+      parameters:
+      - name: cycleId
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 招募周期 ID
+      - name: X-Service-Token
+        in: header
+        required: true
+        schema:
+          type: string
+        description: 服务间共享令牌
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseMessageEvaluationBoardSeed'
+      security: []
+  /api/internal/evaluation/materialize:
+    post:
+      summary: 物化回写面试评价（内部）
+      deprecated: false
+      description: '协同服务把 Y.Doc 解析出的评价批量 upsert 进 `interview_evaluation`（唯一键 `schedule_id`：一场面试只有一份评价，
+        由该场次的几位面试官共同维护）。
+
+        服务端逐个校验 `contributors`、`lastEditedBy`、`submittedBy` 里的人是否绑定在该行所属场次上——CRDT 协议层拦不住越权写入，这里是把关的那一道。
+
+        自 V17 起每个维度可以有独立评语：请求里的 `dimensionNotes`（{dimensionId: text}）与 `dimensionWriters`（{dimensionId:
+        userId}）分别落到 `interview_evaluation.dimension_notes` 与 `dimension_writers`。维度作者取自协同服务的单元格级写入记录（Yjs
+        update 的 origin，不是客户端自报），并同样要过「是否绑定在该场次」的校验，未绑定者不给署名。原有 `comment` 退化为可选的总体结论，`scores`
+        结构不变（{dimensionId: score}），因此评价汇总、结果与通知等既有读取方不受影响。
+        未绑定者被剔除出参与人、记入 `collab_audit`（rejected=1）并在响应里说明；评价本身照常落库，避免一个捣乱者让整场面试的记录都写不进去。
+
+        `contributors` 与库中已有的参与人取并集：协同服务重启后旁路记录从零开始，直接覆盖会让重启前参与过的人从署名里消失。
+
+        `version` 取协同服务给出的单调值（通常为时间戳），低于库中版本的迟到快照不会覆盖已保存的数据。评价表锁定时整批拒绝。
+
+        '
+      tags:
+      - 内部服务接口
+      parameters:
+      - name: X-Service-Token
+        in: header
+        required: true
+        schema:
+          type: string
+        description: 服务间共享令牌
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MaterializeEvaluationRequest'
+      responses:
+        '200':
+          description: 物化完成（部分条目可能被丢弃，见 rejected）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseMessageMaterializeResult'
+      security: []
   /api/interview/admin/cycles/{cycleId}/assign:
     post:
       summary: 一键场次分配（管理员）
@@ -9639,6 +10535,347 @@ components:
         data:
           $ref: '#/components/schemas/SessionAssignmentResult'
           description: 响应数据
+      required:
+      - code
+      - message
+      - data
+    EvaluationDimension:
+      type: object
+      properties:
+        dimensionId:
+          type: integer
+          description: 维度 ID。新增时不传，更新时必传
+        name:
+          type: string
+          example: 技术能力
+          description: 维度名称，同一周期内不可重名
+        maxScore:
+          type: integer
+          example: 10
+          description: 该维度满分
+        weight:
+          type: number
+          example: 1
+          description: 加权总分中的权重
+        sortOrder:
+          type: integer
+          example: 1
+          description: 列顺序（升序）
+    EvaluationBoard:
+      type: object
+      properties:
+        cycleId:
+          type: integer
+          description: 招募周期 ID
+        docName:
+          type: string
+          example: eval-board:3
+          description: 协同文档名，前端据此连接 `/collab`
+        locked:
+          type: boolean
+          description: 是否已锁定（锁定后全员只读）
+        rowCount:
+          type: integer
+          description: 待评价的候选人行数
+        dimensionCount:
+          type: integer
+          description: 评分维度（列）数量
+        updatedAt:
+          type: string
+          description: 文档最后更新时间
+    ResponseMessageEvaluationBoard:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 200
+          description: 业务状态码（200 表示成功）
+        message:
+          type: string
+          example: 操作成功
+          description: 提示信息
+        data:
+          $ref: '#/components/schemas/EvaluationBoard'
+          description: 响应数据
+      required:
+      - code
+      - message
+      - data
+    EvaluationBoardSeedRow:
+      type: object
+      properties:
+        scheduleId:
+          type: integer
+          description: 行键：面试安排 ID
+        resumeId:
+          type: integer
+        userId:
+          type: integer
+          description: 候选人用户 ID
+        candidateName:
+          type: string
+        account:
+          type: string
+          description: 候选人账号（注册用户名，通常为学号）
+        deptId:
+          type: integer
+        deptName:
+          type: string
+        sessionId:
+          type: integer
+        interviewTime:
+          type: string
+        interviewerUserIds:
+          type: array
+          items:
+            type: integer
+          description: 该场次绑定的面试官，决定谁能编辑这一行；协同服务写进行的 `_info.interviewerUserIds`
+    EvaluationBoardSeed:
+      type: object
+      properties:
+        docName:
+          type: string
+          example: eval-board:3
+        cycleId:
+          type: integer
+        locked:
+          type: boolean
+        columns:
+          type: array
+          items:
+            $ref: '#/components/schemas/EvaluationDimension'
+          description: 列定义（评分维度）
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/EvaluationBoardSeedRow'
+          description: 行（候选人名单快照）
+        interviewerNames:
+          type: object
+          additionalProperties:
+            type: string
+          description: '本表涉及的面试官 `{userId: 姓名}`。行里只存 userId，前端要显示参与人署名就得有这份对照表；协同服务把它写进文档 `meta.interviewerNames`'
+          example:
+            '7': 张三
+            '9': 李四
+    CandidateResume:
+      type: object
+      description: 评价表内的候选人简历速览
+      properties:
+        resumeId:
+          type: integer
+        userId:
+          type: integer
+        status:
+          type: integer
+          description: 简历状态，1草稿 2已提交
+        simpleFields:
+          type: array
+          items:
+            $ref: '#/components/schemas/SimpleResumeField'
+          description: 简历动态字段，前端按 fieldKey 排版
+    ResponseMessageResumeDTO:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: 操作成功
+        data:
+          $ref: '#/components/schemas/CandidateResume'
+      required:
+      - code
+      - message
+      - data
+    ResponseMessageEvaluationBoardSeed:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: 操作成功
+        data:
+          $ref: '#/components/schemas/EvaluationBoardSeed'
+      required:
+      - code
+      - message
+      - data
+    MaterializeEvaluationItem:
+      type: object
+      properties:
+        scheduleId:
+          type: integer
+          description: 面试安排 ID，共编模型下一场面试只有一条
+        contributors:
+          type: array
+          items:
+            type: integer
+          description: 参与编辑过这份评价的面试官（由协同服务在服务端旁路记录，客户端无法伪造）。未绑定该场次的会被剔除并记审计
+        lastEditedBy:
+          type: integer
+          nullable: true
+          description: 最后一次改动这份评价的人，未绑定该场次时置空
+        submittedBy:
+          type: integer
+          nullable: true
+          description: 点下定稿的人，未绑定该场次时置空
+        scores:
+          type: object
+          additionalProperties:
+            type: number
+          description: 各维度得分，键为 dimensionId
+        comment:
+          type: string
+          nullable: true
+          description: 面试记录与评语，由本场面试官共同编写
+        recommendation:
+          type: integer
+          nullable: true
+          description: 共同结论，1倾向通过 2待定 3不倾向
+        status:
+          type: integer
+          description: 1进行中 2已定稿，为空按进行中处理
+        version:
+          type: integer
+          format: int64
+          description: 单调递增的物化版本（通常为时间戳），低于库中版本时不覆盖
+      required:
+      - scheduleId
+      - version
+    MaterializeEvaluationRequest:
+      type: object
+      properties:
+        docName:
+          type: string
+          example: eval-board:3
+          description: 来源协同文档名，须与 cycleId 匹配
+        cycleId:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MaterializeEvaluationItem'
+      required:
+      - docName
+      - cycleId
+      - items
+    ResponseMessageMaterializeResult:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: 操作成功
+        data:
+          type: object
+          properties:
+            accepted:
+              type: integer
+              description: 成功写入的条目数
+            rejected:
+              type: integer
+              description: 被剔除的参与人数与被丢弃的行数之和（未绑定该场次，或行不属于本周期）
+            rejectReasons:
+              type: array
+              items:
+                type: string
+              description: 剔除与丢弃的说明
+      required:
+      - code
+      - message
+      - data
+    EvaluationSummaryCandidate:
+      type: object
+      properties:
+        scheduleId:
+          type: integer
+        resumeId:
+          type: integer
+        userId:
+          type: integer
+        candidateName:
+          type: string
+        deptName:
+          type: string
+        interviewTime:
+          type: string
+        scores:
+          type: object
+          additionalProperties:
+            type: number
+          description: 各维度得分，键为 dimensionId。共编模型下一位候选人只有一份评价，不再是均分
+        totalScore:
+          type: number
+          nullable: true
+          description: 加权总分 = Σ(维度得分 × 维度权重)
+        comment:
+          type: string
+          nullable: true
+          description: 本场面试官共同写下的面试记录与评语
+        recommendation:
+          type: integer
+          nullable: true
+          description: 共同结论，1倾向通过 2待定 3不倾向
+        status:
+          type: integer
+          nullable: true
+          description: 1进行中 2已定稿；尚无评价时为空
+        contributors:
+          type: array
+          description: 参与编辑过这份评价的面试官，用于署名
+          items:
+            type: object
+            properties:
+              userId:
+                type: integer
+              name:
+                type: string
+        assignedInterviewerCount:
+          type: integer
+          description: 该场次绑定的面试官人数
+        lastEditedBy:
+          type: integer
+          nullable: true
+        lastEditedByName:
+          type: string
+          nullable: true
+        submittedBy:
+          type: integer
+          nullable: true
+        submittedByName:
+          type: string
+          nullable: true
+        submittedAt:
+          type: string
+          nullable: true
+    ResponseMessageEvaluationSummary:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: 操作成功
+        data:
+          type: object
+          properties:
+            cycleId:
+              type: integer
+            dimensions:
+              type: array
+              items:
+                $ref: '#/components/schemas/EvaluationDimension'
+            candidates:
+              type: array
+              items:
+                $ref: '#/components/schemas/EvaluationSummaryCandidate'
       required:
       - code
       - message

@@ -130,4 +130,10 @@ public interface IResumeService {
      * @return 简历实体列表
      */
     List<Resume> getAllResumesByCycleId(Integer cycleId);
+
+    /**
+     * 管理员为简历打分（0~100）。resume_score 列此前只有飞书导出在读,
+     * 全后端没有任何写入口 —— 管理端因此没有打分的地方。
+     */
+    Resume updateResumeScore(Integer resumeId, Integer score);
 }

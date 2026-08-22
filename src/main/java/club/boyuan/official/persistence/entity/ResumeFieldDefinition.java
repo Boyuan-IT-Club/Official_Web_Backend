@@ -1,5 +1,7 @@
 package club.boyuan.official.persistence.entity;
 
+import java.util.List;
+import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -8,7 +10,7 @@ import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import java.time.LocalDateTime;
 
-@TableName("resume_field_definition") // MyBatis-Plus 表映射注解
+@TableName(value = "resume_field_definition", autoResultMap = true) // MyBatis-Plus 表映射注解
 public class ResumeFieldDefinition {
     @TableId(value = "field_id", type = IdType.AUTO) // MyBatis-Plus 主键映射，指定自增策略
     private Integer fieldId;
@@ -36,6 +38,20 @@ public class ResumeFieldDefinition {
 
     @TableField("is_active")
     private Boolean isActive;
+
+    /**
+     * 下拉/单选/多选的选项列表，库里是 JSON 字符串数组（如 ["男","女"]）。
+     *
+     * 这一列是后补的（V25）。此前管理端能编辑选项、前端类型也带着它，
+     * 但库里无处存放 —— 保存时被静默丢掉，投递页的下拉只能靠前端写死的常量。
+     *
+     * 用 JacksonTypeHandler 而非映射成 String：它是有类型的字符串数组，
+     * 让 Jackson 与 MyBatis 各自按 List<String> 处理，避免两端手工序列化。
+     * 注意 @TableName 上必须带 autoResultMap = true，否则 BaseMapper 的查询
+     * 不会应用这个 TypeHandler；自定义 XML 的 resultMap 里也要显式声明。
+     */
+    @TableField(value = "options", typeHandler = JacksonTypeHandler.class)
+    private List<String> options;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @TableField(value = "created_at", fill = FieldFill.INSERT) // 自动填充创建时间
@@ -126,6 +142,14 @@ public class ResumeFieldDefinition {
 
     public void setIsActive(Boolean isActive) {
         this.isActive = isActive;
+    }
+
+    public List<String> getOptions() {
+        return options;
+    }
+
+    public void setOptions(List<String> options) {
+        this.options = options;
     }
 
     public LocalDateTime getCreatedAt() {

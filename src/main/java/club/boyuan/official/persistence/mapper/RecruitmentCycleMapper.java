@@ -46,11 +46,12 @@ public interface RecruitmentCycleMapper extends BaseMapper<RecruitmentCycle> {
     RecruitmentCycle findByAcademicYear(String academicYear);
     
     /**
-     * 批量删除招募周期
-     * @param cycleIds 招募周期ID列表
-     * @return 影响行数
+     * 软删除（单删与批删共用）：置 is_deleted = 1 并同时停用。
+     * 没有硬删方法是刻意的 —— interview_session/interview_time_slot 对周期是
+     * ON DELETE CASCADE，硬删会静默连带清掉整个周期的面试数据。
+     * @return 实际置位的行数（已删除的行不重复计数）
      */
-    int batchDelete(@Param("cycleIds") List<Integer> cycleIds);
+    int softDeleteByIds(@Param("cycleIds") List<Integer> cycleIds);
     
     /**
      * 批量更新招募周期
@@ -112,4 +113,15 @@ public interface RecruitmentCycleMapper extends BaseMapper<RecruitmentCycle> {
      * @return 影响行数
      */
     int updateStatusBasedOnDate(@Param("currentDate") LocalDate currentDate);
+
+    /**
+     * 当前开放投递的周期:启用中,且今天落在起止日期内。
+     *
+     * 刻意不看 status 列:它虽有 1未开始/2进行中/3已结束 的语义,但只有一个手动
+     * 管理接口会刷新它(没有定时任务),实际数据长期陈旧。起止日期是管理端唯一
+     * 真正维护的字段,所以以日期为权威。
+     *
+     * 按 start_date 倒序:同时开放多个时,较新的排前面做默认选中。
+     */
+    List<RecruitmentCycle> findOpenForApplication(@Param("today") LocalDate today);
 }

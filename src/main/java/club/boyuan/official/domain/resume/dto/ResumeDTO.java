@@ -8,6 +8,8 @@ public class ResumeDTO {
     private Integer userId;
     private Integer cycleId;
     private Integer status;
+    /** 简历评分（0~100，管理员在简历审核里打） */
+    private Integer resumeScore;
     private LocalDateTime submittedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -50,6 +52,14 @@ public class ResumeDTO {
     
     public void setStatus(Integer status) {
         this.status = status;
+    }
+
+    public Integer getResumeScore() {
+        return resumeScore;
+    }
+
+    public void setResumeScore(Integer resumeScore) {
+        this.resumeScore = resumeScore;
     }
     
     public LocalDateTime getSubmittedAt() {

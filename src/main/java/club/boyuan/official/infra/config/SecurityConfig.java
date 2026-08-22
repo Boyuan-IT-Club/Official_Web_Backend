@@ -22,6 +22,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import club.boyuan.official.common.dto.ResponseMessage;
 import club.boyuan.official.common.exception.BusinessExceptionEnum;
 import club.boyuan.official.infra.filter.JwtAuthenticationFilter;
+import club.boyuan.official.infra.filter.ServiceTokenAuthenticationFilter;
 
 /**
  * Spring Security核心配置类
@@ -34,9 +35,12 @@ import club.boyuan.official.infra.filter.JwtAuthenticationFilter;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final ServiceTokenAuthenticationFilter serviceTokenAuthenticationFilter;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
+                          ServiceTokenAuthenticationFilter serviceTokenAuthenticationFilter) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.serviceTokenAuthenticationFilter = serviceTokenAuthenticationFilter;
     }
 
     /**
@@ -66,6 +70,8 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/activity/**").permitAll()
                         // 允许访问上传的文件
                         .requestMatchers("/uploads/**").permitAll()
+                        // 头像通过后端 COS 中转读取，公开可访问
+                        .requestMatchers("/api/files/avatars/**").permitAll()
                         // 允许静态资源访问
                         .requestMatchers(PathRequest.toStaticResources().atCommonLocations()).permitAll()
                         // 其他所有请求需要认证
@@ -79,7 +85,9 @@ public class SecurityConfig {
                 // 配置会话管理为无状态
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 // 添加JWT认证过滤器
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                // 服务间调用（协同服务回写评价）不持有用户 JWT，用共享令牌认证 /api/internal/**
+                .addFilterBefore(serviceTokenAuthenticationFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }

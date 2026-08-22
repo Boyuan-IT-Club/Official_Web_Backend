@@ -1,5 +1,6 @@
 package club.boyuan.official.domain.resume.service.impl;
 
+import club.boyuan.official.domain.resume.dto.OpenCycleDTO;
 import club.boyuan.official.common.dto.PageResultDTO;
 import club.boyuan.official.persistence.entity.RecruitmentCycle;
 import club.boyuan.official.persistence.mapper.RecruitmentCycleMapper;
@@ -85,8 +86,11 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
                 throw new IllegalArgumentException("招募周期不存在");
             }
             
-            recruitmentCycleMapper.deleteById(cycleId);
-            logger.info("招募周期删除成功，ID: {}", cycleId);
+            // 软删除：resume.cycle_id 是 RESTRICT（有简历的周期硬删直接报外键错），
+            // 而 interview_session 等又是 CASCADE（硬删会静默清掉面试数据）——
+            // 两头都不允许硬删。软删后周期从列表与开放周期里消失，历史数据全部保留。
+            recruitmentCycleMapper.softDeleteByIds(java.util.List.of(cycleId));
+            logger.info("招募周期已软删除，ID: {}", cycleId);
         } catch (Exception e) {
             logger.error("删除招募周期失败，ID: {}", cycleId, e);
             throw e;
@@ -158,14 +162,33 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
                 return;
             }
             
-            int deletedCount = recruitmentCycleMapper.batchDelete(cycleIds);
-            logger.info("批量删除招募周期完成，删除数量: {}", deletedCount);
+            int deletedCount = recruitmentCycleMapper.softDeleteByIds(cycleIds);
+            logger.info("批量软删除招募周期完成，置位数量: {}", deletedCount);
         } catch (Exception e) {
             logger.error("批量删除招募周期失败，IDs: {}", cycleIds, e);
             throw e;
         }
     }
     
+    @Override
+    public List<OpenCycleDTO> getOpenCyclesForApplication() {
+        LocalDate today = LocalDate.now();
+        List<RecruitmentCycle> open = recruitmentCycleMapper.findOpenForApplication(today);
+        logger.debug("当前开放投递的周期数: {}，日期: {}", open.size(), today);
+        return open.stream()
+                .map(c -> {
+                    int fieldCount = 0;
+                    try {
+                        fieldCount = fieldDefinitionService.getFieldDefinitionsByCycleId(c.getCycleId()).size();
+                    } catch (Exception e) {
+                        // 字段数只用于提示「该周期未配置表单」，取不到不该让整个列表失败
+                        logger.warn("统计周期{}的简历字段数失败: {}", c.getCycleId(), e.getMessage());
+                    }
+                    return new OpenCycleDTO(c, fieldCount);
+                })
+                .toList();
+    }
+
     @Override
     public void updateRecruitmentCycleStatusesBasedOnDate(LocalDate currentDate) {
         logger.info("根据当前日期更新招募周期状态，当前日期: {}", currentDate);

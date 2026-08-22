@@ -22,9 +22,17 @@ public interface IUserService extends IService<User> {
     User getUserByPhone(String phone);
     User register(UserDTO userDTO);
     User updateUserStatus(Integer userId, String status);
+
+    /**
+     * 按条件分页查用户。
+     * roleGroup 为 RBAC 分组：all/admin/member/nonmember（角色来源 user_role 关联，见 ADR-0001）；
+     * keyword 匹配姓名/学号/邮箱/手机。
+     */
     PageResultDTO<User> getUsersByConditions(String roleGroup, Integer roleId, String dept, String status, String keyword, Pageable pageable, User currentUser);
+
     /** 用户分类统计（total/frozen/adminCount/memberCount/nonMemberCount），全量、单条 SQL 聚合 */
     Map<String, Object> getUserStats();
+
     /**
      * 更新用户头像
      * @param userId 用户ID
@@ -34,7 +42,7 @@ public interface IUserService extends IService<User> {
     User updateAvatar(Integer userId, String avatarPath) throws BusinessException;
     User updatePassword(Integer userId, String newPassword);
     User updateUserMembership(Integer userId, Boolean isMember);
-    
+
     /**
      * 批量更新用户状态
      * @param userIds 用户ID列表
@@ -42,7 +50,7 @@ public interface IUserService extends IService<User> {
      * @return 更新的用户数量
      */
     int batchUpdateUserStatus(List<Integer> userIds, String status);
-    
+
     /**
      * 批量更新用户部门
      * @param userIds 用户ID列表
@@ -50,7 +58,7 @@ public interface IUserService extends IService<User> {
      * @return 更新的用户数量
      */
     int batchUpdateUserDept(List<Integer> userIds, String dept);
-    
+
     /**
      * 批量更新用户会员状态
      * @param userIds 用户ID列表

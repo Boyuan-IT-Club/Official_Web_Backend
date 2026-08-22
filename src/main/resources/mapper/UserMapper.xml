@@ -14,6 +14,11 @@
         <result property="major" column="major"/>
         <result property="github" column="github"/>
         <result property="deptId" column="dept_id"/>
+        <!-- dept / is_member 此前漏映射：findByRoleAndDeptAndStatus 明明 SELECT 了这两列,
+             但 resultMap 不认,MyBatis 直接丢弃 -> 接口 JSON 永远没有这两个键,
+             管理端「部门」列因此恒显示非社员,批量录取/分配部门看不出任何变化。 -->
+        <result property="dept" column="dept"/>
+        <result property="isMember" column="is_member"/>
         <result property="avatar" column="avatar"/>
         <result property="status" column="status"/>
         <result property="createTime" column="create_time"/>
@@ -197,7 +202,7 @@
         AND is_deleted = 0
     </update>
     
-    <select id="selectByIds" resultMap="UserResultMap">
+    <select id="selectUsersByIds" resultMap="UserResultMap">
         SELECT *
         FROM user
         WHERE user_id IN
@@ -205,6 +210,26 @@
             #{userId}
         </foreach>
         AND is_deleted = 0
+    </select>
+
+    <!-- 统计卡:is_member 允许为 NULL(历史行),按「非社员」计,否则两数相加不等于总数 -->
+    <select id="countByMembership" resultType="java.lang.Long">
+        SELECT COUNT(*)
+        FROM user
+        WHERE is_deleted = 0
+        <if test="isMember">
+            AND is_member = 1
+        </if>
+        <if test="!isMember">
+            AND (is_member = 0 OR is_member IS NULL)
+        </if>
+    </select>
+
+    <select id="countFrozen" resultType="java.lang.Long">
+        SELECT COUNT(*)
+        FROM user
+        WHERE is_deleted = 0
+          AND status = 0
     </select>
 
 </mapper>

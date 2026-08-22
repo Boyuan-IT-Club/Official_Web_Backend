@@ -22,7 +22,7 @@ import java.util.List;
 @RequestMapping("/api/interview/admin")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("hasAuthority('resume:audit')")
+@PreAuthorize("hasAnyAuthority('interview:schedule', 'resume:audit')")
 public class SessionAssignmentController {
 
     private final ISessionAssignmentService sessionAssignmentService;

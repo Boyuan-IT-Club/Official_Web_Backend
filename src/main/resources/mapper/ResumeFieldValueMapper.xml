@@ -17,6 +17,15 @@
         WHERE resume_id = #{resumeId}
     </select>
 
+    <!-- 批量版：列表页用一次 IN 查询替掉「每份简历一次」的 N+1 -->
+    <select id="findByResumeIds" resultMap="ResumeFieldValueMap">
+        SELECT * FROM resume_field_value
+        WHERE resume_id IN
+        <foreach collection="resumeIds" item="rid" open="(" separator="," close=")">
+            #{rid}
+        </foreach>
+    </select>
+
     <select id="findByResumeIdAndFieldId" resultMap="ResumeFieldValueMap">
         SELECT * FROM resume_field_value
         WHERE resume_id = #{resumeId} AND field_id = #{fieldId}

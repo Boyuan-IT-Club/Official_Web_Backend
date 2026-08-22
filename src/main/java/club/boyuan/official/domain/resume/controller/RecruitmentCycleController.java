@@ -1,5 +1,6 @@
 package club.boyuan.official.domain.resume.controller;
 
+import club.boyuan.official.domain.resume.dto.OpenCycleDTO;
 import club.boyuan.official.common.dto.PageResultDTO;
 import club.boyuan.official.common.dto.ResponseMessage;
 import club.boyuan.official.persistence.entity.RecruitmentCycle;
@@ -172,6 +173,26 @@ public class RecruitmentCycleController {
     /**
      * 根据是否启用获取招募周期
      */
+    /**
+     * 当前开放投递的周期列表(用户端周期选择器用)。
+     *
+     * 与 /active/{isActive} 的区别：is_active 的语义只是「是否启用」，往届周期
+     * 为了能查历史简历通常也保持启用，所以「启用中」不等于「现在能投」。
+     * 用户端此前直接取 /active/1 的第一条，同时有两个启用周期时就会任选一个 ——
+     * 若选中的那个还没配简历字段，投递页会渲染成一张零字段的空表单，
+     * 且前后端都不报错，表现就是「用户端显示不出来」。
+     *
+     * 本接口以起止日期为权威(管理端唯一真正维护的字段)，不看 status 列：
+     * status 只有一个手动管理接口会刷新，没有定时任务，实际长期陈旧。
+     */
+    @GetMapping("/open")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ResponseMessage<List<OpenCycleDTO>>> getOpenCycles() {
+        List<OpenCycleDTO> cycles = recruitmentCycleService.getOpenCyclesForApplication();
+        logger.debug("返回当前开放投递的周期，共{}个", cycles.size());
+        return ResponseEntity.ok(ResponseMessage.success(cycles));
+    }
+
     @GetMapping("/active/{isActive}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<List<RecruitmentCycle>>> getRecruitmentCyclesByIsActive(@PathVariable Integer isActive) {

@@ -1,5 +1,7 @@
 package club.boyuan.official.domain.resume.service.impl;
 
+import club.boyuan.official.persistence.mapper.RecruitmentCycleMapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import club.boyuan.official.common.dto.PageResultDTO;
 import club.boyuan.official.domain.resume.dto.ResumeDTO;
 import club.boyuan.official.domain.resume.dto.ResumeFieldValueDTO;
@@ -34,6 +36,7 @@ public class ResumeServiceImpl implements IResumeService {
     private static final Logger logger = LoggerFactory.getLogger(ResumeServiceImpl.class);
     
     private final ResumeMapper resumeMapper;
+    private final RecruitmentCycleMapper recruitmentCycleMapper;
     private final ResumeFieldValueMapper resumeFieldValueMapper;
     private final IResumeFieldDefinitionService fieldDefinitionService;
     private final RedisTemplate<String, Object> redisTemplate;
@@ -80,6 +83,7 @@ public class ResumeServiceImpl implements IResumeService {
     @Transactional
     public Resume createResume(Resume resume) {
         logger.info("创建简历，用户ID: {}，年份: {}", resume.getUserId(), resume.getCycleId());
+        requireCycleOpen(resume.getCycleId());
         try {
             resumeMapper.insert(resume);
             // 清除相关缓存
@@ -134,6 +138,14 @@ public class ResumeServiceImpl implements IResumeService {
     @Transactional
     public Resume submitResume(Integer resumeId) {
         logger.info("提交简历，简历ID: {}", resumeId);
+        // 周期关闭后不再接收提交。放在这里而不是只藏前端入口：
+        // 前端把开放周期从切换器里拿掉只是看不见，直接调接口照样能投。
+        // 必须在 try 之外 —— 下面的 catch(Exception) 会把一切重包装成
+        // RESUME_SUBMIT_FAILED(3008)，把守卫的专属错误码 3010 吞掉（CI 实测抓到）。
+        Resume guarded = resumeMapper.findById(resumeId);
+        if (guarded != null) {
+            requireCycleOpen(guarded.getCycleId());
+        }
         try {
             Resume resume = resumeMapper.findById(resumeId);
             if (resume != null) {
@@ -264,18 +276,23 @@ public class ResumeServiceImpl implements IResumeService {
             // 缓存未命中，从数据库查询
             List<Resume> resumes = resumeMapper.queryResumes(name, major, expectedDepartment, cycleId, status);
             List<ResumeDTO> result = new ArrayList<>();
+            // 一次批量取回本页所有简历的字段值，替掉循环里的逐份查询
+            java.util.Map<Integer, List<SimpleResumeFieldDTO>> fieldsByResume =
+                    getSimpleFieldValuesByResumeIds(
+                            resumes.stream().map(Resume::getResumeId).collect(Collectors.toList()));
             for (Resume resume : resumes) {
                 ResumeDTO dto = new ResumeDTO();
                 dto.setResumeId(resume.getResumeId());
                 dto.setUserId(resume.getUserId());
                 dto.setCycleId(resume.getCycleId());
                 dto.setStatus(resume.getStatus());
+                dto.setResumeScore(resume.getResumeScore());
                 dto.setSubmittedAt(resume.getSubmittedAt());
                 dto.setCreatedAt(resume.getCreatedAt());
                 dto.setUpdatedAt(resume.getUpdatedAt());
                 // 可选：添加简化字段信息
-                List<SimpleResumeFieldDTO> simpleFields = getSimpleFieldValuesByResumeId(resume.getResumeId());
-                dto.setSimpleFields(simpleFields);
+                dto.setSimpleFields(fieldsByResume.getOrDefault(
+                        resume.getResumeId(), java.util.Collections.emptyList()));
                 result.add(dto);
             }
             
@@ -311,18 +328,23 @@ public class ResumeServiceImpl implements IResumeService {
             
             // 转换为DTO
             List<ResumeDTO> result = new ArrayList<>();
+            // 一次批量取回本页所有简历的字段值，替掉循环里的逐份查询
+            java.util.Map<Integer, List<SimpleResumeFieldDTO>> fieldsByResume =
+                    getSimpleFieldValuesByResumeIds(
+                            resumes.stream().map(Resume::getResumeId).collect(Collectors.toList()));
             for (Resume resume : resumes) {
                 ResumeDTO dto = new ResumeDTO();
                 dto.setResumeId(resume.getResumeId());
                 dto.setUserId(resume.getUserId());
                 dto.setCycleId(resume.getCycleId());
                 dto.setStatus(resume.getStatus());
+                dto.setResumeScore(resume.getResumeScore());
                 dto.setSubmittedAt(resume.getSubmittedAt());
                 dto.setCreatedAt(resume.getCreatedAt());
                 dto.setUpdatedAt(resume.getUpdatedAt());
                 // 可选：添加简化字段信息
-                List<SimpleResumeFieldDTO> simpleFields = getSimpleFieldValuesByResumeId(resume.getResumeId());
-                dto.setSimpleFields(simpleFields);
+                dto.setSimpleFields(fieldsByResume.getOrDefault(
+                        resume.getResumeId(), java.util.Collections.emptyList()));
                 result.add(dto);
             }
             
@@ -358,6 +380,7 @@ public class ResumeServiceImpl implements IResumeService {
             resumeDTO.setUserId(resume.getUserId());
             resumeDTO.setCycleId(resume.getCycleId());
             resumeDTO.setStatus(resume.getStatus());
+            resumeDTO.setResumeScore(resume.getResumeScore());
             resumeDTO.setSubmittedAt(resume.getSubmittedAt());
             resumeDTO.setCreatedAt(resume.getCreatedAt());
             resumeDTO.setUpdatedAt(resume.getUpdatedAt());
@@ -389,6 +412,7 @@ public class ResumeServiceImpl implements IResumeService {
             resumeDTO.setUserId(resume.getUserId());
             resumeDTO.setCycleId(resume.getCycleId());
             resumeDTO.setStatus(resume.getStatus());
+            resumeDTO.setResumeScore(resume.getResumeScore());
             resumeDTO.setSubmittedAt(resume.getSubmittedAt());
             resumeDTO.setCreatedAt(resume.getCreatedAt());
             resumeDTO.setUpdatedAt(resume.getUpdatedAt());
@@ -404,22 +428,117 @@ public class ResumeServiceImpl implements IResumeService {
         }
     }
     
+        @Override
+    public Resume updateResumeScore(Integer resumeId, Integer score) {
+        if (resumeId == null || score == null) {
+            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
+        }
+        if (score < 0 || score > 100) {
+            throw new BusinessException(BusinessExceptionEnum.PARAMETER_VALIDATION_FAILED,
+                    "简历评分需在 0~100 之间，收到: " + score);
+        }
+        Resume resume = resumeMapper.selectById(resumeId);
+        if (resume == null) {
+            throw new BusinessException(BusinessExceptionEnum.RESUME_NOT_FOUND);
+        }
+        // 显式 UpdateWrapper 只动 resume_score —— updateById 走整个实体，
+        // 会把并发窗口里其它字段的旧值一起写回去
+        resumeMapper.update(null, new LambdaUpdateWrapper<Resume>()
+                .eq(Resume::getResumeId, resumeId)
+                .set(Resume::getResumeScore, score));
+        resume.setResumeScore(score);
+        logger.info("简历评分已更新，简历ID: {}，分数: {}", resumeId, score);
+        return resume;
+    }
+
     /**
+     * 周期必须处于开放投递状态：未删除、启用中、今天在起止日期内。
+     *
+     * 管理员想停止收简历时，改结束日期到昨天或停用周期即可 —— 这里保证
+     * 后端真的会拒收，而不是只靠前端把入口藏起来。
+     * 只拦「新建」与「提交」两个动作；已有草稿的编辑不拦（内容留着无害，
+     * 反正提交不进来），已提交简历的展示/审核完全不受影响。
+     */
+    private void requireCycleOpen(Integer cycleId) {
+        if (cycleId == null) {
+            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
+        }
+        club.boyuan.official.persistence.entity.RecruitmentCycle cycle = recruitmentCycleMapper.selectById(cycleId);
+        boolean open = cycle != null
+                && !Integer.valueOf(1).equals(cycle.getIsDeleted())
+                && Integer.valueOf(1).equals(cycle.getIsActive())
+                && cycle.getStartDate() != null && cycle.getEndDate() != null
+                && !java.time.LocalDate.now().isBefore(cycle.getStartDate())
+                && !java.time.LocalDate.now().isAfter(cycle.getEndDate());
+        if (!open) {
+            throw new BusinessException(BusinessExceptionEnum.RESUME_CYCLE_CLOSED);
+        }
+    }
+
+/**
      * 根据简历ID获取简化版字段信息（仅包含字段标签和字段值）
      * @param resumeId 简历ID
      * @return 简化版字段信息列表
      */
+
+    /**
+     * 批量取多份简历的简化字段值，返回 resumeId -> 字段列表。
+     *
+     * 列表页原来是每份简历一次 findByResumeId、再逐字段查定义 ——
+     * 一页 100 份简历就是 100 次值查询 + 上千次定义查找。
+     * 这里两次查询搞定（值一次 IN、定义一次 IN）。
+     */
+    private java.util.Map<Integer, List<SimpleResumeFieldDTO>> getSimpleFieldValuesByResumeIds(
+            java.util.Collection<Integer> resumeIds) {
+        if (resumeIds == null || resumeIds.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        java.util.Set<Integer> ids = resumeIds.stream()
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (ids.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        List<ResumeFieldValue> all = resumeFieldValueMapper.findByResumeIds(ids);
+        if (all.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        java.util.Map<Integer, ResumeFieldDefinition> defs = fieldDefinitionService.getFieldDefinitionsByIds(
+                all.stream().map(ResumeFieldValue::getFieldId)
+                        .filter(java.util.Objects::nonNull).collect(Collectors.toSet()));
+
+        java.util.Map<Integer, List<SimpleResumeFieldDTO>> byResume = new java.util.HashMap<>();
+        for (ResumeFieldValue fv : all) {
+            if (fv.getResumeId() == null) {
+                continue;
+            }
+            byResume.computeIfAbsent(fv.getResumeId(), k -> new ArrayList<>())
+                    .add(toSimpleResumeFieldDTO(fv,
+                            fv.getFieldId() == null ? null : defs.get(fv.getFieldId())));
+        }
+        return byResume;
+    }
+
     private List<SimpleResumeFieldDTO> getSimpleFieldValuesByResumeId(Integer resumeId) {
         try {
             List<ResumeFieldValue> fieldValues = resumeFieldValueMapper.findByResumeId(resumeId);
-            
-            return fieldValues.stream().map(fieldValue -> {
-                ResumeFieldDefinition fieldDefinition = null;
-                if (fieldValue.getFieldId() != null) {
-                    fieldDefinition = fieldDefinitionService.getFieldDefinitionById(fieldValue.getFieldId());
-                }
-                return toSimpleResumeFieldDTO(fieldValue, fieldDefinition);
-            }).collect(Collectors.toList());
+            if (fieldValues.isEmpty()) {
+                return new ArrayList<>();
+            }
+            // 一次批量取回全部字段定义。原来是每个字段值单独调
+            // getFieldDefinitionById —— 一份简历约 20 个字段就是 20 次 Redis
+            // 往返，而面试官打分时一位位点开候选人，这代价每次重复付。
+            java.util.Set<Integer> fieldIds = fieldValues.stream()
+                    .map(ResumeFieldValue::getFieldId)
+                    .filter(java.util.Objects::nonNull)
+                    .collect(Collectors.toSet());
+            java.util.Map<Integer, ResumeFieldDefinition> defs =
+                    fieldDefinitionService.getFieldDefinitionsByIds(fieldIds);
+
+            return fieldValues.stream()
+                    .map(fv -> toSimpleResumeFieldDTO(fv,
+                            fv.getFieldId() == null ? null : defs.get(fv.getFieldId())))
+                    .collect(Collectors.toList());
         } catch (Exception e) {
             logger.error("获取简化版字段信息失败，简历ID: {}", resumeId, e);
             throw new BusinessException(BusinessExceptionEnum.DATABASE_QUERY_FAILED);

@@ -1,0 +1,25 @@
+{
+  "name": "official-collab-server",
+  "version": "1.0.0",
+  "description": "博远社团官网 - 面试评价协同服务（Yjs + Hocuspocus）",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@hocuspocus/server": "^2.15.2",
+    "dotenv": "^16.4.7",
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.12.0",
+    "yjs": "^13.6.20"
+  },
+  "devDependencies": {
+    "@hocuspocus/provider": "^4.6.0"
+  }
+}

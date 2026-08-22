@@ -1,6 +1,7 @@
 package club.boyuan.official.domain.interview.controller;
 
 
+import java.util.Map;
 import club.boyuan.official.common.dto.*;
 import club.boyuan.official.domain.interview.dto.*;
 import club.boyuan.official.persistence.entity.InterviewResult;
@@ -9,6 +10,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,6 +27,10 @@ import java.util.List;
 @RequestMapping("/api/interview/result")
 @Slf4j
 @RequiredArgsConstructor
+// 本类此前没有任何类级/方法级鉴权，只落到 SecurityConfig 的 anyRequest().authenticated()，
+// 也就是任何登录用户（含学生本人）都能改自己的录取结果、群发通知、拉取全体结果名单。
+// 与同域的 SessionAssignmentController 对齐，统一收到 resume:audit 之下。
+@PreAuthorize("hasAnyAuthority('interview:result', 'resume:audit')")
 public class InterviewResultController {
 
     private final IInterviewResultService interviewResultService;
@@ -41,6 +47,33 @@ public class InterviewResultController {
             return ResponseEntity.badRequest()
                     .body(ResponseMessage.error(400, "发送面试结果通知失败"));
         }
+    }
+
+    /**
+     * 批量录取 / 批量标记未通过：先勾选候选人，再一次性写入决定与录取部门。
+     * 逐条录入在几十上百人时不现实，这是管理端「结果与通知」的主要入口。
+     */
+    @PostMapping("/batch-decision")
+    public ResponseEntity<ResponseMessage<BatchDecisionResponseDTO>> batchDecision(
+            @Valid @RequestBody BatchDecisionRequestDTO requestDTO
+    ) {
+        log.info("批量录取，cycleId={}，decision={}，deptId={}，共 {} 人",
+                requestDTO.getCycleId(), requestDTO.getDecision(),
+                requestDTO.getAssignedDeptId(), requestDTO.getResultIds().size());
+        BatchDecisionResponseDTO responseDTO = interviewResultService.batchDecision(requestDTO);
+        return ResponseEntity.ok(ResponseMessage.success(responseDTO));
+    }
+
+    /**
+     * 从本周期的生效面试安排生成结果名单（decision=0 待定），已有结果行的安排跳过。
+     * 此前结果行只有飞书拉取会创建 —— 不接飞书「结果与通知」就是空的。
+     * 生成后用下方的单行更新 / 批量录取即可全站内定结果，飞书变成可选项。
+     */
+    @PostMapping("/seed-from-schedules")
+    public ResponseEntity<ResponseMessage<Map<String, Integer>>> seedFromSchedules(
+            @RequestParam Integer cycleId) {
+        int created = interviewResultService.seedFromSchedules(cycleId);
+        return ResponseEntity.ok(ResponseMessage.success(Map.of("created", created)));
     }
 
     @GetMapping("/list")

@@ -12,11 +12,13 @@ import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import club.boyuan.official.common.exception.BusinessException;
 import club.boyuan.official.common.exception.BusinessExceptionEnum;
 import club.boyuan.official.persistence.entity.UserRole;
+import club.boyuan.official.persistence.entity.Role;
 import club.boyuan.official.persistence.mapper.AwardExperienceMapper;
 import club.boyuan.official.persistence.mapper.ResumeFieldValueMapper;
 import club.boyuan.official.persistence.mapper.ResumeMapper;
 import club.boyuan.official.persistence.mapper.UserMapper;
 import club.boyuan.official.persistence.mapper.UserRoleMapper;
+import club.boyuan.official.persistence.mapper.RoleMapper;
 import club.boyuan.official.domain.user.service.IUserService;
 import club.boyuan.official.common.utils.GitHubAccountUtil;
 import club.boyuan.official.common.utils.JwtTokenUtil;
@@ -33,6 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import club.boyuan.official.common.utils.PermissionUtils;
 
@@ -47,6 +50,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
     private final ResumeMapper resumeMapper;
     private final ResumeFieldValueMapper resumeFieldValueMapper;
     private final UserRoleMapper userRoleMapper;
+    private final RoleMapper roleMapper;
     private final EvaluationSubmissionMapper evaluationSubmissionMapper;
     private final BCryptPasswordEncoder passwordEncoder;
     private final JwtTokenUtil jwtTokenUtil;
@@ -417,7 +421,48 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
         
         int updatedCount = userMapper.batchUpdateMembershipByIds(userIds, isMember);
         logger.info("批量更新用户会员状态成功，更新数量: {}，会员状态: {}", updatedCount, isMember);
+        // 同步社员角色：让「社员身份」与「社员角色」保持一致（ADR-0001：RBAC 角色是唯一来源）
+        syncMemberRole(userIds, isMember);
         return updatedCount;
+    }
+
+    /**
+     * 让「社员身份」与「社员角色」保持一致。
+     *
+     * 按 role_code 查角色而不是写死 role_id:V6 种子里 MEMBER 是 3,但显式 ID
+     * 正是 V10/V13 权限撞号的根因,这里不重复那个做法。
+     * 角色行不存在时只记日志不抛异常 —— 状态更新本身已经成功,不该因为角色缺失而整体回滚。
+     */
+    private void syncMemberRole(List<Integer> userIds, boolean isMember) {
+        if (userIds == null || userIds.isEmpty()) {
+            return;
+        }
+        Role memberRole = roleMapper.selectOne(new LambdaQueryWrapper<Role>()
+                .eq(Role::getRoleCode, "MEMBER").last("LIMIT 1"));
+        if (memberRole == null) {
+            logger.warn("未找到 role_code = MEMBER 的角色，跳过社员角色同步，用户数: {}", userIds.size());
+            return;
+        }
+
+        if (isMember) {
+            for (Integer userId : userIds) {
+                boolean exists = userRoleMapper.exists(new LambdaQueryWrapper<UserRole>()
+                        .eq(UserRole::getUserId, userId)
+                        .eq(UserRole::getRoleId, memberRole.getRoleId()));
+                if (!exists) {
+                    UserRole ur = new UserRole();
+                    ur.setUserId(userId);
+                    ur.setRoleId(memberRole.getRoleId());
+                    userRoleMapper.insert(ur);
+                }
+            }
+            logger.info("已为 {} 个用户同步社员角色", userIds.size());
+        } else {
+            int removed = userRoleMapper.delete(new LambdaQueryWrapper<UserRole>()
+                    .in(UserRole::getUserId, userIds)
+                    .eq(UserRole::getRoleId, memberRole.getRoleId()));
+            logger.info("开除社员：已移除 {} 条社员角色绑定", removed);
+        }
     }
 
     @Override
