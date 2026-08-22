@@ -10,7 +10,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -23,13 +22,12 @@ public class ProfileController {
 
     private final IProfileService profileService;
 
-    /** 候选档案列表：有面试安排的候选人，按最近面试时间排序。 */
+    /** 候选档案列表：有面试安排的候选人，按最近面试时间排序。跨全部周期。 */
     @GetMapping
     @PreAuthorize("hasAuthority('resume:view') or hasAuthority('evaluation:view')")
-    public ResponseEntity<ResponseMessage<List<CandidateProfileListRow>>> list(
-            @RequestParam(required = false) Integer cycleId) {
+    public ResponseEntity<ResponseMessage<List<CandidateProfileListRow>>> list() {
         return ResponseEntity.ok(
-                new ResponseMessage<>(200, "候选档案列表获取成功", profileService.listCandidates(cycleId)));
+                new ResponseMessage<>(200, "候选档案列表获取成功", profileService.listCandidates()));
     }
 
     /** 候选档案详情：某用户全部周期聚合（面试安排/评测成绩/获奖/简历）。 */

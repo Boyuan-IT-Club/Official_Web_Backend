@@ -144,13 +144,13 @@
         SELECT
             COUNT(*) AS total,
             COALESCE(SUM(u.status = 0), 0) AS frozen,
-            COALESCE(SUM(EXISTS(SELECT 1 FROM user_role ur JOIN role ro ON ro.role_id = ur.role_id
-                                WHERE ur.user_id = u.user_id AND ro.role_code IN ('SUPER_ADMIN','ADMIN'))), 0) AS adminCount,
-            COALESCE(SUM(EXISTS(SELECT 1 FROM user_role ur JOIN role ro ON ro.role_id = ur.role_id
-                                WHERE ur.user_id = u.user_id AND ro.role_code = 'MEMBER')), 0) AS memberCount,
-            COALESCE(SUM(EXISTS(SELECT 1 FROM user_role ur JOIN role ro ON ro.role_id = ur.role_id
+            COALESCE(SUM(CASE WHEN EXISTS(SELECT 1 FROM user_role ur JOIN role ro ON ro.role_id = ur.role_id
+                                WHERE ur.user_id = u.user_id AND ro.role_code IN ('SUPER_ADMIN','ADMIN')) THEN 1 ELSE 0 END), 0) AS adminCount,
+            COALESCE(SUM(CASE WHEN EXISTS(SELECT 1 FROM user_role ur JOIN role ro ON ro.role_id = ur.role_id
+                                WHERE ur.user_id = u.user_id AND ro.role_code = 'MEMBER') THEN 1 ELSE 0 END), 0) AS memberCount,
+            COALESCE(SUM(CASE WHEN EXISTS(SELECT 1 FROM user_role ur JOIN role ro ON ro.role_id = ur.role_id
                                 WHERE ur.user_id = u.user_id AND ro.role_code = 'APPLICANT')
-                          OR NOT EXISTS(SELECT 1 FROM user_role ur WHERE ur.user_id = u.user_id)), 0) AS nonMemberCount
+                          OR NOT EXISTS(SELECT 1 FROM user_role ur WHERE ur.user_id = u.user_id) THEN 1 ELSE 0 END), 0) AS nonMemberCount
         FROM user u
         WHERE u.is_deleted = 0
     </select>
@@ -177,13 +177,14 @@
     </update>
     
     <update id="batchUpdateDeptByIds">
-        UPDATE user 
+        UPDATE user
         SET dept_id = (SELECT dept_id FROM department WHERE dept_name = #{dept} LIMIT 1), update_time = NOW()
         WHERE user_id IN
         <foreach collection="userIds" item="userId" open="(" separator="," close=")">
             #{userId}
         </foreach>
         AND is_deleted = 0
+        AND EXISTS (SELECT 1 FROM department WHERE dept_name = #{dept})
     </update>
     
     <update id="batchUpdateMembershipByIds">

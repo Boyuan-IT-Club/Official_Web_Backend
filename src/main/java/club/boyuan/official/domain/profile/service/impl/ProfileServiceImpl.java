@@ -50,8 +50,8 @@ public class ProfileServiceImpl implements IProfileService {
     private final EvaluationSubmissionMapper evaluationSubmissionMapper;
 
     @Override
-    public List<CandidateProfileListRow> listCandidates(Integer cycleId) {
-        List<Map<String, Object>> rows = interviewScheduleMapper.selectCandidateProfileRows(cycleId);
+    public List<CandidateProfileListRow> listCandidates() {
+        List<Map<String, Object>> rows = interviewScheduleMapper.selectCandidateProfileRows();
         if (rows == null) {
             return Collections.emptyList();
         }
