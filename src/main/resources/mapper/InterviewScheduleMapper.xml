@@ -2,4 +2,52 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="club.boyuan.official.persistence.mapper.InterviewScheduleMapper">
 
+    <!-- 候选档案列表：收录「至少一条面试安排」的用户，附最近面试时间/地点/所属周期。
+         面试安排经 resume 认证到用户（resume.user_id 全 schema 稳定；不依赖 schedule.user_id）。
+         最近面试地点：按 (resume_id, user_id) 取 MAX(interview_time)，回连 interview_schedule 取该行地点。
+         地点优先取场次(interview_session.location)，回退旧时段(interview_slot.location)。 -->
+    <select id="selectCandidateProfileRows" resultType="map">
+        SELECT
+            u.user_id                  AS userId,
+            u.name                     AS name,
+            u.username                 AS username,
+            u.major                    AS major,
+            COALESCE(d.dept_name, '')  AS deptName,
+            COALESCE(rc.cycle_name,'') AS cycleName,
+            agg.maxTime                AS latestInterviewTime,
+            COALESCE(se.location, sl.location) AS interviewLocation
+        FROM (
+            SELECT
+                s.resume_id            AS resumeId,
+                r.user_id              AS userId,
+                MAX(s.interview_time)  AS maxTime
+            FROM interview_schedule s
+            INNER JOIN resume r ON r.resume_id = s.resume_id
+            <where>
+                <if test="cycleId != null">
+                    AND s.cycle_id = #{cycleId}
+                </if>
+            </where>
+            GROUP BY s.resume_id, r.user_id
+        ) agg
+        INNER JOIN user u ON u.user_id = agg.userId AND u.is_deleted = 0
+        LEFT JOIN department d ON d.dept_id = u.dept_id
+        LEFT JOIN (
+            SELECT r.user_id AS userId, MAX(rc.cycle_name) AS cycle_name
+            FROM interview_schedule s
+            INNER JOIN resume r ON r.resume_id = s.resume_id
+            LEFT JOIN recruitment_cycle rc ON rc.cycle_id = s.cycle_id
+            <where>
+                <if test="cycleId != null">
+                    AND s.cycle_id = #{cycleId}
+                </if>
+            </where>
+            GROUP BY r.user_id
+        ) rc ON rc.userId = agg.userId
+        LEFT JOIN interview_schedule ls ON ls.resume_id = agg.resumeId AND ls.interview_time = agg.maxTime
+        LEFT JOIN interview_session se ON se.session_id = ls.session_id
+        LEFT JOIN interview_slot sl ON sl.slot_id = ls.slot_id
+        ORDER BY agg.maxTime IS NULL ASC, agg.maxTime ASC
+    </select>
+
 </mapper>
