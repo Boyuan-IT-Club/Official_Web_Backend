@@ -30,9 +30,10 @@ public class ProfileController {
                 new ResponseMessage<>(200, "候选档案列表获取成功", profileService.listCandidates()));
     }
 
-    /** 候选档案详情：某用户全部周期聚合（面试安排/评测成绩/获奖/简历）。 */
+    /** 候选档案详情：某用户全部周期聚合（面试安排/评测成绩/获奖/简历）。
+         *  面试官(interview:evaluate)在打分工作台据此读获奖/成绩；不授予 resume:view 全量简历库。 */
     @GetMapping("/{userId}")
-    @PreAuthorize("hasAuthority('resume:view') or hasAuthority('evaluation:view')")
+    @PreAuthorize("hasAuthority('resume:view') or hasAuthority('evaluation:view') or hasAuthority('interview:evaluate')")
     public ResponseEntity<ResponseMessage<CandidateProfileDetail>> detail(@PathVariable Integer userId) {
         return ResponseEntity.ok(
                 new ResponseMessage<>(200, "候选档案详情获取成功", profileService.getProfile(userId)));
