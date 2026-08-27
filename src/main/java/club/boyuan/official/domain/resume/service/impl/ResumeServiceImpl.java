@@ -282,6 +282,7 @@ public class ResumeServiceImpl implements IResumeService {
                     getSimpleFieldValuesByResumeIds(
                             resumes.stream().map(Resume::getResumeId).collect(Collectors.toList()));
             java.util.Map<Integer, String> scorerNames = resolveScorerNames(resumes);
+            java.util.Map<Integer, club.boyuan.official.persistence.entity.User> candidates = resolveCandidateUsers(resumes);
             for (Resume resume : resumes) {
                 ResumeDTO dto = new ResumeDTO();
                 dto.setResumeId(resume.getResumeId());
@@ -290,6 +291,7 @@ public class ResumeServiceImpl implements IResumeService {
                 dto.setStatus(resume.getStatus());
                 dto.setResumeScore(resume.getResumeScore());
                 fillScorer(dto, resume, scorerNames);
+                fillCandidateUser(dto, resume, candidates);
                 dto.setSubmittedAt(resume.getSubmittedAt());
                 dto.setCreatedAt(resume.getCreatedAt());
                 dto.setUpdatedAt(resume.getUpdatedAt());
@@ -336,6 +338,7 @@ public class ResumeServiceImpl implements IResumeService {
                     getSimpleFieldValuesByResumeIds(
                             resumes.stream().map(Resume::getResumeId).collect(Collectors.toList()));
             java.util.Map<Integer, String> scorerNames = resolveScorerNames(resumes);
+            java.util.Map<Integer, club.boyuan.official.persistence.entity.User> candidates = resolveCandidateUsers(resumes);
             for (Resume resume : resumes) {
                 ResumeDTO dto = new ResumeDTO();
                 dto.setResumeId(resume.getResumeId());
@@ -344,6 +347,7 @@ public class ResumeServiceImpl implements IResumeService {
                 dto.setStatus(resume.getStatus());
                 dto.setResumeScore(resume.getResumeScore());
                 fillScorer(dto, resume, scorerNames);
+                fillCandidateUser(dto, resume, candidates);
                 dto.setSubmittedAt(resume.getSubmittedAt());
                 dto.setCreatedAt(resume.getCreatedAt());
                 dto.setUpdatedAt(resume.getUpdatedAt());
@@ -387,6 +391,7 @@ public class ResumeServiceImpl implements IResumeService {
             resumeDTO.setStatus(resume.getStatus());
             resumeDTO.setResumeScore(resume.getResumeScore());
             fillScorer(resumeDTO, resume, resolveScorerNames(List.of(resume)));
+            fillCandidateUser(resumeDTO, resume, resolveCandidateUsers(List.of(resume)));
             resumeDTO.setSubmittedAt(resume.getSubmittedAt());
             resumeDTO.setCreatedAt(resume.getCreatedAt());
             resumeDTO.setUpdatedAt(resume.getUpdatedAt());
@@ -420,6 +425,7 @@ public class ResumeServiceImpl implements IResumeService {
             resumeDTO.setStatus(resume.getStatus());
             resumeDTO.setResumeScore(resume.getResumeScore());
             fillScorer(resumeDTO, resume, resolveScorerNames(List.of(resume)));
+            fillCandidateUser(resumeDTO, resume, resolveCandidateUsers(List.of(resume)));
             resumeDTO.setSubmittedAt(resume.getSubmittedAt());
             resumeDTO.setCreatedAt(resume.getCreatedAt());
             resumeDTO.setUpdatedAt(resume.getUpdatedAt());
@@ -516,6 +522,36 @@ public class ResumeServiceImpl implements IResumeService {
     private void fillScorer(ResumeDTO dto, Resume resume, java.util.Map<Integer, String> scorerNames) {
         dto.setScoredBy(resume.getScoredBy());
         dto.setScoredByName(resume.getScoredBy() == null ? null : scorerNames.get(resume.getScoredBy()));
+    }
+
+    /**
+     * 批量取回候选人账号（姓名/邮箱）。简历字段值可能一片空白（自动建的空草稿），
+     * 管理端的身份信息以注册账号为准兜底，不再显示「未提供姓名」。
+     */
+    private java.util.Map<Integer, club.boyuan.official.persistence.entity.User> resolveCandidateUsers(List<Resume> resumes) {
+        java.util.Set<Integer> userIds = resumes.stream()
+                .map(Resume::getUserId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (userIds.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        return userMapper.selectUsersByIds(new ArrayList<>(userIds)).stream()
+                .collect(Collectors.toMap(
+                        club.boyuan.official.persistence.entity.User::getUserId,
+                        java.util.function.Function.identity(),
+                        (a, b) -> a));
+    }
+
+    /** DTO 上补候选人注册姓名/邮箱 */
+    private void fillCandidateUser(ResumeDTO dto, Resume resume,
+                                   java.util.Map<Integer, club.boyuan.official.persistence.entity.User> candidates) {
+        club.boyuan.official.persistence.entity.User user =
+                resume.getUserId() == null ? null : candidates.get(resume.getUserId());
+        if (user != null) {
+            dto.setUserName(user.getName());
+            dto.setUserEmail(user.getEmail());
+        }
     }
 
 /**
