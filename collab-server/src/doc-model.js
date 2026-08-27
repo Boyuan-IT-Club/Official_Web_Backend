@@ -102,6 +102,7 @@ function writeRowInfo(rowMap, row) {
   info.set('deptId', row.deptId);
   info.set('deptName', row.deptName);
   info.set('sessionId', row.sessionId);
+  info.set('location', row.location);
   info.set('interviewTime', row.interviewTime);
   // 前端据此判断「我是否负责这场」来决定该行可否编辑
   info.set('interviewerUserIds', row.interviewerUserIds ?? []);

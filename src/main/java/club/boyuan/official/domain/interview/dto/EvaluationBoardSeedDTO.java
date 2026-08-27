@@ -65,6 +65,9 @@ public class EvaluationBoardSeedDTO {
 
         private Integer sessionId;
 
+        /** 面试地点（取自场次），评价表按地点筛选用 */
+        private String location;
+
         private LocalDateTime interviewTime;
 
         /**
