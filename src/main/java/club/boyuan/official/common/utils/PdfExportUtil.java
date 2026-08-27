@@ -64,8 +64,6 @@ public class PdfExportUtil {
             BaseColor lightLine = new BaseColor(225, 232, 240);
             BaseColor subText = new BaseColor(110, 120, 135);
 
-            Font bannerCn = getFont(20, Font.BOLD, BaseColor.WHITE);
-            Font bannerSub = getFont(9, Font.NORMAL, new BaseColor(200, 215, 235));
             Font sectionFont = getFont(12, Font.BOLD, accent);
             Font labelFont = getFont(9, Font.NORMAL, subText);
             Font valueFont = getFont(11, Font.NORMAL, new BaseColor(35, 40, 48));
@@ -88,24 +86,46 @@ public class PdfExportUtil {
 
                 String name = firstNonBlank(byKey.get("name"), "未填写姓名");
 
-                // ── 顶部品牌横幅 ─────────────────────────────
-                PdfPTable banner = new PdfPTable(1);
-                banner.setWidthPercentage(100);
-                PdfPCell bc = new PdfPCell();
-                bc.setBackgroundColor(brand);
-                bc.setBorder(Rectangle.NO_BORDER);
-                bc.setPadding(16f);
-                Paragraph bt = new Paragraph(name, bannerCn);
-                Paragraph bs = new Paragraph("博远信息技术社 · 招新申请简历", bannerSub);
-                bs.setSpacingBefore(4);
-                bc.addElement(bt);
-                bc.addElement(bs);
-                banner.addCell(bc);
-                banner.setSpacingAfter(14);
-                document.add(banner);
+                // ── 页眉：大号姓名 + 品牌色副标题 + 品牌色细线 ──
+                // 原先是整块深蓝横幅，打印/黑白复印时一团黑；改为留白页眉更耐看，
+                // 与前端 Word 导出（exportResume.ts）保持同一版式语言
+                PdfPTable head = new PdfPTable(photoImage != null ? new float[]{4f, 1f} : new float[]{1f});
+                head.setWidthPercentage(100);
+                PdfPCell hc = new PdfPCell();
+                hc.setBorder(Rectangle.NO_BORDER);
+                hc.setPaddingLeft(0);
+                Paragraph bt = new Paragraph(name, getFont(24, Font.BOLD, new BaseColor(35, 40, 48)));
+                Paragraph bs = new Paragraph("博远信息技术社 · 招新申请简历", getFont(10, Font.NORMAL, accent));
+                bs.setSpacingBefore(5);
+                hc.addElement(bt);
+                hc.addElement(bs);
+                head.addCell(hc);
+                if (photoImage != null) {
+                    PdfPCell hp = new PdfPCell(photoImage, true);
+                    hp.setBorder(Rectangle.BOX);
+                    hp.setBorderColor(lightLine);
+                    hp.setBorderWidth(0.8f);
+                    hp.setHorizontalAlignment(Element.ALIGN_RIGHT);
+                    hp.setPadding(3f);
+                    head.addCell(hp);
+                }
+                head.setSpacingAfter(6);
+                document.add(head);
 
-                // ── 基本信息（左双列 + 右照片）───────────────
-                PdfPTable info = new PdfPTable(photoImage != null ? new float[]{2.2f, 2.2f, 1.3f} : new float[]{1f, 1f});
+                // 品牌色分隔线
+                PdfPTable rule = new PdfPTable(1);
+                rule.setWidthPercentage(100);
+                PdfPCell rc = new PdfPCell();
+                rc.setBorder(Rectangle.BOTTOM);
+                rc.setBorderColorBottom(accent);
+                rc.setBorderWidthBottom(1.6f);
+                rc.setFixedHeight(2f);
+                rule.addCell(rc);
+                rule.setSpacingAfter(12);
+                document.add(rule);
+
+                // ── 基本信息（双列，空字段也列出标签——空草稿导出不再是"什么都没有"）──
+                PdfPTable info = new PdfPTable(new float[]{1f, 1f});
                 info.setWidthPercentage(100);
                 info.setSpacingAfter(10);
                 java.util.List<String[]> basics = new ArrayList<>();
@@ -122,16 +142,6 @@ public class PdfExportUtil {
                 PdfPCell colB = basicColumn(basics.size() > perCol ? basics.subList(perCol, basics.size()) : new ArrayList<>(), labelFont, valueFont);
                 info.addCell(colA);
                 info.addCell(colB);
-                if (photoImage != null) {
-                    PdfPCell pc = new PdfPCell(photoImage, true);
-                    // 证件照直接贴白底会没有边界感，给一圈浅边把它框住
-                    pc.setBorder(Rectangle.BOX);
-                    pc.setBorderColor(lightLine);
-                    pc.setBorderWidth(0.8f);
-                    pc.setHorizontalAlignment(Element.ALIGN_RIGHT);
-                    pc.setPadding(3f);
-                    info.addCell(pc);
-                }
                 document.add(info);
 
                 // ── 长文本小节 ──────────────────────────────
@@ -227,7 +237,8 @@ public class PdfExportUtil {
     }
 
     private static void addBasic(java.util.List<String[]> list, String label, String value) {
-        if (value != null && !value.trim().isEmpty()) list.add(new String[]{label, value});
+        // 空字段也列出标签：空草稿导出的 PDF 至少能看出结构，而不是「一片空白」
+        list.add(new String[]{label, value != null && !value.trim().isEmpty() ? value : "未填写"});
     }
 
     private static PdfPCell basicColumn(java.util.List<String[]> items, Font labelFont, Font valueFont) {
