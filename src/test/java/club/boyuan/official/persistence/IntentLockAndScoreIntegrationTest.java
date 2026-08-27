@@ -160,6 +160,15 @@ class IntentLockAndScoreIntegrationTest {
                     "周期未开放时提交必须被拒 —— 前端藏入口挡不住直接调接口");
             assertEquals(BusinessExceptionEnum.RESUME_CYCLE_CLOSED.getCode(), closed.getCode());
 
+            // 6.5) 编辑入口共用同一道闸：周期关闭后字段值保存/简历更新也必须被拒。
+            // 原先编辑不拦，学生在周期结束后仍能改草稿，造成「填写完成却投不进去、
+            // 管理端也查无此人」的困惑
+            final Integer cidClosed = cycleId;
+            BusinessException editClosed = assertThrows(BusinessException.class,
+                    () -> resumeService.assertCycleOpen(cidClosed),
+                    "周期未开放时编辑闸（assertCycleOpen）必须拒绝");
+            assertEquals(BusinessExceptionEnum.RESUME_CYCLE_CLOSED.getCode(), editClosed.getCode());
+
             // 7) 周期开放（启用且窗口覆盖今天）：提交恢复正常
             RecruitmentCycle reopen = new RecruitmentCycle();
             reopen.setCycleId(cycleId);

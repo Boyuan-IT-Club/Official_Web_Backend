@@ -3395,7 +3395,7 @@ paths:
     put:
       summary: 修改简历内容
       deprecated: false
-      description: 修改当前用户在指定招募周期的简历内容。
+      description: 修改当前用户在指定招募周期的简历内容。周期停止投递（已停用、已删除或不在起止日期内）时返回业务码 3010，不再接受修改。
       tags:
       - 简历相关功能——普通用户
       parameters:
@@ -3451,7 +3451,7 @@ paths:
     post:
       summary: 填写字段值
       deprecated: false
-      description: 保存/填写当前用户简历在指定周期下的自定义字段值。
+      description: 保存/填写当前用户简历在指定周期下的自定义字段值。周期停止投递（已停用、已删除或不在起止日期内）时返回业务码 3010，不再接受修改。
       tags:
       - 简历相关功能——普通用户
       parameters:

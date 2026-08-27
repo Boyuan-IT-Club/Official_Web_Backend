@@ -228,6 +228,10 @@ public class ResumeController {
         logger.info("用户{}保存招募周期ID为{}的简历字段值，字段数量: {}",
                 currentUser.getUsername(), cycleId, fieldValues.size());
 
+        // 周期关闭后编辑一并拒绝：内容改了也投不进去，留着入口只会造成
+        // "填写完成却查无此人"的困惑（管理端只看已提交）
+        resumeService.assertCycleOpen(cycleId);
+
         Resume resume = resumeService.getResumeByUserIdAndCycleId(currentUser.getUserId(), cycleId);
         if (resume == null) {
             resume = new Resume();
@@ -350,6 +354,9 @@ public class ResumeController {
         User currentUser = currentUser();
         logger.info("用户{}更新招募周期ID为{}的简历，字段数量: {}",
                 currentUser.getUsername(), cycleId, fieldValues.size());
+
+        // 与字段值保存同一道闸：周期关闭后不再接受任何学生侧修改
+        resumeService.assertCycleOpen(cycleId);
 
         Resume resume = resumeService.getResumeByUserIdAndCycleId(currentUser.getUserId(), cycleId);
         if (resume == null) {
