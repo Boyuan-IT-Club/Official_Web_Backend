@@ -7,6 +7,11 @@
         <result property="userId" column="user_id"/>
         <result property="cycleId" column="cycle_id"/>
         <result property="status" column="status"/>
+        <!-- 分数与署名此前漏映射：走本 resultMap 的查询一直拿不到 resume_score -->
+        <result property="resumeScore" column="resume_score"/>
+        <result property="scoredBy" column="scored_by"/>
+        <result property="scoredAt" column="scored_at"/>
+        <result property="submittedAt" column="submitted_at"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
     </resultMap>

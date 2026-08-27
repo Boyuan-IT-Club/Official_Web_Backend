@@ -140,16 +140,16 @@ class IntentLockAndScoreIntegrationTest {
 
             // 4) 打分：写入生效
             final Integer rid = resumeId;
-            resumeService.updateResumeScore(rid, 85);
+            resumeService.updateResumeScore(rid, 85, SEEDED_USER_ID);
             assertEquals(85, resumeMapper.selectById(rid).getResumeScore(),
                     "打分应落库到 resume_score");
 
             // 5) 范围与存在性校验
-            assertThrows(BusinessException.class, () -> resumeService.updateResumeScore(rid, 101),
+            assertThrows(BusinessException.class, () -> resumeService.updateResumeScore(rid, 101, SEEDED_USER_ID),
                     "超出 0~100 必须拒绝");
-            assertThrows(BusinessException.class, () -> resumeService.updateResumeScore(rid, -1),
+            assertThrows(BusinessException.class, () -> resumeService.updateResumeScore(rid, -1, SEEDED_USER_ID),
                     "负分必须拒绝");
-            assertThrows(BusinessException.class, () -> resumeService.updateResumeScore(999999, 60),
+            assertThrows(BusinessException.class, () -> resumeService.updateResumeScore(999999, 60, SEEDED_USER_ID),
                     "不存在的简历必须拒绝");
             assertEquals(85, resumeMapper.selectById(rid).getResumeScore(),
                     "被拒的打分不得留下任何写入");

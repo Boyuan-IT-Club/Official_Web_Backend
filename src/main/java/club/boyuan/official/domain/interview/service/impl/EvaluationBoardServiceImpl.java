@@ -206,10 +206,24 @@ public class EvaluationBoardServiceImpl implements IEvaluationBoardService {
         // user_id 是后补的列，历史行可能为空，用简历兜底带出候选人
         Map<Integer, Integer> resumeToUser = resolveMissingUserIds(roster);
 
+        // 简历初筛分与打分人：面试官打分时参考，管理端还要看署名
+        Set<Integer> resumeIds = roster.stream()
+                .map(InterviewSchedule::getResumeId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Integer, Resume> resumes = resumeIds.isEmpty() ? Collections.emptyMap()
+                : resumeMapper.selectBatchIds(resumeIds).stream()
+                .collect(Collectors.toMap(Resume::getResumeId, Function.identity(), (a, b) -> a));
+
         Set<Integer> userIds = roster.stream()
                 .map(s -> s.getUserId() != null ? s.getUserId() : resumeToUser.get(s.getResumeId()))
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
+        // 打分人也要取姓名，并进同一次批量查询
+        resumes.values().stream()
+                .map(Resume::getScoredBy)
+                .filter(Objects::nonNull)
+                .forEach(userIds::add);
         Map<Integer, User> users = userIds.isEmpty() ? Collections.emptyMap()
                 : selectUsersByIds(userIds).stream()
                 .collect(Collectors.toMap(User::getUserId, Function.identity(), (a, b) -> a));
@@ -245,6 +259,12 @@ public class EvaluationBoardServiceImpl implements IEvaluationBoardService {
             row.setLocation(schedule.getSessionId() == null
                     ? null
                     : locationBySession.get(schedule.getSessionId()));
+            Resume resume = schedule.getResumeId() == null ? null : resumes.get(schedule.getResumeId());
+            if (resume != null) {
+                row.setResumeScore(resume.getResumeScore());
+                User scorer = resume.getScoredBy() == null ? null : users.get(resume.getScoredBy());
+                row.setResumeScoredByName(scorer == null ? null : scorer.getName());
+            }
             row.setInterviewTime(schedule.getInterviewTime());
             row.setInterviewerUserIds(schedule.getSessionId() == null
                     ? Collections.emptyList()

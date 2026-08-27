@@ -37,6 +37,7 @@ public class ResumeServiceImpl implements IResumeService {
     
     private final ResumeMapper resumeMapper;
     private final RecruitmentCycleMapper recruitmentCycleMapper;
+    private final club.boyuan.official.persistence.mapper.UserMapper userMapper;
     private final ResumeFieldValueMapper resumeFieldValueMapper;
     private final IResumeFieldDefinitionService fieldDefinitionService;
     private final RedisTemplate<String, Object> redisTemplate;
@@ -280,6 +281,7 @@ public class ResumeServiceImpl implements IResumeService {
             java.util.Map<Integer, List<SimpleResumeFieldDTO>> fieldsByResume =
                     getSimpleFieldValuesByResumeIds(
                             resumes.stream().map(Resume::getResumeId).collect(Collectors.toList()));
+            java.util.Map<Integer, String> scorerNames = resolveScorerNames(resumes);
             for (Resume resume : resumes) {
                 ResumeDTO dto = new ResumeDTO();
                 dto.setResumeId(resume.getResumeId());
@@ -287,6 +289,7 @@ public class ResumeServiceImpl implements IResumeService {
                 dto.setCycleId(resume.getCycleId());
                 dto.setStatus(resume.getStatus());
                 dto.setResumeScore(resume.getResumeScore());
+                fillScorer(dto, resume, scorerNames);
                 dto.setSubmittedAt(resume.getSubmittedAt());
                 dto.setCreatedAt(resume.getCreatedAt());
                 dto.setUpdatedAt(resume.getUpdatedAt());
@@ -332,6 +335,7 @@ public class ResumeServiceImpl implements IResumeService {
             java.util.Map<Integer, List<SimpleResumeFieldDTO>> fieldsByResume =
                     getSimpleFieldValuesByResumeIds(
                             resumes.stream().map(Resume::getResumeId).collect(Collectors.toList()));
+            java.util.Map<Integer, String> scorerNames = resolveScorerNames(resumes);
             for (Resume resume : resumes) {
                 ResumeDTO dto = new ResumeDTO();
                 dto.setResumeId(resume.getResumeId());
@@ -339,6 +343,7 @@ public class ResumeServiceImpl implements IResumeService {
                 dto.setCycleId(resume.getCycleId());
                 dto.setStatus(resume.getStatus());
                 dto.setResumeScore(resume.getResumeScore());
+                fillScorer(dto, resume, scorerNames);
                 dto.setSubmittedAt(resume.getSubmittedAt());
                 dto.setCreatedAt(resume.getCreatedAt());
                 dto.setUpdatedAt(resume.getUpdatedAt());
@@ -381,6 +386,7 @@ public class ResumeServiceImpl implements IResumeService {
             resumeDTO.setCycleId(resume.getCycleId());
             resumeDTO.setStatus(resume.getStatus());
             resumeDTO.setResumeScore(resume.getResumeScore());
+            fillScorer(resumeDTO, resume, resolveScorerNames(List.of(resume)));
             resumeDTO.setSubmittedAt(resume.getSubmittedAt());
             resumeDTO.setCreatedAt(resume.getCreatedAt());
             resumeDTO.setUpdatedAt(resume.getUpdatedAt());
@@ -413,6 +419,7 @@ public class ResumeServiceImpl implements IResumeService {
             resumeDTO.setCycleId(resume.getCycleId());
             resumeDTO.setStatus(resume.getStatus());
             resumeDTO.setResumeScore(resume.getResumeScore());
+            fillScorer(resumeDTO, resume, resolveScorerNames(List.of(resume)));
             resumeDTO.setSubmittedAt(resume.getSubmittedAt());
             resumeDTO.setCreatedAt(resume.getCreatedAt());
             resumeDTO.setUpdatedAt(resume.getUpdatedAt());
@@ -429,7 +436,7 @@ public class ResumeServiceImpl implements IResumeService {
     }
     
         @Override
-    public Resume updateResumeScore(Integer resumeId, Integer score) {
+    public Resume updateResumeScore(Integer resumeId, Integer score, Integer scorerUserId) {
         if (resumeId == null || score == null) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
         }
@@ -441,13 +448,18 @@ public class ResumeServiceImpl implements IResumeService {
         if (resume == null) {
             throw new BusinessException(BusinessExceptionEnum.RESUME_NOT_FOUND);
         }
-        // 显式 UpdateWrapper 只动 resume_score —— updateById 走整个实体，
+        // 显式 UpdateWrapper 只动打分三列 —— updateById 走整个实体，
         // 会把并发窗口里其它字段的旧值一起写回去
+        LocalDateTime scoredAt = LocalDateTime.now();
         resumeMapper.update(null, new LambdaUpdateWrapper<Resume>()
                 .eq(Resume::getResumeId, resumeId)
-                .set(Resume::getResumeScore, score));
+                .set(Resume::getResumeScore, score)
+                .set(Resume::getScoredBy, scorerUserId)
+                .set(Resume::getScoredAt, scoredAt));
         resume.setResumeScore(score);
-        logger.info("简历评分已更新，简历ID: {}，分数: {}", resumeId, score);
+        resume.setScoredBy(scorerUserId);
+        resume.setScoredAt(scoredAt);
+        logger.info("简历评分已更新，简历ID: {}，分数: {}，打分人: {}", resumeId, score, scorerUserId);
         return resume;
     }
 
@@ -478,6 +490,32 @@ public class ResumeServiceImpl implements IResumeService {
     @Override
     public void assertCycleOpen(Integer cycleId) {
         requireCycleOpen(cycleId);
+    }
+
+    /**
+     * 批量把打分人 userId 解析成姓名。走 UserMapper 的自定义查询
+     * （通用查询在 User 上会撞 role 列缺失，见 EvaluationBoardServiceImpl 的说明）。
+     */
+    private java.util.Map<Integer, String> resolveScorerNames(List<Resume> resumes) {
+        java.util.Set<Integer> scorerIds = resumes.stream()
+                .map(Resume::getScoredBy)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (scorerIds.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        return userMapper.selectUsersByIds(new ArrayList<>(scorerIds)).stream()
+                .filter(u -> u.getName() != null)
+                .collect(Collectors.toMap(
+                        club.boyuan.official.persistence.entity.User::getUserId,
+                        club.boyuan.official.persistence.entity.User::getName,
+                        (a, b) -> a));
+    }
+
+    /** DTO 上补打分署名（分数本身各处已在填） */
+    private void fillScorer(ResumeDTO dto, Resume resume, java.util.Map<Integer, String> scorerNames) {
+        dto.setScoredBy(resume.getScoredBy());
+        dto.setScoredByName(resume.getScoredBy() == null ? null : scorerNames.get(resume.getScoredBy()));
     }
 
 /**

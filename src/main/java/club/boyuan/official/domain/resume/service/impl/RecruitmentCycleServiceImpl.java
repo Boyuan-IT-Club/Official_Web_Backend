@@ -31,6 +31,8 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
     private final RecruitmentCycleMapper recruitmentCycleMapper;
     private final IResumeFieldDefinitionService fieldDefinitionService;
     private final SqlSessionFactory sqlSessionFactory;
+    private final club.boyuan.official.persistence.mapper.ResumeMapper resumeMapper;
+    private final club.boyuan.official.persistence.mapper.ResumeFieldDefinitionMapper resumeFieldDefinitionMapper;
     
     @Override
     public RecruitmentCycle createRecruitmentCycle(RecruitmentCycle recruitmentCycle) {
@@ -86,11 +88,25 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
                 throw new IllegalArgumentException("招募周期不存在");
             }
             
-            // 软删除：resume.cycle_id 是 RESTRICT（有简历的周期硬删直接报外键错），
-            // 而 interview_session 等又是 CASCADE（硬删会静默清掉面试数据）——
-            // 两头都不允许硬删。软删后周期从列表与开放周期里消失，历史数据全部保留。
-            recruitmentCycleMapper.softDeleteByIds(java.util.List.of(cycleId));
-            logger.info("招募周期已软删除，ID: {}", cycleId);
+            // 有投递才软删，没投递直接物理删除：
+            //   - 有简历：resume.cycle_id 是 RESTRICT，硬删本来就过不去；软删保留全部历史。
+            //   - 无简历（建错的测试周期居多）：物理删除，别在库里和「我的申请」的
+            //     关联判断里永远留一具空壳。字段定义与招新提示语是 RESTRICT/无动作，
+            //     先行清掉；场次/时间槽/评分维度等都是 CASCADE，随周期一并消失。
+            Long resumeCount = resumeMapper.selectCount(
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<club.boyuan.official.persistence.entity.Resume>()
+                            .eq(club.boyuan.official.persistence.entity.Resume::getCycleId, cycleId));
+            if (resumeCount != null && resumeCount > 0) {
+                recruitmentCycleMapper.softDeleteByIds(java.util.List.of(cycleId));
+                logger.info("招募周期已软删除（存在 {} 份投递），ID: {}", resumeCount, cycleId);
+            } else {
+                resumeFieldDefinitionMapper.delete(
+                        new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<club.boyuan.official.persistence.entity.ResumeFieldDefinition>()
+                                .eq(club.boyuan.official.persistence.entity.ResumeFieldDefinition::getCycleId, cycleId));
+                recruitmentCycleMapper.deleteTipsByCycleId(cycleId);
+                recruitmentCycleMapper.deleteById(cycleId);
+                logger.info("招募周期无任何投递，已物理删除，ID: {}", cycleId);
+            }
         } catch (Exception e) {
             logger.error("删除招募周期失败，ID: {}", cycleId, e);
             throw e;
@@ -161,9 +177,12 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
                 logger.warn("尝试批量删除招募周期，但ID列表为空");
                 return;
             }
-            
-            int deletedCount = recruitmentCycleMapper.softDeleteByIds(cycleIds);
-            logger.info("批量软删除招募周期完成，置位数量: {}", deletedCount);
+
+            // 逐个走单删逻辑：每个周期按「有投递软删 / 无投递物理删」独立决策
+            for (Integer cycleId : cycleIds) {
+                deleteRecruitmentCycle(cycleId);
+            }
+            logger.info("批量删除招募周期完成，数量: {}", cycleIds.size());
         } catch (Exception e) {
             logger.error("批量删除招募周期失败，IDs: {}", cycleIds, e);
             throw e;

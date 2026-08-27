@@ -43,6 +43,8 @@ function seededDoc() {
       deptName: '技术部',
       sessionId: 10,
       location: '理科楼 B204',
+      resumeScore: 88,
+      resumeScoredByName: '王审核',
       interviewTime: '2026-09-01T10:00:00',
       interviewerUserIds: [ME, PEER],
     }],
@@ -139,6 +141,13 @@ test('面试地点随行播种进 _info，评价表按地点筛选靠它', () =>
   const doc = seededDoc();
   const info = doc.getMap('rows').get('100').get('_info');
   assert.equal(info.get('location'), '理科楼 B204');
+});
+
+test('简历初筛分与打分人随行播种进 _info，评价表展示与署名靠它', () => {
+  const doc = seededDoc();
+  const info = doc.getMap('rows').get('100').get('_info');
+  assert.equal(info.get('resumeScore'), 88);
+  assert.equal(info.get('resumeScoredByName'), '王审核');
 });
 
 test('前端的加权总分算法与 Java 物化侧一致', () => {

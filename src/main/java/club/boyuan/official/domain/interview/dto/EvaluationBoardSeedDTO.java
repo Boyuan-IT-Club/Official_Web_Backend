@@ -68,6 +68,12 @@ public class EvaluationBoardSeedDTO {
         /** 面试地点（取自场次），评价表按地点筛选用 */
         private String location;
 
+        /** 简历初筛分（resume.resume_score），面试官打分时参考 */
+        private Integer resumeScore;
+
+        /** 简历打分人姓名，仅管理端（resume:audit 等）展示，面试官前端不渲染 */
+        private String resumeScoredByName;
+
         private LocalDateTime interviewTime;
 
         /**

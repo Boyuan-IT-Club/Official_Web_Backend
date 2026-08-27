@@ -74,17 +74,20 @@ public class ResumeController {
                         .orderByDesc(Resume::getCycleId));
         java.util.List<java.util.Map<String, Object>> list = new java.util.ArrayList<>();
         for (Resume r : resumes) {
+            club.boyuan.official.persistence.entity.RecruitmentCycle cycle =
+                    r.getCycleId() == null ? null : recruitmentCycleMapper.selectById(r.getCycleId());
+            // 已软删除的周期不再出现在「我的申请」里：周期被删表示这一届作废，
+            // 挂在下面的申请对用户只是困惑（点进去也无事可做）
+            if (cycle != null && Integer.valueOf(1).equals(cycle.getIsDeleted())) {
+                continue;
+            }
             java.util.Map<String, Object> item = new java.util.LinkedHashMap<>();
             item.put("resumeId", r.getResumeId());
             item.put("cycleId", r.getCycleId());
             item.put("status", effectiveStatus(r.getStatus(), r.getCycleId()));
             item.put("createdAt", r.getCreatedAt());
-            if (r.getCycleId() != null) {
-                club.boyuan.official.persistence.entity.RecruitmentCycle cycle =
-                        recruitmentCycleMapper.selectById(r.getCycleId());
-                item.put("cycleName", cycle != null ? cycle.getCycleName() : null);
-                item.put("academicYear", cycle != null ? cycle.getAcademicYear() : null);
-            }
+            item.put("cycleName", cycle != null ? cycle.getCycleName() : null);
+            item.put("academicYear", cycle != null ? cycle.getAcademicYear() : null);
             list.add(item);
         }
         return ResponseEntity.ok(ResponseMessage.success(list));
@@ -313,7 +316,7 @@ public class ResumeController {
             @RequestBody Map<String, Integer> body) {
         Integer score = body == null ? null : body.get("score");
         logger.info("更新简历评分，简历ID: {}，分数: {}", resumeId, score);
-        Resume updated = resumeService.updateResumeScore(resumeId, score);
+        Resume updated = resumeService.updateResumeScore(resumeId, score, currentUser().getUserId());
         ResumeDTO dto = new ResumeDTO();
         dto.setResumeId(updated.getResumeId());
         dto.setUserId(updated.getUserId());
