@@ -60,7 +60,7 @@ DDD 顶层语义分区，包根 `club.boyuan.official`：
 - `ai-review.yml`：PR 时调 DeepSeek 做代码审查回帖，失败不阻断
 - Dockerfile 是 Spring Boot layertools **分层镜像**（依赖层与应用层分离），入口是 `org.springframework.boot.loader.launch.JarLauncher`——改 Dockerfile 时保持分层结构，否则部署拉取会退化为全量
 
-生产是双机集群：Node A（8.159.153.140，nginx 入口 + 主数据层 + outbox/定时任务 leader）、Node B（8.159.150.156，应用 + 数据热备，`OUTBOX_ENABLED=false`）。部署目录 `~/boyuan-official/`，两台从 Docker Hub 拉镜像。运维 Runbook 在团队飞书 wiki（源文件若存在于本地 `docs/feishu-wiki/`，该目录已 gitignore 不入库）。
+生产是双机集群（2026-08 已从阿里云迁至腾讯云）：Node A（公网 124.221.222.206 / 内网 10.0.0.12，nginx 入口 + 主数据层 + outbox/定时任务 leader）、Node B（公网 124.221.230.58 / 内网 10.0.0.13，应用 + 数据热备，`OUTBOX_ENABLED=false`）。部署目录 `~/boyuan-official/`，两台从 Docker Hub 拉镜像。服务器登录凭据只放 gitignore 的配置清单，严禁写进任何入库文件。运维 Runbook 在团队飞书 wiki（源文件若存在于本地 `docs/feishu-wiki/`，该目录已 gitignore 不入库）。
 
 ## 安全红线
 
