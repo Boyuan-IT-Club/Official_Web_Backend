@@ -456,8 +456,8 @@ public class ResumeServiceImpl implements IResumeService {
      *
      * 管理员想停止收简历时，改结束日期到昨天或停用周期即可 —— 这里保证
      * 后端真的会拒收，而不是只靠前端把入口藏起来。
-     * 只拦「新建」与「提交」两个动作；已有草稿的编辑不拦（内容留着无害，
-     * 反正提交不进来），已提交简历的展示/审核完全不受影响。
+     * 拦「新建」「编辑」「提交」三个学生侧动作（编辑原先不拦，导致周期结束后
+     * 学生仍能改草稿、造成"填完了却投不进去"的困惑）；已提交简历的展示/审核不受影响。
      */
     private void requireCycleOpen(Integer cycleId) {
         if (cycleId == null) {
@@ -473,6 +473,11 @@ public class ResumeServiceImpl implements IResumeService {
         if (!open) {
             throw new BusinessException(BusinessExceptionEnum.RESUME_CYCLE_CLOSED);
         }
+    }
+
+    @Override
+    public void assertCycleOpen(Integer cycleId) {
+        requireCycleOpen(cycleId);
     }
 
 /**
