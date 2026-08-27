@@ -10,6 +10,14 @@ public class ResumeDTO {
     private Integer status;
     /** 简历评分（0~100，管理员在简历审核里打） */
     private Integer resumeScore;
+    /** 候选人注册姓名（user.name），简历字段缺姓名时管理端用它兜底展示 */
+    private String userName;
+    /** 候选人注册邮箱（user.email） */
+    private String userEmail;
+    /** 打分人 userId（署名），历史分数为 null */
+    private Integer scoredBy;
+    /** 打分人姓名，管理端展示用 */
+    private String scoredByName;
     private LocalDateTime submittedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -52,6 +60,38 @@ public class ResumeDTO {
     
     public void setStatus(Integer status) {
         this.status = status;
+    }
+
+    public String getUserName() {
+        return userName;
+    }
+
+    public void setUserName(String userName) {
+        this.userName = userName;
+    }
+
+    public String getUserEmail() {
+        return userEmail;
+    }
+
+    public void setUserEmail(String userEmail) {
+        this.userEmail = userEmail;
+    }
+
+    public Integer getScoredBy() {
+        return scoredBy;
+    }
+
+    public void setScoredBy(Integer scoredBy) {
+        this.scoredBy = scoredBy;
+    }
+
+    public String getScoredByName() {
+        return scoredByName;
+    }
+
+    public void setScoredByName(String scoredByName) {
+        this.scoredByName = scoredByName;
     }
 
     public Integer getResumeScore() {

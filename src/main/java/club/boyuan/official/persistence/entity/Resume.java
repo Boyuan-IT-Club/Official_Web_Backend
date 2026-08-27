@@ -33,6 +33,14 @@ public class Resume {
     @TableField("resume_score")
     private Integer resumeScore;
 
+    /** 打分人 userId（署名，V30 起记录），历史分数为 null */
+    @TableField("scored_by")
+    private Integer scoredBy;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField("scored_at")
+    private LocalDateTime scoredAt;
+
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @TableField("submitted_at")
     private LocalDateTime submittedAt;
@@ -94,6 +102,22 @@ public class Resume {
 
     public void setResumeScore(Integer resumeScore) {
         this.resumeScore = resumeScore;
+    }
+
+    public Integer getScoredBy() {
+        return scoredBy;
+    }
+
+    public void setScoredBy(Integer scoredBy) {
+        this.scoredBy = scoredBy;
+    }
+
+    public LocalDateTime getScoredAt() {
+        return scoredAt;
+    }
+
+    public void setScoredAt(LocalDateTime scoredAt) {
+        this.scoredAt = scoredAt;
     }
 
     public LocalDateTime getSubmittedAt() {

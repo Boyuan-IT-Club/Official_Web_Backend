@@ -1,7 +1,9 @@
 package club.boyuan.official.persistence.mapper;
 
 import club.boyuan.official.persistence.entity.RecruitmentCycle;
-import com.baomidou.mybatisplus.core.mapper.BaseMapper;import org.apache.ibatis.annotations.Param;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import org.apache.ibatis.annotations.Delete;
+import org.apache.ibatis.annotations.Param;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -17,6 +19,14 @@ public interface RecruitmentCycleMapper extends BaseMapper<RecruitmentCycle> {
      * @return 招募周期实体
      */
     RecruitmentCycle findById(Integer cycleId);
+
+    /**
+     * 清空周期的招新提示语。仅供「无投递周期的物理删除」前置清理：
+     * recruitment_tips 对 cycle 的外键没有 ON DELETE 动作（RESTRICT 语义），
+     * 该表在 Java 侧没有独立 Mapper，就近挂在这里。
+     */
+    @Delete("DELETE FROM recruitment_tips WHERE cycle_id = #{cycleId}")
+    int deleteTipsByCycleId(@Param("cycleId") Integer cycleId);
     
     /**
      * 查询所有招募周期
