@@ -10623,6 +10623,10 @@ components:
           type: string
         sessionId:
           type: integer
+        location:
+          type: string
+          nullable: true
+          description: 面试地点（取自场次），评价表按地点筛选用
         interviewTime:
           type: string
         interviewerUserIds:

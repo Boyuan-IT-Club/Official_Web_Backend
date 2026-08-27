@@ -223,6 +223,7 @@ public class EvaluationBoardServiceImpl implements IEvaluationBoardService {
                 .collect(Collectors.toMap(Department::getDeptId, Function.identity(), (a, b) -> a));
 
         Map<Integer, List<Integer>> interviewersBySession = loadInterviewersBySession(roster);
+        Map<Integer, String> locationBySession = loadLocationsBySession(roster);
 
         List<EvaluationBoardSeedDTO.RowSeed> rows = new ArrayList<>(roster.size());
         for (InterviewSchedule schedule : roster) {
@@ -241,6 +242,9 @@ public class EvaluationBoardServiceImpl implements IEvaluationBoardService {
             row.setDeptId(schedule.getDeptId());
             row.setDeptName(department == null ? null : department.getDeptName());
             row.setSessionId(schedule.getSessionId());
+            row.setLocation(schedule.getSessionId() == null
+                    ? null
+                    : locationBySession.get(schedule.getSessionId()));
             row.setInterviewTime(schedule.getInterviewTime());
             row.setInterviewerUserIds(schedule.getSessionId() == null
                     ? Collections.emptyList()
@@ -261,6 +265,24 @@ public class EvaluationBoardServiceImpl implements IEvaluationBoardService {
         return resumeMapper.selectBatchIds(resumeIds).stream()
                 .filter(r -> r.getUserId() != null)
                 .collect(Collectors.toMap(Resume::getResumeId, Resume::getUserId, (a, b) -> a));
+    }
+
+    /** 场次ID → 面试地点。行里带上地点，评价表才能按地点筛选 */
+    private Map<Integer, String> loadLocationsBySession(List<InterviewSchedule> roster) {
+        Set<Integer> sessionIds = roster.stream()
+                .map(InterviewSchedule::getSessionId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (sessionIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Integer, String> bySession = new HashMap<>();
+        for (InterviewSession session : interviewSessionMapper.selectBatchIds(sessionIds)) {
+            if (session.getLocation() != null) {
+                bySession.put(session.getSessionId(), session.getLocation());
+            }
+        }
+        return bySession;
     }
 
     private Map<Integer, List<Integer>> loadInterviewersBySession(List<InterviewSchedule> roster) {
