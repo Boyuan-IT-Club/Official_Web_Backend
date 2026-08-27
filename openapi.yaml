@@ -7301,7 +7301,7 @@ paths:
     put:
       summary: 管理员处理改期申请
       deprecated: false
-      description: status=1 同意（随后在「分配与调剂」人工重排）；status=2 拒绝。可附 adminNote 备注。需 resume:audit 权限。
+      description: status=1 同意——自动取消原场次安排（schedule.status 置 2），候选人进入「分配与调剂」待调剂池，由管理员人工重排到新场次；status=2 拒绝（原安排不动）。可附 adminNote 备注。需 resume:audit 权限。
       tags:
       - 面试分配模块
       parameters:
