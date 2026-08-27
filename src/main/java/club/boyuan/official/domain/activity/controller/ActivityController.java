@@ -1,10 +1,12 @@
 package club.boyuan.official.domain.activity.controller;
 
 import club.boyuan.official.common.dto.ResponseMessage;
+import club.boyuan.official.common.utils.FileUploadUtil;
 import club.boyuan.official.persistence.entity.Activity;
 import club.boyuan.official.common.exception.BusinessException;
 import club.boyuan.official.common.exception.BusinessExceptionEnum;
 import club.boyuan.official.domain.activity.service.IActivityService;
+import club.boyuan.official.infra.storage.CosStorageService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,8 +14,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 活动管理控制器
@@ -26,6 +31,34 @@ public class ActivityController {
 
     @Autowired
     private IActivityService activityService;
+
+    @Autowired
+    private CosStorageService cosStorageService;
+
+    /**
+     * 上传活动图片（封面或正文插图），返回可直接引用的 URL。
+     * 与头像上传同一套存储：COS 未配置时降级本地磁盘，保证本地开发与 CI 可用。
+     * 图片与活动记录不强关联——正文里的图以 URL 内嵌，删活动不追删对象，避免误伤被多处引用的图。
+     */
+    @PostMapping("/image")
+    @PreAuthorize("hasAuthority('activity:manage')")
+    public ResponseEntity<ResponseMessage<?>> uploadImage(@RequestParam("file") MultipartFile file) {
+        try {
+            if (file == null || file.isEmpty()) {
+                return ResponseEntity.badRequest().body(ResponseMessage.error(400, "上传文件为空"));
+            }
+            String stored = cosStorageService.isEnabled()
+                    ? cosStorageService.upload(file, "activities/")
+                    : FileUploadUtil.uploadFile(file, "activities/", "image/");
+            String url = cosStorageService.resolveAvatarUrl(stored);
+            log.info("活动图片上传成功，存储值: {}，访问地址: {}", stored, url);
+            return ResponseEntity.ok(ResponseMessage.success(Map.of("url", url, "objectKey", stored)));
+        } catch (IOException e) {
+            log.error("活动图片上传失败", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ResponseMessage.error(500, "图片上传失败: " + e.getMessage()));
+        }
+    }
 
     /**
      * 获取所有活动

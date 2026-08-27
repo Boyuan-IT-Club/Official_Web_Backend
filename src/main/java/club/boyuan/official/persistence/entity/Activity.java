@@ -25,6 +25,13 @@ public class Activity {
     @TableField("description")
     private String description;
 
+    /**
+     * 图文详情：管理端富文本编辑器产出的 HTML，图片以 URL 内嵌。
+     * 服务端写入前按白名单消毒（见 ActivityServiceImpl），库里只有受控标签，用户端可直接渲染。
+     */
+    @TableField("detail_content")
+    private String detailContent;
+
     @TableField("category")
     private String category;
 
@@ -110,6 +117,14 @@ public class Activity {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public String getDetailContent() {
+        return detailContent;
+    }
+
+    public void setDetailContent(String detailContent) {
+        this.detailContent = detailContent;
     }
 
     public String getCategory() {
