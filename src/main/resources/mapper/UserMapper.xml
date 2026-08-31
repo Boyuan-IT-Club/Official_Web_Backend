@@ -181,15 +181,27 @@
         AND is_deleted = 0
     </update>
     
+    <!-- 两列一起写。
+         user 表有 dept(varchar) 和 dept_id(int) 两列：界面读的是 dept，
+         而这条语句原来只写 dept_id —— 于是「分配部门」在列表上看不出任何变化，
+         两列还越走越偏（线上实测 8 人里 6 人不一致）。
+
+         dept 为 NULL 表示取消分配：此时子查询取不到行，dept_id 自然落成 NULL；
+         EXISTS 那道存在性校验必须跳过 —— dept_name = NULL 恒不成立，
+         留着会让清空操作静默影响 0 行。 -->
     <update id="batchUpdateDeptByIds">
         UPDATE user
-        SET dept_id = (SELECT dept_id FROM department WHERE dept_name = #{dept} LIMIT 1), update_time = NOW()
+        SET dept = #{dept},
+            dept_id = (SELECT dept_id FROM department WHERE dept_name = #{dept} LIMIT 1),
+            update_time = NOW()
         WHERE user_id IN
         <foreach collection="userIds" item="userId" open="(" separator="," close=")">
             #{userId}
         </foreach>
         AND is_deleted = 0
-        AND EXISTS (SELECT 1 FROM department WHERE dept_name = #{dept})
+        <if test="dept != null">
+            AND EXISTS (SELECT 1 FROM department WHERE dept_name = #{dept})
+        </if>
     </update>
     
     <update id="batchUpdateMembershipByIds">
