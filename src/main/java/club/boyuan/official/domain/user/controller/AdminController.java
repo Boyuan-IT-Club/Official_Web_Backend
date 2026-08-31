@@ -259,23 +259,30 @@ public class AdminController {
         @SuppressWarnings("unchecked")
         List<Integer> userIds = (List<Integer>) deptRequest.get("userIds");
 
-        if (dept == null || dept.trim().isEmpty()) {
-            logger.warn("部门信息不能为空");
+        // 用「键在不在」区分两种情况，而不是只看值空不空：
+        //   请求体里没有 dept 键        -> 调用方漏传，拒绝
+        //   dept 键存在但为 null / 空串 -> 显式取消分配，把部门清空
+        // 此前一律按「不能为空」拒绝，导致部门分配出去就撤不回来。
+        if (!deptRequest.containsKey("dept")) {
+            logger.warn("缺少 dept 字段");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ResponseMessage.error(400, "部门信息不能为空"));
+                    .body(ResponseMessage.error(400, "缺少 dept 字段；取消分配请显式传 dept: null"));
         }
+        boolean clearing = dept == null || dept.trim().isEmpty();
         if (userIds == null || userIds.isEmpty()) {
             logger.warn("用户ID列表不能为空");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(ResponseMessage.error(400, "用户ID列表不能为空"));
         }
 
-        int updatedCount = userService.batchUpdateUserDept(userIds, dept);
-        logger.info("管理员成功更新{}个用户的部门为{}", updatedCount, dept);
+        int updatedCount = userService.batchUpdateUserDept(userIds, clearing ? null : dept);
+        logger.info("管理员成功{}{}个用户的部门{}", clearing ? "取消分配" : "更新",
+                updatedCount, clearing ? "" : "为" + dept);
 
         Map<String, Object> result = new HashMap<>();
         result.put("updatedCount", updatedCount);
-        result.put("dept", dept);
+        result.put("dept", clearing ? null : dept);
+        result.put("cleared", clearing);
         return ResponseEntity.ok(ResponseMessage.success(result));
     }
 

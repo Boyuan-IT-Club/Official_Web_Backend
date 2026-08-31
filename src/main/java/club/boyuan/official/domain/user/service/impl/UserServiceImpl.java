@@ -375,9 +375,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
         }
         
-        if (dept == null) {
-            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "部门信息不能为空");
-        }
+        // dept 为 null 表示「取消分配」，是合法入参 —— 是否允许由调用方
+        // (controller) 按请求体里有没有 dept 键来判断，这里不再拦
+
         
         // 检查用户是否存在且不是管理员
         List<User> users = userMapper.selectByIds(userIds);
