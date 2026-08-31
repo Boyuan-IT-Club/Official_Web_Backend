@@ -35,6 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import club.boyuan.official.common.utils.PermissionUtils;
@@ -393,6 +394,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
         
         int updatedCount = userMapper.batchUpdateDeptByIds(userIds, dept);
         logger.info("批量更新用户部门成功，更新数量: {}，部门: {}", updatedCount, dept);
+
+        // 不变式：社员 ⟺ 分配了部门（V32 起统一口径）。
+        // 分配部门即录取为社员，取消分配即回到非社员——两个开关合成一个，
+        // 不再出现「有部门却非社员」「社员却无部门」的中间态。
+        boolean member = dept != null;
+        userMapper.batchUpdateMembershipByIds(userIds, member);
+        syncMemberRole(userIds, member);
         return updatedCount;
     }
 
@@ -419,7 +427,24 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
             }
         }
         
+        // 不变式：社员 ⟺ 分配了部门。录取必须先有部门（分配部门会自动录取），
+        // 否则会出现「社员却不属于任何部门」的中间态
+        if (isMember) {
+            List<String> missingDept = users.stream()
+                    .filter(u -> u.getDept() == null || u.getDept().trim().isEmpty())
+                    .map(u -> u.getName() != null ? u.getName() : u.getUsername())
+                    .collect(Collectors.toList());
+            if (!missingDept.isEmpty()) {
+                throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD,
+                        "以下用户尚未分配部门，无法录取为社员（在「分配部门」里选择部门即自动录取）：" + String.join("、", missingDept));
+            }
+        }
+
         int updatedCount = userMapper.batchUpdateMembershipByIds(userIds, isMember);
+        // 取消录取同时收回部门，维持「社员 ⟺ 有部门」
+        if (!isMember) {
+            userMapper.batchUpdateDeptByIds(userIds, null);
+        }
         logger.info("批量更新用户会员状态成功，更新数量: {}，会员状态: {}", updatedCount, isMember);
         // 同步社员角色：让「社员身份」与「社员角色」保持一致（ADR-0001：RBAC 角色是唯一来源）
         syncMemberRole(userIds, isMember);
