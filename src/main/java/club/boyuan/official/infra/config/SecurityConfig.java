@@ -70,8 +70,9 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/activity/**").permitAll()
                         // 允许访问上传的文件
                         .requestMatchers("/uploads/**").permitAll()
-                        // 头像通过后端 COS 中转读取，公开可访问
-                        .requestMatchers("/api/files/avatars/**").permitAll()
+                        // 官网公开图片通过后端 COS 中转读取；只开放明确的公开目录，避免放开整个存储桶
+                        .requestMatchers(org.springframework.http.HttpMethod.GET,
+                                "/api/files/avatars/**", "/api/files/activities/**").permitAll()
                         // 允许静态资源访问
                         .requestMatchers(PathRequest.toStaticResources().atCommonLocations()).permitAll()
                         // 其他所有请求需要认证

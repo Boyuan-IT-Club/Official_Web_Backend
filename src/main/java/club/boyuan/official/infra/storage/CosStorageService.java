@@ -100,26 +100,34 @@ public class CosStorageService {
     }
 
     /**
-     * 把数据库里存储的头像值转换为对外可访问的 URL。
+     * 把数据库里的存储值转换为浏览器可访问的 URL。
      *
-     * <p>兼容三种存量格式：{@code /uploads/} 开头的本地老路径原样返回；
-     * 已是完整 http(s) 地址的原样返回；其余视为 objectKey，用 public-base-url 拼接。
+     * <p>兼容历史数据中已经保存的绝对 URL、站内根路径（例如 {@code /uploads/}
+     * 与 {@code /api/files/}）以及 COS objectKey。站内路径必须原样返回，否则再次解析时会
+     * 被错误拼成 {@code /api/files//api/files/...}。</p>
      */
-    public String resolveAvatarUrl(String avatar) {
-        if (!StringUtils.hasText(avatar)) {
-            return avatar;
+    public String resolvePublicUrl(String storedValue) {
+        if (!StringUtils.hasText(storedValue)) {
+            return storedValue;
         }
-        if (avatar.startsWith("/uploads/")
-                || avatar.startsWith("http://")
-                || avatar.startsWith("https://")) {
-            return avatar;
+        if (storedValue.startsWith("/")
+                || storedValue.startsWith("http://")
+                || storedValue.startsWith("https://")) {
+            return storedValue;
         }
 
         String baseUrl = cosProperties.getPublicBaseUrl();
         if (!StringUtils.hasText(baseUrl)) {
-            return "/api/files/" + avatar;
+            return "/api/files/" + storedValue;
         }
-        return baseUrl.replaceAll("/+$", "") + "/" + avatar;
+        return baseUrl.replaceAll("/+$", "") + "/" + storedValue;
+    }
+
+    /**
+     * 头像模块的兼容入口；新代码统一使用 {@link #resolvePublicUrl(String)}。
+     */
+    public String resolveAvatarUrl(String avatar) {
+        return resolvePublicUrl(avatar);
     }
 
     private String buildObjectKey(String prefix, String originalFilename) {

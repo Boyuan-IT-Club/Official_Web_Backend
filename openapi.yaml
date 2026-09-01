@@ -1023,7 +1023,7 @@ paths:
     get:
       summary: 读取 COS 文件
       deprecated: false
-      description: 后端中转读取 COS 对象（浏览器不直连私有桶）。头像访问对应 prefix=avatars。
+      description: 后端中转读取 COS 对象（浏览器不直连私有桶）。头像与活动图片分别对应 prefix=avatars、activities，二者均可匿名访问；其他目录需要登录。
       tags:
       - 个人信息页
       parameters:
@@ -9386,10 +9386,10 @@ paths:
                     properties:
                       url:
                         type: string
-                        description: 可直接引用的访问地址
+                        description: 可直接引用的访问地址。COS 未配置公开域名时为站内 /api/files/activities/... 地址
                       objectKey:
                         type: string
-                        description: 存储对象键（COS）或本地相对路径
+                        description: 稳定存储值（COS 对象键或本地相对路径），建议持久化此字段；展示时也兼容直接保存 url
           headers: {}
   /api/activity/{id}:
     get:
@@ -12449,7 +12449,7 @@ components:
         coverImage:
           type: string
           nullable: true
-          description: 封面图 URL
+          description: 可直接访问的封面图 URL；数据库中的 COS 对象键会在响应时自动解析
         category:
           type: string
           example: 迎新

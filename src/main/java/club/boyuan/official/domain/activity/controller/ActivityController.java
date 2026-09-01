@@ -8,8 +8,8 @@ import club.boyuan.official.common.exception.BusinessExceptionEnum;
 import club.boyuan.official.domain.activity.service.IActivityService;
 import club.boyuan.official.infra.storage.CosStorageService;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -27,13 +27,12 @@ import java.util.Map;
 @Slf4j
 @RestController
 @RequestMapping("/api/activity")
+@RequiredArgsConstructor
 public class ActivityController {
 
-    @Autowired
-    private IActivityService activityService;
+    private final IActivityService activityService;
 
-    @Autowired
-    private CosStorageService cosStorageService;
+    private final CosStorageService cosStorageService;
 
     /**
      * 上传活动图片（封面或正文插图），返回可直接引用的 URL。
@@ -50,7 +49,7 @@ public class ActivityController {
             String stored = cosStorageService.isEnabled()
                     ? cosStorageService.upload(file, "activities/")
                     : FileUploadUtil.uploadFile(file, "activities/", "image/");
-            String url = cosStorageService.resolveAvatarUrl(stored);
+            String url = cosStorageService.resolvePublicUrl(stored);
             log.info("活动图片上传成功，存储值: {}，访问地址: {}", stored, url);
             return ResponseEntity.ok(ResponseMessage.success(Map.of("url", url, "objectKey", stored)));
         } catch (IOException e) {
@@ -67,7 +66,7 @@ public class ActivityController {
     public ResponseEntity<ResponseMessage<List<Activity>>> getAllActivities(HttpServletRequest request) {
         try {
             log.info("获取所有活动，用户IP: {}", request.getRemoteAddr());
-            List<Activity> activities = activityService.getAllActivities();
+            List<Activity> activities = resolveImageUrls(activityService.getAllActivities());
             log.info("获取所有活动成功，活动数量: {}", activities.size());
             return ResponseEntity.ok(ResponseMessage.success(activities));
         } catch (BusinessException e) {
@@ -84,7 +83,7 @@ public class ActivityController {
     public ResponseEntity<ResponseMessage<Activity>> getActivityById(@PathVariable Integer id, HttpServletRequest request) {
         try {
             log.info("根据ID获取活动，活动ID: {}，用户IP: {}", id, request.getRemoteAddr());
-            Activity activity = activityService.getActivityById(id);
+            Activity activity = resolveImageUrl(activityService.getActivityById(id));
             log.info("获取活动成功，活动标题: {}", activity.getTitle());
             return ResponseEntity.ok(ResponseMessage.success(activity));
         } catch (BusinessException e) {
@@ -102,7 +101,7 @@ public class ActivityController {
     public ResponseEntity<ResponseMessage<Activity>> createActivity(@RequestBody Activity activity, HttpServletRequest request) {
         try {
             log.info("创建活动，活动标题: {}，用户IP: {}", activity.getTitle(), request.getRemoteAddr());
-            Activity createdActivity = activityService.createActivity(activity);
+            Activity createdActivity = resolveImageUrl(activityService.createActivity(activity));
             log.info("成功创建活动，活动ID: {}", createdActivity.getActivityId());
             return ResponseEntity.ok(ResponseMessage.success(createdActivity));
         } catch (BusinessException e) {
@@ -124,7 +123,7 @@ public class ActivityController {
         try {
             log.info("更新活动，活动ID: {}，用户IP: {}", id, request.getRemoteAddr());
             activity.setActivityId(id); // 确保ID一致
-            Activity updatedActivity = activityService.updateActivity(activity);
+            Activity updatedActivity = resolveImageUrl(activityService.updateActivity(activity));
             log.info("成功更新活动，活动标题: {}", updatedActivity.getTitle());
             return ResponseEntity.ok(ResponseMessage.success(updatedActivity));
         } catch (BusinessException e) {
@@ -170,7 +169,7 @@ public class ActivityController {
             HttpServletRequest request) {
         try {
             log.info("根据分类获取活动，分类: {}，用户IP: {}", category, request.getRemoteAddr());
-            List<Activity> activities = activityService.getActivitiesByCategory(category);
+            List<Activity> activities = resolveImageUrls(activityService.getActivitiesByCategory(category));
             log.info("根据分类获取活动成功，分类: {}，活动数量: {}", category, activities.size());
             return ResponseEntity.ok(ResponseMessage.success(activities));
         } catch (BusinessException e) {
@@ -187,7 +186,7 @@ public class ActivityController {
     public ResponseEntity<ResponseMessage<List<Activity>>> getActiveActivities(HttpServletRequest request) {
         try {
             log.info("获取进行中的活动，用户IP: {}", request.getRemoteAddr());
-            List<Activity> activities = activityService.getActiveActivities();
+            List<Activity> activities = resolveImageUrls(activityService.getActiveActivities());
             log.info("获取进行中的活动成功，活动数量: {}", activities.size());
             return ResponseEntity.ok(ResponseMessage.success(activities));
         } catch (BusinessException e) {
@@ -195,5 +194,21 @@ public class ActivityController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ResponseMessage.error(e.getCode(), e.getMessage()));
         }
+    }
+
+    /**
+     * 数据库允许保存稳定的 COS objectKey，也兼容已经保存的完整 URL 或本地路径；
+     * 对外响应统一转换成浏览器可直接访问的地址。
+     */
+    private Activity resolveImageUrl(Activity activity) {
+        if (activity != null) {
+            activity.setCoverImage(cosStorageService.resolvePublicUrl(activity.getCoverImage()));
+        }
+        return activity;
+    }
+
+    private List<Activity> resolveImageUrls(List<Activity> activities) {
+        activities.forEach(this::resolveImageUrl);
+        return activities;
     }
 }
