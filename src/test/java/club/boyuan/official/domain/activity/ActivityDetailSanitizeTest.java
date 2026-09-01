@@ -66,6 +66,23 @@ class ActivityDetailSanitizeTest {
     }
 
     @Test
+    @DisplayName("后端中转的站内活动图片地址会被保留")
+    void keepsBackendProxyImageUrl() {
+        Activity saved = insertedActivity(
+                "<p>现场照片</p>"
+                        + "<img src=\"/api/files/activities/a.png\">"
+                        + "<img src=\"/uploads/activities/b.webp\">"
+                        + "<img src=\"/api/files/activities/../private/x.png\">"
+                        + "<img src=\"//evil.example/x.png\">");
+
+        assertThat(saved.getDetailContent())
+                .contains("src=\"/api/files/activities/a.png\"")
+                .contains("src=\"/uploads/activities/b.webp\"")
+                .doesNotContain("../private")
+                .doesNotContain("evil.example");
+    }
+
+    @Test
     @DisplayName("详情为 null 时原样保留，不会被消毒成空串")
     void keepsNullDetail() {
         Activity saved = insertedActivity(null);

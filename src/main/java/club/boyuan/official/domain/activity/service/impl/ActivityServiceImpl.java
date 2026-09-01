@@ -8,6 +8,8 @@ import club.boyuan.official.domain.activity.service.IActivityService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.AllArgsConstructor;
 import org.jsoup.Jsoup;
+import org.jsoup.nodes.Attribute;
+import org.jsoup.nodes.Element;
 import org.jsoup.safety.Safelist;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * Activity的业务层实现
@@ -29,12 +32,34 @@ public class ActivityServiceImpl implements IActivityService {
 
     /**
      * 图文详情的 HTML 白名单：relaxed 覆盖标题/加粗/列表/图片/链接等常规排版标签
-     * （img 的 src 仅允许 http/https，天然挡掉 data: 内嵌与脚本协议），
+     * （img 的 src 允许 http/https 与站内相对地址，挡掉 data: 内嵌与脚本协议），
      * 另放行 class —— Quill 的对齐/缩进（ql-align-* 等）全靠 class 表达。
      * 编辑器产出不可信：绕过前端直接调接口也只能写进这份白名单内的内容。
      */
-    private static final Safelist DETAIL_SAFELIST = Safelist.relaxed()
-            .addAttributes(":all", "class");
+    private static final Safelist DETAIL_SAFELIST = new ActivityDetailSafelist();
+
+    private static final Pattern SITE_ACTIVITY_IMAGE_PATH = Pattern.compile(
+            "^/(?:api/files|uploads)/activities/[A-Za-z0-9][A-Za-z0-9._-]*$");
+
+    /**
+     * Jsoup 的 relaxed 规则默认会剥掉相对图片地址。只额外放行本系统两个活动图片目录，
+     * 不开放任意站内路径、协议相对地址或路径穿越写法。
+     */
+    private static final class ActivityDetailSafelist extends Safelist {
+        private ActivityDetailSafelist() {
+            super(Safelist.relaxed().addAttributes(":all", "class"));
+        }
+
+        @Override
+        public boolean isSafeAttribute(String tagName, Element element, Attribute attribute) {
+            if ("img".equals(tagName)
+                    && "src".equals(attribute.getKey())
+                    && SITE_ACTIVITY_IMAGE_PATH.matcher(attribute.getValue()).matches()) {
+                return true;
+            }
+            return super.isSafeAttribute(tagName, element, attribute);
+        }
+    }
 
     private final ActivityMapper activityMapper;
 
