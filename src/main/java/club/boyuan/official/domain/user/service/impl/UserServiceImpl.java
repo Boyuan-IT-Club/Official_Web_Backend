@@ -5,15 +5,22 @@ import club.boyuan.official.common.dto.PageResultDTO;
 import club.boyuan.official.domain.user.dto.UserDTO;
 import club.boyuan.official.persistence.entity.Resume;
 import club.boyuan.official.persistence.entity.User;
+import club.boyuan.official.persistence.entity.EvaluationSubmission;
+import club.boyuan.official.persistence.mapper.EvaluationSubmissionMapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import club.boyuan.official.common.exception.BusinessException;
 import club.boyuan.official.common.exception.BusinessExceptionEnum;
 import club.boyuan.official.persistence.entity.UserRole;
+import club.boyuan.official.persistence.entity.Role;
 import club.boyuan.official.persistence.mapper.AwardExperienceMapper;
 import club.boyuan.official.persistence.mapper.ResumeFieldValueMapper;
 import club.boyuan.official.persistence.mapper.ResumeMapper;
 import club.boyuan.official.persistence.mapper.UserMapper;
 import club.boyuan.official.persistence.mapper.UserRoleMapper;
+import club.boyuan.official.persistence.mapper.RoleMapper;
 import club.boyuan.official.domain.user.service.IUserService;
+import club.boyuan.official.common.utils.GitHubAccountUtil;
 import club.boyuan.official.common.utils.JwtTokenUtil;
 import club.boyuan.official.common.utils.PasswordValidator;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -27,6 +34,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import club.boyuan.official.common.utils.PermissionUtils;
 
@@ -41,6 +51,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
     private final ResumeMapper resumeMapper;
     private final ResumeFieldValueMapper resumeFieldValueMapper;
     private final UserRoleMapper userRoleMapper;
+    private final RoleMapper roleMapper;
+    private final EvaluationSubmissionMapper evaluationSubmissionMapper;
     private final BCryptPasswordEncoder passwordEncoder;
     private final JwtTokenUtil jwtTokenUtil;
     private final UserConverter userConverter;
@@ -66,6 +78,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
         if (userMapper.selectByPhone(userDTO.getPhone()) != null) {
             logger.warn("添加用户失败，手机号已存在: {}", userDTO.getPhone());
             throw new BusinessException(BusinessExceptionEnum.PHONE_ALREADY_EXISTS);
+        }
+
+        // GitHub 账号归一化(可选):统一为登录名,并校验未被其他用户绑定
+        if (userDTO.getGithub() != null && !userDTO.getGithub().isBlank()) {
+            String normalizedGithub = GitHubAccountUtil.normalize(userDTO.getGithub());
+            GitHubAccountUtil.assertNotBound(userMapper, normalizedGithub, null);
+            userDTO.setGithub(normalizedGithub);
         }
 
         // 验证密码复杂度
@@ -133,8 +152,28 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
             logger.debug("专业更新为: {}", userDTO.getMajor());
         }
         if (userDTO.getGithub() != null) {
-            user.setGithub(userDTO.getGithub());
-            logger.debug("GitHub更新为: {}", userDTO.getGithub());
+            String normalizedGithub = GitHubAccountUtil.normalize(userDTO.getGithub());
+            if (normalizedGithub == null) {
+                // updateById 默认忽略 null 字段(setGithub(null) 不会进 UPDATE SQL,线上事故:解绑 200 但值不变);
+                // 显式 UPDATE ... SET github = NULL 才能真正解绑
+                userMapper.update(null, new UpdateWrapper<User>()
+                        .eq("user_id", user.getUserId())
+                        .set("github", null));
+                user.setGithub(null);
+                logger.debug("GitHub账号已解绑，用户ID: {}", userDTO.getUserId());
+            } else {
+                GitHubAccountUtil.assertNotBound(userMapper, normalizedGithub, userDTO.getUserId());
+                userDTO.setGithub(normalizedGithub);
+                user.setGithub(normalizedGithub);
+                logger.debug("GitHub账号更新为: {}", normalizedGithub);
+                // 回填认领:该 github 的历史未认领提交归属到用户
+                EvaluationSubmission patch = new EvaluationSubmission();
+                patch.setUserId(userDTO.getUserId());
+                evaluationSubmissionMapper.update(patch, new LambdaUpdateWrapper<EvaluationSubmission>()
+                        .eq(EvaluationSubmission::getGithubUsername, normalizedGithub)
+                        .isNull(EvaluationSubmission::getUserId));
+                logger.info("绑定 GitHub {} 后回填认领未认领提交,用户ID: {}", normalizedGithub, userDTO.getUserId());
+            }
         }
         if (userDTO.getAvatar() != null) {
             user.setAvatar(userDTO.getAvatar());
@@ -172,11 +211,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
     }
 
     @Override
-    public PageResultDTO<User> getUsersByConditions(String role, String dept, String status, Pageable pageable, User currentUser) {
+    public PageResultDTO<User> getUsersByConditions(String roleGroup, Integer roleId, String dept, String status, String keyword, Pageable pageable, User currentUser) {
         // 权限检查由调用方的 @PreAuthorize 注解统一管理
         
         // 查询总记录数
-        long totalElements = userMapper.countByRoleAndDeptAndStatus(role, dept, status);
+        long totalElements = userMapper.countByRoleAndDeptAndStatus(roleGroup, roleId, dept, status, keyword);
         
         // 计算总页数
         int pageSize = pageable.getPageSize();
@@ -189,10 +228,16 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
             return new PageResultDTO<>(List.of(), totalElements, totalPages, pageNumber, pageSize, pageNumber == 0, pageNumber >= totalPages - 1);
         }
         
-        List<User> userList = userMapper.findByRoleAndDeptAndStatus(role, dept, status, pageable);
+        List<User> userList = userMapper.findByRoleAndDeptAndStatus(roleGroup, roleId, dept, status, keyword, pageable);
         boolean isFirst = pageNumber == 0;
         boolean isLast = pageNumber >= totalPages - 1;
         return new PageResultDTO<>(userList, totalElements, totalPages, pageNumber, pageSize, isFirst, isLast);
+    }
+
+    @Override
+    public Map<String, Object> getUserStats() {
+        Map<String, Object> stats = userMapper.countUserBuckets();
+        return stats != null ? stats : Map.of();
     }
 
     @Override
@@ -331,9 +376,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
         }
         
-        if (dept == null) {
-            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "部门信息不能为空");
-        }
+        // dept 为 null 表示「取消分配」，是合法入参 —— 是否允许由调用方
+        // (controller) 按请求体里有没有 dept 键来判断，这里不再拦
+
         
         // 检查用户是否存在且不是管理员
         List<User> users = userMapper.selectByIds(userIds);
@@ -349,6 +394,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
         
         int updatedCount = userMapper.batchUpdateDeptByIds(userIds, dept);
         logger.info("批量更新用户部门成功，更新数量: {}，部门: {}", updatedCount, dept);
+
+        // 不变式：社员 ⟺ 分配了部门（V32 起统一口径）。
+        // 分配部门即录取为社员，取消分配即回到非社员——两个开关合成一个，
+        // 不再出现「有部门却非社员」「社员却无部门」的中间态。
+        boolean member = dept != null;
+        userMapper.batchUpdateMembershipByIds(userIds, member);
+        syncMemberRole(userIds, member);
         return updatedCount;
     }
 
@@ -375,9 +427,67 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
             }
         }
         
+        // 不变式：社员 ⟺ 分配了部门。录取必须先有部门（分配部门会自动录取），
+        // 否则会出现「社员却不属于任何部门」的中间态
+        if (isMember) {
+            List<String> missingDept = users.stream()
+                    .filter(u -> u.getDept() == null || u.getDept().trim().isEmpty())
+                    .map(u -> u.getName() != null ? u.getName() : u.getUsername())
+                    .collect(Collectors.toList());
+            if (!missingDept.isEmpty()) {
+                throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD,
+                        "以下用户尚未分配部门，无法录取为社员（在「分配部门」里选择部门即自动录取）：" + String.join("、", missingDept));
+            }
+        }
+
         int updatedCount = userMapper.batchUpdateMembershipByIds(userIds, isMember);
+        // 取消录取同时收回部门，维持「社员 ⟺ 有部门」
+        if (!isMember) {
+            userMapper.batchUpdateDeptByIds(userIds, null);
+        }
         logger.info("批量更新用户会员状态成功，更新数量: {}，会员状态: {}", updatedCount, isMember);
+        // 同步社员角色：让「社员身份」与「社员角色」保持一致（ADR-0001：RBAC 角色是唯一来源）
+        syncMemberRole(userIds, isMember);
         return updatedCount;
+    }
+
+    /**
+     * 让「社员身份」与「社员角色」保持一致。
+     *
+     * 按 role_code 查角色而不是写死 role_id:V6 种子里 MEMBER 是 3,但显式 ID
+     * 正是 V10/V13 权限撞号的根因,这里不重复那个做法。
+     * 角色行不存在时只记日志不抛异常 —— 状态更新本身已经成功,不该因为角色缺失而整体回滚。
+     */
+    private void syncMemberRole(List<Integer> userIds, boolean isMember) {
+        if (userIds == null || userIds.isEmpty()) {
+            return;
+        }
+        Role memberRole = roleMapper.selectOne(new LambdaQueryWrapper<Role>()
+                .eq(Role::getRoleCode, "MEMBER").last("LIMIT 1"));
+        if (memberRole == null) {
+            logger.warn("未找到 role_code = MEMBER 的角色，跳过社员角色同步，用户数: {}", userIds.size());
+            return;
+        }
+
+        if (isMember) {
+            for (Integer userId : userIds) {
+                boolean exists = userRoleMapper.exists(new LambdaQueryWrapper<UserRole>()
+                        .eq(UserRole::getUserId, userId)
+                        .eq(UserRole::getRoleId, memberRole.getRoleId()));
+                if (!exists) {
+                    UserRole ur = new UserRole();
+                    ur.setUserId(userId);
+                    ur.setRoleId(memberRole.getRoleId());
+                    userRoleMapper.insert(ur);
+                }
+            }
+            logger.info("已为 {} 个用户同步社员角色", userIds.size());
+        } else {
+            int removed = userRoleMapper.delete(new LambdaQueryWrapper<UserRole>()
+                    .in(UserRole::getUserId, userIds)
+                    .eq(UserRole::getRoleId, memberRole.getRoleId()));
+            logger.info("开除社员：已移除 {} 条社员角色绑定", removed);
+        }
     }
 
     @Override

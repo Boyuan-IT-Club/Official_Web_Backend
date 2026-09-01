@@ -5,10 +5,12 @@ import club.boyuan.official.domain.interview.dto.CreateInterviewSessionRequestDT
 import club.boyuan.official.domain.interview.dto.CreateInterviewTimeSlotRequestDTO;
 import club.boyuan.official.domain.interview.dto.InterviewSessionDTO;
 import club.boyuan.official.domain.interview.dto.InterviewTimeSlotDTO;
+import club.boyuan.official.domain.interview.dto.SaveSessionInterviewersRequestDTO;
 import club.boyuan.official.domain.interview.dto.UpdateInterviewSessionRequestDTO;
 import club.boyuan.official.domain.interview.dto.UpdateInterviewTimeSlotRequestDTO;
 import club.boyuan.official.domain.interview.service.IInterviewSessionService;
 import club.boyuan.official.domain.interview.service.IInterviewTimeSlotService;
+import club.boyuan.official.domain.interview.service.ISessionInterviewerService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,11 +28,12 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/interview/admin")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("hasAuthority('resume:audit')")
+@PreAuthorize("hasAnyAuthority('interview:schedule', 'resume:audit')")
 public class InterviewSessionAdminController {
 
     private final IInterviewTimeSlotService interviewTimeSlotService;
     private final IInterviewSessionService interviewSessionService;
+    private final ISessionInterviewerService sessionInterviewerService;
 
     // ------------------------------------------------------------- 时间窗
 
@@ -94,5 +97,24 @@ public class InterviewSessionAdminController {
             @RequestParam(required = false) Integer deptId) {
         List<InterviewSessionDTO> sessions = interviewSessionService.listSessionDTOs(cycleId, deptId, false);
         return ResponseEntity.ok(ResponseMessage.success(sessions));
+    }
+
+    // ---------------------------------------------------------- 场次面试官
+
+    /**
+     * 覆盖式绑定该场次的面试官，决定评价表里谁有自己的评分列、以及「我的待评价」怎么过滤。
+     */
+    @PutMapping("/sessions/{sessionId}/interviewers")
+    public ResponseEntity<ResponseMessage<List<Integer>>> bindInterviewers(
+            @PathVariable Integer sessionId,
+            @Valid @RequestBody SaveSessionInterviewersRequestDTO request) {
+        return ResponseEntity.ok(ResponseMessage.success(
+                sessionInterviewerService.bindInterviewers(sessionId, request.getUserIds())));
+    }
+
+    @GetMapping("/sessions/{sessionId}/interviewers")
+    public ResponseEntity<ResponseMessage<List<Integer>>> listInterviewers(@PathVariable Integer sessionId) {
+        return ResponseEntity.ok(ResponseMessage.success(
+                sessionInterviewerService.listInterviewerIds(sessionId)));
     }
 }

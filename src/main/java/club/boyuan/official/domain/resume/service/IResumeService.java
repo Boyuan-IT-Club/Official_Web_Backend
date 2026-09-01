@@ -62,6 +62,13 @@ public interface IResumeService {
      * @return 提交后的简历
      */
     Resume submitResume(Integer resumeId);
+
+    /**
+     * 断言周期处于开放投递状态（未删除、启用中、今天在起止日期内），否则抛 RESUME_CYCLE_CLOSED。
+     * 学生侧的新建、编辑、提交入口都应先过这道闸；管理端审核与导入不受限。
+     * @param cycleId 招募周期ID
+     */
+    void assertCycleOpen(Integer cycleId);
     
     /**
      * 保存简历字段值
@@ -130,4 +137,10 @@ public interface IResumeService {
      * @return 简历实体列表
      */
     List<Resume> getAllResumesByCycleId(Integer cycleId);
+
+    /**
+     * 管理员为简历打分（0~100）。resume_score 列此前只有飞书导出在读,
+     * 全后端没有任何写入口 —— 管理端因此没有打分的地方。
+     */
+    Resume updateResumeScore(Integer resumeId, Integer score, Integer scorerUserId);
 }

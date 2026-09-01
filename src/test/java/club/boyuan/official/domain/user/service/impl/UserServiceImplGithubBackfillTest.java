@@ -1,0 +1,84 @@
+package club.boyuan.official.domain.user.service.impl;
+
+import club.boyuan.official.common.converter.UserConverter;
+import club.boyuan.official.common.utils.JwtTokenUtil;
+import club.boyuan.official.domain.user.dto.UserDTO;
+import club.boyuan.official.persistence.entity.EvaluationSubmission;
+import club.boyuan.official.persistence.entity.User;
+import club.boyuan.official.persistence.mapper.AwardExperienceMapper;
+import club.boyuan.official.persistence.mapper.EvaluationSubmissionMapper;
+import club.boyuan.official.persistence.mapper.ResumeFieldValueMapper;
+import club.boyuan.official.persistence.mapper.ResumeMapper;
+import club.boyuan.official.persistence.mapper.UserMapper;
+import club.boyuan.official.persistence.mapper.UserRoleMapper;
+import club.boyuan.official.persistence.mapper.RoleMapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class UserServiceImplGithubBackfillTest {
+
+    @Mock private UserMapper userMapper;
+    @Mock private AwardExperienceMapper awardExperienceMapper;
+    @Mock private ResumeMapper resumeMapper;
+    @Mock private ResumeFieldValueMapper resumeFieldValueMapper;
+    @Mock private UserRoleMapper userRoleMapper;
+    @Mock private RoleMapper roleMapper;
+    @Mock private EvaluationSubmissionMapper evaluationSubmissionMapper;
+    @Mock private BCryptPasswordEncoder passwordEncoder;
+    @Mock private JwtTokenUtil jwtTokenUtil;
+    @Mock private UserConverter userConverter;
+
+    @Test
+    void githubBindBackfillsUnclaimedSubmissions() {
+        UserServiceImpl service = new UserServiceImpl(userMapper, awardExperienceMapper, resumeMapper,
+                resumeFieldValueMapper, userRoleMapper, roleMapper, evaluationSubmissionMapper,
+                passwordEncoder, jwtTokenUtil, userConverter);
+
+        User user = new User();
+        user.setUserId(7);
+        when(userMapper.selectById(7)).thenReturn(user);
+        when(userMapper.selectCount(any())).thenReturn(0L);
+
+        UserDTO dto = new UserDTO();
+        dto.setUserId(7);
+        dto.setGithub("https://github.com/Alice");
+
+        service.edit(dto);
+
+        // 归一化后回填:update submission set user_id=7 where github_username='alice' and user_id is null
+        verify(evaluationSubmissionMapper).update(any(EvaluationSubmission.class), any(LambdaUpdateWrapper.class));
+    }
+
+    @Test
+    void githubUnbindWritesExplicitNullInsteadOfIgnoring() {
+        UserServiceImpl service = new UserServiceImpl(userMapper, awardExperienceMapper, resumeMapper,
+                resumeFieldValueMapper, userRoleMapper, roleMapper, evaluationSubmissionMapper,
+                passwordEncoder, jwtTokenUtil, userConverter);
+
+        User user = new User();
+        user.setUserId(7);
+        when(userMapper.selectById(7)).thenReturn(user);
+
+        UserDTO dto = new UserDTO();
+        dto.setUserId(7);
+        dto.setGithub("   "); // 空白 → 归一化 null → 解绑
+
+        service.edit(dto);
+
+        // 解绑必须显式调用 update(SET github = NULL),而非依赖 updateById(默认忽略 null 字段)
+        verify(userMapper).update(org.mockito.ArgumentMatchers.isNull(), any(UpdateWrapper.class));
+        // 解绑不触发回填认领
+        verify(evaluationSubmissionMapper, org.mockito.Mockito.never())
+                .update(any(EvaluationSubmission.class), any(LambdaUpdateWrapper.class));
+    }
+}

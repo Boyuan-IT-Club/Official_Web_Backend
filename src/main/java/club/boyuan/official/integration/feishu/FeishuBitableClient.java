@@ -25,6 +25,20 @@ import java.util.concurrent.atomic.AtomicReference;
 @Slf4j
 public class FeishuBitableClient {
 
+    /** 飞书字段类型（实测自社团模板表）:1=文本 2=数字 3=单选 4=多选 7=复选框 */
+    private static final int FIELD_TYPE_TEXT = 1;
+    private static final int FIELD_TYPE_NUMBER = 2;
+    private static final int FIELD_TYPE_SINGLE_SELECT = 3;
+    private static final int FIELD_TYPE_MULTI_SELECT = 4;
+    private static final int FIELD_TYPE_CHECKBOX = 7;
+
+    /** 多选值的分隔符:formatIntendedDepartments 产出 "技术部 / 项目部",也容忍逗号 */
+    private static final java.util.regex.Pattern MULTI_SPLIT = java.util.regex.Pattern.compile("[/,、]");
+
+    /** 建列时按表串行,避免"先读后建"竞态在同表建出重复列 */
+    private static final java.util.concurrent.ConcurrentMap<String, Object> TABLE_LOCKS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
     private final FeishuProperties feishuProperties;
     private final ObjectMapper objectMapper;
     private final FeishuApiInvoker feishuApiInvoker;
@@ -110,6 +124,184 @@ public class FeishuBitableClient {
     /**
      * 批量新增行，返回与入参顺序一致的 record_id 列表。
      */
+    /**
+     * 确保这些列在目标表里都存在,缺的按文本类型自动补建。
+     *
+     * 飞书多维表格 API 不会在写入时自动建列 —— 写不存在的列名会整批返回
+     * FieldNameNotFound。管理员往往只给一张空表(默认只有一个「文本」字段)的链接,
+     * 于是推送整批失败,界面还只说「同步失败」。推送前先对齐表结构。
+     *
+     * 只新增、不改类型、不删多余列:全部按文本(type=1)建,足够承载导出内容,
+     * 也不会动管理员在飞书里已经建好的其它列。
+     *
+     * @return 表内全部列的 名称 -> 飞书字段类型,供写入前把值转成该列能接受的类型
+     */
+    public java.util.Map<String, Integer> ensureFieldsExist(
+            String tableUrl, java.util.Collection<String> requiredFieldNames) {
+        ensureConfigured();
+        if (requiredFieldNames == null || requiredFieldNames.isEmpty()) {
+            return java.util.Map.of();
+        }
+        FeishuTableUrlParser.ParsedTable parsed = FeishuTableUrlParser.parse(tableUrl);
+        String token = getTenantAccessToken();
+
+        // 同表串行:并发推送时两个任务各自"先读后建",都读到不存在就会各建一遍,
+        // 在生产表上实测建出了 6 个重复列(姓名/年级/预选/是否调剂/第二、三类问题)。
+        // 跨节点仍有极小窗口,靠飞书自身的 FieldNameDuplicated 兜底。
+        Object lock = TABLE_LOCKS.computeIfAbsent(parsed.tableId(), k -> new Object());
+        synchronized (lock) {
+            return ensureFieldsLocked(parsed, token, requiredFieldNames);
+        }
+    }
+
+    private java.util.Map<String, Integer> ensureFieldsLocked(
+            FeishuTableUrlParser.ParsedTable parsed, String token,
+            java.util.Collection<String> requiredFieldNames) {
+        java.util.Map<String, Integer> existing = listFieldTypes(parsed, token);
+        String base = feishuProperties.getApiBaseUrl()
+                + "/open-apis/bitable/v1/apps/" + parsed.appToken()
+                + "/tables/" + parsed.tableId() + "/fields";
+
+        int created = 0;
+        for (String name : requiredFieldNames) {
+            if (name == null || name.isBlank() || existing.containsKey(name)) {
+                continue;
+            }
+            // type=1 多行文本；用 Map 而非拼串,交给 postJson 序列化转义
+            String resp = feishuApiInvoker.postJson(base, token, Map.of("field_name", name, "type", 1));
+            JsonNode root;
+            try {
+                root = objectMapper.readTree(resp);
+            } catch (Exception e) {
+                throw new BusinessException(BusinessExceptionEnum.FEISHU_IMPORT_FAILED,
+                        "创建飞书列「" + name + "」时响应解析失败");
+            }
+            int code = root.path("code").asInt(-1);
+            if (code != 0) {
+                // 并发下别的推送可能刚建过同名列,这种重复报错忽略即可
+                String msg = root.path("msg").asText("");
+                // 飞书对已存在的列名返回 FieldNameDuplicated（实测 code 1254014）；
+                // 并发推送下可能刚被别的任务建过,视为成功。
+                if (msg.contains("Duplicated") || msg.contains("exist") || msg.contains("已存在")) {
+                    // 重复说明列已在（并发推送），但本次没读到它的类型，按文本处理
+                    existing.putIfAbsent(name, FIELD_TYPE_TEXT);
+                    continue;
+                }
+                throw new BusinessException(BusinessExceptionEnum.FEISHU_IMPORT_FAILED,
+                        "自动创建飞书列「" + name + "」失败: " + msg);
+            }
+            existing.put(name, FIELD_TYPE_TEXT);
+            created++;
+        }
+        if (created > 0) {
+            log.info("飞书表 {} 自动补建 {} 个缺失列", parsed.tableId(), created);
+        }
+        return existing;
+    }
+
+    /**
+     * 把整行的值转成各列实际类型能接受的形式。
+     *
+     * 起因:自动建的列都是文本(type=1),而 resumeScore 是 int —— 往文本列写数字,
+     * 飞书返回 TextFieldConvFail(code 1254060),整批失败。
+     * 按列的真实类型转换而不是一律 toString:管理员可能手动把「简历评分」改成
+     * 数字列,那时要写数字才对。未知类型不动,管理员自己清楚他建的是什么。
+     */
+    public static Map<String, Object> coerceRow(Map<String, Object> row, java.util.Map<String, Integer> fieldTypes) {
+        if (row == null || row.isEmpty()) {
+            return row;
+        }
+        // LinkedHashMap：转换不能打乱列序 —— ensureFieldsExist 按这个顺序建列
+        Map<String, Object> out = new java.util.LinkedHashMap<>(row.size());
+        row.forEach((k, v) -> {
+            int type = fieldTypes == null ? FIELD_TYPE_TEXT : fieldTypes.getOrDefault(k, FIELD_TYPE_TEXT);
+            Object coerced = coerceValue(v, type);
+            // OMIT 表示这一格不写 —— 复选框/单选/多选不接受空串,
+            // 写空串会整批报 XxxFieldConvFail;省略等于"留空不动"。
+            if (coerced != OMIT) {
+                out.put(k, coerced);
+            }
+        });
+        return out;
+    }
+
+    /** 读取表的全部字段名与类型(建列对齐 + 写入前值类型转换都要用) */
+    private java.util.Map<String, Integer> listFieldTypes(FeishuTableUrlParser.ParsedTable parsed, String token) {
+        String url = feishuProperties.getApiBaseUrl()
+                + "/open-apis/bitable/v1/apps/" + parsed.appToken()
+                + "/tables/" + parsed.tableId() + "/fields?page_size=100";
+        String resp = feishuApiInvoker.get(url, token);
+        java.util.Map<String, Integer> names = new java.util.HashMap<>();
+        try {
+            JsonNode root = objectMapper.readTree(resp);
+            if (root.path("code").asInt(-1) != 0) {
+                throw new BusinessException(BusinessExceptionEnum.FEISHU_IMPORT_FAILED,
+                        "读取飞书表字段失败: " + root.path("msg").asText("未知错误"));
+            }
+            for (JsonNode it : root.path("data").path("items")) {
+                String n = it.path("field_name").asText(null);
+                if (n != null) {
+                    names.put(n, it.path("type").asInt(FIELD_TYPE_TEXT));
+                }
+            }
+        } catch (BusinessException be) {
+            throw be;
+        } catch (Exception e) {
+            throw new BusinessException(BusinessExceptionEnum.FEISHU_IMPORT_FAILED, "读取飞书表字段响应解析失败");
+        }
+        return names;
+    }
+
+    /** 省略标记:该格不写入(区别于"写一个空值") */
+    private static final Object OMIT = new Object();
+
+    private static Object coerceValue(Object v, int type) {
+        String raw = v == null ? "" : String.valueOf(v).trim();
+        switch (type) {
+            case FIELD_TYPE_TEXT:
+                return v == null ? "" : String.valueOf(v);
+            case FIELD_TYPE_NUMBER:
+                if (raw.isEmpty()) {
+                    return OMIT;
+                }
+                if (v instanceof Number) {
+                    return v;
+                }
+                try {
+                    return Double.valueOf(raw);
+                } catch (NumberFormatException e) {
+                    return OMIT;   // 非数字内容不写，别让整批连坐
+                }
+            case FIELD_TYPE_MULTI_SELECT: {
+                if (raw.isEmpty()) {
+                    return OMIT;
+                }
+                // "技术部 / 项目部" -> ["技术部","项目部"]；多选列只接受数组
+                List<String> parts = new ArrayList<>();
+                for (String part : MULTI_SPLIT.split(raw)) {
+                    String t = part.trim();
+                    if (!t.isEmpty()) {
+                        parts.add(t);
+                    }
+                }
+                return parts.isEmpty() ? OMIT : parts;
+            }
+            case FIELD_TYPE_SINGLE_SELECT:
+                return raw.isEmpty() ? OMIT : raw;
+            case FIELD_TYPE_CHECKBOX:
+                if (raw.isEmpty()) {
+                    return OMIT;   // 留空即未勾选，写 "" 会 CheckboxFieldConvFail
+                }
+                if (v instanceof Boolean) {
+                    return v;
+                }
+                return "是".equals(raw) || "true".equalsIgnoreCase(raw) || "1".equals(raw) || "y".equalsIgnoreCase(raw);
+            default:
+                // 日期/人员/附件等：空值不写，非空原样交给飞书校验
+                return raw.isEmpty() ? OMIT : v;
+        }
+    }
+
     public FeishuBatchWriteResult batchCreateRecords(String tableUrl, List<Map<String, Object>> rows) {
         if (rows == null || rows.isEmpty()) {
             return new FeishuBatchWriteResult(0, List.of());

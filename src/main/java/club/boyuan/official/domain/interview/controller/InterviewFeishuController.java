@@ -17,6 +17,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import club.boyuan.official.domain.interview.dto.LocationTableConfigDTO;
+import club.boyuan.official.domain.interview.dto.SaveLocationTableRequestDTO;
+import club.boyuan.official.domain.interview.service.ILocationTableService;
+import club.boyuan.official.domain.interview.dto.PullAllLocationsResponseDTO;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -27,7 +31,12 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+
+import java.util.ArrayList;
+import java.util.List;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -47,16 +56,75 @@ import org.springframework.web.bind.annotation.RestController;
 public class InterviewFeishuController {
 
     private final InterviewFeishuImportService feishuImportService;
+    private final ILocationTableService locationTableService;
     private final IUserService userService;
     private final AsyncTaskSseHub asyncTaskSseHub;
     private final ObjectMapper objectMapper;
+
+    /**
+     * 列出该周期的面试地点及各自的飞书表格链接配置。
+     * <p>推送是按地点分桶的：每个地点推到自己那张表。这个接口让管理端看清
+     * 「哪些地点还没配链接（配之前推送会跳过该地点）、配了会推多少人」。
+     */
+    @GetMapping("/cycles/{cycleId}/locations")
+    @PreAuthorize("hasAnyAuthority('feishu:sync', 'resume:audit')")
+    public ResponseEntity<ResponseMessage<List<LocationTableConfigDTO>>> listLocations(
+            @PathVariable Integer cycleId) {
+        return ResponseEntity.ok(ResponseMessage.success(locationTableService.listByCycle(cycleId)));
+    }
+
+    /**
+     * 保存某地点的飞书表格链接；链接留空表示清除该地点的配置。
+     */
+    @PutMapping("/cycles/{cycleId}/locations")
+    @PreAuthorize("hasAnyAuthority('feishu:sync', 'resume:audit')")
+    public ResponseEntity<ResponseMessage<List<LocationTableConfigDTO>>> saveLocation(
+            @PathVariable Integer cycleId,
+            @Valid @RequestBody SaveLocationTableRequestDTO request) {
+        locationTableService.save(cycleId, request);
+        return ResponseEntity.ok(ResponseMessage.success(locationTableService.listByCycle(cycleId)));
+    }
+
+    /**
+     * 一键从「所有已配置链接的地点」拉回结果：每个地点提交一个独立任务，返回 taskId 列表。
+     * <p>不做成"一个任务拉 N 张表"，是因为拉回的进度、失败行与错误信息天然按表格分开，
+     * 混在一个任务里出问题时分不清是哪个地点的表有问题。
+     */
+    @PostMapping("/cycles/{cycleId}/pull-all")
+    @PreAuthorize("hasAnyAuthority('feishu:sync', 'resume:audit')")
+    public ResponseEntity<ResponseMessage<PullAllLocationsResponseDTO>> pullAllLocations(
+            @PathVariable Integer cycleId,
+            @RequestParam(defaultValue = "true") Boolean updateUserDept) {
+        List<LocationTableConfigDTO> configs = locationTableService.listByCycle(cycleId);
+        List<PullAllLocationsResponseDTO.LocationTask> tasks = new ArrayList<>();
+        List<String> skipped = new ArrayList<>();
+        Integer operator = resolveOperatorUserId();
+
+        for (LocationTableConfigDTO config : configs) {
+            if (config.getFeishuTableUrl() == null || config.getFeishuTableUrl().isBlank()) {
+                skipped.add(config.getLocation());
+                continue;
+            }
+            ImportFromFeishuTableRequestDTO request = new ImportFromFeishuTableRequestDTO();
+            request.setCycleId(cycleId);
+            request.setFeishuTableUrl(config.getFeishuTableUrl());
+            request.setUpdateUserDept(updateUserDept);
+            FeishuSyncTaskSubmitDTO submit = feishuImportService.submitPullFromTableTask(request, operator);
+            tasks.add(new PullAllLocationsResponseDTO.LocationTask(config.getLocation(), submit.getTaskId()));
+        }
+
+        log.info("一键拉回全部地点 cycleId={}，提交 {} 个任务，跳过 {} 个未配链接的地点",
+                cycleId, tasks.size(), skipped.size());
+        return ResponseEntity.ok(ResponseMessage.success(
+                new PullAllLocationsResponseDTO().setTasks(tasks).setSkippedLocations(skipped)));
+    }
 
     /**
      * 从飞书多维表格异步拉回平台：立即返回 taskId，轮询/SSE 与 {@link #submitImport} 相同。
      * <p>列名：姓名、录取部门、面试是否通过、面试是否通过（预选）、是否调剂、决定人。
      */
     @PostMapping("/import-from-table")
-    @PreAuthorize("hasAuthority('resume:audit')")
+    @PreAuthorize("hasAnyAuthority('feishu:sync', 'resume:audit')")
     public ResponseEntity<ResponseMessage<FeishuSyncTaskSubmitDTO>> importFromTable(
             @Valid @RequestBody ImportFromFeishuTableRequestDTO request) {
         log.info("提交飞书拉回任务 cycleId={}, url={}", request.getCycleId(), request.getFeishuTableUrl());
@@ -69,7 +137,7 @@ public class InterviewFeishuController {
      * 提交飞书导入任务：立即返回 taskId，实际导入由 MQ 消费者并行执行（平台 → 飞书）。
      */
     @PostMapping("/import")
-    @PreAuthorize("hasAuthority('resume:audit')")
+    @PreAuthorize("hasAnyAuthority('feishu:sync', 'resume:audit')")
     public ResponseEntity<ResponseMessage<FeishuSyncTaskSubmitDTO>> submitImport(
             @Valid @RequestBody ImportFeishuRequestDTO request) {
         log.info("提交飞书导入任务 cycleId={}, slotId={}, forceUpdate={}",
@@ -82,7 +150,7 @@ public class InterviewFeishuController {
      * 查询飞书导入任务进度与结果（轮询）。
      */
     @GetMapping("/import/tasks/{taskId}")
-    @PreAuthorize("hasAuthority('resume:audit')")
+    @PreAuthorize("hasAnyAuthority('feishu:sync', 'resume:audit')")
     public ResponseEntity<ResponseMessage<FeishuSyncTaskStatusDTO>> getImportTask(
             @PathVariable Long taskId) {
         FeishuSyncTaskStatusDTO status = feishuImportService.getImportTaskStatus(taskId);
@@ -93,7 +161,7 @@ public class InterviewFeishuController {
      * SSE 订阅飞书导入任务进度（终态后连接自动关闭）。仍保留 GET 轮询作为兜底。
      */
     @GetMapping(value = "/import/tasks/{taskId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    @PreAuthorize("hasAuthority('resume:audit')")
+    @PreAuthorize("hasAnyAuthority('feishu:sync', 'resume:audit')")
     public SseEmitter streamImportTask(@PathVariable Long taskId) throws Exception {
         FeishuSyncTaskStatusDTO current = feishuImportService.getImportTaskStatus(taskId);
         SseEmitter emitter = asyncTaskSseHub.register(AsyncTaskChannel.FEISHU, String.valueOf(taskId));

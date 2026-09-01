@@ -13,9 +13,20 @@ on:
       - 'docs/**'
   workflow_dispatch:
 
+# 生产部署串行化：同一时刻只允许一个部署在跑，后来的排队等待。
+# 缺这个闸的实际事故：连续合并两个 PR 触发两个部署并行，第二个在 Node B
+# 删 official-app 容器时撞上第一个正在删同一容器
+# （"removal of container ... is already in progress"），部署失败，
+# 集群停在旧版本而 main 已是新提交。
+# cancel-in-progress 必须为 false —— 取消一个删了一半容器的部署比排队危险得多。
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 env:
   DOCKER_USERNAME: boyuanclub
   IMAGE_NAME: official-core-api
+  COLLAB_IMAGE_NAME: official-collab-server
   DOCKERHUB_EMAIL: notify@boyuan.club
 
 jobs:
@@ -146,6 +157,39 @@ jobs:
             ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest
             ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
 
+  # ── 2b) 构建并推送协同服务镜像 ───────────────────────────────
+  # 协同服务（Yjs/Hocuspocus）源码在本仓库 collab-server/ 下，与后端同批发布。
+  # 它不依赖 Maven 产物，故不必等 build，与之并行即可。
+  build-collab:
+    name: Build & Push collab server
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push collab image
+        if: github.event_name == 'push'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./collab-server
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          cache-from: type=gha,scope=collab
+          cache-to: type=gha,mode=max,scope=collab
+          tags: ${{ env.DOCKER_USERNAME }}/${{ env.COLLAB_IMAGE_NAME }}:latest
+
   # ── 3) 双机并行预拉镜像 ─────────────────────────────────────
   # 拉镜像是部署耗时大头（跨境访问 Docker Hub 慢且不稳定），A/B 并行拉、
   # 单次限时 10 分钟：卡死即杀掉重试（已完成的层保留，重试只补缺失层）。
@@ -153,7 +197,7 @@ jobs:
   pull:
     name: Pull image
     runs-on: ubuntu-latest
-    needs: build
+    needs: [ build, build-collab ]
     if: github.event_name == 'push'
     strategy:
       matrix:
@@ -169,13 +213,20 @@ jobs:
           script: |
             set -e
             cd ~/boyuan-official
-            n=0
-            until timeout 600 docker compose pull official; do
-              n=$((n+1))
-              if [ "$n" -ge 3 ]; then echo "Node ${{ matrix.node }} 镜像拉取重试 3 次仍失败" >&2; exit 1; fi
-              echo "拉取失败/超时，第 $n 次重试..."; sleep 10
+            # 协同服务只部署在 Node A（必须单实例），故仅 A 的 compose 里有 official-collab
+            services="official"
+            if docker compose config --services | grep -qx official-collab; then
+              services="official official-collab"
+            fi
+            for svc in $services; do
+              n=0
+              until timeout 600 docker compose pull "$svc"; do
+                n=$((n+1))
+                if [ "$n" -ge 3 ]; then echo "Node ${{ matrix.node }} 拉取 $svc 重试 3 次仍失败" >&2; exit 1; fi
+                echo "拉取 $svc 失败/超时，第 $n 次重试..."; sleep 10
+              done
             done
-            echo "Node ${{ matrix.node }} 镜像就绪"
+            echo "Node ${{ matrix.node }} 镜像就绪：$services"
 
   # ── 4) 滚动重启（先 B 后 A，镜像已就绪，仅换容器+健康检查）──
   deploy:
@@ -225,6 +276,16 @@ jobs:
               sleep 5
               if [ "$i" = "20" ]; then echo "Node A 健康检查超时" >&2; exit 1; fi
             done
+            # 协同服务随后端一起换代；它只在 A 上跑，重启会断开在线的评价表连接，
+            # 前端 provider 会自动重连并从快照恢复，未落库的编辑由 onDisconnect 兜底物化
+            if docker compose config --services | grep -qx official-collab; then
+              docker compose up -d official-collab
+              for i in $(seq 1 12); do
+                if curl -fsS -o /dev/null http://127.0.0.1:3100/; then echo "协同服务 UP"; break; fi
+                sleep 5
+                if [ "$i" = "12" ]; then echo "协同服务健康检查超时" >&2; exit 1; fi
+              done
+            fi
             docker image prune -f >/dev/null 2>&1 || true
 
       - name: Verify via load balancer
@@ -237,3 +298,50 @@ jobs:
           script: |
             code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/api/user/login || true)
             echo "LB /api 返回码: $code (401/400 表示反代通)"
+
+  # 生产的 docker-compose.yml 是各节点手工维护的，改动漏加一半是真实发生过的事故：
+  # COLLAB_SERVICE_TOKEN 只加进了 collab 服务、漏了 official 服务，后端读到空值后拒绝
+  # 所有 /api/internal/** 调用，协同评价表打不开却只在界面上显示 permission-denied。
+  # 这个 job 在每次部署后核对关键变量是否真的注入进了容器，让这类漂移当场暴露。
+  verify-env:
+    name: Verify env on Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: github.event_name == 'push'
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [A, B]
+    steps:
+      - name: Check app container env
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets[format('DEPLOY_HOST_{0}', matrix.node)] }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 3m
+          script: |
+            app=$(docker ps --format '{{.Names}}' | grep -E -- '-app$' | head -1)
+            if [ -z "$app" ]; then echo "::error::找不到应用容器"; exit 1; fi
+
+            # 缺了会让功能静默失效的变量：必须存在，否则判失败
+            missing=""
+            for k in JWT_SECRET COLLAB_SERVICE_TOKEN; do
+              docker exec "$app" printenv "$k" >/dev/null 2>&1 || missing="$missing $k"
+            done
+
+            # 缺了只会退化、不致命的变量：仅告警，不挡发布
+            degraded=""
+            for k in COS_BUCKET COS_SECRET_ID MAIL_PASSWORD FEISHU_APP_ID; do
+              docker exec "$app" printenv "$k" >/dev/null 2>&1 || degraded="$degraded $k"
+            done
+
+            if [ -n "$degraded" ]; then
+              echo "::warning::Node ${{ matrix.node }} 缺少可选变量:$degraded（相关功能将降级）"
+            fi
+            if [ -n "$missing" ]; then
+              echo "::error::Node ${{ matrix.node }} 的 $app 缺少关键环境变量:$missing"
+              echo "多半是该节点 docker-compose.yml 的 official 服务未注入，或 .env 未配置该项"
+              exit 1
+            fi
+            echo "Node ${{ matrix.node }} 关键环境变量齐全（容器 $app）"

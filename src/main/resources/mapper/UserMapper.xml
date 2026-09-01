@@ -14,6 +14,11 @@
         <result property="major" column="major"/>
         <result property="github" column="github"/>
         <result property="deptId" column="dept_id"/>
+        <!-- dept / is_member 此前漏映射：findByRoleAndDeptAndStatus 明明 SELECT 了这两列,
+             但 resultMap 不认,MyBatis 直接丢弃 -> 接口 JSON 永远没有这两个键,
+             管理端「部门」列因此恒显示非社员,批量录取/分配部门看不出任何变化。 -->
+        <result property="dept" column="dept"/>
+        <result property="isMember" column="is_member"/>
         <result property="avatar" column="avatar"/>
         <result property="status" column="status"/>
         <result property="createTime" column="create_time"/>
@@ -81,39 +86,78 @@
         WHERE is_deleted = 0
     </select>
 
+    <!-- 用户列表：RBAC 分组(roleGroup) + 角色(roleId) + 部门名(dept) + 状态(status:active/frozen) + 关键字(keyword) 筛选。
+         用 EXISTS/NOT EXISTS 子查询表达角色关系，避免 LEFT JOIN 造成多角色用户重复行。 -->
+    <sql id="userFilterWhere">
+        u.is_deleted = 0
+        <if test="roleGroup != null and roleGroup != ''">
+            <choose>
+                <when test="roleGroup == 'admin'">
+                    AND EXISTS (SELECT 1 FROM user_role ur JOIN role ro ON ro.role_id = ur.role_id
+                                WHERE ur.user_id = u.user_id AND ro.role_code IN ('SUPER_ADMIN','ADMIN'))
+                </when>
+                <when test="roleGroup == 'member'">
+                    AND EXISTS (SELECT 1 FROM user_role ur JOIN role ro ON ro.role_id = ur.role_id
+                                WHERE ur.user_id = u.user_id AND ro.role_code = 'MEMBER')
+                </when>
+                <when test="roleGroup == 'nonmember'">
+                    AND (EXISTS (SELECT 1 FROM user_role ur JOIN role ro ON ro.role_id = ur.role_id
+                                 WHERE ur.user_id = u.user_id AND ro.role_code = 'APPLICANT')
+                         OR NOT EXISTS (SELECT 1 FROM user_role ur WHERE ur.user_id = u.user_id))
+                </when>
+            </choose>
+        </if>
+        <if test="roleId != null">
+            AND EXISTS (SELECT 1 FROM user_role ur WHERE ur.user_id = u.user_id AND ur.role_id = #{roleId})
+        </if>
+        <if test="dept != null and dept != ''">
+            AND EXISTS (SELECT 1 FROM department d WHERE d.dept_id = u.dept_id AND d.dept_name = #{dept})
+        </if>
+        <if test="status != null and status != ''">
+            <choose>
+                <when test="status == 'frozen'">AND u.status = 0</when>
+                <otherwise>AND u.status = 1</otherwise>
+            </choose>
+        </if>
+        <if test="keyword != null and keyword != ''">
+            AND (u.username LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.name LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.email LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.phone LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </sql>
+
     <select id="findByRoleAndDeptAndStatus" resultMap="UserResultMap">
-        SELECT user_id, username, password, email, role, name, phone, dept, avatar, create_time, status, is_member
-        FROM user
+        SELECT u.*
+        FROM user u
         <where>
-            AND is_deleted = 0
-            <if test="role != null and role != ''">
-                AND role = #{role}
-            </if>
-            <if test="dept != null and dept != ''">
-                AND dept = #{dept}
-            </if>
-            <if test="status != null">
-                AND status = #{status, jdbcType=BOOLEAN}
-            </if>
+            <include refid="userFilterWhere"/>
         </where>
         LIMIT #{pageable.offset}, #{pageable.pageSize}
     </select>
 
     <select id="countByRoleAndDeptAndStatus" resultType="java.lang.Long">
         SELECT COUNT(*)
-        FROM user
+        FROM user u
         <where>
-            AND is_deleted = 0
-            <if test="role != null and role != ''">
-                AND role = #{role}
-            </if>
-            <if test="dept != null and dept != ''">
-                AND dept = #{dept}
-            </if>
-            <if test="status != null">
-                AND status = #{status, jdbcType=BOOLEAN}
-            </if>
+            <include refid="userFilterWhere"/>
         </where>
+    </select>
+
+    <!-- 用户分类统计：单条 SQL 聚合，一次返回总数/冻结/管理员/社员/非社员 -->
+    <select id="countUserBuckets" resultType="map">
+        SELECT
+            COUNT(*) AS total,
+            COALESCE(SUM(u.status = 0), 0) AS frozen,
+            COALESCE(SUM(CASE WHEN EXISTS(SELECT 1 FROM user_role ur JOIN role ro ON ro.role_id = ur.role_id
+                                WHERE ur.user_id = u.user_id AND ro.role_code IN ('SUPER_ADMIN','ADMIN')) THEN 1 ELSE 0 END), 0) AS adminCount,
+            COALESCE(SUM(CASE WHEN EXISTS(SELECT 1 FROM user_role ur JOIN role ro ON ro.role_id = ur.role_id
+                                WHERE ur.user_id = u.user_id AND ro.role_code = 'MEMBER') THEN 1 ELSE 0 END), 0) AS memberCount,
+            COALESCE(SUM(CASE WHEN EXISTS(SELECT 1 FROM user_role ur JOIN role ro ON ro.role_id = ur.role_id
+                                WHERE ur.user_id = u.user_id AND ro.role_code = 'APPLICANT')
+                          OR NOT EXISTS(SELECT 1 FROM user_role ur WHERE ur.user_id = u.user_id) THEN 1 ELSE 0 END), 0) AS nonMemberCount
+        FROM user u
+        WHERE u.is_deleted = 0
     </select>
     
     <select id="searchUsers" parameterType="string" resultMap="UserResultMap">
@@ -122,8 +166,7 @@
         WHERE (username LIKE CONCAT('%', #{keyword}, '%') 
            OR name LIKE CONCAT('%', #{keyword}, '%') 
            OR email LIKE CONCAT('%', #{keyword}, '%') 
-           OR phone LIKE CONCAT('%', #{keyword}, '%') 
-           OR dept LIKE CONCAT('%', #{keyword}, '%'))
+           OR phone LIKE CONCAT('%', #{keyword}, '%'))
            AND is_deleted = 0
         LIMIT 20
     </select>
@@ -138,14 +181,27 @@
         AND is_deleted = 0
     </update>
     
+    <!-- 两列一起写。
+         user 表有 dept(varchar) 和 dept_id(int) 两列：界面读的是 dept，
+         而这条语句原来只写 dept_id —— 于是「分配部门」在列表上看不出任何变化，
+         两列还越走越偏（线上实测 8 人里 6 人不一致）。
+
+         dept 为 NULL 表示取消分配：此时子查询取不到行，dept_id 自然落成 NULL；
+         EXISTS 那道存在性校验必须跳过 —— dept_name = NULL 恒不成立，
+         留着会让清空操作静默影响 0 行。 -->
     <update id="batchUpdateDeptByIds">
-        UPDATE user 
-        SET dept = #{dept}, update_time = NOW()
+        UPDATE user
+        SET dept = #{dept},
+            dept_id = (SELECT dept_id FROM department WHERE dept_name = #{dept} LIMIT 1),
+            update_time = NOW()
         WHERE user_id IN
         <foreach collection="userIds" item="userId" open="(" separator="," close=")">
             #{userId}
         </foreach>
         AND is_deleted = 0
+        <if test="dept != null">
+            AND EXISTS (SELECT 1 FROM department WHERE dept_name = #{dept})
+        </if>
     </update>
     
     <update id="batchUpdateMembershipByIds">
@@ -158,7 +214,7 @@
         AND is_deleted = 0
     </update>
     
-    <select id="selectByIds" resultMap="UserResultMap">
+    <select id="selectUsersByIds" resultMap="UserResultMap">
         SELECT *
         FROM user
         WHERE user_id IN
@@ -166,6 +222,26 @@
             #{userId}
         </foreach>
         AND is_deleted = 0
+    </select>
+
+    <!-- 统计卡:is_member 允许为 NULL(历史行),按「非社员」计,否则两数相加不等于总数 -->
+    <select id="countByMembership" resultType="java.lang.Long">
+        SELECT COUNT(*)
+        FROM user
+        WHERE is_deleted = 0
+        <if test="isMember">
+            AND is_member = 1
+        </if>
+        <if test="!isMember">
+            AND (is_member = 0 OR is_member IS NULL)
+        </if>
+    </select>
+
+    <select id="countFrozen" resultType="java.lang.Long">
+        SELECT COUNT(*)
+        FROM user
+        WHERE is_deleted = 0
+          AND status = 0
     </select>
 
 </mapper>

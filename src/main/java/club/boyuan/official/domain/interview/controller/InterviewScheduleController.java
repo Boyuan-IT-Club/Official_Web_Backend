@@ -142,7 +142,7 @@ public class InterviewScheduleController {
      * @return 分配结果
      */
     @PostMapping("/auto-assign/{cycleId}")
-    @PreAuthorize("hasAuthority(('resume:audit'))")
+    @PreAuthorize("hasAnyAuthority('interview:schedule', 'resume:audit')")
     public ResponseEntity<ResponseMessage<AutoAssignInterviewResponseDTO>> autoAssignInterviewsByCycleId(
             @PathVariable Integer cycleId) {
         try {

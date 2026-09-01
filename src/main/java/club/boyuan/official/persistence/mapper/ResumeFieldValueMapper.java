@@ -16,6 +16,14 @@ public interface ResumeFieldValueMapper extends BaseMapper<ResumeFieldValue> {
      * @return 字段值列表
      */
     List<ResumeFieldValue> findByResumeId(Integer resumeId);
+
+    /**
+     * 批量按简历 ID 取字段值。
+     *
+     * 简历列表页原来是每份简历单独调 findByResumeId —— 一页 100 份就是
+     * 100 次查询，再乘以每份里的字段定义查找。列表接口的耗时基本全在这上面。
+     */
+    List<ResumeFieldValue> findByResumeIds(@Param("resumeIds") java.util.Collection<Integer> resumeIds);
     
     /**
      * 根据简历ID和字段ID查询字段值

@@ -1,5 +1,6 @@
 package club.boyuan.official.domain.resume.service.impl;
 
+import club.boyuan.official.domain.resume.dto.OpenCycleDTO;
 import club.boyuan.official.common.dto.PageResultDTO;
 import club.boyuan.official.persistence.entity.RecruitmentCycle;
 import club.boyuan.official.persistence.mapper.RecruitmentCycleMapper;
@@ -30,6 +31,8 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
     private final RecruitmentCycleMapper recruitmentCycleMapper;
     private final IResumeFieldDefinitionService fieldDefinitionService;
     private final SqlSessionFactory sqlSessionFactory;
+    private final club.boyuan.official.persistence.mapper.ResumeMapper resumeMapper;
+    private final club.boyuan.official.persistence.mapper.ResumeFieldDefinitionMapper resumeFieldDefinitionMapper;
     
     @Override
     public RecruitmentCycle createRecruitmentCycle(RecruitmentCycle recruitmentCycle) {
@@ -85,8 +88,25 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
                 throw new IllegalArgumentException("招募周期不存在");
             }
             
-            recruitmentCycleMapper.deleteById(cycleId);
-            logger.info("招募周期删除成功，ID: {}", cycleId);
+            // 有投递才软删，没投递直接物理删除：
+            //   - 有简历：resume.cycle_id 是 RESTRICT，硬删本来就过不去；软删保留全部历史。
+            //   - 无简历（建错的测试周期居多）：物理删除，别在库里和「我的申请」的
+            //     关联判断里永远留一具空壳。字段定义与招新提示语是 RESTRICT/无动作，
+            //     先行清掉；场次/时间槽/评分维度等都是 CASCADE，随周期一并消失。
+            Long resumeCount = resumeMapper.selectCount(
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<club.boyuan.official.persistence.entity.Resume>()
+                            .eq(club.boyuan.official.persistence.entity.Resume::getCycleId, cycleId));
+            if (resumeCount != null && resumeCount > 0) {
+                recruitmentCycleMapper.softDeleteByIds(java.util.List.of(cycleId));
+                logger.info("招募周期已软删除（存在 {} 份投递），ID: {}", resumeCount, cycleId);
+            } else {
+                resumeFieldDefinitionMapper.delete(
+                        new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<club.boyuan.official.persistence.entity.ResumeFieldDefinition>()
+                                .eq(club.boyuan.official.persistence.entity.ResumeFieldDefinition::getCycleId, cycleId));
+                recruitmentCycleMapper.deleteTipsByCycleId(cycleId);
+                recruitmentCycleMapper.deleteById(cycleId);
+                logger.info("招募周期无任何投递，已物理删除，ID: {}", cycleId);
+            }
         } catch (Exception e) {
             logger.error("删除招募周期失败，ID: {}", cycleId, e);
             throw e;
@@ -157,15 +177,37 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
                 logger.warn("尝试批量删除招募周期，但ID列表为空");
                 return;
             }
-            
-            int deletedCount = recruitmentCycleMapper.batchDelete(cycleIds);
-            logger.info("批量删除招募周期完成，删除数量: {}", deletedCount);
+
+            // 逐个走单删逻辑：每个周期按「有投递软删 / 无投递物理删」独立决策
+            for (Integer cycleId : cycleIds) {
+                deleteRecruitmentCycle(cycleId);
+            }
+            logger.info("批量删除招募周期完成，数量: {}", cycleIds.size());
         } catch (Exception e) {
             logger.error("批量删除招募周期失败，IDs: {}", cycleIds, e);
             throw e;
         }
     }
     
+    @Override
+    public List<OpenCycleDTO> getOpenCyclesForApplication() {
+        LocalDate today = LocalDate.now();
+        List<RecruitmentCycle> open = recruitmentCycleMapper.findOpenForApplication(today);
+        logger.debug("当前开放投递的周期数: {}，日期: {}", open.size(), today);
+        return open.stream()
+                .map(c -> {
+                    int fieldCount = 0;
+                    try {
+                        fieldCount = fieldDefinitionService.getFieldDefinitionsByCycleId(c.getCycleId()).size();
+                    } catch (Exception e) {
+                        // 字段数只用于提示「该周期未配置表单」，取不到不该让整个列表失败
+                        logger.warn("统计周期{}的简历字段数失败: {}", c.getCycleId(), e.getMessage());
+                    }
+                    return new OpenCycleDTO(c, fieldCount);
+                })
+                .toList();
+    }
+
     @Override
     public void updateRecruitmentCycleStatusesBasedOnDate(LocalDate currentDate) {
         logger.info("根据当前日期更新招募周期状态，当前日期: {}", currentDate);

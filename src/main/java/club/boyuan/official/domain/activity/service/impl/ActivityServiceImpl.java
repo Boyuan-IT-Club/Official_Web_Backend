@@ -7,6 +7,8 @@ import club.boyuan.official.persistence.mapper.ActivityMapper;
 import club.boyuan.official.domain.activity.service.IActivityService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.AllArgsConstructor;
+import org.jsoup.Jsoup;
+import org.jsoup.safety.Safelist;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -25,7 +27,21 @@ public class ActivityServiceImpl implements IActivityService {
 
     private static final Logger logger = LoggerFactory.getLogger(ActivityServiceImpl.class);
 
+    /**
+     * 图文详情的 HTML 白名单：relaxed 覆盖标题/加粗/列表/图片/链接等常规排版标签
+     * （img 的 src 仅允许 http/https，天然挡掉 data: 内嵌与脚本协议），
+     * 另放行 class —— Quill 的对齐/缩进（ql-align-* 等）全靠 class 表达。
+     * 编辑器产出不可信：绕过前端直接调接口也只能写进这份白名单内的内容。
+     */
+    private static final Safelist DETAIL_SAFELIST = Safelist.relaxed()
+            .addAttributes(":all", "class");
+
     private final ActivityMapper activityMapper;
+
+    /** null 原样保留（更新时不覆盖已有详情），空串消毒后仍是空串 */
+    private static String sanitizeDetailContent(String html) {
+        return html == null ? null : Jsoup.clean(html, DETAIL_SAFELIST);
+    }
 
     @Override
     public Activity createActivity(Activity activity) throws BusinessException {
@@ -36,6 +52,8 @@ public class ActivityServiceImpl implements IActivityService {
                 logger.warn("创建活动失败，活动标题为空");
                 throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "活动标题不能为空");
             }
+
+            activity.setDetailContent(sanitizeDetailContent(activity.getDetailContent()));
 
             // 设置创建时间
             activity.setCreatedAt(LocalDateTime.now());
@@ -62,6 +80,8 @@ public class ActivityServiceImpl implements IActivityService {
                 logger.warn("更新活动失败，活动不存在，活动ID: {}", activity.getActivityId());
                 throw new BusinessException(BusinessExceptionEnum.ACTIVITY_NOT_FOUND, "活动不存在");
             }
+
+            activity.setDetailContent(sanitizeDetailContent(activity.getDetailContent()));
 
             // 设置更新时间
             activity.setUpdatedAt(LocalDateTime.now());

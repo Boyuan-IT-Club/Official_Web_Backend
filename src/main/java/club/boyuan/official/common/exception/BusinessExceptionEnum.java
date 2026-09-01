@@ -34,6 +34,11 @@ public enum BusinessExceptionEnum {
     ROLE_NOT_FOUND(2014, "角色不存在", HttpStatus.BAD_REQUEST),
     PERMISSION_NOT_FOUND(2015, "权限不存在", HttpStatus.BAD_REQUEST),
     DEPARTMENT_NOT_FOUND(2016, "部门不存在", HttpStatus.BAD_REQUEST),
+    GITHUB_ALREADY_BOUND(2017, "该 GitHub 账号已被其他用户绑定", HttpStatus.BAD_REQUEST),
+    INVALID_REPORT(2018, "报告单无效", HttpStatus.BAD_REQUEST),
+    EVALUATION_SUBMISSION_NOT_FOUND(2019, "评测提交不存在", HttpStatus.NOT_FOUND),
+    EVALUATION_SUBMISSION_ALREADY_CLAIMED(2020, "该评测提交已被认领", HttpStatus.CONFLICT),
+    PAYLOAD_TOO_LARGE(2021, "请求体过大", HttpStatus.PAYLOAD_TOO_LARGE),
 
     // 认证相关异常 (2100-2199)
     AUTHENTICATION_FAILED(2100, "认证失败", HttpStatus.BAD_REQUEST),
@@ -62,6 +67,7 @@ public enum BusinessExceptionEnum {
     RESUME_UPDATE_FAILED(3006, "简历更新失败", HttpStatus.BAD_REQUEST),
     RESUME_DELETE_FAILED(3007, "简历删除失败", HttpStatus.BAD_REQUEST),
     RESUME_SUBMIT_FAILED(3008, "简历提交失败", HttpStatus.BAD_REQUEST),
+    RESUME_CYCLE_CLOSED(3010, "该招募周期未开放投递（已停用、已删除或不在起止日期内）", HttpStatus.BAD_REQUEST),
     RESUME_QUERY_FAILED(3009, "简历查询失败", HttpStatus.BAD_REQUEST),
 
     // 简历字段定义相关异常 (3100-3199)
@@ -135,6 +141,16 @@ public enum BusinessExceptionEnum {
     INTERVIEW_PREFERENCE_TIME_REQUIRED(3610, "请至少勾选一个可接受的时间窗", HttpStatus.BAD_REQUEST),
     INTERVIEW_PREFERENCE_TIME_INVALID(3611, "所选时间窗无效或不属于该周期", HttpStatus.BAD_REQUEST),
     INTERVIEW_SCHEDULE_NOT_FOUND(3612, "面试安排不存在", HttpStatus.BAD_REQUEST),
+    INTERVIEW_PREFERENCE_LOCKED_BY_SCHEDULE(3613, "面试已安排，志愿与可面试时间不可再修改；如需调整请在申请中心提交改期申请", HttpStatus.CONFLICT),
+
+    // 面试评价与协同相关异常 (3700-3799)
+    EVALUATION_BOARD_NOT_OPENED(3701, "该周期的评价表尚未开启", HttpStatus.BAD_REQUEST),
+    EVALUATION_BOARD_LOCKED(3702, "评价表已锁定，无法修改", HttpStatus.CONFLICT),
+    EVALUATION_NO_ROSTER(3703, "该周期尚无已分配的面试名单，请先完成一键分配", HttpStatus.BAD_REQUEST),
+    EVALUATION_DIMENSION_DUPLICATE(3704, "评分维度名称重复", HttpStatus.BAD_REQUEST),
+    EVALUATION_DIMENSION_NOT_FOUND(3705, "评分维度不存在", HttpStatus.BAD_REQUEST),
+    EVALUATION_INTERVIEWER_NOT_FOUND(3706, "指定的面试官不存在", HttpStatus.BAD_REQUEST),
+    EVALUATION_SERVICE_TOKEN_INVALID(3707, "服务间调用凭证无效", HttpStatus.UNAUTHORIZED),
 
     // 活动相关异常 (7000-7099)
     ACTIVITY_NOT_FOUND(7001, "活动不存在", HttpStatus.BAD_REQUEST),

@@ -113,7 +113,7 @@ public class InterviewRescheduleController {
      * 管理员按周期查询改期申请列表（可按状态过滤，默认全部）。
      */
     @GetMapping("/admin/list")
-    @PreAuthorize("hasAuthority('resume:audit')")
+    @PreAuthorize("hasAnyAuthority('interview:schedule', 'resume:audit')")
     public ResponseEntity<ResponseMessage<List<InterviewRescheduleRequest>>> adminList(
             @RequestParam Integer cycleId,
             @RequestParam(required = false) Integer status) {
@@ -128,10 +128,11 @@ public class InterviewRescheduleController {
     }
 
     /**
-     * 管理员处理改期申请：status=1 同意（随后在「分配与调剂」人工重排）；status=2 拒绝。
+     * 管理员处理改期申请：status=1 同意（自动取消原场次安排，进入「分配与调剂」
+     * 待调剂池，由管理员人工重排到新场次）；status=2 拒绝（原安排不动）。
      */
     @PutMapping("/admin/{requestId}/handle")
-    @PreAuthorize("hasAuthority('resume:audit')")
+    @PreAuthorize("hasAnyAuthority('interview:schedule', 'resume:audit')")
     public ResponseEntity<ResponseMessage<InterviewRescheduleRequest>> handle(
             @PathVariable Integer requestId,
             @RequestBody Map<String, Object> body) {
@@ -154,6 +155,20 @@ public class InterviewRescheduleController {
                 .setHandledBy(handler.getUserId())
                 .setHandledAt(LocalDateTime.now());
         rescheduleMapper.updateById(req);
+
+        // 同意改期 = 取消原场次安排（status=2），候选人进入「分配与调剂」的待调剂池。
+        // 原先只改申请状态、旧安排照常生效：学生端仍显示原时间、面试官仍按旧安排等人，
+        // 看起来像"系统直接定了"——同意后必须由管理员在新场次上人工重排。
+        // 取消同时也解开意向锁（已取消的安排不再锁志愿，见 IntentLock 集成测试）。
+        if (status == InterviewRescheduleRequest.STATUS_APPROVED && req.getScheduleId() != null) {
+            InterviewSchedule schedule = interviewScheduleMapper.selectById(req.getScheduleId());
+            if (schedule != null && Integer.valueOf(1).equals(schedule.getStatus())) {
+                schedule.setStatus(2); // 已取消，等待人工重排
+                interviewScheduleMapper.updateById(schedule);
+                log.info("改期申请{}已同意，原面试安排{}已取消待重排", requestId, schedule.getScheduleId());
+            }
+        }
+
         log.info("管理员{}处理改期申请{}，status={}", handler.getUsername(), requestId, status);
         return ResponseEntity.ok(ResponseMessage.success(req));
     }

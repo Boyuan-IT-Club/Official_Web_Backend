@@ -1,5 +1,7 @@
 package club.boyuan.official.domain.interview.service;
 
+import club.boyuan.official.domain.interview.dto.BatchDecisionRequestDTO;
+import club.boyuan.official.domain.interview.dto.BatchDecisionResponseDTO;
 import club.boyuan.official.domain.interview.dto.InterviewResultResponseDTO;
 import club.boyuan.official.domain.interview.dto.InterviewResultSaveDTO;
 import club.boyuan.official.domain.interview.dto.SendNotificationsRequestDTO;
@@ -25,4 +27,20 @@ public interface IInterviewResultService extends IService<InterviewResult> {
     InterviewResultResponseDTO list(Integer cycleId, String name, String decision, String department, Integer page, Integer size);
 
     InterviewResult update(Integer resultId, @Valid InterviewResultSaveDTO interviewResult);
+
+    /**
+     * 批量录取 / 批量标记未通过。单条 UPDATE 落库，同一批要么都改要么都不改。
+     */
+    BatchDecisionResponseDTO batchDecision(@Valid BatchDecisionRequestDTO request);
+
+    /**
+     * 从本周期的生效面试安排生成结果名单(decision=0 待定),已有结果行的安排跳过。
+     *
+     * 此前 interview_result 只有飞书拉取(FeishuTablePullImportExecutor)会创建 ——
+     * 不接飞书就没有名单,「结果与通知」无从操作。本方法让录取决定可以完全在
+     * 站内完成:生成名单后用既有的单行更新/批量录取接口定结果。
+     *
+     * @return 本次新建的行数
+     */
+    int seedFromSchedules(Integer cycleId);
 }

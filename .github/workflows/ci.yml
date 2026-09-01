@@ -66,6 +66,21 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
+      # Flyway 见到同一版本号两个脚本会直接启动失败（"Found more than one migration with
+      # version N"），而这在并行开发里很容易发生——两个分支各自认为下一个版本号是 N。
+      # 真出现时是整个应用起不来，所以放在跑测试之前用几行 shell 挡掉，反馈比等 Spring
+      # 上下文初始化失败快得多，报错也直白。
+      - name: Check migration versions are unique
+        run: |
+          dup=$(ls src/main/resources/db/migration/ | grep -oE '^V[0-9]+' | sort | uniq -d)
+          if [ -n "$dup" ]; then
+            echo "::error::迁移版本号重复：$dup"
+            ls src/main/resources/db/migration/ | grep -E "^($(echo "$dup" | paste -sd'|' -))__"
+            echo "改用一个未被占用的版本号；新增前先看生产 flyway_schema_history 的最大版本"
+            exit 1
+          fi
+          echo "迁移版本号唯一：$(ls src/main/resources/db/migration/ | wc -l | tr -d ' ') 个脚本"
+
       - name: Run tests (with JaCoCo)
         run: |
           chmod +x mvnw

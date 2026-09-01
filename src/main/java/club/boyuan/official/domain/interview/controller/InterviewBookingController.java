@@ -203,7 +203,7 @@ public class InterviewBookingController {
      * 管理员分页查看某周期全部有效预约。
      */
     @GetMapping("/admin/cycles/{cycleId}")
-    @PreAuthorize("hasAuthority('resume:audit')")
+    @PreAuthorize("hasAnyAuthority('interview:schedule', 'resume:audit')")
     public ResponseEntity<ResponseMessage<InterviewBookingAdminListResponseDTO>> listBookingsForAdmin(
             @PathVariable Integer cycleId,
             @RequestParam(required = false) Boolean hasFineInterviewTime,

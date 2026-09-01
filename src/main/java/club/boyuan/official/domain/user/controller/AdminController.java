@@ -2,6 +2,7 @@ package club.boyuan.official.domain.user.controller;
 
 import club.boyuan.official.common.dto.PageResultDTO;
 import club.boyuan.official.common.dto.ResponseMessage;
+import club.boyuan.official.domain.user.dto.AdminUserPageDTO;
 import club.boyuan.official.domain.user.dto.UserDTO;
 import club.boyuan.official.persistence.entity.User;
 import club.boyuan.official.common.exception.BusinessExceptionEnum;
@@ -49,7 +50,7 @@ public class AdminController {
      * 管理员添加账号接口
      */
     @PostMapping("/users")
-    @PreAuthorize("hasAuthority('admin:manage')")
+    @PreAuthorize("hasAnyAuthority('user:manage', 'admin:manage')")
     public ResponseEntity<ResponseMessage<?>> addUser(@RequestBody UserDTO userDTO) {
         User existingUser = userService.getUserByUsername(userDTO.getUsername());
         if (existingUser != null) {
@@ -71,7 +72,7 @@ public class AdminController {
      * 为用户赋予管理员权限接口
      */
     @PostMapping("/users/{userId}/grant-admin")
-    @PreAuthorize("hasAuthority('admin:manage')")
+    @PreAuthorize("hasAnyAuthority('admin:grant', 'admin:manage')")
     public ResponseEntity<ResponseMessage<?>> grantAdminPermission(@PathVariable Integer userId) {
         String adminUsername = SecurityUtil.getCurrentUsername();
         User adminUser = userService.getUserByUsername(adminUsername);
@@ -101,15 +102,20 @@ public class AdminController {
     /**
      * 获取用户列表接口（分页 + 条件查询）
      */
+    // 只读放宽:admin:manage(超管,可读可写)或 user:view(管理员,只读)。
+    // 本控制器其余接口一律保持 admin:manage —— 只读角色能看不能改的边界就在这里,
+    // 新增写接口时不要顺手抄这一行。
     @GetMapping("/users")
-    @PreAuthorize("hasAuthority('admin:manage')")
+    @PreAuthorize("hasAnyAuthority('admin:manage', 'user:view')")
     public ResponseEntity<ResponseMessage<?>> getUsers(
-            @RequestParam(required = false) String role,
+            @RequestParam(required = false) String roleGroup,
+            @RequestParam(required = false) Integer role,
             @RequestParam(required = false) String dept,
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) String keyword,
             @PageableDefault(size = 10, sort = "userId", direction = Sort.Direction.ASC) Pageable pageable) {
         User currentUser = userService.getUserByUsername(SecurityUtil.getCurrentUsername());
-        PageResultDTO<User> userPage = userService.getUsersByConditions(role, dept, status, pageable, currentUser);
+        PageResultDTO<User> userPage = userService.getUsersByConditions(roleGroup, role, dept, status, keyword, pageable, currentUser);
         // 填充 RBAC 角色（user 表的 role 列为注册期遗留字段，展示与分配统一走 user_role 关联）
         if (userPage != null && userPage.getContent() != null) {
             userPage.getContent().forEach(u -> {
@@ -121,14 +127,33 @@ public class AdminController {
                 }
             });
         }
-        return ResponseEntity.ok(ResponseMessage.success(userPage));
+        // 统计卡的三个计数走全库,与当前分页/筛选无关;键名兼容上游 DTO,
+        // 语义统一为 RBAC 分组(见 ADR-0001)。前端统计卡已迁移到 GET /users/stats。
+        Map<String, Object> stats = userService.getUserStats();
+        AdminUserPageDTO body = new AdminUserPageDTO(
+                userPage,
+                ((Number) stats.getOrDefault("memberCount", 0)).longValue(),
+                ((Number) stats.getOrDefault("nonMemberCount", 0)).longValue(),
+                ((Number) stats.getOrDefault("frozen", 0)).longValue());
+        return ResponseEntity.ok(ResponseMessage.success(body));
+    }
+
+    /**
+     * 用户分类统计（全量）：total / frozen / adminCount / memberCount / nonMemberCount。
+     * 独立于分页列表，供统计卡片使用。只读，故与 getUsers 同门槛（user:view 可看统计）。
+     */
+    @GetMapping("/users/stats")
+    @PreAuthorize("hasAnyAuthority('admin:manage', 'user:manage', 'user:view')")
+    public ResponseEntity<ResponseMessage<?>> getUserStats() {
+        Map<String, Object> stats = userService.getUserStats();
+        return ResponseEntity.ok(ResponseMessage.success(stats));
     }
 
     /**
      * 用户状态管理接口
      */
     @PutMapping("/users/{userId}/status")
-    @PreAuthorize("hasAuthority('admin:manage')")
+    @PreAuthorize("hasAnyAuthority('user:manage', 'admin:manage')")
     public ResponseEntity<ResponseMessage<?>> updateUserStatus(
             @PathVariable Integer userId,
             @RequestBody Map<String, String> statusRequest) {
@@ -153,7 +178,7 @@ public class AdminController {
      * 冻结/解冻用户接口
      */
     @PutMapping("/users/{userId}/freeze")
-    @PreAuthorize("hasAuthority('admin:manage')")
+    @PreAuthorize("hasAnyAuthority('user:manage', 'admin:manage')")
     public ResponseEntity<ResponseMessage<?>> freezeUser(
             @PathVariable Integer userId,
             @RequestBody Map<String, String> statusRequest) {
@@ -174,7 +199,7 @@ public class AdminController {
      * 修改用户会员状态接口（录取/取消录取）
      */
     @PutMapping("/users/{userId}/membership")
-    @PreAuthorize("hasAuthority('admin:manage')")
+    @PreAuthorize("hasAnyAuthority('user:manage', 'admin:manage')")
     public ResponseEntity<ResponseMessage<?>> updateUserMembership(
             @PathVariable Integer userId,
             @RequestBody Map<String, Boolean> membershipRequest) {
@@ -195,7 +220,7 @@ public class AdminController {
      * 批量冻结/解冻用户接口
      */
     @PutMapping("/users/batch-status")
-    @PreAuthorize("hasAuthority('admin:manage')")
+    @PreAuthorize("hasAnyAuthority('user:manage', 'admin:manage')")
     public ResponseEntity<ResponseMessage<?>> batchUpdateUserStatus(
             @RequestBody Map<String, Object> statusRequest) {
         String status = (String) statusRequest.get("status");
@@ -227,30 +252,37 @@ public class AdminController {
      * 批量修改用户部门接口
      */
     @PutMapping("/users/batch-dept")
-    @PreAuthorize("hasAuthority('admin:manage')")
+    @PreAuthorize("hasAnyAuthority('user:manage', 'admin:manage')")
     public ResponseEntity<ResponseMessage<?>> batchUpdateUserDept(
             @RequestBody Map<String, Object> deptRequest) {
         String dept = (String) deptRequest.get("dept");
         @SuppressWarnings("unchecked")
         List<Integer> userIds = (List<Integer>) deptRequest.get("userIds");
 
-        if (dept == null || dept.trim().isEmpty()) {
-            logger.warn("部门信息不能为空");
+        // 用「键在不在」区分两种情况，而不是只看值空不空：
+        //   请求体里没有 dept 键        -> 调用方漏传，拒绝
+        //   dept 键存在但为 null / 空串 -> 显式取消分配，把部门清空
+        // 此前一律按「不能为空」拒绝，导致部门分配出去就撤不回来。
+        if (!deptRequest.containsKey("dept")) {
+            logger.warn("缺少 dept 字段");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ResponseMessage.error(400, "部门信息不能为空"));
+                    .body(ResponseMessage.error(400, "缺少 dept 字段；取消分配请显式传 dept: null"));
         }
+        boolean clearing = dept == null || dept.trim().isEmpty();
         if (userIds == null || userIds.isEmpty()) {
             logger.warn("用户ID列表不能为空");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(ResponseMessage.error(400, "用户ID列表不能为空"));
         }
 
-        int updatedCount = userService.batchUpdateUserDept(userIds, dept);
-        logger.info("管理员成功更新{}个用户的部门为{}", updatedCount, dept);
+        int updatedCount = userService.batchUpdateUserDept(userIds, clearing ? null : dept);
+        logger.info("管理员成功{}{}个用户的部门{}", clearing ? "取消分配" : "更新",
+                updatedCount, clearing ? "" : "为" + dept);
 
         Map<String, Object> result = new HashMap<>();
         result.put("updatedCount", updatedCount);
-        result.put("dept", dept);
+        result.put("dept", clearing ? null : dept);
+        result.put("cleared", clearing);
         return ResponseEntity.ok(ResponseMessage.success(result));
     }
 
@@ -258,7 +290,7 @@ public class AdminController {
      * 批量修改用户会员状态接口（录取/取消录取）
      */
     @PutMapping("/users/batch-membership")
-    @PreAuthorize("hasAuthority('admin:manage')")
+    @PreAuthorize("hasAnyAuthority('user:manage', 'admin:manage')")
     public ResponseEntity<ResponseMessage<?>> batchUpdateUserMembership(
             @RequestBody Map<String, Object> membershipRequest) {
         Boolean isMember = (Boolean) membershipRequest.get("isMember");
@@ -290,7 +322,7 @@ public class AdminController {
      * 清理Redis缓存接口
      */
     @PostMapping("/cache/clear")
-    @PreAuthorize("hasAuthority('admin:manage')")
+    @PreAuthorize("hasAnyAuthority('system:ops', 'admin:manage')")
     public ResponseEntity<ResponseMessage<?>> clearCache(
             @RequestBody(required = false) Map<String, String> cacheRequest) {
         String cacheType = cacheRequest != null ? cacheRequest.get("type") : "field_definition";

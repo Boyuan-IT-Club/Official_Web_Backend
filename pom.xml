@@ -49,6 +49,13 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- 活动图文详情的 HTML 白名单消毒：富文本编辑器的产出不可信，入库前过一遍 -->
+        <dependency>
+            <groupId>org.jsoup</groupId>
+            <artifactId>jsoup</artifactId>
+            <version>1.18.3</version>
+        </dependency>
+
         <dependency>
             <groupId>com.baomidou</groupId>
             <artifactId>mybatis-plus-spring-boot3-starter</artifactId>

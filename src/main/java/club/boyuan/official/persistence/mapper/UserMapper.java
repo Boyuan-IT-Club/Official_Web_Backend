@@ -7,6 +7,7 @@ import org.apache.ibatis.annotations.Param;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
+import java.util.Map;
 
 @Mapper
 public interface UserMapper extends BaseMapper<User> {
@@ -27,14 +28,21 @@ public interface UserMapper extends BaseMapper<User> {
     
     List<User> selectAll();
     
-    List<User> findByRoleAndDeptAndStatus(@Param("role") String role, 
-                                          @Param("dept") String dept, 
-                                          @Param("status") String status, 
+    List<User> findByRoleAndDeptAndStatus(@Param("roleGroup") String roleGroup,
+                                          @Param("roleId") Integer roleId,
+                                          @Param("dept") String dept,
+                                          @Param("status") String status,
+                                          @Param("keyword") String keyword,
                                           Pageable pageable);
-                                          
-    long countByRoleAndDeptAndStatus(@Param("role") String role, 
-                                     @Param("dept") String dept, 
-                                     @Param("status") String status);
+
+    long countByRoleAndDeptAndStatus(@Param("roleGroup") String roleGroup,
+                                     @Param("roleId") Integer roleId,
+                                     @Param("dept") String dept,
+                                     @Param("status") String status,
+                                     @Param("keyword") String keyword);
+
+    /** 用户分类统计：单条 SQL 聚合 total/frozen/adminCount/memberCount/nonMemberCount */
+    Map<String, Object> countUserBuckets();
     
     List<User> searchUsers(@Param("keyword") String keyword);
     
@@ -61,11 +69,27 @@ public interface UserMapper extends BaseMapper<User> {
      * @return 更新的记录数
      */
     int batchUpdateMembershipByIds(@Param("userIds") List<Integer> userIds, @Param("isMember") Boolean isMember);
+
+    /**
+     * 管理端统计卡用的全库计数(不随分页/筛选变化)。
+     */
+    long countByMembership(@Param("isMember") boolean isMember);
+
+    long countFrozen();
     
     /**
      * 根据用户ID列表查询用户
      * @param userIds 用户ID列表
      * @return 用户列表
      */
-    List<User> selectByIds(@Param("userIds") List<Integer> userIds);
+    /**
+     * 按 ID 批量查用户。
+     *
+     * 不能叫 selectByIds：MyBatis-Plus 3.5.9 的 BaseMapper 内置了同名方法
+     * （参数名是 coll），而同名 XML 语句会顶掉内置实现 —— 于是任何走
+     * IService.listByIds() 的调用（飞书导入就是）都会带着 coll 撞上这条
+     * 要 userIds 的 XML，报 "Parameter 'userIds' not found"。
+     * 线上飞书同步/拉取整条链路因此全挂。自定义方法名必须避开内置名。
+     */
+    List<User> selectUsersByIds(@Param("userIds") List<Integer> userIds);
 }
