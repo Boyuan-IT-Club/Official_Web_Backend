@@ -12,6 +12,10 @@
         <result property="status" column="status"/>
         <result property="isActive" column="is_active"/>
         <result property="isDeleted" column="is_deleted"/>
+        <!-- 自定义 resultMap 不继承实体上的 @TableField，新增列必须在这里补一行，
+             否则接口查出来永远是 null（dept/is_member 就踩过这个坑） -->
+        <result property="waitingRoom" column="waiting_room"/>
+        <result property="contactInfo" column="contact_info"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
     </resultMap>

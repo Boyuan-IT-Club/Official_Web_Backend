@@ -1,5 +1,11 @@
 package club.boyuan.official.common.utils;
 
+import org.slf4j.LoggerFactory;
+import org.slf4j.Logger;
+import java.nio.charset.StandardCharsets;
+import org.springframework.mail.javamail.MimeMessageHelper;
+import jakarta.mail.internet.MimeMessage;
+import jakarta.mail.MessagingException;
 import club.boyuan.official.common.exception.BusinessException;
 import club.boyuan.official.common.exception.BusinessExceptionEnum;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +22,8 @@ import club.boyuan.official.domain.user.service.SmsService;
  */
 @Component
 public class MessageUtils {
+
+    private static final Logger logger = LoggerFactory.getLogger(MessageUtils.class);
 
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
     private static final Pattern PHONE_PATTERN = Pattern.compile("^\\d{11}$");
@@ -64,6 +72,31 @@ public class MessageUtils {
         message.setSubject(subject);
         message.setText(content);
         mailSender.send(message);
+    }
+
+    /**
+     * 发送 HTML 邮件。
+     *
+     * 与上面的纯文本版并存而不是替换：验证码之外还有些内部通知用纯文本更合适，
+     * 而且真出问题时可以逐个回退，不必一次全切。
+     *
+     * @param plainFallback 纯文本兜底。不给的话，关闭了 HTML 的客户端（以及
+     *                      部分邮件预览、无障碍读屏）只会看到一片空白
+     */
+    public void sendHtmlEmail(String to, String subject, String html, String plainFallback) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            // multipart=true 才能同时带纯文本与 HTML 两份正文
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, StandardCharsets.UTF_8.name());
+            helper.setFrom(fromEmail);
+            helper.setTo(to);
+            helper.setSubject(subject);
+            helper.setText(plainFallback == null ? "" : plainFallback, html);
+            mailSender.send(message);
+        } catch (MessagingException e) {
+            logger.error("HTML 邮件发送失败，收件人: {}, 主题: {}", to, subject, e);
+            throw new BusinessException(BusinessExceptionEnum.EMAIL_SEND_FAILED);
+        }
     }
 
     /**

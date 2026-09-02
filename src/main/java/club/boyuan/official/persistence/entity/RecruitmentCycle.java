@@ -60,6 +60,14 @@ public class RecruitmentCycle {
      * 而历史简历详情、评价表都要按 ID 解析已删周期的名称 —— 自动过滤正好破坏这条路径。
      * 过滤范围由各查询语句显式控制（见 RecruitmentCycleMapper.xml）。
      */
+    /** 候场教室。同一周期通常只有一间，面试提醒邮件里用（V33） */
+    @TableField("waiting_room")
+    private String waitingRoom;
+
+    /** 本届负责人联系方式，未录取通知邮件末尾附上（V33） */
+    @TableField("contact_info")
+    private String contactInfo;
+
     @TableField("is_deleted")
     private Integer isDeleted;
 
@@ -191,5 +199,21 @@ public class RecruitmentCycle {
                 this.status = 3; // 已结束
             }
         }
+    }
+
+    public String getWaitingRoom() {
+        return waitingRoom;
+    }
+
+    public void setWaitingRoom(String waitingRoom) {
+        this.waitingRoom = waitingRoom;
+    }
+
+    public String getContactInfo() {
+        return contactInfo;
+    }
+
+    public void setContactInfo(String contactInfo) {
+        this.contactInfo = contactInfo;
     }
 }

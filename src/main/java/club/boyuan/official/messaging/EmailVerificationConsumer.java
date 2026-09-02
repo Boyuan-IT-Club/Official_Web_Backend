@@ -1,5 +1,6 @@
 package club.boyuan.official.messaging;
 
+import club.boyuan.official.infra.notification.mail.RecruitmentMails;
 import club.boyuan.official.infra.config.RabbitMQConfig;
 import club.boyuan.official.common.utils.MessageUtils;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +17,8 @@ import org.springframework.stereotype.Component;
 public class EmailVerificationConsumer {
 
     private static final String EMAIL_SUBJECT = "邮箱验证码";
+    /** 与 Redis 里验证码的 TTL 保持一致 */
+    private static final int CODE_VALID_MINUTES = 5;
 
     private final MessageUtils messageUtils;
 
@@ -25,8 +28,10 @@ public class EmailVerificationConsumer {
             log.warn("收到无效的邮箱验证码消息，已忽略: {}", message);
             return;
         }
-        String content = "您的验证码是：" + message.getCode() + "，有效期5分钟";
-        messageUtils.sendEmail(message.getEmail(), EMAIL_SUBJECT, content);
+        // 改发 HTML（与三封招新通知同一套视觉）。同时带纯文本兜底，
+        // 关闭了 HTML 的客户端仍能看到验证码。
+        var mail = RecruitmentMails.verificationCode(message.getCode(), CODE_VALID_MINUTES);
+        messageUtils.sendHtmlEmail(message.getEmail(), EMAIL_SUBJECT, mail.html(), mail.plainText());
         log.info("邮箱验证码已通过 MQ 消费者发送, email={}", message.getEmail());
     }
 }
