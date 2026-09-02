@@ -1,5 +1,11 @@
 package club.boyuan.official.domain.interview.service.impl;
 
+import java.util.List;
+import club.boyuan.official.infra.notification.mail.MailTemplate;
+import club.boyuan.official.domain.interview.service.IRecruitmentQrCodeService;
+import club.boyuan.official.persistence.entity.RecruitmentQrCode;
+import club.boyuan.official.persistence.entity.RecruitmentCycle;
+import club.boyuan.official.persistence.mapper.RecruitmentCycleMapper;
 import club.boyuan.official.domain.interview.dto.InterviewBookingDTO;
 import club.boyuan.official.persistence.entity.Department;
 import club.boyuan.official.persistence.entity.InterviewNotificationLog;
@@ -52,6 +58,8 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
     private final DepartmentService departmentService;
     private final ResumeDataService resumeDataService;
     private final MessageUtils messageUtils;
+    private final RecruitmentCycleMapper recruitmentCycleMapper;
+    private final IRecruitmentQrCodeService qrCodeService;
 
     @Override
     public void enqueueBookingSuccess(Integer scheduleId, String requestId) {
@@ -148,7 +156,11 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
 
         String subject = InterviewNotificationEmailBuilder.subject(type);
         String body = InterviewNotificationEmailBuilder.body(type, name, booking, null);
-        sendAndLog(type, scheduleId, null, email, subject, body, schedule, message.getRequestId());
+        NoticeConfig reminderCfg = noticeConfig(booking == null ? null : booking.getCycleId());
+        String html = InterviewNotificationEmailBuilder.html(
+                type, name, booking, null, reminderCfg.academicYear(),
+                reminderCfg.waitingRoom(), List.of(), reminderCfg.contactInfo()).html();
+        sendAndLog(type, scheduleId, null, email, subject, body, html, schedule, message.getRequestId());
     }
 
     private void deliverResult(InterviewNotificationType type, InterviewNotificationMessage message) {
@@ -203,7 +215,68 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
                 ? InterviewNotificationEmailBuilder.body(effectiveType, name, booking, departmentName)
                 : message.getCustomBody();
 
-        sendAndLog(effectiveType, result.getScheduleId(), resultId, email, subject, body, schedule, null);
+        // 管理员写了自定义正文时不套模板 —— 那是他要说的话，不该被包进
+        // 「恭喜录取」的壳里
+        String html = null;
+        if (templated) {
+            NoticeConfig cfg = noticeConfig(schedule == null ? null : schedule.getCycleId());
+            List<MailTemplate.QrItem> qrs = effectiveType == InterviewNotificationType.ADMISSION
+                    ? qrItems(schedule == null ? null : schedule.getCycleId(), result.getAssignedDeptId())
+                    : List.of();
+            html = InterviewNotificationEmailBuilder.html(
+                    effectiveType, name, booking, departmentName,
+                    cfg.academicYear(), cfg.waitingRoom(), qrs, cfg.contactInfo()).html();
+        }
+
+        sendAndLog(effectiveType, result.getScheduleId(), resultId, email, subject, body, html, schedule, null);
+    }
+
+    /** 邮件要用到的周期级配置。周期取不到时全部为空，模板会自动省略对应段落 */
+    private record NoticeConfig(String academicYear, String waitingRoom, String contactInfo) {
+        static NoticeConfig empty() {
+            return new NoticeConfig(null, null, null);
+        }
+    }
+
+    private NoticeConfig noticeConfig(Integer cycleId) {
+        if (cycleId == null) {
+            return NoticeConfig.empty();
+        }
+        RecruitmentCycle cycle = recruitmentCycleMapper.selectById(cycleId);
+        if (cycle == null) {
+            return NoticeConfig.empty();
+        }
+        return new NoticeConfig(cycle.getAcademicYear(), cycle.getWaitingRoom(), cycle.getContactInfo());
+    }
+
+    /**
+     * 录取通知里要附的二维码：本人部门那张 + 大群那张。
+     * 取不到就返回空列表 —— 模板会改成「登录官网查看」，而不是留一块空图。
+     */
+    private List<MailTemplate.QrItem> qrItems(Integer cycleId, Integer deptId) {
+        if (cycleId == null) {
+            return List.of();
+        }
+        try {
+            return qrCodeService.forAdmitted(cycleId, deptId).stream()
+                    .map(qr -> new MailTemplate.QrItem(qr.getImageUrl(), labelOf(qr)))
+                    .toList();
+        } catch (Exception e) {
+            // 二维码取不到不该挡住录取通知本身
+            log.warn("取二维码失败 cycleId={}, deptId={}: {}", cycleId, deptId, e.getMessage());
+            return List.of();
+        }
+    }
+
+    private String labelOf(RecruitmentQrCode qr) {
+        if (StringUtils.hasText(qr.getRemark())) {
+            return qr.getRemark();
+        }
+        if (RecruitmentQrCode.TYPE_MAIN_GROUP.equals(qr.getQrType())) {
+            return "社团大群";
+        }
+        String dept = resolveDepartmentName(qr.getDeptId());
+        return StringUtils.hasText(dept) ? dept + "群" : "部门群";
     }
 
     private InterviewNotificationType resolveType(InterviewNotificationMessage message) {
@@ -238,10 +311,16 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
                             String email,
                             String subject,
                             String body,
+                            String html,
                             InterviewSchedule schedule,
                             String requestId) {
         messageUtils.validateEmail(email);
-        messageUtils.sendEmail(email, subject, body);
+        if (StringUtils.hasText(html)) {
+            // HTML 为主、纯文本兜底：关掉 HTML 的客户端仍能读到完整内容
+            messageUtils.sendHtmlEmail(email, subject, html, body);
+        } else {
+            messageUtils.sendEmail(email, subject, body);
+        }
 
         InterviewNotificationLog logEntry = new InterviewNotificationLog()
                 .setNotificationType(type.name())
