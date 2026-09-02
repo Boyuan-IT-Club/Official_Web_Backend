@@ -1,5 +1,8 @@
 package club.boyuan.official.infra.notification;
 
+import java.util.List;
+import club.boyuan.official.infra.notification.mail.RecruitmentMails;
+import club.boyuan.official.infra.notification.mail.MailTemplate;
 import club.boyuan.official.domain.interview.dto.InterviewBookingDTO;
 import org.springframework.util.StringUtils;
 
@@ -63,6 +66,64 @@ public final class InterviewNotificationEmailBuilder {
             return recipientName + "，您好：";
         }
         return "您好：";
+    }
+
+    /**
+     * HTML 版正文（B 版模板）。与上面的纯文本 body 并存 ——
+     * 纯文本那份仍作为兜底随 HTML 一起发出，关掉 HTML 的客户端看的是它。
+     *
+     * @param waitingRoom 候场教室，按周期配置；没配就不出现那一行
+     * @param qrCodes     录取通知用的部门群 + 大群二维码；其它类型忽略
+     * @param contactInfo 未录取通知末尾的负责人联系方式；没配就不出现
+     */
+    public static MailTemplate.Rendered html(InterviewNotificationType type,
+                                             String recipientName,
+                                             InterviewBookingDTO booking,
+                                             String departmentName,
+                                             String academicYear,
+                                             String waitingRoom,
+                                             List<MailTemplate.QrItem> qrCodes,
+                                             String contactInfo) {
+        return switch (type) {
+            case ADMISSION -> RecruitmentMails.admitted(
+                    recipientName, academicYear, departmentName, qrCodes);
+            case REJECTION -> RecruitmentMails.rejected(recipientName, contactInfo);
+            // 预约成功 / 前一日提醒 / 当日提醒共用同一封「面试安排」——
+            // 三者要说的事完全一样（什么时候、在哪、怎么改期），
+            // 分成三套文案只会让维护时改漏一处
+            default -> RecruitmentMails.interviewReminder(
+                    recipientName, formatTimeText(booking), locationOf(booking), waitingRoom);
+        };
+    }
+
+    /** 面试时间，形如 2025-09-27 13:40-13:50；只有日期时退化成日期 */
+    private static String formatTimeText(InterviewBookingDTO booking) {
+        if (booking == null) {
+            return "";
+        }
+        if (booking.getInterviewTime() != null) {
+            return booking.getInterviewTime().format(DATE_TIME_FMT);
+        }
+        if (booking.getInterviewDate() == null) {
+            return "";
+        }
+        String date = booking.getInterviewDate().format(DATE_FMT);
+        if (booking.getStartTime() != null && booking.getEndTime() != null) {
+            return date + " " + booking.getStartTime().format(TIME_FMT)
+                    + "-" + booking.getEndTime().format(TIME_FMT);
+        }
+        return date;
+    }
+
+    /** 面试房间即面试地点；线上面试则给会议链接 */
+    private static String locationOf(InterviewBookingDTO booking) {
+        if (booking == null) {
+            return "";
+        }
+        if (StringUtils.hasText(booking.getLocation())) {
+            return booking.getLocation();
+        }
+        return StringUtils.hasText(booking.getMeetingLink()) ? booking.getMeetingLink() : "";
     }
 
     private static String formatBookingDetails(InterviewBookingDTO booking) {
