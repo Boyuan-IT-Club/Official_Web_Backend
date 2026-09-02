@@ -40,6 +40,7 @@ import java.util.Map;
 public class InterviewScheduleController {
 
     private final IInterviewScheduleService interviewScheduleService;
+    private final club.boyuan.official.domain.interview.service.IRecruitmentQrCodeService qrCodeService;
 
     private final IUserService userService;
 
@@ -57,6 +58,18 @@ public class InterviewScheduleController {
      * 学生查询本人在指定周期的面试结果（录取/未录取）。
      * 结果未出（或管理员尚未录入 decision）时 data 为 null。
      */
+    /** 二维码的说明文字。有备注用备注，否则按类型给默认名 */
+    private String qrLabel(club.boyuan.official.persistence.entity.RecruitmentQrCode qr) {
+        if (org.springframework.util.StringUtils.hasText(qr.getRemark())) {
+            return qr.getRemark();
+        }
+        if (club.boyuan.official.persistence.entity.RecruitmentQrCode.TYPE_MAIN_GROUP.equals(qr.getQrType())) {
+            return "社团大群";
+        }
+        Department d = departmentMapper.selectById(qr.getDeptId());
+        return d != null ? d.getDeptName() + "群" : "部门群";
+    }
+
     @GetMapping("/my-result")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<Map<String, Object>>> getMyResult(@RequestParam Integer cycleId) {
@@ -91,6 +104,20 @@ public class InterviewScheduleController {
             Department dept = departmentMapper.selectById(result.getAssignedDeptId());
             data.put("assignedDeptId", result.getAssignedDeptId());
             data.put("assignedDeptName", dept != null ? dept.getDeptName() : null);
+        }
+
+        // 录取者才给二维码：本人部门群 + 社团大群。
+        // 未通过的人拿到入群码只会造成误解，所以按 decision 判断而不是一律返回。
+        if (Integer.valueOf(1).equals(result.getDecision())) {
+            data.put("qrCodes", qrCodeService.forAdmitted(cycleId, result.getAssignedDeptId())
+                    .stream()
+                    .map(qr -> {
+                        Map<String, Object> item = new LinkedHashMap<>();
+                        item.put("imageUrl", qr.getImageUrl());
+                        item.put("label", qrLabel(qr));
+                        return item;
+                    })
+                    .toList());
         }
         return ResponseEntity.ok(ResponseMessage.success(data));
     }
