@@ -1,5 +1,6 @@
 package club.boyuan.official.domain.resume.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import club.boyuan.official.domain.resume.dto.OpenCycleDTO;
 import club.boyuan.official.common.dto.PageResultDTO;
 import club.boyuan.official.persistence.entity.RecruitmentCycle;
@@ -69,6 +70,28 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
             }
             
             recruitmentCycleMapper.updateById(recruitmentCycle);
+
+            // updateById 会跳过 null 字段，意味着「候场教室」「负责人联系方式」
+            // 一旦填过就再也清不掉（和部门分配撤不回来是同一类问题）。
+            // 这两项是纯文本配置、没有「不传即保持」的语义需求，所以显式置空。
+            // 只在调用方确实传了 null 时才清，避免误伤只改了别的字段的请求 ——
+            // 判断依据是「实体里为 null 且库里原本有值」。
+            boolean clearWaitingRoom = recruitmentCycle.getWaitingRoom() == null
+                    && existingCycle.getWaitingRoom() != null;
+            boolean clearContact = recruitmentCycle.getContactInfo() == null
+                    && existingCycle.getContactInfo() != null;
+            if (clearWaitingRoom || clearContact) {
+                LambdaUpdateWrapper<RecruitmentCycle> clear = new LambdaUpdateWrapper<RecruitmentCycle>()
+                        .eq(RecruitmentCycle::getCycleId, recruitmentCycle.getCycleId());
+                if (clearWaitingRoom) {
+                    clear.set(RecruitmentCycle::getWaitingRoom, null);
+                }
+                if (clearContact) {
+                    clear.set(RecruitmentCycle::getContactInfo, null);
+                }
+                recruitmentCycleMapper.update(null, clear);
+            }
+
             logger.info("招募周期更新成功，ID: {}", recruitmentCycle.getCycleId());
             return recruitmentCycle;
         } catch (Exception e) {
