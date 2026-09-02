@@ -646,7 +646,8 @@ public class ResumeServiceImpl implements IResumeService {
                 fieldLabel,
                 fieldType,
                 placeholder,
-                fieldValue.getFieldValue()
+                fieldValue.getFieldValue(),
+                fieldDefinition != null ? fieldDefinition.getSortOrder() : null
         );
     }
 

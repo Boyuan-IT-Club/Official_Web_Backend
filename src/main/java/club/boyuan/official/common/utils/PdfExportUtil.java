@@ -128,13 +128,16 @@ public class PdfExportUtil {
                 PdfPTable info = new PdfPTable(new float[]{1f, 1f});
                 info.setWidthPercentage(100);
                 info.setSpacingAfter(10);
+                // 顺序与网页、Word 导出一致（学号 → 性别 → 年级 → 专业 → 邮箱 →
+                // 手机 → GitHub）。三处此前各有一套写死的顺序，同一份简历
+                // 在网页、PDF、Word 里长得都不一样。
                 java.util.List<String[]> basics = new ArrayList<>();
                 addBasic(basics, "学号", byKey.get("student_id"));
+                addBasic(basics, "性别", byKey.get("gender"));
+                addBasic(basics, "年级", byKey.get("grade"));
+                addBasic(basics, "专业", byKey.get("major"));
                 addBasic(basics, "邮箱", byKey.get("email"));
                 addBasic(basics, "手机", byKey.get("phone"));
-                addBasic(basics, "年级", byKey.get("grade"));
-                addBasic(basics, "性别", byKey.get("gender"));
-                addBasic(basics, "专业", byKey.get("major"));
                 addBasic(basics, "GitHub", byKey.get("github"));
 
                 int perCol = (int) Math.ceil(basics.size() / 2.0);
@@ -145,13 +148,20 @@ public class PdfExportUtil {
                 document.add(info);
 
                 // ── 长文本小节 ──────────────────────────────
-                addChipSection(document, "技术栈", byKey.get("tech_stack"),
-                        sectionFont, chipFont, accent, chipBg);
-                addSection(document, "个人简介", firstNonBlank(byKey.get("self_introduction"), byKey.get("introduction")), sectionFont, bodyFont, accent);
-                addSection(document, "项目经验", byKey.get("project_experience"), sectionFont, bodyFont, accent);
-                addSection(document, "加入原因", byKey.get("reason"), sectionFont, bodyFont, accent);
+                // 小节顺序同样对齐：自我介绍 → 加入理由 → 个人简介 → 期望部门 →
+                // 技术栈 → 项目经验。
+                //
+                // 自我介绍与个人简介拆成两节：原来是 firstNonBlank(两者)，
+                // 学生两个都填时后一个被静默丢掉（网页与 Word 导出有同样的毛病，
+                // 已一并修掉）。
+                addSection(document, "自我介绍", byKey.get("self_introduction"), sectionFont, bodyFont, accent);
+                addSection(document, "加入理由", byKey.get("reason"), sectionFont, bodyFont, accent);
+                addSection(document, "个人简介", byKey.get("introduction"), sectionFont, bodyFont, accent);
                 addChipSection(document, "期望部门", byKey.get("expected_departments"),
                         sectionFont, chipFont, accent, chipBg);
+                addChipSection(document, "技术栈", byKey.get("tech_stack"),
+                        sectionFont, chipFont, accent, chipBg);
+                addSection(document, "项目经验", byKey.get("project_experience"), sectionFont, bodyFont, accent);
 
                 // 其余未归类字段（模板可扩展，逐条列出）
                 java.util.Set<String> known = new java.util.HashSet<>(java.util.Arrays.asList(
@@ -159,7 +169,11 @@ public class PdfExportUtil {
                         "expected_departments", "tech_stack", "self_introduction", "introduction",
                         "project_experience", "reason", "personal_photo"));
                 StringBuilder extras = new StringBuilder();
-                for (SimpleResumeFieldDTO f : fields) {
+                // 自定义字段按管理员配置的 sort_order 排，别按数据库返回的偶然顺序
+                java.util.List<SimpleResumeFieldDTO> orderedExtras = new ArrayList<>(fields);
+                orderedExtras.sort(java.util.Comparator.comparing(
+                        f -> f.getSortOrder() == null ? Integer.MAX_VALUE : f.getSortOrder()));
+                for (SimpleResumeFieldDTO f : orderedExtras) {
                     if (f.getFieldKey() == null || known.contains(f.getFieldKey())) continue;
                     if (f.getFieldValue() == null || f.getFieldValue().trim().isEmpty()) continue;
                     if (isBase64Image(f.getFieldValue())) continue;

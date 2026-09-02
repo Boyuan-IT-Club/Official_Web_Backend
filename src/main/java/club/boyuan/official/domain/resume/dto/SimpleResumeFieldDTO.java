@@ -7,6 +7,12 @@ public class SimpleResumeFieldDTO {
     private String fieldType;
     private String placeholder;
     private String fieldValue;
+    /**
+     * 该字段在本周期里的排列序号（resume_field_definition.sort_order）。
+     * 带出来是为了让 PDF、Word、网页三处按同一个顺序展示 ——
+     * 此前各有一套写死的顺序，同一份简历在三个地方长得都不一样。
+     */
+    private Integer sortOrder;
     
     public SimpleResumeFieldDTO() {
     }
@@ -15,6 +21,13 @@ public class SimpleResumeFieldDTO {
         this.fieldId = fieldId;
         this.fieldLabel = fieldLabel;
         this.fieldValue = fieldValue;
+    }
+
+    public SimpleResumeFieldDTO(Integer fieldId, String fieldKey, String fieldLabel,
+                                String fieldType, String placeholder, String fieldValue,
+                                Integer sortOrder) {
+        this(fieldId, fieldKey, fieldLabel, fieldType, placeholder, fieldValue);
+        this.sortOrder = sortOrder;
     }
 
     public SimpleResumeFieldDTO(Integer fieldId, String fieldKey, String fieldLabel,
@@ -74,5 +87,13 @@ public class SimpleResumeFieldDTO {
     
     public void setFieldValue(String fieldValue) {
         this.fieldValue = fieldValue;
+    }
+
+    public Integer getSortOrder() {
+        return sortOrder;
+    }
+
+    public void setSortOrder(Integer sortOrder) {
+        this.sortOrder = sortOrder;
     }
 }
