@@ -132,6 +132,15 @@ public class PdfExportUtil {
                 Paragraph bt = new Paragraph(name, getFont(24, Font.BOLD, new BaseColor(35, 40, 48)));
                 Paragraph bs = new Paragraph("博远信息技术社 · 招新申请简历", getFont(10, Font.NORMAL, accent));
                 bs.setSpacingBefore(5);
+                // 社徽跟在副标题这一行的行首，和文字同高（12pt），
+                // 不单独占一行——简历的主角是姓名，logo 只是署名
+                Image mark = loadBrandLogo();
+                if (mark != null) {
+                    mark.scaleToFit(14f, 14f);
+                    Chunk markChunk = new Chunk(mark, 0, -3f, true);
+                    bs.add(0, new Chunk("  "));
+                    bs.add(0, markChunk);
+                }
                 hc.addElement(bt);
                 hc.addElement(bs);
                 head.addCell(hc);
@@ -511,6 +520,35 @@ public class PdfExportUtil {
     private static void applyCjkLineBreaking(Paragraph p) {
         for (Chunk c : p.getChunks()) {
             c.setSplitCharacter(CJK_SPLIT);
+        }
+    }
+
+    /** 社徽，缓存住——每页页脚也要用，重复解码没意义。 */
+    private static volatile Image BRAND_LOGO;
+    private static volatile boolean BRAND_LOGO_LOADED;
+
+    /**
+     * 读打包在 jar 里的社徽。刻意不走 URL：邮件模板可以引外链（收件人在线看），
+     * 但 PDF 是要离线传阅、打印、存档的，图片必须自带。
+     */
+    private static Image loadBrandLogo() {
+        if (BRAND_LOGO_LOADED) {
+            return BRAND_LOGO;
+        }
+        synchronized (FONT_LOCK) {
+            if (!BRAND_LOGO_LOADED) {
+                try (java.io.InputStream in = PdfExportUtil.class
+                        .getResourceAsStream("/branding/logo.png")) {
+                    if (in != null) {
+                        BRAND_LOGO = Image.getInstance(in.readAllBytes());
+                    }
+                } catch (Exception e) {
+                    // 拿不到社徽不该让整份简历导不出来，缺就缺了
+                    log.warn("社徽加载失败，PDF 将不带 logo: {}", e.getMessage());
+                }
+                BRAND_LOGO_LOADED = true;
+            }
+            return BRAND_LOGO;
         }
     }
 
