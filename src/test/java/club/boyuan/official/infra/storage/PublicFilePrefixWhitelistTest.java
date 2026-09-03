@@ -34,8 +34,15 @@ class PublicFilePrefixWhitelistTest {
     private static final Path SECURITY_CONFIG = Path.of(
             "src/main/java/club/boyuan/official/infra/config/SecurityConfig.java");
 
-    /** 明确不打算公开读的前缀。目前为空 —— 有了再往里加，别默默放行。 */
-    private static final Set<String> INTENTIONALLY_PRIVATE = Set.of();
+    /**
+     * 明确不打算公开读的前缀。往里加之前必须想清楚：这些文件由谁、怎么鉴权取到。
+     *
+     * attachments：简历附件，申请人上传的个人资料。取文件走
+     * ResumeAttachmentController 的 /api/resumes/attachments/{id}/content，
+     * 逐次鉴权 + 强制 nosniff + 只有安全类型才内联。放进公开白名单等于
+     * 任何人拿到对象键就能下载别人的申请材料。
+     */
+    private static final Set<String> INTENTIONALLY_PRIVATE = Set.of("attachments");
 
     @Test
     @DisplayName("每个上传前缀都在 /api/files 白名单里")
