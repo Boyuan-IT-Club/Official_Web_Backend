@@ -84,7 +84,10 @@ public class ResumeAttachmentServiceImpl implements IResumeAttachmentService {
 
         String objectKey;
         try {
-            objectKey = cosStorageService.upload(file, "attachments");
+            // imageOnly=false：附件本来就是「任意格式」。
+            // 安全边界在读取那一侧（逐次鉴权 + nosniff + 只有安全类型才内联），
+            // 不是靠拦住上传——拦了功能就没了。
+            objectKey = cosStorageService.upload(file, "attachments", false);
         } catch (IOException e) {
             log.error("附件上传失败 resumeId={}, file={}", resumeId, fileName, e);
             throw new BusinessException(BusinessExceptionEnum.FILE_UPLOAD_FAILED);

@@ -34,12 +34,27 @@ public class CosStorageService {
 
     /**
      * 上传文件并返回对象键（objectKey），不包含对外访问域名。
+     *
+     * 默认只收图片：头像、活动图、二维码这些调用方都只该传图。
      */
     public String upload(MultipartFile file, String prefix) throws IOException {
+        return upload(file, prefix, true);
+    }
+
+    /**
+     * @param imageOnly 是否强制只收图片。
+     *
+     * 简历附件传 false —— 「任意格式」正是那个功能的需求，作品集可能是
+     * PDF、压缩包、视频。放开类型不等于放开风险：附件的安全边界在**读取**那一侧
+     * （ResumeAttachmentController：逐次鉴权、nosniff、只有安全类型才内联），
+     * 而不是靠在这里拦住上传。其余调用方保持只收图片，别顺手一起放开。
+     */
+    public String upload(MultipartFile file, String prefix, boolean imageOnly) throws IOException {
         if (file == null || file.isEmpty()) {
             throw new IOException("上传文件为空");
         }
-        if (file.getContentType() == null || !file.getContentType().startsWith("image/")) {
+        if (imageOnly && (file.getContentType() == null
+                || !file.getContentType().startsWith("image/"))) {
             throw new IOException("不允许上传此类型的文件");
         }
 
