@@ -115,4 +115,9 @@ public interface IRecruitmentCycleService {
     PageResultDTO<RecruitmentCycle> getRecruitmentCyclesByConditions(String cycleName, String academicYear, 
                                                                      Integer status, Integer isActive,
                                                                      int page, int size, String sortBy, String sortOrder);
+
+    /**
+     * 即将开放的周期（预告用）。可见但不可投——闸门仍是 getOpenCyclesForApplication。
+     */
+    List<OpenCycleDTO> getUpcomingCyclesForApplication();
 }

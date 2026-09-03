@@ -209,4 +209,12 @@
         ORDER BY start_date DESC, cycle_id DESC
     </select>
 
+    <select id="findUpcomingForApplication" resultMap="RecruitmentCycleResultMap">
+        SELECT * FROM recruitment_cycle
+        WHERE is_active = 1
+          AND is_deleted = 0
+          AND start_date &gt; #{today}
+        ORDER BY start_date ASC, cycle_id ASC
+    </select>
+
 </mapper>
