@@ -86,5 +86,20 @@ public class InterviewResult implements Serializable {
     @TableField("notified_at")
     private LocalDateTime notifiedAt;
 
+    /*
+     * 以下两个不是本表的列，是 selectResultPage 联表查出来的展示字段。
+     *
+     * exist = false 必须写：不写的话 MyBatis-Plus 会把它们当成真实列，
+     * 拼进 INSERT/UPDATE 直接报 Unknown column。
+     *
+     * 之前实体里根本没有这两个字段——SQL 明明 SELECT 了 u.name as user_name，
+     * 查出来无处安放就被丢掉，管理端只好去「面试安排名册」里凑名字。
+     * 而没有面试安排的同学不在那份名册里（V34 之后他们也进结果名单了），
+     * 于是姓名退化成「用户#14」，尽管库里存着「叶晓良」。
+     */
+    @TableField(value = "user_name", exist = false)
+    private String userName;
 
+    @TableField(value = "department_name", exist = false)
+    private String departmentName;
 }
