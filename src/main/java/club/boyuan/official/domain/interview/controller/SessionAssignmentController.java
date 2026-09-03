@@ -6,6 +6,10 @@ import club.boyuan.official.domain.interview.dto.ReassignScheduleRequestDTO;
 import club.boyuan.official.domain.interview.dto.SessionAssignmentResultDTO;
 import club.boyuan.official.domain.interview.service.IInterviewSessionService;
 import club.boyuan.official.domain.interview.service.ISessionAssignmentService;
+import club.boyuan.official.persistence.entity.Resume;
+import club.boyuan.official.persistence.entity.ResumeFieldDefinition;
+import club.boyuan.official.persistence.entity.ResumeFieldValue;
+import club.boyuan.official.persistence.entity.User;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,7 +17,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 管理员：一键场次分配、待调剂名单、人工调剂（一键再分配到其它有空的场次）。
@@ -30,6 +37,9 @@ public class SessionAssignmentController {
     private final club.boyuan.official.persistence.mapper.InterviewScheduleMapper interviewScheduleMapper;
     private final club.boyuan.official.persistence.mapper.UserMapper userMapper;
     private final club.boyuan.official.persistence.mapper.DepartmentMapper departmentMapper;
+    private final club.boyuan.official.persistence.mapper.ResumeMapper resumeMapper;
+    private final club.boyuan.official.persistence.mapper.ResumeFieldDefinitionMapper resumeFieldDefinitionMapper;
+    private final club.boyuan.official.persistence.mapper.ResumeFieldValueMapper resumeFieldValueMapper;
 
     /**
      * 查询某周期的已分配名单（可按场次过滤），按面试时间排序。
@@ -115,5 +125,76 @@ public class SessionAssignmentController {
         SessionAssignmentResultDTO.AssignedItem item =
                 sessionAssignmentService.manualAssign(resumeId, request.getTargetSessionId());
         return ResponseEntity.ok(ResponseMessage.success(item));
+    }
+
+    /**
+     * 无法参加线下面试的同学名单。
+     *
+     * 这批人不会被自动排进场次，管理员得单独约线上面试——可在此之前
+     * 他们在管理端是「看不见」的：既不在已分配名单里，也不在任何场次下，
+     * 只能靠翻每一份简历才发现。
+     *
+     * 数据来自简历字段 expected_interview_time 的 JSON
+     * （{first, second, canAttend, customTime}）——「能否线下参加」没有独立
+     * 字段，是面试意向卡一次性写进去的；customTime 承载学生填的说明。
+     * 这里不为它建新表：值本就在简历里，另存一份只会产生第二个真相源。
+     */
+    @GetMapping("/cycles/{cycleId}/offline-unavailable")
+    public ResponseEntity<ResponseMessage<List<Map<String, Object>>>> offlineUnavailable(
+            @PathVariable Integer cycleId) {
+        List<Map<String, Object>> out = new ArrayList<>();
+
+        // 先定位本周期「能否线下参加」所在的字段 id：字段是按周期配置的，
+        // 不同周期同一个 fieldKey 的 id 不一样，写死 id 会串届
+        ResumeFieldDefinition def = resumeFieldDefinitionMapper.selectOne(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ResumeFieldDefinition>()
+                        .eq(ResumeFieldDefinition::getCycleId, cycleId)
+                        .eq(ResumeFieldDefinition::getFieldKey, "expected_interview_time")
+                        .last("LIMIT 1"));
+        if (def == null) {
+            return ResponseEntity.ok(ResponseMessage.success(out));
+        }
+
+        List<ResumeFieldValue> values = resumeFieldValueMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ResumeFieldValue>()
+                        .eq(ResumeFieldValue::getFieldId, def.getFieldId()));
+
+        for (ResumeFieldValue v : values) {
+            String raw = v.getFieldValue();
+            if (raw == null || !raw.contains("\"no\"")) {
+                continue;   // 便宜的预筛，避免给每一行都解析 JSON
+            }
+            String canAttend;
+            String note;
+            try {
+                com.fasterxml.jackson.databind.JsonNode node =
+                        new com.fasterxml.jackson.databind.ObjectMapper().readTree(raw);
+                canAttend = node.path("canAttend").asText("");
+                note = node.path("customTime").asText("");
+            } catch (Exception e) {
+                continue;   // 脏数据跳过，不能让一行坏 JSON 弄挂整张名单
+            }
+            if (!"no".equals(canAttend)) {
+                continue;
+            }
+
+            Resume resume = v.getResumeId() == null ? null : resumeMapper.selectById(v.getResumeId());
+            if (resume == null || !cycleId.equals(resume.getCycleId())) {
+                continue;
+            }
+            User u = resume.getUserId() == null ? null : userMapper.selectById(resume.getUserId());
+
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("userId", resume.getUserId());
+            item.put("resumeId", resume.getResumeId());
+            item.put("name", u != null ? u.getName() : null);
+            item.put("username", u != null ? u.getUsername() : null);
+            item.put("email", u != null ? u.getEmail() : null);
+            item.put("phone", u != null ? u.getPhone() : null);
+            item.put("note", note);          // 学生填的说明，可能为空
+            item.put("resumeStatus", resume.getStatus());
+            out.add(item);
+        }
+        return ResponseEntity.ok(ResponseMessage.success(out));
     }
 }
