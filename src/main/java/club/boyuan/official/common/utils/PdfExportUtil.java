@@ -36,6 +36,7 @@ public class PdfExportUtil {
      * 而每份 PDF 会取六七种字号，不缓存等于每次导出重跑几十遍。
      */
     private static volatile BaseFont CHINESE_BASE_FONT;
+    private static volatile boolean FONT_RESOLVED;
     private static final Object FONT_LOCK = new Object();
 
     /**
@@ -541,13 +542,16 @@ public class PdfExportUtil {
      * @return BaseFont对象，如果无法创建则返回null
      */
     private static BaseFont getChineseBaseFont() {
-        BaseFont cached = CHINESE_BASE_FONT;
-        if (cached != null) {
-            return cached;
+        // 用单独的标志位而不是「CHINESE_BASE_FONT != null」判断是否解析过：
+        // 解析失败时结果本来就是 null，拿 null 当「还没解析」会导致每取一次字号
+        // 就重跑一遍枚举与探针，日志也跟着刷屏
+        if (FONT_RESOLVED) {
+            return CHINESE_BASE_FONT;
         }
         synchronized (FONT_LOCK) {
-            if (CHINESE_BASE_FONT == null) {
+            if (!FONT_RESOLVED) {
                 CHINESE_BASE_FONT = resolveChineseBaseFont();
+                FONT_RESOLVED = true;
             }
             return CHINESE_BASE_FONT;
         }
@@ -583,7 +587,9 @@ public class PdfExportUtil {
                 }
             }
         }
-        // iText 内置的中日韩字体，本身就不可嵌入，靠阅读器的标准 CJK 支持
+        // 兜底：iText 内置的中日韩字体，CMap 资源由 itext-asian 提供。
+        // 它不可嵌入，但走的是 Adobe 标准 CJK 编码而非 IDENTITY_H，
+        // 阅读器按标准替换即可正确显示，没有 Identity-H 那种字形错位问题。
         for (String name : new String[]{"STSong-Light", "STSongStd-Light"}) {
             BaseFont bf = tryCreate(name, "UniGB-UCS2-H");
             if (bf != null) {
