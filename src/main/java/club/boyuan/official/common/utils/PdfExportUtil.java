@@ -200,10 +200,24 @@ public class PdfExportUtil {
                 addSection(document, "项目经验", byKey.get("project_experience"), sectionFont, bodyFont, accent);
 
                 // 其余未归类字段（模板可扩展，逐条列出）
+                // 「其他信息」只收管理员自己加的字段：标准字段上面已经排过了。
+                //
+                // 这份清单必须与前端 resumeFieldRegistry 的 RESUME_FIELDS 保持一致
+                // （Word 导出那侧已改为从规范表推导）。此前三处各维护一份、互相漂移：
+                // 前端漏了 introduction，导致「个人简介」在 Word 里出现两次；
+                // 这边则漏了 first_choice / second_choice 与两个方案A 遗留字段，
+                // 历史数据里若存过值，就会在 PDF 末尾冒出几栏本不该露面的内容。
+                //
+                // Java 侧没有那张规范表，只能手抄；改规范表时记得成对改这里。
                 java.util.Set<String> known = new java.util.HashSet<>(java.util.Arrays.asList(
-                        "name", "student_id", "email", "phone", "grade", "gender", "major", "github",
-                        "expected_departments", "tech_stack", "self_introduction", "introduction",
-                        "project_experience", "reason", "personal_photo"));
+                        "name", "student_id", "gender", "grade", "major", "email", "phone", "github",
+                        "personal_photo", "photo",
+                        "self_introduction", "reason", "introduction",
+                        "first_choice", "second_choice", "expected_departments",
+                        "tech_stack", "project_experience",
+                        // 方案A 遗留，任何界面都不展示
+                        "can_attend_offline_interview", "expected_interview_time",
+                        "second_interview_time"));
                 StringBuilder extras = new StringBuilder();
                 // 自定义字段按管理员配置的 sort_order 排，别按数据库返回的偶然顺序
                 java.util.List<SimpleResumeFieldDTO> orderedExtras = new ArrayList<>(fields);
