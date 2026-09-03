@@ -12,6 +12,7 @@ import club.boyuan.official.domain.resume.service.IRecruitmentCycleService;
 import club.boyuan.official.domain.resume.service.IResumeService;
 import club.boyuan.official.domain.resume.service.ResumeDataService;
 import club.boyuan.official.persistence.entity.Department;
+import club.boyuan.official.persistence.entity.InterviewSessionDept;
 import club.boyuan.official.persistence.entity.InterviewPreference;
 import club.boyuan.official.persistence.entity.InterviewPreferenceTime;
 import club.boyuan.official.persistence.entity.InterviewSchedule;
@@ -60,6 +61,7 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
     private final InterviewPreferenceTimeMapper preferenceTimeMapper;
     private final IInterviewSessionService interviewSessionService;
     private final InterviewSessionMapper interviewSessionMapper;
+    private final club.boyuan.official.persistence.mapper.InterviewSessionDeptMapper interviewSessionDeptMapper;
     private final IInterviewScheduleService interviewScheduleService;
     private final IInterviewTimeSlotService interviewTimeSlotService;
     private final IResumeService resumeService;
@@ -110,16 +112,19 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
 
             SessionState chosen = null;
             int matchedChoice = 0;
+            Integer matchedDeptId = null;
             if (pref.getFirstDeptId() != null) {
                 chosen = pickSession(statesByDept.get(pref.getFirstDeptId()), acceptable);
                 if (chosen != null) {
                     matchedChoice = 1;
+                    matchedDeptId = pref.getFirstDeptId();
                 }
             }
             if (chosen == null && pref.getSecondDeptId() != null) {
                 chosen = pickSession(statesByDept.get(pref.getSecondDeptId()), acceptable);
                 if (chosen != null) {
                     matchedChoice = 2;
+                    matchedDeptId = pref.getSecondDeptId();
                 }
             }
 
@@ -133,7 +138,7 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
             if (!touchedStates.contains(chosen)) {
                 touchedStates.add(chosen);
             }
-            InterviewSchedule schedule = persistSchedule(resume, chosen, index, matchedChoice);
+            InterviewSchedule schedule = persistSchedule(resume, chosen, index, matchedChoice, matchedDeptId);
             result.getAssigned().add(buildAssigned(schedule, resume, chosen, matchedChoice, deptNames));
         }
 
@@ -246,7 +251,15 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
                 .orElse(null);
     }
 
-    private InterviewSchedule persistSchedule(Resume resume, SessionState state, int index, int matchedChoice) {
+    /**
+     * @param matchedDeptId 学生被匹配上的部门。
+     *
+     * 多部门场次下不能再写 session.getDeptId()：一场同时面三个部门时，
+     * 那个值只是「主部门」，照抄会把技术部的同学记成媒体部的面试，
+     * 后续录取部门、通知邮件全跟着错。要记的是他因为哪个志愿被排进来的。
+     */
+    private InterviewSchedule persistSchedule(Resume resume, SessionState state, int index,
+                                              int matchedChoice, Integer matchedDeptId) {
         LocalDateTime start = computeStart(state.timeSlot, index, durationOf(state.session));
         InterviewSchedule schedule = new InterviewSchedule()
                 .setResumeId(resume.getResumeId())
@@ -254,7 +267,7 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
                 .setCycleId(state.session.getCycleId())
                 .setSlotId(null)
                 .setSessionId(state.session.getSessionId())
-                .setDeptId(state.session.getDeptId())
+                .setDeptId(matchedDeptId != null ? matchedDeptId : state.session.getDeptId())
                 .setInterviewTime(start)
                 .setStatus(SCHEDULE_STATUS_ACTIVE)
                 .setNotes("自动分配 - 第" + (matchedChoice == 0 ? "" : matchedChoice) + "志愿 - " + state.session.getLocation())
@@ -324,12 +337,43 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
         Map<Integer, InterviewTimeSlot> timeSlotMap = interviewTimeSlotService.listByIds(timeSlotIds).stream()
                 .collect(Collectors.toMap(InterviewTimeSlot::getTimeSlotId, ts -> ts, (a, b) -> a));
 
+        // 一个场次可以同时面多个部门（V36），所以它要挂到它服务的**每个**部门下。
+        // 注意 SessionState 只建一个、被多个部门共享 —— 容量是场次的，不是部门的：
+        // 每个部门各建一份 state 会让同一场次的容量被重复计算好几遍，超额分配。
+        Map<Integer, List<Integer>> deptsBySession = loadDeptsBySession(
+                sessions.stream().map(InterviewSession::getSessionId).filter(Objects::nonNull).toList());
+
         Map<Integer, List<SessionState>> byDept = new HashMap<>();
         for (InterviewSession session : sessions) {
             SessionState state = new SessionState(session, timeSlotMap.get(session.getTimeSlotId()));
-            byDept.computeIfAbsent(session.getDeptId(), k -> new ArrayList<>()).add(state);
+            List<Integer> depts = deptsBySession.get(session.getSessionId());
+            if (depts == null || depts.isEmpty()) {
+                // 关联表没有记录时回落到场次自己的 dept_id。
+                // 正常不该发生（V36 已回填），但缺了它，老数据会直接分不出去
+                depts = session.getDeptId() == null ? List.of() : List.of(session.getDeptId());
+            }
+            for (Integer deptId : depts) {
+                byDept.computeIfAbsent(deptId, k -> new ArrayList<>()).add(state);
+            }
         }
         return byDept;
+    }
+
+    /**
+     * 一次把这批场次覆盖的部门全查出来，避免在循环里逐场次查（N+1）。
+     */
+    private Map<Integer, List<Integer>> loadDeptsBySession(List<Integer> sessionIds) {
+        if (sessionIds == null || sessionIds.isEmpty()) {
+            return new HashMap<>();
+        }
+        List<InterviewSessionDept> rows = interviewSessionDeptMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<InterviewSessionDept>()
+                        .in(InterviewSessionDept::getSessionId, sessionIds));
+        Map<Integer, List<Integer>> out = new HashMap<>();
+        for (InterviewSessionDept r : rows) {
+            out.computeIfAbsent(r.getSessionId(), k -> new ArrayList<>()).add(r.getDeptId());
+        }
+        return out;
     }
 
     private Map<Integer, String> loadAllDeptNames() {
@@ -347,8 +391,10 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
         item.setName(resumeDataService.getResumeName(resume));
         item.setMatchedChoice(matchedChoice == 0 ? null : matchedChoice);
         item.setSessionId(state.session.getSessionId());
-        item.setDeptId(state.session.getDeptId());
-        item.setDeptName(deptNames.get(state.session.getDeptId()));
+        // 展示的是「他被排进哪个部门的面试」，多部门场次下不等于场次的主部门
+        Integer shownDept = schedule.getDeptId() != null ? schedule.getDeptId() : state.session.getDeptId();
+        item.setDeptId(shownDept);
+        item.setDeptName(deptNames.get(shownDept));
         item.setLocation(state.session.getLocation());
         item.setInterviewStartTime(schedule.getInterviewTime());
         if (schedule.getInterviewTime() != null) {
