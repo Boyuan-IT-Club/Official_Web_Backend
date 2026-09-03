@@ -218,17 +218,26 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
         List<RecruitmentCycle> open = recruitmentCycleMapper.findOpenForApplication(today);
         logger.debug("当前开放投递的周期数: {}，日期: {}", open.size(), today);
         return open.stream()
-                .map(c -> {
-                    int fieldCount = 0;
-                    try {
-                        fieldCount = fieldDefinitionService.getFieldDefinitionsByCycleId(c.getCycleId()).size();
-                    } catch (Exception e) {
-                        // 字段数只用于提示「该周期未配置表单」，取不到不该让整个列表失败
-                        logger.warn("统计周期{}的简历字段数失败: {}", c.getCycleId(), e.getMessage());
-                    }
-                    return new OpenCycleDTO(c, fieldCount);
-                })
+                .map(c -> new OpenCycleDTO(c, countFields(c.getCycleId())))
                 .toList();
+    }
+
+    @Override
+    public List<OpenCycleDTO> getUpcomingCyclesForApplication() {
+        LocalDate today = LocalDate.now();
+        List<RecruitmentCycle> upcoming = recruitmentCycleMapper.findUpcomingForApplication(today);
+        logger.debug("即将开放的周期数: {}，日期: {}", upcoming.size(), today);
+        return upcoming.stream().map(c -> new OpenCycleDTO(c, countFields(c.getCycleId()))).toList();
+    }
+
+    /** 字段数只用于提示「该周期未配置表单」，取不到不该让整个列表失败。 */
+    private int countFields(Integer cycleId) {
+        try {
+            return fieldDefinitionService.getFieldDefinitionsByCycleId(cycleId).size();
+        } catch (Exception e) {
+            logger.warn("统计周期{}的简历字段数失败: {}", cycleId, e.getMessage());
+            return 0;
+        }
     }
 
     @Override

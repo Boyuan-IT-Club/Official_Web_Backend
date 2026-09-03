@@ -134,4 +134,17 @@ public interface RecruitmentCycleMapper extends BaseMapper<RecruitmentCycle> {
      * 按 start_date 倒序:同时开放多个时,较新的排前面做默认选中。
      */
     List<RecruitmentCycle> findOpenForApplication(@Param("today") LocalDate today);
+
+    /**
+     * 即将开放的周期:启用中,且开始日期还没到。
+     *
+     * 与 findOpenForApplication 一样以日期为权威,不看 status 列。
+     *
+     * 单独一个查询而不是并进「开放」里:openIds 在前端是「能不能投」的闸门,
+     * 把未开始的混进去,用户就能给一个还没开始的周期提交简历。
+     * 未开始的周期要在用户端可见(做预告),但可见与可投是两件事。
+     *
+     * 按 start_date 升序:最快开始的排最前,预告卡片的自然顺序。
+     */
+    List<RecruitmentCycle> findUpcomingForApplication(@Param("today") LocalDate today);
 }

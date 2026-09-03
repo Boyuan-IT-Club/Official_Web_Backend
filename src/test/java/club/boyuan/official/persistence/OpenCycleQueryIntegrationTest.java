@@ -59,6 +59,65 @@ class OpenCycleQueryIntegrationTest {
         }
     }
 
+    @Test
+    @DisplayName("未开始的周期进「即将开放」，且绝不能混进「开放投递」")
+    void upcomingCyclesAreSeparateFromOpenOnes() {
+        // 线上问题：管理员把已经开投的周期的开始时间往后推，周期掉出开放列表，
+        // 用户端却只会判断「不在开放列表里」，于是一律显示「招募周期已结束」——
+        // 和旁边那句「已提交（可修改）」自相矛盾。
+        // 未开始的周期得能单独查出来做预告，但可见与可投必须分开：
+        // 前端拿开放列表的 id 当「能不能投」的闸门，混进去就能投一个还没开始的周期。
+        LocalDate today = LocalDate.now();
+        List<Integer> created = new ArrayList<>();
+        try {
+            Integer notStarted = insert("测试-还没开始", today.plusDays(7), today.plusDays(30), 1, created);
+            Integer openNow = insert("测试-正在开放", today.minusDays(1), today.plusDays(9), 1, created);
+            Integer ended = insert("测试-已截止", today.minusDays(60), today.minusDays(30), 1, created);
+            Integer disabled = insert("测试-未启用但未开始", today.plusDays(7), today.plusDays(30), 0, created);
+            Integer startsToday = insert("测试-今天开始", today, today.plusDays(10), 1, created);
+
+            List<Integer> upcoming = cycleMapper.findUpcomingForApplication(today).stream()
+                    .map(RecruitmentCycle::getCycleId).toList();
+            List<Integer> open = cycleMapper.findOpenForApplication(today).stream()
+                    .map(RecruitmentCycle::getCycleId).toList();
+
+            assertTrue(upcoming.contains(notStarted), "开始日期还没到的周期要能查到，用户端才做得出预告");
+            assertFalse(upcoming.contains(openNow), "正在开放的不属于「即将开放」");
+            assertFalse(upcoming.contains(ended), "已截止的不属于「即将开放」");
+            assertFalse(upcoming.contains(disabled), "未启用的不该出现，管理员还没打算公开它");
+
+            // 边界：今天开始就是今天能投，不是预告
+            assertFalse(upcoming.contains(startsToday), "今天开始的周期属于开放，不是即将开放");
+            assertTrue(open.contains(startsToday), "今天开始的周期今天就该能投");
+
+            // 这条是重点：可见 != 可投
+            assertFalse(open.contains(notStarted),
+                    "未开始的周期绝不能进开放列表，否则用户能给还没开始的周期提交简历");
+        } finally {
+            created.forEach(cycleMapper::deleteById);
+        }
+    }
+
+    @Test
+    @DisplayName("即将开放按 start_date 升序，最快开始的排最前")
+    void upcomingIsSortedByStartDateAscending() {
+        LocalDate today = LocalDate.now();
+        List<Integer> created = new ArrayList<>();
+        try {
+            Integer later = insert("测试-一个月后", today.plusDays(30), today.plusDays(60), 1, created);
+            Integer sooner = insert("测试-三天后", today.plusDays(3), today.plusDays(20), 1, created);
+
+            List<Integer> ids = cycleMapper.findUpcomingForApplication(today).stream()
+                    .map(RecruitmentCycle::getCycleId).toList();
+
+            // 预告卡片按「还有几天开始」自然排列；与开放列表的倒序相反是有意的
+            assertTrue(ids.indexOf(sooner) < ids.indexOf(later),
+                    "即将开放应按 start_date 升序: " + ids);
+        } finally {
+            created.forEach(cycleMapper::deleteById);
+        }
+    }
+
     private Integer insert(String name, LocalDate start, LocalDate end, int isActive, List<Integer> created) {
         RecruitmentCycle c = new RecruitmentCycle();
         c.setCycleName(name);

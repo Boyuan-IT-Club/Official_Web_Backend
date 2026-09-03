@@ -193,6 +193,21 @@ public class RecruitmentCycleController {
         return ResponseEntity.ok(ResponseMessage.success(cycles));
     }
 
+    /**
+     * 即将开放的周期（用户端预告用）。
+     *
+     * 与 /open 分开而不是并成一个列表：前端拿 /open 的 id 集合当「能不能投」的闸门，
+     * 未开始的混进去，用户就能给一个还没开始的周期提交简历。
+     * 可见与可投是两件事——未开始的周期该看得到（预告），但不该能投。
+     */
+    @GetMapping("/upcoming")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ResponseMessage<List<OpenCycleDTO>>> getUpcomingCycles() {
+        List<OpenCycleDTO> cycles = recruitmentCycleService.getUpcomingCyclesForApplication();
+        logger.debug("返回即将开放的周期，共{}个", cycles.size());
+        return ResponseEntity.ok(ResponseMessage.success(cycles));
+    }
+
     @GetMapping("/active/{isActive}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<List<RecruitmentCycle>>> getRecruitmentCyclesByIsActive(@PathVariable Integer isActive) {

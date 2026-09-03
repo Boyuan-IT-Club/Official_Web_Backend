@@ -4214,6 +4214,74 @@ paths:
                 - message
                 - data
           headers: {}
+  /api/cycles/upcoming:
+    get:
+      summary: 即将开放的周期（预告）
+      deprecated: false
+      description: >-
+        返回「还没开始、但已经可以预告」的招募周期：is_active = 1 且
+        start_date 晚于今天，按 start_date 升序（最快开始的排最前）。
+
+        与 /api/cycles/open 分开而不是并成一个列表：前端拿 open 的 id 集合当
+        「能不能投」的闸门，未开始的混进去，用户就能给一个还没开始的周期提交简历。
+        可见与可投是两件事 —— 未开始的周期该看得到（做预告卡片），但不该能投。
+
+        与 open 一样以起止日期为权威，不看 status 列。
+      tags:
+      - 招聘活动相关接口（管理员专属）
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: 业务状态码（200 表示成功）
+                  message:
+                    type: string
+                    description: 提示信息
+                  data:
+                    type: array
+                    description: 即将开放的周期，可能为空数组（此时没有已排期的下一届）
+                    items:
+                      type: object
+                      properties:
+                        cycleId:
+                          type: integer
+                          description: 招募周期 ID
+                        cycleName:
+                          type: string
+                          description: 周期名称
+                        academicYear:
+                          type: string
+                          description: 学年
+                        description:
+                          type: string
+                          nullable: true
+                          description: 周期说明，预告卡片会展示
+                        startDate:
+                          type: string
+                          description: 开始日期（yyyy-MM-dd）。预告以此计算「还有几天开始」
+                        endDate:
+                          type: string
+                          description: 截止日期（yyyy-MM-dd）
+                        fieldCount:
+                          type: integer
+                          description: 该周期已配置的简历字段数
+                      required:
+                      - cycleId
+                      - cycleName
+                      - startDate
+                      - endDate
+                      - fieldCount
+                required:
+                - code
+                - message
+                - data
+          headers: {}
   /api/cycles/page:
     get:
       summary: 分页获取招募周期
