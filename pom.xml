@@ -151,6 +151,18 @@
             <artifactId>itextpdf</artifactId>
             <version>5.5.13.3</version>
         </dependency>
+        <!--
+            中日韩字体兜底。iText 本体不带 STSong-Light 这类内置 CJK 字体的
+            CMap 资源，缺了它 createFont("STSong-Light", "UniGB-UCS2-H") 会直接
+            报 "is not recognized"——也就是说在装了 fonts-noto-cjk 之前，
+            这条兜底路径从来没生效过：容器一旦缺字体，导出的简历中文会静默变空白。
+            正常情况仍优先用系统里的 Noto 并嵌入，这个包只是地板。
+        -->
+        <dependency>
+            <groupId>com.itextpdf</groupId>
+            <artifactId>itext-asian</artifactId>
+            <version>5.2.0</version>
+        </dependency>
         
         <!-- 腾讯云 COS 对象存储（头像上传） -->
         <dependency>
