@@ -6,7 +6,10 @@ import club.boyuan.official.domain.resume.dto.SimpleResumeFieldDTO;
 import club.boyuan.official.common.exception.BusinessException;
 import club.boyuan.official.common.exception.BusinessExceptionEnum;
 import com.itextpdf.text.*;
+import com.itextpdf.text.SplitCharacter;
 import com.itextpdf.text.pdf.BaseFont;
+import com.itextpdf.text.pdf.DefaultSplitCharacter;
+import com.itextpdf.text.pdf.PdfChunk;
 import com.itextpdf.text.pdf.PdfPCell;
 import com.itextpdf.text.pdf.PdfPTable;
 import com.itextpdf.text.pdf.PdfWriter;
@@ -19,13 +22,44 @@ import java.util.Base64;
 import java.io.ByteArrayInputStream;
 import java.util.List;
 import java.util.ArrayList;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * PDF导出工具类
  * 用于将简历数据导出为PDF格式
  */
+@Slf4j
 public class PdfExportUtil {
-    
+
+    /**
+     * 中文字体解析一次就够：解析要枚举 TTC 子字体、逐个探针验字形，
+     * 而每份 PDF 会取六七种字号，不缓存等于每次导出重跑几十遍。
+     */
+    private static volatile BaseFont CHINESE_BASE_FONT;
+    private static final Object FONT_LOCK = new Object();
+
+    /**
+     * 候选字体文件，按「一定有简体字形」的可信度排序。
+     * 容器里装的是 fonts-noto-cjk（见 Dockerfile），Noto 排最前；
+     * 后面几条是本地开发环境（macOS / Windows）用的，生产不会命中。
+     * 具体用 TTC 里的哪个子字体不写死索引，交给 expandFontFile 按名字挑。
+     */
+    private static final String[] FONT_FILE_CANDIDATES = {
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc",
+            "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-SC-Regular.otf",
+            "/usr/share/fonts/opentype/noto/NotoSerifCJK-SC-Regular.otf",
+            // 本地开发环境。这里黑体排在宋体前面，是为了跟生产对齐：
+            // 容器里命中的是 Noto **Sans** CJK，本地若先选到宋体，
+            // 调版式时看到的字面观感和线上不是一回事。
+            "/System/Library/Fonts/PingFang.ttc",
+            "/System/Library/Fonts/STHeiti Medium.ttc",
+            "/System/Library/Fonts/Supplemental/Songti.ttc",
+            "C:/Windows/Fonts/msyh.ttc",
+            "C:/Windows/Fonts/simsun.ttc",
+    };
+
     /**
      * 将简历数据导出为PDF格式
      * @param resumeDTO 简历数据传输对象
@@ -125,9 +159,6 @@ public class PdfExportUtil {
                 document.add(rule);
 
                 // ── 基本信息（双列，空字段也列出标签——空草稿导出不再是"什么都没有"）──
-                PdfPTable info = new PdfPTable(new float[]{1f, 1f});
-                info.setWidthPercentage(100);
-                info.setSpacingAfter(10);
                 // 顺序与网页、Word 导出一致（学号 → 性别 → 年级 → 专业 → 邮箱 →
                 // 手机 → GitHub）。三处此前各有一套写死的顺序，同一份简历
                 // 在网页、PDF、Word 里长得都不一样。
@@ -140,12 +171,7 @@ public class PdfExportUtil {
                 addBasic(basics, "手机", byKey.get("phone"));
                 addBasic(basics, "GitHub", byKey.get("github"));
 
-                int perCol = (int) Math.ceil(basics.size() / 2.0);
-                PdfPCell colA = basicColumn(basics.subList(0, Math.min(perCol, basics.size())), labelFont, valueFont);
-                PdfPCell colB = basicColumn(basics.size() > perCol ? basics.subList(perCol, basics.size()) : new ArrayList<>(), labelFont, valueFont);
-                info.addCell(colA);
-                info.addCell(colB);
-                document.add(info);
+                addBasicGrid(document, basics, labelFont, valueFont);
 
                 // ── 长文本小节 ──────────────────────────────
                 // 小节顺序同样对齐：自我介绍 → 加入理由 → 个人简介 → 期望部门 →
@@ -255,18 +281,47 @@ public class PdfExportUtil {
         list.add(new String[]{label, value != null && !value.trim().isEmpty() ? value : "未填写"});
     }
 
-    private static PdfPCell basicColumn(java.util.List<String[]> items, Font labelFont, Font valueFont) {
-        PdfPCell cell = new PdfPCell();
-        cell.setBorder(Rectangle.NO_BORDER);
-        cell.setPaddingRight(10f);
-        for (String[] kv : items) {
-            Paragraph line = new Paragraph();
-            line.setSpacingAfter(6);
-            line.add(new Chunk(kv[0] + "  ", labelFont));
-            line.add(new Chunk(kv[1], valueFont));
-            cell.addElement(line);
+    /**
+     * 基本信息排成「标签｜值｜标签｜值」四列网格。
+     *
+     * 原先是左右两个单元格各自竖着堆 "标签  值" 的段落——标签宽度不一样，
+     * 值的起始位置就跟着飘：右列「邮箱/手机」对得上，轮到更宽的「GitHub」
+     * 整行就被顶出去，一眼看去参差不齐。
+     * 现在标签列宽度固定、右对齐，值列左对齐，两边各自成栏。
+     */
+    private static void addBasicGrid(Document document, java.util.List<String[]> items,
+                                     Font labelFont, Font valueFont) throws DocumentException {
+        if (items.isEmpty()) {
+            return;
         }
-        return cell;
+        PdfPTable grid = new PdfPTable(new float[]{1.1f, 3.4f, 1.1f, 3.4f});
+        grid.setWidthPercentage(100);
+        grid.setSpacingAfter(10);
+
+        int rows = (int) Math.ceil(items.size() / 2.0);
+        for (int r = 0; r < rows; r++) {
+            addBasicPair(grid, r < items.size() ? items.get(r) : null, labelFont, valueFont);
+            int right = r + rows;
+            addBasicPair(grid, right < items.size() ? items.get(right) : null, labelFont, valueFont);
+        }
+        document.add(grid);
+    }
+
+    /** 往网格里放一对「标签｜值」；kv 为 null 时补两个空格子，保持网格完整。 */
+    private static void addBasicPair(PdfPTable grid, String[] kv, Font labelFont, Font valueFont) {
+        PdfPCell label = new PdfPCell(new Phrase(kv == null ? "" : kv[0], labelFont));
+        label.setBorder(Rectangle.NO_BORDER);
+        label.setHorizontalAlignment(Element.ALIGN_RIGHT);
+        label.setPaddingRight(8f);
+        label.setPaddingBottom(7f);
+
+        PdfPCell value = new PdfPCell(new Phrase(kv == null ? "" : kv[1], valueFont));
+        value.setBorder(Rectangle.NO_BORDER);
+        value.setPaddingRight(12f);
+        value.setPaddingBottom(7f);
+
+        grid.addCell(label);
+        grid.addCell(value);
     }
 
     /**
@@ -282,6 +337,7 @@ public class PdfExportUtil {
         addSectionHeader(document, title, sectionFont, barColor);
 
         Paragraph body = new Paragraph(content, bodyFont);
+        applyCjkLineBreaking(body);
         body.setIndentationLeft(7f);
         body.setLeading(16f);
         document.add(body);
@@ -407,6 +463,56 @@ public class PdfExportUtil {
         }
     }
 
+
+    /**
+     * 行首禁则：不允许这些标点被甩到下一行开头。
+     *
+     * iText 对中文是「见缝就断」，样例里就出现过整句排完、句号孤零零掉到
+     * 下一行的情况。这里按中文排版惯例，禁止在「下一个字是收尾标点」的位置断行，
+     * 断点自然往前挪一格，标点跟着前一个字走。
+     */
+    private static final String NO_LINE_START = "。，、；：？！）】》」』〕”’%…‰°,.;:?!)]}>";
+
+    /** 行尾禁则：开引号/开括号不该留在行末。 */
+    private static final String NO_LINE_END = "（【《「『〔“‘([{<";
+
+    /**
+     * 在 iText 默认断行规则之上叠一层中文禁则。
+     *
+     * 必须继承 DefaultSplitCharacter 而不是从零实现：IDENTITY_H 编码下
+     * 传进来的 char[] 装的是**字形编号**不是 Unicode，得靠 getCurrentCharacter
+     * 经 PdfChunk 换算回字符。自己直接读 cc[current] 比的是一堆无意义的数字，
+     * 会把正文整段截掉（实测自我介绍、项目经验的第二行直接消失）。
+     */
+    private static final SplitCharacter CJK_SPLIT = new DefaultSplitCharacter() {
+        @Override
+        public boolean isSplitCharacter(int start, int current, int end, char[] cc, PdfChunk[] ck) {
+            if (!super.isSplitCharacter(start, current, end, cc, ck)) {
+                return false;
+            }
+            char c = getCurrentCharacter(current, cc, ck);
+            if (NO_LINE_END.indexOf(c) >= 0) {
+                return false;   // 开引号/开括号不该留在行末
+            }
+            // cc.length 这道保护不能省：越界读会被 iText 吞掉，
+            // 表现是正文后半段整段消失（实测自我介绍、项目经验的第二行）
+            if (current + 1 <= end && current + 1 < cc.length) {
+                char next = getCurrentCharacter(current + 1, cc, ck);
+                if (NO_LINE_START.indexOf(next) >= 0) {
+                    return false;   // 在这断行会让收尾标点落到下一行开头
+                }
+            }
+            return true;
+        }
+    };
+
+    /** 给段落里的所有 Chunk 装上中文断行规则。 */
+    private static void applyCjkLineBreaking(Paragraph p) {
+        for (Chunk c : p.getChunks()) {
+            c.setSplitCharacter(CJK_SPLIT);
+        }
+    }
+
     private static Font getFont(int size, int style, BaseColor color) {
         Font f = getFont(size, style);
         f.setColor(color);
@@ -435,57 +541,140 @@ public class PdfExportUtil {
      * @return BaseFont对象，如果无法创建则返回null
      */
     private static BaseFont getChineseBaseFont() {
-        // 优先尝试Docker容器中常见的字体路径
-        String[][] fontConfigs = {
-            // 容器中的Noto字体 - 按实际存在的路径优先排序
-            {"/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc,0", BaseFont.IDENTITY_H},
-            {"/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc,0", BaseFont.IDENTITY_H},
-            {"/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc,0", BaseFont.IDENTITY_H},
-            {"/usr/share/fonts/truetype/noto/NotoSerifCJK-Regular.ttc,0", BaseFont.IDENTITY_H},
-            
-            // 单独的CJK字体文件
-            {"/usr/share/fonts/opentype/noto/NotoSansCJK-SC-Regular.otf", BaseFont.IDENTITY_H},
-            {"/usr/share/fonts/opentype/noto/NotoSerifCJK-SC-Regular.otf", BaseFont.IDENTITY_H},
-            
-            // 容器中的DejaVu字体
-            {"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", BaseFont.IDENTITY_H},
-            {"/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf", BaseFont.IDENTITY_H},
-            
-            // iText内置中文字体
-            {"STSong-Light", "UniGB-UCS2-H"},
-            {"STSongStd-Light", "UniGB-UCS2-H"},
-            
-            // Windows系统字体（本地开发环境）
-            {"C:/Windows/Fonts/simsun.ttc,0", BaseFont.IDENTITY_H},
-            {"C:/Windows/Fonts/msyh.ttc,0", BaseFont.IDENTITY_H},
+        BaseFont cached = CHINESE_BASE_FONT;
+        if (cached != null) {
+            return cached;
+        }
+        synchronized (FONT_LOCK) {
+            if (CHINESE_BASE_FONT == null) {
+                CHINESE_BASE_FONT = resolveChineseBaseFont();
+            }
+            return CHINESE_BASE_FONT;
+        }
+    }
 
-            // macOS 系统字体（本地开发环境）。
-            // 原先列表里有 Linux 与 Windows 却没有 macOS，导致 Mac 上导出会一路回退到
-            // Helvetica——那个字体没有中文字形，整份简历的中文全变空白，
-            // 而这在生产（Linux 容器有 Noto CJK）看不出来，只有本地验证版式时才撞上。
-            {"/System/Library/Fonts/Supplemental/Songti.ttc,0", BaseFont.IDENTITY_H},
-            {"/System/Library/Fonts/Hiragino Sans GB.ttc,0", BaseFont.IDENTITY_H},
-            {"/System/Library/Fonts/STHeiti Medium.ttc,0", BaseFont.IDENTITY_H},
-            
-            // 备用选项 - 使用默认字体
-            {BaseFont.HELVETICA, BaseFont.CP1252}
-        };
-        
-        for (String[] fontConfig : fontConfigs) {
-            try {
-                BaseFont baseFont = BaseFont.createFont(fontConfig[0], fontConfig[1], BaseFont.NOT_EMBEDDED);
-                // 成功创建字体，记录日志并返回
-                System.out.println("PDF字体初始化成功: " + fontConfig[0]);
-                return baseFont;
-            } catch (Exception e) {
-                // 忽略异常，尝试下一个字体配置
-                System.out.println("PDF字体初始化失败: " + fontConfig[0] + ", 错误: " + e.getMessage());
+    /**
+     * 挑一个真的能写简体中文的字体，并尽量把它嵌进 PDF。
+     *
+     * 之前这里有两个叠在一起的坑，「期望部门」的「门」字渲染异常就是它们的产物：
+     *
+     * 1) 用 .ttc 的 0 号子字体。TTC 是字体合集，0 号并不是「默认那个」：
+     *    容器里 NotoSansCJK-Regular.ttc 的 0 号是**日文**子字体，
+     *    macOS 上 Songti.ttc 的 0 号是 STSongti-SC-**Black**（超粗黑）。
+     *    实测日文 CJK 字体连「简/历/项」都没有字形。
+     * 2) NOT_EMBEDDED。不嵌入时 PDF 只记字体名，阅读器找不到就自行替换；
+     *    而 IDENTITY_H 下写进去的是**原字体的字形编号**，拿到替换字体里查表
+     *    就会错位成别的字——个别汉字变形、其余侥幸正常，正是用户看到的现象。
+     *
+     * 所以这里改成：按名字挑简体子字体 → 用探针字符验证真有字形 → 优先嵌入。
+     * 有些系统字体（如 macOS Songti）授权禁止嵌入，那就退回不嵌入使用，
+     * 总好过一路跌到 Helvetica 把整份简历的中文变成空白。
+     */
+    private static BaseFont resolveChineseBaseFont() {
+        for (String path : FONT_FILE_CANDIDATES) {
+            if (!new java.io.File(path).isFile()) {
+                continue;
+            }
+            for (String spec : expandFontFile(path)) {
+                BaseFont bf = tryCreate(spec, BaseFont.IDENTITY_H);
+                if (bf != null) {
+                    log.info("PDF 中文字体: {}", spec);
+                    return bf;
+                }
             }
         }
-        
-        // 所有字体都失败，记录警告并返回null
-        System.err.println("警告: 所有PDF字体初始化尝试都失败，将使用默认字体");
+        // iText 内置的中日韩字体，本身就不可嵌入，靠阅读器的标准 CJK 支持
+        for (String name : new String[]{"STSong-Light", "STSongStd-Light"}) {
+            BaseFont bf = tryCreate(name, "UniGB-UCS2-H");
+            if (bf != null) {
+                log.info("PDF 中文字体（内置）: {}", name);
+                return bf;
+            }
+        }
+        log.error("找不到任何可用的中文字体，PDF 导出中文将无法显示");
         return null;
+    }
+
+    /**
+     * .ttc 展开成按简体优先排序的子字体列表；普通字体文件原样返回。
+     */
+    private static java.util.List<String> expandFontFile(String path) {
+        if (!path.toLowerCase(java.util.Locale.ROOT).endsWith(".ttc")) {
+            return java.util.Collections.singletonList(path);
+        }
+        String[] names;
+        try {
+            names = BaseFont.enumerateTTCNames(path);
+        } catch (Exception e) {
+            log.debug("枚举 {} 的子字体失败，退回 0 号: {}", path, e.getMessage());
+            return java.util.Collections.singletonList(path + ",0");
+        }
+        java.util.List<Integer> idx = new ArrayList<>();
+        for (int i = 0; i < names.length; i++) {
+            idx.add(i);
+        }
+        idx.sort(java.util.Comparator.comparingInt(i -> subfontPenalty(names[i])));
+        java.util.List<String> specs = new ArrayList<>(idx.size());
+        for (int i : idx) {
+            specs.add(path + "," + i);
+        }
+        return specs;
+    }
+
+    /** 分数越小越优先：要简体、要 Regular、不要等宽。 */
+    private static int subfontPenalty(String name) {
+        String n = name.toLowerCase(java.util.Locale.ROOT);
+        int penalty = 0;
+        // 简体标识（sc / gb）优先；日韩繁体明确靠后
+        if (!(n.contains("sc") || n.contains("gb"))) {
+            penalty += 100;
+        }
+        if (n.contains("jp") || n.contains("kr") || n.contains("tc") || n.contains("hk")) {
+            penalty += 200;
+        }
+        // 正文要常规字重，Black/Bold/Light 都不合适
+        if (!n.contains("regular")) {
+            penalty += 10;
+        }
+        if (n.contains("black") || n.contains("heavy") || n.contains("light") || n.contains("thin")) {
+            penalty += 20;
+        }
+        if (n.contains("mono")) {
+            penalty += 50;
+        }
+        return penalty;
+    }
+
+    /**
+     * 建字体：先试嵌入，被授权拒绝再试不嵌入；两种都要过字形探针。
+     */
+    private static BaseFont tryCreate(String spec, String encoding) {
+        for (boolean embedded : new boolean[]{BaseFont.EMBEDDED, BaseFont.NOT_EMBEDDED}) {
+            try {
+                BaseFont bf = BaseFont.createFont(spec, encoding, embedded);
+                if (!hasSimplifiedGlyphs(bf)) {
+                    log.debug("跳过 {}：缺少简体字形", spec);
+                    return null;   // 字形不全是字体本身的问题，换嵌入方式也没用
+                }
+                return bf;
+            } catch (Exception e) {
+                log.debug("创建字体 {}（嵌入={}）失败: {}", spec, embedded, e.getMessage());
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 探针字符全是**简体独有**的字，日文/繁体字体会在这里露馅。
+     * 「门」就是用户报的那个字，留在第一位当回归哨兵。
+     */
+    private static boolean hasSimplifiedGlyphs(BaseFont bf) {
+        for (char c : "门简历项荐".toCharArray()) {
+            if (!bf.charExists(c)) {
+                return false;
+            }
+        }
+        return true;
     }
     
     /**
