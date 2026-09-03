@@ -113,4 +113,50 @@ class PdfExportFontTest {
         assertTrue(flat.contains(line1.replaceAll("\\s+", "")), "第一行正文丢失");
         assertTrue(flat.contains(line2.replaceAll("\\s+", "")), "第二行正文丢失——断行规则又把内容吃掉了");
     }
+
+    @Test
+    @DisplayName("PDF 用管理员配置的标签，而不是写死的中文名")
+    void usesAdminConfiguredLabels() throws Exception {
+        // 管理员把「GitHub主页」改成「代码仓库」后，表单跟着变而 PDF 不变，
+        // 同一份简历「表里填的」和「导出的」就对不上了
+        ResumeDTO dto = new ResumeDTO();
+        dto.setUserId(1);
+        dto.setUserName("张三");
+        dto.setStatus(2);
+
+        SimpleResumeFieldDTO gh = new SimpleResumeFieldDTO();
+        gh.setFieldKey("github");
+        gh.setFieldLabel("代码仓库");
+        gh.setFieldValue("github.com/zhangsan");
+        gh.setFieldType("text");
+        gh.setSortOrder(1);
+        dto.setSimpleFields(java.util.List.of(gh));
+
+        String text = com.itextpdf.text.pdf.parser.PdfTextExtractor.getTextFromPage(
+                new com.itextpdf.text.pdf.PdfReader(PdfExportUtil.exportResumeToPdf(dto)), 1);
+
+        assertTrue(text.contains("代码仓库"), "没用上管理员改的标签，实际抽到: " + text);
+        assertTrue(!text.contains("GitHub主页"), "仍在使用写死的标签");
+    }
+
+    @Test
+    @DisplayName("没配标签时回落到内置中文名")
+    void fallsBackToBuiltinLabel() throws Exception {
+        ResumeDTO dto = new ResumeDTO();
+        dto.setUserId(1);
+        dto.setUserName("张三");
+        dto.setStatus(2);
+
+        SimpleResumeFieldDTO f = new SimpleResumeFieldDTO();
+        f.setFieldKey("student_id");
+        f.setFieldLabel(null);            // 没有标签
+        f.setFieldValue("10235101468");
+        f.setFieldType("text");
+        f.setSortOrder(1);
+        dto.setSimpleFields(java.util.List.of(f));
+
+        String text = com.itextpdf.text.pdf.parser.PdfTextExtractor.getTextFromPage(
+                new com.itextpdf.text.pdf.PdfReader(PdfExportUtil.exportResumeToPdf(dto)), 1);
+        assertTrue(text.contains("学号"), "没有回落到内置标签，实际抽到: " + text);
+    }
 }

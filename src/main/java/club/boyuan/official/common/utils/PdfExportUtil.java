@@ -112,6 +112,16 @@ public class PdfExportUtil {
                 java.util.List<SimpleResumeFieldDTO> fields = resumeDTO.getSimpleFields() != null
                         ? resumeDTO.getSimpleFields() : new ArrayList<>();
                 Image photoImage = null;
+                // 管理员在字段配置里改过的标签，导出要跟着走 ——
+                // 否则表单显示「代码仓库」而 PDF 里还写着 GitHub，
+                // 同一份简历「表里填的」和「导出的」对不上。
+                java.util.Map<String, String> labelOf = new java.util.LinkedHashMap<>();
+                for (SimpleResumeFieldDTO f : fields) {
+                    if (f.getFieldKey() != null && f.getFieldLabel() != null
+                            && !f.getFieldLabel().trim().isEmpty()) {
+                        labelOf.put(f.getFieldKey(), f.getFieldLabel().trim());
+                    }
+                }
                 for (SimpleResumeFieldDTO f : fields) {
                     if (f.getFieldKey() != null) byKey.put(f.getFieldKey(), f.getFieldValue());
                     if (photoImage == null && isBase64Image(f.getFieldValue())) {
@@ -173,13 +183,13 @@ public class PdfExportUtil {
                 // 手机 → GitHub）。三处此前各有一套写死的顺序，同一份简历
                 // 在网页、PDF、Word 里长得都不一样。
                 java.util.List<String[]> basics = new ArrayList<>();
-                addBasic(basics, "学号", byKey.get("student_id"));
-                addBasic(basics, "性别", byKey.get("gender"));
-                addBasic(basics, "年级", byKey.get("grade"));
-                addBasic(basics, "专业", byKey.get("major"));
-                addBasic(basics, "邮箱", byKey.get("email"));
-                addBasic(basics, "手机", byKey.get("phone"));
-                addBasic(basics, "GitHub", byKey.get("github"));
+                addBasic(basics, labelOf.getOrDefault("student_id", "学号"), byKey.get("student_id"));
+                addBasic(basics, labelOf.getOrDefault("gender", "性别"), byKey.get("gender"));
+                addBasic(basics, labelOf.getOrDefault("grade", "年级"), byKey.get("grade"));
+                addBasic(basics, labelOf.getOrDefault("major", "专业"), byKey.get("major"));
+                addBasic(basics, labelOf.getOrDefault("email", "邮箱"), byKey.get("email"));
+                addBasic(basics, labelOf.getOrDefault("phone", "手机"), byKey.get("phone"));
+                addBasic(basics, labelOf.getOrDefault("github", "GitHub"), byKey.get("github"));
 
                 addBasicGrid(document, basics, labelFont, valueFont);
 
@@ -190,20 +200,34 @@ public class PdfExportUtil {
                 // 自我介绍与个人简介拆成两节：原来是 firstNonBlank(两者)，
                 // 学生两个都填时后一个被静默丢掉（网页与 Word 导出有同样的毛病，
                 // 已一并修掉）。
-                addSection(document, "自我介绍", byKey.get("self_introduction"), sectionFont, bodyFont, accent);
-                addSection(document, "加入理由", byKey.get("reason"), sectionFont, bodyFont, accent);
-                addSection(document, "个人简介", byKey.get("introduction"), sectionFont, bodyFont, accent);
-                addChipSection(document, "期望部门", byKey.get("expected_departments"),
+                addSection(document, labelOf.getOrDefault("self_introduction", "自我介绍"), byKey.get("self_introduction"), sectionFont, bodyFont, accent);
+                addSection(document, labelOf.getOrDefault("reason", "加入理由"), byKey.get("reason"), sectionFont, bodyFont, accent);
+                addSection(document, labelOf.getOrDefault("introduction", "个人简介"), byKey.get("introduction"), sectionFont, bodyFont, accent);
+                addChipSection(document, labelOf.getOrDefault("expected_departments", "期望部门"), byKey.get("expected_departments"),
                         sectionFont, chipFont, accent, chipBg);
-                addChipSection(document, "技术栈", byKey.get("tech_stack"),
+                addChipSection(document, labelOf.getOrDefault("tech_stack", "技术栈"), byKey.get("tech_stack"),
                         sectionFont, chipFont, accent, chipBg);
-                addSection(document, "项目经验", byKey.get("project_experience"), sectionFont, bodyFont, accent);
+                addSection(document, labelOf.getOrDefault("project_experience", "项目经验"), byKey.get("project_experience"), sectionFont, bodyFont, accent);
 
                 // 其余未归类字段（模板可扩展，逐条列出）
+                // 「其他信息」只收管理员自己加的字段：标准字段上面已经排过了。
+                //
+                // 这份清单必须与前端 resumeFieldRegistry 的 RESUME_FIELDS 保持一致
+                // （Word 导出那侧已改为从规范表推导）。此前三处各维护一份、互相漂移：
+                // 前端漏了 introduction，导致「个人简介」在 Word 里出现两次；
+                // 这边则漏了 first_choice / second_choice 与两个方案A 遗留字段，
+                // 历史数据里若存过值，就会在 PDF 末尾冒出几栏本不该露面的内容。
+                //
+                // Java 侧没有那张规范表，只能手抄；改规范表时记得成对改这里。
                 java.util.Set<String> known = new java.util.HashSet<>(java.util.Arrays.asList(
-                        "name", "student_id", "email", "phone", "grade", "gender", "major", "github",
-                        "expected_departments", "tech_stack", "self_introduction", "introduction",
-                        "project_experience", "reason", "personal_photo"));
+                        "name", "student_id", "gender", "grade", "major", "email", "phone", "github",
+                        "personal_photo", "photo",
+                        "self_introduction", "reason", "introduction",
+                        "first_choice", "second_choice", "expected_departments",
+                        "tech_stack", "project_experience",
+                        // 方案A 遗留，任何界面都不展示
+                        "can_attend_offline_interview", "expected_interview_time",
+                        "second_interview_time"));
                 StringBuilder extras = new StringBuilder();
                 // 自定义字段按管理员配置的 sort_order 排，别按数据库返回的偶然顺序
                 java.util.List<SimpleResumeFieldDTO> orderedExtras = new ArrayList<>(fields);
