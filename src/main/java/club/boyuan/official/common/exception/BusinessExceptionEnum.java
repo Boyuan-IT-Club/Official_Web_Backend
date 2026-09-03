@@ -69,6 +69,7 @@ public enum BusinessExceptionEnum {
     RESUME_SUBMIT_FAILED(3008, "简历提交失败", HttpStatus.BAD_REQUEST),
     RESUME_CYCLE_CLOSED(3010, "该招募周期未开放投递（已停用、已删除或不在起止日期内）", HttpStatus.BAD_REQUEST),
     RESUME_QUERY_FAILED(3009, "简历查询失败", HttpStatus.BAD_REQUEST),
+    RESUME_ATTACHMENT_NOT_FOUND(3011, "附件不存在", HttpStatus.NOT_FOUND),
 
     // 简历字段定义相关异常 (3100-3199)
     RESUME_FIELD_DEFINITION_CREATE_FAILED(3101, "简历字段定义创建失败", HttpStatus.BAD_REQUEST),

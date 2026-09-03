@@ -4282,6 +4282,126 @@ paths:
                 - message
                 - data
           headers: {}
+  /api/resumes/{resumeId}/attachments:
+    get:
+      summary: 列出简历附件
+      description: 学生看自己的、面试官看候选人的，同一个接口。仅需登录。
+      tags: [简历相关接口]
+      parameters:
+      - name: resumeId
+        in: path
+        required: true
+        schema: { type: integer }
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: integer }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        resumeId: { type: integer }
+                        fileName: { type: string, description: 原始文件名 }
+                        contentType: { type: string, nullable: true }
+                        sizeBytes: { type: integer, format: int64 }
+                        createdAt: { type: string, nullable: true }
+                        previewable:
+                          type: boolean
+                          description: >-
+                            浏览器能否安全地内联预览。由服务端判定，前端不要自己猜类型：
+                            这份判断是安全边界，text/html 与 image/svg+xml 一律为 false，
+                            内联它们等于让上传者在管理端的源上执行脚本。
+                      required: [id, fileName, sizeBytes, previewable]
+                required: [code, message, data]
+    post:
+      summary: 上传简历附件
+      description: >-
+        任意格式，单个不超过 20MB、每份简历最多 10 个。只能传到自己的简历上，
+        且该周期须开放投递。同名视为替换。
+      tags: [简历相关接口]
+      parameters:
+      - name: resumeId
+        in: path
+        required: true
+        schema: { type: integer }
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+              required: [file]
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: integer }
+                  message: { type: string }
+                  data: { type: object }
+                required: [code, message]
+  /api/resumes/attachments/{id}:
+    delete:
+      summary: 删除简历附件
+      description: 只有上传者本人可删，且该周期须仍开放投递。
+      tags: [简历相关接口]
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer }
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: integer }
+                  message: { type: string }
+                required: [code, message]
+  /api/resumes/attachments/{id}/content:
+    get:
+      summary: 取简历附件内容（预览 / 下载）
+      description: >-
+        附件是申请人的个人资料，走本接口逐次鉴权，**不在** /api/files 的公开白名单里。
+
+        inline=true 时尝试内联返回，但是否真的内联由服务端决定：只有
+        PDF / 常见图片 / 纯文本 / 音视频这类「浏览器渲染但不执行脚本」的类型才内联，
+        其余（含 text/html 与 image/svg+xml）一律 Content-Disposition: attachment。
+        响应固定带 X-Content-Type-Options: nosniff 与沙箱 CSP。
+
+        前端不能把本地址直接塞进 img/iframe 的 src —— 那样发出的请求不带
+        Authorization 头，一律 401。应先取回 blob 再用 blob: URL 渲染。
+      tags: [简历相关接口]
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer }
+      - name: inline
+        in: query
+        required: false
+        schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: 文件内容
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
   /api/cycles/page:
     get:
       summary: 分页获取招募周期
