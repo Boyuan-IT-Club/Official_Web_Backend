@@ -70,9 +70,18 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/activity/**").permitAll()
                         // 允许访问上传的文件
                         .requestMatchers("/uploads/**").permitAll()
-                        // 官网公开图片通过后端 COS 中转读取；只开放明确的公开目录，避免放开整个存储桶
+                        // 官网公开图片通过后端 COS 中转读取；只开放明确的公开目录，避免放开整个存储桶。
+                        //
+                        // 新增 qrcodes：招新二维码要在「简历填写页」（答疑群）和录取通知邮件里显示，
+                        // 两处都可能是未登录状态——邮件里的图片更是由邮件客户端匿名去取的。
+                        // 漏了它的表现是管理端上传成功、缩略图却是裂图（401），
+                        // 学生端与邮件里同样什么都看不到。
+                        //
+                        // 加前缀时记得同步这里：COS 是私有桶，静态域名 static.boyuan.club
+                        // 只是把 / 转发到本接口，真正的闸门就是这份白名单。
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
-                                "/api/files/avatars/**", "/api/files/activities/**").permitAll()
+                                "/api/files/avatars/**", "/api/files/activities/**",
+                                "/api/files/qrcodes/**").permitAll()
                         // 允许静态资源访问
                         .requestMatchers(PathRequest.toStaticResources().atCommonLocations()).permitAll()
                         // 其他所有请求需要认证
