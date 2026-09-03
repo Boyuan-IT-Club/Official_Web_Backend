@@ -88,6 +88,10 @@ public class ResumeController {
             item.put("createdAt", r.getCreatedAt());
             item.put("cycleName", cycle != null ? cycle.getCycleName() : null);
             item.put("academicYear", cycle != null ? cycle.getAcademicYear() : null);
+            // 起止日期：用户端的周期切换器要在每张卡上显示「起 ~ 止」。
+            // 缺了它，往届卡片上就只剩一个孤零零的「~」（线上就是这样）。
+            item.put("startDate", cycle != null ? cycle.getStartDate() : null);
+            item.put("endDate", cycle != null ? cycle.getEndDate() : null);
             list.add(item);
         }
         return ResponseEntity.ok(ResponseMessage.success(list));
