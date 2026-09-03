@@ -31,10 +31,12 @@ import org.mockito.quality.Strictness;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.when;
@@ -53,6 +55,7 @@ class SessionAssignmentServiceImplTest {
     @Mock private IResumeService resumeService;
     @Mock private ResumeDataService resumeDataService;
     @Mock private DepartmentMapper departmentMapper;
+    @Mock private club.boyuan.official.persistence.mapper.InterviewSessionDeptMapper interviewSessionDeptMapper;
 
     @InjectMocks
     private SessionAssignmentServiceImpl service;
@@ -167,6 +170,129 @@ class SessionAssignmentServiceImplTest {
 
     private static InterviewPreferenceTime prefTime(int resumeId, int timeSlotId) {
         return new InterviewPreferenceTime().setResumeId(resumeId).setTimeSlotId(timeSlotId);
+    }
+
+
+    // ── 多部门场次（V36）─────────────────────────────────────────
+
+    /**
+     * 一个场次同时面技术部(1)与媒体部(4)。
+     * 两名候选人各报一个部门，都该被排进这同一场次；
+     * 而各自的 schedule 要记**自己志愿的那个部门**，不是场次的主部门。
+     */
+    @Test
+    void multiDeptSession_servesBothDeptsAndRecordsMatchedDept() {
+        Integer cycleId = 1;
+        when(recruitmentCycleService.getRecruitmentCycleById(cycleId)).thenReturn(new RecruitmentCycle());
+        when(resumeService.getAllResumesByCycleId(cycleId)).thenReturn(List.of(resume(301, 1), resume(302, 2)));
+        when(resumeDataService.getResumeName(any(Resume.class))).thenReturn("学生");
+        when(interviewScheduleService.list(any(Wrapper.class))).thenReturn(List.of());
+        when(interviewPreferenceService.list(any(Wrapper.class))).thenReturn(List.of(
+                pref(301, cycleId, 1, null),    // 只报技术部
+                pref(302, cycleId, 4, null)));  // 只报媒体部
+        when(preferenceTimeMapper.selectList(any())).thenReturn(List.of(prefTime(301, 10), prefTime(302, 10)));
+
+        InterviewTimeSlot ts = new InterviewTimeSlot()
+                .setTimeSlotId(10).setCycleId(cycleId).setSlotName("周六上午")
+                .setInterviewDate(LocalDate.of(2026, 3, 1))
+                .setStartTime(LocalTime.of(9, 0)).setEndTime(LocalTime.of(12, 0)).setStatus(1);
+        when(interviewTimeSlotService.listByIds(any())).thenReturn(List.of(ts));
+
+        // 主部门是技术部，但它同时服务媒体部
+        InterviewSession shared = session(2000, cycleId, 10, 1, "301", 5);
+        when(interviewSessionService.list(any(Wrapper.class))).thenReturn(List.of(shared));
+        when(interviewSessionDeptMapper.selectList(any())).thenReturn(List.of(
+                sessionDept(2000, 1), sessionDept(2000, 4)));
+        when(departmentMapper.selectList(nullable(Wrapper.class)))
+                .thenReturn(List.of(dept(1, "技术部"), dept(4, "媒体部")));
+
+        List<InterviewSchedule> saved = new ArrayList<>();
+        when(interviewScheduleService.save(any(InterviewSchedule.class))).thenAnswer(inv -> {
+            saved.add(inv.getArgument(0));
+            return true;
+        });
+
+        SessionAssignmentResultDTO result = service.assign(cycleId);
+
+        assertEquals(2, result.getAssigned().size(), "两人都该排进这个共享场次");
+        assertTrue(saved.stream().allMatch(x -> Integer.valueOf(2000).equals(x.getSessionId())),
+                "都该落在同一个场次上");
+
+        // 关键：记的是各自志愿的部门，而不是场次的主部门（都记成技术部就错了）
+        List<Integer> deptIds = saved.stream().map(InterviewSchedule::getDeptId).sorted().toList();
+        assertEquals(List.of(1, 4), deptIds,
+                "schedule 的部门应是学生匹配上的那个；照抄场次主部门会把媒体部的同学记成技术部");
+    }
+
+    /**
+     * 共享场次的容量属于场次本身，不该按部门各算一份。
+     * 容量 1 的场次同时服务两个部门，两名候选人只能进去一个。
+     */
+    @Test
+    void multiDeptSession_capacityIsSharedNotPerDept() {
+        Integer cycleId = 1;
+        when(recruitmentCycleService.getRecruitmentCycleById(cycleId)).thenReturn(new RecruitmentCycle());
+        when(resumeService.getAllResumesByCycleId(cycleId)).thenReturn(List.of(resume(401, 1), resume(402, 2)));
+        when(resumeDataService.getResumeName(any(Resume.class))).thenReturn("学生");
+        when(interviewScheduleService.list(any(Wrapper.class))).thenReturn(List.of());
+        when(interviewPreferenceService.list(any(Wrapper.class))).thenReturn(List.of(
+                pref(401, cycleId, 1, null), pref(402, cycleId, 4, null)));
+        when(preferenceTimeMapper.selectList(any())).thenReturn(List.of(prefTime(401, 10), prefTime(402, 10)));
+
+        InterviewTimeSlot ts = new InterviewTimeSlot()
+                .setTimeSlotId(10).setCycleId(cycleId).setSlotName("周六上午")
+                .setInterviewDate(LocalDate.of(2026, 3, 1))
+                .setStartTime(LocalTime.of(9, 0)).setEndTime(LocalTime.of(12, 0)).setStatus(1);
+        when(interviewTimeSlotService.listByIds(any())).thenReturn(List.of(ts));
+
+        InterviewSession shared = session(2100, cycleId, 10, 1, "301", 1);   // 容量只有 1
+        when(interviewSessionService.list(any(Wrapper.class))).thenReturn(List.of(shared));
+        when(interviewSessionDeptMapper.selectList(any())).thenReturn(List.of(
+                sessionDept(2100, 1), sessionDept(2100, 4)));
+        when(departmentMapper.selectList(nullable(Wrapper.class)))
+                .thenReturn(List.of(dept(1, "技术部"), dept(4, "媒体部")));
+        when(interviewScheduleService.save(any(InterviewSchedule.class))).thenReturn(true);
+
+        SessionAssignmentResultDTO result = service.assign(cycleId);
+
+        // 若给每个部门各建一份 SessionState，容量会被算成 2，两人都能进——那是超额分配
+        assertEquals(1, result.getAssigned().size(), "容量属于场次，不该按部门各算一份");
+        assertEquals(1, result.getUnassigned().size(), "满了的那个应进待调剂");
+    }
+
+    /**
+     * 关联表没有记录时回落到场次自己的 dept_id。
+     * V36 已回填，正常不该发生；但缺了这条兜底，老数据会直接一个都分不出去。
+     */
+    @Test
+    void multiDeptSession_fallsBackToSessionDeptWhenNoMapping() {
+        Integer cycleId = 1;
+        when(recruitmentCycleService.getRecruitmentCycleById(cycleId)).thenReturn(new RecruitmentCycle());
+        when(resumeService.getAllResumesByCycleId(cycleId)).thenReturn(List.of(resume(501, 1)));
+        when(resumeDataService.getResumeName(any(Resume.class))).thenReturn("学生");
+        when(interviewScheduleService.list(any(Wrapper.class))).thenReturn(List.of());
+        when(interviewPreferenceService.list(any(Wrapper.class)))
+                .thenReturn(List.of(pref(501, cycleId, 1, null)));
+        when(preferenceTimeMapper.selectList(any())).thenReturn(List.of(prefTime(501, 10)));
+
+        InterviewTimeSlot ts = new InterviewTimeSlot()
+                .setTimeSlotId(10).setCycleId(cycleId).setSlotName("周六上午")
+                .setInterviewDate(LocalDate.of(2026, 3, 1))
+                .setStartTime(LocalTime.of(9, 0)).setEndTime(LocalTime.of(12, 0)).setStatus(1);
+        when(interviewTimeSlotService.listByIds(any())).thenReturn(List.of(ts));
+        when(interviewSessionService.list(any(Wrapper.class)))
+                .thenReturn(List.of(session(2200, cycleId, 10, 1, "301", 3)));
+        when(interviewSessionDeptMapper.selectList(any())).thenReturn(List.of());   // 关联表为空
+        when(departmentMapper.selectList(nullable(Wrapper.class))).thenReturn(List.of(dept(1, "技术部")));
+        when(interviewScheduleService.save(any(InterviewSchedule.class))).thenReturn(true);
+
+        SessionAssignmentResultDTO result = service.assign(cycleId);
+        assertEquals(1, result.getAssigned().size(), "关联表为空时应回落到场次自己的部门，而不是分不出去");
+    }
+
+    private static club.boyuan.official.persistence.entity.InterviewSessionDept sessionDept(int sessionId, int deptId) {
+        return new club.boyuan.official.persistence.entity.InterviewSessionDept()
+                .setSessionId(sessionId).setDeptId(deptId);
     }
 
     private static InterviewSession session(int id, int cycleId, int timeSlotId, int deptId, String loc, int capacity) {

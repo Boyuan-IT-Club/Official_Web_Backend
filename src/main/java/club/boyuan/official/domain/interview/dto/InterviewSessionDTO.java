@@ -20,8 +20,13 @@ public class InterviewSessionDTO {
     private LocalTime startTime;
     private LocalTime endTime;
 
+    /** 主部门。多部门场次下只是其中之一，判定请用 deptIds */
     private Integer deptId;
     private String deptName;
+
+    /** 本场次覆盖的全部部门（V36）。单部门场次里就一个元素 */
+    private java.util.List<Integer> deptIds;
+    private java.util.List<String> deptNames;
 
     private String location;
     private Integer capacity;

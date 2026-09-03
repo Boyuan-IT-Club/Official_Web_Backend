@@ -18,4 +18,7 @@ public class UpdateInterviewSessionRequestDTO {
     private Integer interviewDurationMinutes;
 
     private Integer status;
+
+    /** 覆盖式更新本场次服务的部门；为 null 表示不动。 */
+    private java.util.List<Integer> deptIds;
 }

@@ -44,6 +44,7 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
     private final IInterviewTimeSlotService interviewTimeSlotService;
     private final DepartmentMapper departmentMapper;
     private final InterviewScheduleMapper interviewScheduleMapper;
+    private final club.boyuan.official.persistence.mapper.InterviewSessionDeptMapper interviewSessionDeptMapper;
 
     @Override
     public InterviewSession createSession(CreateInterviewSessionRequestDTO request) {
@@ -56,14 +57,23 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
         if (!Objects.equals(timeSlot.getCycleId(), request.getCycleId())) {
             throw new BusinessException(BusinessExceptionEnum.INTERVIEW_TIME_SLOT_CYCLE_MISMATCH);
         }
-        if (departmentMapper.selectById(request.getDeptId()) == null) {
+        // deptIds 优先；没传就按老语义只服务 deptId 一个部门
+        List<Integer> deptIds = normalizeDeptIds(request.getDeptIds(), request.getDeptId());
+        if (deptIds.isEmpty()) {
             throw new BusinessException(BusinessExceptionEnum.DEPARTMENT_NOT_FOUND);
+        }
+        for (Integer id : deptIds) {
+            if (departmentMapper.selectById(id) == null) {
+                throw new BusinessException(BusinessExceptionEnum.DEPARTMENT_NOT_FOUND);
+            }
         }
 
         InterviewSession session = new InterviewSession()
                 .setCycleId(request.getCycleId())
                 .setTimeSlotId(request.getTimeSlotId())
-                .setDeptId(request.getDeptId())
+                // 主部门取第一个：那些只能显示一个部门的地方（飞书同步、
+                // 紧凑列表）仍读它，判定一律以关联表为准
+                .setDeptId(deptIds.get(0))
                 .setLocation(request.getLocation())
                 .setCapacity(request.getCapacity())
                 .setCurrentOccupied(0)
@@ -72,6 +82,7 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
                                 ? DEFAULT_DURATION_MINUTES : request.getInterviewDurationMinutes())
                 .setStatus(STATUS_AVAILABLE);
         save(session);
+        replaceSessionDepts(session.getSessionId(), deptIds);
         log.info("创建面试场次成功，sessionId={}, cycleId={}, timeSlotId={}, deptId={}, capacity={}",
                 session.getSessionId(), session.getCycleId(), session.getTimeSlotId(),
                 session.getDeptId(), session.getCapacity());
@@ -96,6 +107,20 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
         }
         if (request.getStatus() != null) {
             session.setStatus(request.getStatus());
+        }
+        // deptIds 为 null 表示本次不动部门；给了就覆盖式替换
+        if (request.getDeptIds() != null) {
+            List<Integer> deptIds = normalizeDeptIds(request.getDeptIds(), null);
+            if (deptIds.isEmpty()) {
+                throw new BusinessException(BusinessExceptionEnum.DEPARTMENT_NOT_FOUND);
+            }
+            for (Integer id : deptIds) {
+                if (departmentMapper.selectById(id) == null) {
+                    throw new BusinessException(BusinessExceptionEnum.DEPARTMENT_NOT_FOUND);
+                }
+            }
+            session.setDeptId(deptIds.get(0));
+            replaceSessionDepts(sessionId, deptIds);
         }
         updateById(session);
         log.info("更新面试场次成功，sessionId={}", sessionId);
@@ -157,6 +182,7 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
         dto.setTimeSlotId(session.getTimeSlotId());
         dto.setDeptId(session.getDeptId());
         dto.setDeptName(deptName);
+        fillDeptList(dto, session.getSessionId());
         dto.setLocation(session.getLocation());
         dto.setCapacity(session.getCapacity());
         int occupied = session.getCurrentOccupied() == null ? 0 : session.getCurrentOccupied();
@@ -213,5 +239,64 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
         if (cycle == null) {
             throw new BusinessException(BusinessExceptionEnum.RECRUITMENT_CYCLE_NOT_FOUND);
         }
+    }
+
+    /** 去重去空、保持顺序；deptIds 为空时回落到单个 fallback。 */
+    private static List<Integer> normalizeDeptIds(List<Integer> deptIds, Integer fallback) {
+        List<Integer> out = new java.util.ArrayList<>();
+        if (deptIds != null) {
+            for (Integer id : deptIds) {
+                if (id != null && !out.contains(id)) {
+                    out.add(id);
+                }
+            }
+        }
+        if (out.isEmpty() && fallback != null) {
+            out.add(fallback);
+        }
+        return out;
+    }
+
+    /**
+     * 覆盖式写入场次覆盖的部门。
+     *
+     * 先删后插而不是增量比对：部门就那么几个，删插的代价可以忽略，
+     * 而增量比对要处理「新增/删除/顺序」三种情况，多写的分支反而更容易错。
+     */
+    private void replaceSessionDepts(Integer sessionId, List<Integer> deptIds) {
+        interviewSessionDeptMapper.delete(
+                new LambdaQueryWrapper<club.boyuan.official.persistence.entity.InterviewSessionDept>()
+                        .eq(club.boyuan.official.persistence.entity.InterviewSessionDept::getSessionId, sessionId));
+        for (Integer deptId : deptIds) {
+            interviewSessionDeptMapper.insert(
+                    new club.boyuan.official.persistence.entity.InterviewSessionDept()
+                            .setSessionId(sessionId).setDeptId(deptId));
+        }
+    }
+
+    /**
+     * 填充本场次覆盖的全部部门。
+     *
+     * 关联表没有记录时回落到主部门 —— V36 已回填存量数据，
+     * 正常不该发生；但缺了这条兜底，老数据在管理端会显示成「未设置部门」。
+     */
+    private void fillDeptList(InterviewSessionDTO dto, Integer sessionId) {
+        List<Integer> ids = interviewSessionDeptMapper.selectList(
+                        new LambdaQueryWrapper<club.boyuan.official.persistence.entity.InterviewSessionDept>()
+                                .eq(club.boyuan.official.persistence.entity.InterviewSessionDept::getSessionId, sessionId))
+                .stream()
+                .map(club.boyuan.official.persistence.entity.InterviewSessionDept::getDeptId)
+                .toList();
+        if (ids.isEmpty()) {
+            ids = dto.getDeptId() == null ? List.of() : List.of(dto.getDeptId());
+        }
+        dto.setDeptIds(ids);
+        dto.setDeptNames(ids.stream()
+                .map(id -> {
+                    Department d = departmentMapper.selectById(id);
+                    return d == null ? null : d.getDeptName();
+                })
+                .filter(java.util.Objects::nonNull)
+                .toList());
     }
 }

@@ -8725,6 +8725,9 @@ paths:
                     items:
                       $ref: '#/components/schemas/InterviewTimeSlot'
                     description: 响应数据
+  # 说明：场次自 V36 起支持多部门（deptIds）。
+  # deptId 保留为「主部门」，兼容飞书同步等只认单值的地方；
+  # 分配算法的判定一律以 deptIds 为准，未传时视同只服务 deptId 一个部门。
   /api/interview/admin/sessions:
     post:
       summary: 创建面试场次（管理员）
