@@ -155,6 +155,16 @@ public class SessionAssignmentController {
             return ResponseEntity.ok(ResponseMessage.success(out));
         }
 
+        // 学号要取简历里填的那个，不能拿 user.username 顶替。
+        // 多数同学两者恰好相同（注册时用学号当用户名），但早期账号不是——
+        // 线上就有登录名为 "dinghuaye"、简历里学号是 10245101480 的情况，
+        // 表头写着「学号」却显示登录名，看的人会以为数据错了。
+        ResumeFieldDefinition sidDef = resumeFieldDefinitionMapper.selectOne(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ResumeFieldDefinition>()
+                        .eq(ResumeFieldDefinition::getCycleId, cycleId)
+                        .eq(ResumeFieldDefinition::getFieldKey, "student_id")
+                        .last("LIMIT 1"));
+
         List<ResumeFieldValue> values = resumeFieldValueMapper.selectList(
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ResumeFieldValue>()
                         .eq(ResumeFieldValue::getFieldId, def.getFieldId()));
@@ -189,6 +199,7 @@ public class SessionAssignmentController {
             item.put("resumeId", resume.getResumeId());
             item.put("name", u != null ? u.getName() : null);
             item.put("username", u != null ? u.getUsername() : null);
+            item.put("studentId", studentIdOf(resume.getResumeId(), sidDef));
             item.put("email", u != null ? u.getEmail() : null);
             item.put("phone", u != null ? u.getPhone() : null);
             item.put("note", note);          // 学生填的说明，可能为空
@@ -196,5 +207,21 @@ public class SessionAssignmentController {
             out.add(item);
         }
         return ResponseEntity.ok(ResponseMessage.success(out));
+    }
+
+    /** 取某份简历里填的学号；没填或没有该字段时返回 null（由前端回落到登录名）。 */
+    private String studentIdOf(Integer resumeId, ResumeFieldDefinition sidDef) {
+        if (resumeId == null || sidDef == null) {
+            return null;
+        }
+        ResumeFieldValue v = resumeFieldValueMapper.selectOne(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ResumeFieldValue>()
+                        .eq(ResumeFieldValue::getResumeId, resumeId)
+                        .eq(ResumeFieldValue::getFieldId, sidDef.getFieldId())
+                        .last("LIMIT 1"));
+        if (v == null || v.getFieldValue() == null || v.getFieldValue().trim().isEmpty()) {
+            return null;
+        }
+        return v.getFieldValue().trim();
     }
 }
