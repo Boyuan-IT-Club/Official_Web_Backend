@@ -14,7 +14,9 @@
         ir.created_at,
         ir.updated_at,
         ir.notified_at,
-        isc.cycle_id,
+        ir.resume_id,
+        -- 优先用结果自身的 cycle_id：没有面试安排的结果查不到 isc.cycle_id（V34）
+        COALESCE(ir.cycle_id, isc.cycle_id) AS cycle_id,
         u.name as user_name,
         d.dept_name as department_name
         FROM interview_result ir
@@ -23,7 +25,7 @@
         LEFT JOIN department d ON ir.assigned_dept_id = d.dept_id
         <where>
             <if test="cycleId != null">
-                AND isc.cycle_id = #{cycleId}
+                AND COALESCE(ir.cycle_id, isc.cycle_id) = #{cycleId}
             </if>
             <if test="name != null and name != ''">
                 AND u.name LIKE CONCAT('%', #{name}, '%')
