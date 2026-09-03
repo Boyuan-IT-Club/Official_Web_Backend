@@ -44,6 +44,14 @@ public class InterviewResult implements Serializable {
     @TableField("user_id")
     private Integer userId;
 
+    /** 简历ID。结果脱离面试安排时（不能线下参加/未被分配）靠它定位候选人（V34） */
+    @TableField("resume_id")
+    private Integer resumeId;
+
+    /** 招募周期ID。此前只能经 schedule 反查，无安排时查不到（V34） */
+    @TableField("cycle_id")
+    private Integer cycleId;
+
     /**
      * 最终决定：0(待定), 1(通过), 2(不通过), 3(待调剂)
      */

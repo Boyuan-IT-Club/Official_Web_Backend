@@ -1,5 +1,6 @@
 package club.boyuan.official.domain.interview.service.impl;
 
+import java.util.Map;
 import java.util.stream.Collectors;
 import club.boyuan.official.persistence.mapper.ResumeMapper;
 import club.boyuan.official.persistence.mapper.InterviewScheduleMapper;
@@ -209,48 +210,63 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
         if (cycleId == null) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
         }
+
+        // 已有结果行的简历一律不动（无论站内建的还是飞书拉的）
+        Set<Integer> seededResumes = baseMapper.selectList(
+                        new LambdaQueryWrapper<InterviewResult>().eq(InterviewResult::getCycleId, cycleId))
+                .stream()
+                .map(InterviewResult::getResumeId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+
         List<InterviewSchedule> schedules = interviewScheduleMapper.selectList(
                 new LambdaQueryWrapper<InterviewSchedule>()
                         .eq(InterviewSchedule::getCycleId, cycleId)
                         .eq(InterviewSchedule::getStatus, 1));
-        if (schedules.isEmpty()) {
-            return 0;
+        Map<Integer, InterviewSchedule> scheduleByResume = new java.util.HashMap<>();
+        for (InterviewSchedule sc : schedules) {
+            if (sc.getResumeId() != null) {
+                scheduleByResume.putIfAbsent(sc.getResumeId(), sc);
+            }
         }
 
-        Set<Integer> scheduleIds = schedules.stream()
-                .map(InterviewSchedule::getScheduleId)
-                .collect(Collectors.toSet());
-        Set<Integer> seeded = baseMapper.selectList(
-                        new LambdaQueryWrapper<InterviewResult>()
-                                .in(InterviewResult::getScheduleId, scheduleIds))
-                .stream()
-                .map(InterviewResult::getScheduleId)
-                .collect(Collectors.toSet());
+        // 本周期所有已提交的简历，而不只是「有面试安排的」——
+        // 选了「不能参加线下面试」的同学不进排期，因人数原因没排上的也一样，
+        // 只看 schedule 会让他们在「结果与通知」里彻底消失，管理员无从录取或婉拒。
+        List<Resume> submitted = resumeMapper.selectList(
+                new LambdaQueryWrapper<Resume>()
+                        .eq(Resume::getCycleId, cycleId)
+                        .ge(Resume::getStatus, 2));
 
         int created = 0;
-        for (InterviewSchedule schedule : schedules) {
-            if (seeded.contains(schedule.getScheduleId())) {
-                continue;   // 已有结果行（无论站内建的还是飞书拉的）一律不动
+        for (Resume resume : submitted) {
+            if (resume.getResumeId() == null || seededResumes.contains(resume.getResumeId())) {
+                continue;
             }
-            Integer userId = schedule.getUserId();
-            if (userId == null && schedule.getResumeId() != null) {
-                // user_id 是后补列，历史安排可能为空，用简历兜底
-                Resume resume = resumeMapper.selectById(schedule.getResumeId());
-                userId = resume != null ? resume.getUserId() : null;
+            InterviewSchedule sc = scheduleByResume.get(resume.getResumeId());
+            Integer userId = resume.getUserId();
+            if (userId == null && sc != null) {
+                userId = sc.getUserId();
             }
             if (userId == null) {
-                log.warn("安排 {} 无法解析候选人，跳过生成结果行", schedule.getScheduleId());
+                log.warn("简历 {} 无法解析候选人，跳过生成结果行", resume.getResumeId());
                 continue;
             }
             InterviewResult row = new InterviewResult()
-                    .setScheduleId(schedule.getScheduleId())
+                    .setScheduleId(sc == null ? null : sc.getScheduleId())   // 无安排时留空（V34 起可空）
+                    .setResumeId(resume.getResumeId())
+                    .setCycleId(cycleId)
                     .setUserId(userId)
                     .setDecision(0);   // 0=待定，等管理员在「结果与通知」里定
             baseMapper.insert(row);
             created++;
         }
-        log.info("周期 {} 从面试安排生成结果名单：新建 {} 行，跳过已存在 {} 行",
-                cycleId, created, schedules.size() - created);
+        log.info("周期 {} 生成结果名单：新建 {} 行（其中无面试安排 {} 行），跳过已存在 {} 行",
+                cycleId, created,
+                submitted.stream().filter(r -> r.getResumeId() != null
+                        && !seededResumes.contains(r.getResumeId())
+                        && !scheduleByResume.containsKey(r.getResumeId())).count(),
+                seededResumes.size());
         return created;
     }
 
