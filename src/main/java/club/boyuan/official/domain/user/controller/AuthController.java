@@ -249,8 +249,6 @@ public class AuthController {
             // 构建返回数据
             Map<String, Object> data = new HashMap<>();
             data.put("user_id", user.getUserId());
-            // 获取用户角色列表，User类已经没有getRole()方法
-
             TokenVO tokenVO = (TokenVO) response.getData();
             String token = tokenVO.getToken();
 
@@ -259,6 +257,8 @@ public class AuthController {
             data.put("token", token);
             // 添加角色信息到返回数据
             data.put("roleNames", roleNames);
+            // 添加权限码到返回数据(SEC-01 #89 A2:官网通道首次登录就要完整身份)
+            data.put("permissionCodes", permissionCodes);
 
             return ResponseEntity.ok(ResponseMessage.success(data));
         } catch (BusinessException e) {
@@ -267,6 +267,37 @@ public class AuthController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ResponseMessage.error(500, "服务器内部错误: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * 获取当前登录用户的最小身份(候选 Agent 专用)。
+     *
+     * 与 /api/user/me 职责区分(ADR-0006 / #88,#89):
+     * - /api/user/me:返回 user 全量(含 PII),供「我的资料」页
+     * - /api/auth/me:只返回 userId/roleNames/permissionCodes,供 Agent 解析身份,
+     *   防止 Agent 数据面扩大(不暴露电话/邮箱等)
+     * 身份直接从 JWT claims 解,不查数据库(与 CLI 解 token 行为一致)。
+     * logout 有 Redis 吊销 revokeToken 担保有效性。
+     */
+    @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ResponseMessage<?>> getAuthMe(
+            @RequestHeader(value = "Authorization", required = false) String authorization) {
+        try {
+            if (authorization == null || !authorization.startsWith("Bearer ")) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(ResponseMessage.error(401, "缺少 Bearer token"));
+            }
+            String token = authorization.substring(7);
+            Map<String, Object> data = new HashMap<>();
+            data.put("userId", jwtTokenUtil.extractUserId(token));
+            data.put("roleNames", jwtTokenUtil.extractRoleNames(token));
+            data.put("permissionCodes", jwtTokenUtil.extractPermissionCodes(token));
+            return ResponseEntity.ok(ResponseMessage.success(data));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ResponseMessage.error(401, "token 无效: " + e.getMessage()));
         }
     }
 

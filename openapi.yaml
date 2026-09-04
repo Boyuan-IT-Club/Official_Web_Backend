@@ -303,17 +303,75 @@ paths:
                         items:
                           type: string
                         description: 角色名称列表
+                      permissionCodes:
+                        type: array
+                        items:
+                          type: string
+                        description: 权限码列表(#89 A2:官网通道首次登录就要完整身份)
                     required:
                     - user_id
                     - token
                     - roleNames
+                    - permissionCodes
                     description: 响应数据
+                    required:
+                    - code
+                    - message
+                    - data
+                description: 响应数据
+          headers: {}
+      security: []
+  /api/auth/me:
+    get:
+      summary: 获取当前用户最小身份(候选 Agent 专用)
+      deprecated: false
+      description: >-
+        只返回 userId/roleNames/permissionCodes(最小暴露,不含 PII),供客服 Agent
+        解析身份。与 /api/user/me 职责区分:/user/me 返回 user 全量(含 PII)供
+        「我的资料」页;/auth/me 只给 Agent 最小身份,防数据面扩大(ADR-0006/#89 A2)。
+      tags:
+      - 登录注册页
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: 业务状态码(200 表示成功)
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      userId:
+                        type: integer
+                        description: 用户 ID
+                      roleNames:
+                        type: array
+                        items:
+                          type: string
+                        description: 角色名称列表
+                      permissionCodes:
+                        type: array
+                        items:
+                          type: string
+                        description: 权限码列表
+                    required:
+                    - userId
+                    - roleNames
+                    - permissionCodes
+                    description: 最小身份(不含 user 全量/PII)
                 required:
                 - code
                 - message
                 - data
           headers: {}
-      security: []
+      security:
+      - bearerAuth: []
   /api/auth/reset-password:
     post:
       summary: 重置密码
