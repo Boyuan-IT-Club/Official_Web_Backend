@@ -291,9 +291,18 @@ public class AuthController {
             }
             String token = authorization.substring(7);
             Map<String, Object> data = new HashMap<>();
-            data.put("userId", jwtTokenUtil.extractUserId(token));
+            Integer userId = jwtTokenUtil.extractUserId(token);
+            data.put("userId", userId);
             data.put("roleNames", jwtTokenUtil.extractRoleNames(token));
             data.put("permissionCodes", jwtTokenUtil.extractPermissionCodes(token));
+            // 补身份档案字段(供客服 agent 识别「我是谁」):name 查库(JWT 里没有)。
+            // 最小暴露:只取姓名,不返回 phone/email 等 PII(ADR-0006/A2)。
+            if (userId != null) {
+                club.boyuan.official.persistence.entity.User u = userService.getUserById(userId);
+                data.put("name", u == null ? null : u.getName());
+            } else {
+                data.put("name", null);
+            }
             return ResponseEntity.ok(ResponseMessage.success(data));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
