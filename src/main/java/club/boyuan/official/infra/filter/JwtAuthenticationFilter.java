@@ -97,8 +97,16 @@ public class JwtAuthenticationFilter implements Filter {
         if ("/api/health".equals(requestURI) || "/health".equals(requestURI)) {
             return true;
         }
-        // 排除以/api/auth开头的所有接口
-        return requestURI.startsWith("/api/auth");
+        // 只排除公开认证端点(登录/注册/验证码/重置);GET /api/auth/me(#208)
+        // 需解析 JWT 认证——它返回当前用户最小身份,不是公开端点,不能整段排除。
+        if (!requestURI.startsWith("/api/auth")) {
+            return false;
+        }
+        return requestURI.equals("/api/auth/login")
+                || requestURI.equals("/api/auth/register")
+                || requestURI.equals("/api/auth/send-email-code")
+                || requestURI.equals("/api/auth/send-sms-code")
+                || requestURI.equals("/api/auth/reset-password");
     }
 
     /**
