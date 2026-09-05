@@ -46,6 +46,9 @@ class AuthControllerAuthMeTest {
         when(jwtTokenUtil.extractUserId("tok")).thenReturn(42);
         when(jwtTokenUtil.extractRoleNames("tok")).thenReturn(List.of("申请人"));
         when(jwtTokenUtil.extractPermissionCodes("tok")).thenReturn(List.of("candidate:read:own"));
+        club.boyuan.official.persistence.entity.User u = new club.boyuan.official.persistence.entity.User();
+        u.setName("申请人甲");
+        when(userService.getUserById(42)).thenReturn(u);
 
         ResponseEntity<?> resp = controller.getAuthMe("Bearer tok");
         assertEquals(200, resp.getStatusCode().value());
@@ -53,10 +56,12 @@ class AuthControllerAuthMeTest {
         assertEquals(42, data.get("userId"));
         assertEquals(List.of("申请人"), data.get("roleNames"));
         assertEquals(List.of("candidate:read:own"), data.get("permissionCodes"));
-        // 最小暴露:只含身份字段,不含 user 全量/PII
+        assertEquals("申请人甲", data.get("name")); // 档案字段(#89 follow-up)
+        // 最小暴露:身份字段 + name,不含 user 全量/PII
         assertNull(data.get("user"));
         assertNull(data.get("awardExperiences"));
-        assertEquals(3, data.size());
+        assertNull(data.get("phone"));
+        assertEquals(4, data.size());
     }
 
     @Test

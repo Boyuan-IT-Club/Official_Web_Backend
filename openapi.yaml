@@ -75,6 +75,8 @@ tags:
   description: 候选人派生仓 GitHub Actions 推送 autograder 加密报告单的公开入库端点(零认证)
 - name: 评测(用户)
   description: 当前登录候选人查看自己的评测历史/最新/趋势
+- name: 客服 Agent 管理(管理员)
+  description: 客服 Agent 运营视图/配置管理代理(M6 #115;Backend 只转发,数据权威在 Agent 服务)
 paths:
   /api/public/evaluations:
     post:
@@ -2673,6 +2675,133 @@ paths:
                 - message
                 - data
           headers: {}
+  /api/admin/agent/conversations:
+    get:
+      summary: Agent 运营对话列表
+      deprecated: false
+      description: 转发 Agent 服务 /admin/conversations。返回 conversation_log 列表投影(时间/用户/问题首字/状态/token),支持按用户/会话过滤与分页(limit 上限 200)。
+      tags:
+      - 客服 Agent 管理(管理员)
+      parameters:
+      - name: user_id
+        in: query
+        description: 按用户 ID 过滤
+        required: false
+        schema:
+          type: integer
+      - name: thread_id
+        in: query
+        description: 按会话 thread_id 过滤(详情页拉同会话全部轮次)
+        required: false
+        schema:
+          type: string
+      - name: limit
+        in: query
+        description: 每页条数(1-200,默认 50)
+        required: false
+        schema:
+          type: integer
+      - name: offset
+        in: query
+        description: 偏移量(默认 0)
+        required: false
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        description: 对话行(轮)列表
+                      limit:
+                        type: integer
+                      offset:
+                        type: integer
+        '502':
+          description: Agent 服务不可达
+  /api/admin/agent/conversations/{conversationId}:
+    get:
+      summary: Agent 对话轮次详情
+      deprecated: false
+      description: 转发 Agent 服务 /admin/conversations/{id}。单轮详情:问题原文/回复摘要(可展开)/工具调用/耗时/错误码/token。
+      tags:
+      - 客服 Agent 管理(管理员)
+      parameters:
+      - name: conversationId
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: ''
+        '404':
+          description: 会话不存在
+        '502':
+          description: Agent 服务不可达
+  /api/admin/agent/config:
+    get:
+      summary: Agent 配置回显
+      deprecated: false
+      description: 转发 Agent 服务 /admin/config。低敏键(HOT_KEYS)返回实值;高敏键返回 {configured, masked}(掩码末 4 位,决策 #101)。
+      tags:
+      - 客服 Agent 管理(管理员)
+      responses:
+        '200':
+          description: ''
+        '502':
+          description: Agent 服务不可达
+    put:
+      summary: 修改 Agent 低敏配置(热生效)
+      deprecated: false
+      description: 转发 Agent 服务 PUT /admin/config。仅接受 HOT_KEYS 白名单键(model_light/model_strong/llm_provider/llm_base_url),写库后进程内热生效;白名单外返回 400。
+      tags:
+      - 客服 Agent 管理(管理员)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+              example:
+                model_strong: deepseek-chat
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      updated:
+                        type: array
+                        items:
+                          type: string
+        '400':
+          description: 键不在热载白名单或值为空
+        '502':
+          description: Agent 服务不可达
   /api/admin/cache/clear:
     post:
       summary: 清理Redis缓存
