@@ -81,6 +81,23 @@ public class AgentAdminController {
         return wrap(agentAdminClient.putConfig(authorization, body));
     }
 
+
+    /** 会话列表(G3):按用户过滤可选,缺省全部用户。 */
+    @GetMapping("/sessions")
+    public ResponseEntity<ResponseMessage<?>> sessions(
+            @RequestHeader("Authorization") String authorization,
+            @RequestParam(value = "user_id", required = false) Integer userId) {
+        return wrap(agentAdminClient.getSessions(authorization, userId));
+    }
+
+    /** 会话原文回看(G3):checkpointer 全文(运营排查)。 */
+    @GetMapping("/sessions/{threadId}/messages")
+    public ResponseEntity<ResponseMessage<?>> sessionMessages(
+            @RequestHeader("Authorization") String authorization,
+            @PathVariable String threadId) {
+        return wrap(agentAdminClient.getSessionMessages(authorization, threadId));
+    }
+
     /** 上游响应 → 站内统一信封(状态码保持,前端按既有约定解包/报错)。 */
     private ResponseEntity<ResponseMessage<?>> wrap(ResponseEntity<String> upstream) {
         var status = upstream.getStatusCode();

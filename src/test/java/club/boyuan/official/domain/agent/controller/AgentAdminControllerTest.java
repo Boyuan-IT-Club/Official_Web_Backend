@@ -106,4 +106,31 @@ class AgentAdminControllerTest {
         assertEquals(HttpStatus.OK, resp.getStatusCode());
         assertEquals(objectMapper.readTree("{\"updated\":[\"model_strong\"]}"), resp.getBody().getData());
     }
+
+    @Test
+    @DisplayName("会话列表:user_id 过滤透传,2xx 包信封")
+    void sessions_forwardsFilterAndWraps() throws Exception {
+        when(client.getSessions(AUTH, 9001))
+                .thenReturn(upstream(HttpStatus.OK, "{\"items\":[]}"));
+
+        ResponseEntity<ResponseMessage<?>> resp = controller.sessions(AUTH, 9001);
+
+        assertEquals(HttpStatus.OK, resp.getStatusCode());
+        assertEquals(objectMapper.readTree("{\"items\":[]}"), resp.getBody().getData());
+    }
+
+    @Test
+    @DisplayName("会话原文:threadId 路径透传;上游 detail 透传为 error 信封")
+    void sessionMessages_forwardsAndKeepsUpstreamError() {
+        when(client.getSessionMessages(AUTH, "web:u9001:abc1"))
+                .thenReturn(upstream(HttpStatus.OK, "{\"messages\":[]}"));
+
+        ResponseEntity<ResponseMessage<?>> ok = controller.sessionMessages(AUTH, "web:u9001:abc1");
+        assertEquals(HttpStatus.OK, ok.getStatusCode());
+        when(client.getSessionMessages(AUTH, "web:u8:none"))
+                .thenReturn(upstream(HttpStatus.NOT_FOUND, "{\"detail\":\"会话不存在\"}"));
+        ResponseEntity<ResponseMessage<?>> nf = controller.sessionMessages(AUTH, "web:u8:none");
+        assertEquals(HttpStatus.NOT_FOUND, nf.getStatusCode());
+        assertEquals("会话不存在", nf.getBody().getMessage());
+    }
 }

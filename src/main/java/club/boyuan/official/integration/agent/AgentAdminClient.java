@@ -76,6 +76,27 @@ public class AgentAdminClient {
                 .body(body));
     }
 
+
+    /** 会话列表(按用户过滤可选)。 */
+    public ResponseEntity<String> getSessions(String authorization, Integer userId) {
+        return exchange(restClient.get()
+                .uri(uri -> {
+                    uri.path("/admin/sessions");
+                    if (userId != null) {
+                        uri.queryParam("user_id", userId);
+                    }
+                    return uri.build();
+                })
+                .header("Authorization", authorization));
+    }
+
+    /** 会话原文回看。 */
+    public ResponseEntity<String> getSessionMessages(String authorization, String threadId) {
+        return exchange(restClient.get()
+                .uri("/admin/sessions/{threadId}/messages", threadId)
+                .header("Authorization", authorization));
+    }
+
     private ResponseEntity<String> exchange(RestClient.RequestHeadersSpec<?> spec) {
         return spec.exchange((request, response) -> new ResponseEntity<>(
                 response.bodyTo(String.class), response.getHeaders(), response.getStatusCode()));
