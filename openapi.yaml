@@ -8806,7 +8806,6 @@ paths:
               required:
               - cycleId
               - timeSlotId
-              - deptId
               - location
               - capacity
               properties:
@@ -8818,7 +8817,17 @@ paths:
                   description: 面试时间窗 ID
                 deptId:
                   type: integer
-                  description: 部门 ID
+                  nullable: true
+                  description: 主部门 ID（兼容旧调用方）。与 deptIds 至少给一个；两者都给时以 deptIds 为准
+                deptIds:
+                  type: array
+                  nullable: true
+                  items:
+                    type: integer
+                  example:
+                  - 1
+                  - 4
+                  description: 本场次覆盖的全部部门 ID（V36 起支持一场同时面多个部门）。首个元素作为主部门
                 location:
                   type: string
                   example: 理科楼 301
@@ -8842,7 +8851,7 @@ paths:
     put:
       summary: 更新面试场次（管理员）
       deprecated: false
-      description: 增量更新场次（地点/容量/时长/状态）。容量不得低于已占用人数。需权限 `resume:audit`。
+      description: 增量更新场次（地点/容量/时长/状态/覆盖部门）。容量不得低于已占用人数。需权限 `resume:audit`。
       tags:
       - 面试场次管理（管理员）
       parameters:
@@ -8859,6 +8868,12 @@ paths:
             schema:
               type: object
               properties:
+                deptIds:
+                  type: array
+                  nullable: true
+                  items:
+                    type: integer
+                  description: 覆盖式替换本场次的部门列表；不传表示不改动部门。首个元素作为主部门
                 location:
                   type: string
                   description: 面试地点
@@ -9364,7 +9379,9 @@ paths:
     get:
       summary: 待人工调剂名单（管理员）
       deprecated: false
-      description: 返回已填志愿但算法未能分到场次的候选人。需权限 `resume:audit`。
+      description: '返回已填志愿但当前没有有效面试安排的候选人。`reason` 按当前数据即时推断（与一键分配同一套判定）：「未勾选可接受的时间窗」/「志愿部门的可选场次已满或无匹配时段」/「有可用场次，待执行一键分配」。需权限 `resume:audit`。
+
+        '
       tags:
       - 面试场次分配（管理员）
       parameters:
@@ -10602,11 +10619,27 @@ components:
           description: 结束时间
         deptId:
           type: integer
-          description: 部门 ID
+          description: 主部门 ID。多部门场次下只是其中之一，判定用 deptIds
         deptName:
           type: string
           example: 技术部
-          description: 部门名称
+          description: 主部门名称
+        deptIds:
+          type: array
+          items:
+            type: integer
+          example:
+          - 1
+          - 4
+          description: 本场次覆盖的全部部门 ID（V36）。单部门场次里只有一个元素
+        deptNames:
+          type: array
+          items:
+            type: string
+          example:
+          - 技术部
+          - 媒体部
+          description: 与 deptIds 一一对应的部门名称
         location:
           type: string
           example: 理科楼 301
@@ -10735,8 +10768,8 @@ components:
           description: 第二志愿部门名称
         reason:
           type: string
-          description: 未能分配的原因
-          example: 志愿部门场次已满
+          description: 未能分配的原因。取值：未勾选可接受的时间窗 / 志愿部门的可选场次已满或无匹配时段 / 有可用场次，待执行一键分配（仅待调剂名单接口）
+          example: 志愿部门的可选场次已满或无匹配时段
     SessionAssignmentResult:
       type: object
       description: 一键分配的执行结果

@@ -7,6 +7,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -61,6 +63,31 @@ public class GlobalExceptionHandler {
                 BusinessExceptionEnum.PERMISSION_DENIED.getMessage(), 
                 null);
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+    }
+
+    /**
+     * 处理 {@code @Valid} 请求体校验失败——返回 400 并带上字段级提示。
+     * <p>
+     * 此前没有这个分支，校验失败会落进下面的兜底 Exception 处理，
+     * 前端只看到「系统异常」，真正的原因（如「部门ID不能为空」）完全被掩盖。
+     * @param ex 参数校验异常
+     * @return 统一响应格式
+     */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ResponseMessage<?>> handleMethodArgumentNotValid(MethodArgumentNotValidException ex) {
+        String detail = ex.getBindingResult().getFieldErrors().stream()
+                .map(GlobalExceptionHandler::describeFieldError)
+                .reduce((a, b) -> a + "；" + b)
+                .orElse(BusinessExceptionEnum.PARAMETER_VALIDATION_FAILED.getMessage());
+        logger.warn("参数校验失败: {}", detail);
+        ResponseMessage<?> response = new ResponseMessage<>(
+                BusinessExceptionEnum.PARAMETER_VALIDATION_FAILED.getCode(), detail, null);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    private static String describeFieldError(FieldError fe) {
+        String msg = fe.getDefaultMessage();
+        return msg == null || msg.isBlank() ? fe.getField() + " 不合法" : msg;
     }
 
     /**

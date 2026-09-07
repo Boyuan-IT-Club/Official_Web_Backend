@@ -290,6 +290,76 @@ class SessionAssignmentServiceImplTest {
         assertEquals(1, result.getAssigned().size(), "关联表为空时应回落到场次自己的部门，而不是分不出去");
     }
 
+    // ── 待调剂名单的原因 ─────────────────────────────────────────
+
+    /**
+     * 待调剂名单里的原因要能说明「为什么还没排上」，而不是一句写死的「待人工调剂」：
+     *   601 没勾任何时间窗；
+     *   602 勾了时间窗 10，但技术部的场次只在时间窗 20 上；
+     *   603 勾了时间窗 20，技术部在 20 上有余量 → 只差点一下一键分配。
+     */
+    @Test
+    void listUnassigned_explainsWhyEachCandidateIsStillPending() {
+        Integer cycleId = 1;
+        when(recruitmentCycleService.getRecruitmentCycleById(cycleId)).thenReturn(new RecruitmentCycle());
+        when(resumeService.getAllResumesByCycleId(cycleId)).thenReturn(List.of(
+                resume(601, 1), resume(602, 2), resume(603, 3)));
+        when(resumeDataService.getResumeName(any(Resume.class))).thenReturn("学生");
+        when(interviewScheduleService.list(any(Wrapper.class))).thenReturn(List.of());
+        when(interviewPreferenceService.list(any(Wrapper.class))).thenReturn(List.of(
+                pref(601, cycleId, 1, null), pref(602, cycleId, 1, null), pref(603, cycleId, 1, null)));
+        when(preferenceTimeMapper.selectList(any())).thenReturn(List.of(prefTime(602, 10), prefTime(603, 20)));
+
+        InterviewTimeSlot ts20 = new InterviewTimeSlot().setTimeSlotId(20).setCycleId(cycleId)
+                .setInterviewDate(LocalDate.of(2026, 3, 1)).setStartTime(LocalTime.of(9, 0))
+                .setEndTime(LocalTime.of(12, 0)).setStatus(1);
+        when(interviewTimeSlotService.listByIds(any())).thenReturn(List.of(ts20));
+        when(interviewSessionService.list(any(Wrapper.class)))
+                .thenReturn(List.of(session(3100, cycleId, 20, 1, "301", 5)));
+        when(interviewSessionDeptMapper.selectList(any())).thenReturn(List.of(sessionDept(3100, 1)));
+        when(departmentMapper.selectList(nullable(Wrapper.class))).thenReturn(List.of(dept(1, "技术部")));
+
+        List<SessionAssignmentResultDTO.UnassignedItem> list = service.listUnassigned(cycleId);
+
+        assertEquals(3, list.size());
+        assertEquals(SessionAssignmentServiceImpl.REASON_NO_TIME_SLOT, reasonOf(list, 601));
+        assertEquals(SessionAssignmentServiceImpl.REASON_NO_MATCHING_SESSION, reasonOf(list, 602));
+        assertEquals(SessionAssignmentServiceImpl.REASON_NOT_YET_ASSIGNED, reasonOf(list, 603));
+        assertEquals("技术部", list.get(0).getFirstDeptName());
+    }
+
+    /**
+     * 场次满了也算「无匹配」：剩余名额按库里当前占用算，不能因为场次存在就说「待执行分配」。
+     */
+    @Test
+    void listUnassigned_treatsFullSessionAsNoMatch() {
+        Integer cycleId = 1;
+        when(recruitmentCycleService.getRecruitmentCycleById(cycleId)).thenReturn(new RecruitmentCycle());
+        when(resumeService.getAllResumesByCycleId(cycleId)).thenReturn(List.of(resume(701, 1)));
+        when(resumeDataService.getResumeName(any(Resume.class))).thenReturn("学生");
+        when(interviewScheduleService.list(any(Wrapper.class))).thenReturn(List.of());
+        when(interviewPreferenceService.list(any(Wrapper.class))).thenReturn(List.of(pref(701, cycleId, 1, null)));
+        when(preferenceTimeMapper.selectList(any())).thenReturn(List.of(prefTime(701, 10)));
+        InterviewTimeSlot ts = new InterviewTimeSlot().setTimeSlotId(10).setCycleId(cycleId)
+                .setInterviewDate(LocalDate.of(2026, 3, 1)).setStartTime(LocalTime.of(9, 0))
+                .setEndTime(LocalTime.of(12, 0)).setStatus(1);
+        when(interviewTimeSlotService.listByIds(any())).thenReturn(List.of(ts));
+        InterviewSession full = session(3200, cycleId, 10, 1, "301", 2).setCurrentOccupied(2);
+        when(interviewSessionService.list(any(Wrapper.class))).thenReturn(List.of(full));
+        when(interviewSessionDeptMapper.selectList(any())).thenReturn(List.of(sessionDept(3200, 1)));
+        when(departmentMapper.selectList(nullable(Wrapper.class))).thenReturn(List.of(dept(1, "技术部")));
+
+        List<SessionAssignmentResultDTO.UnassignedItem> list = service.listUnassigned(cycleId);
+
+        assertEquals(1, list.size());
+        assertEquals(SessionAssignmentServiceImpl.REASON_NO_MATCHING_SESSION, list.get(0).getReason());
+    }
+
+    private static String reasonOf(List<SessionAssignmentResultDTO.UnassignedItem> list, int resumeId) {
+        return list.stream().filter(u -> u.getResumeId() == resumeId).findFirst()
+                .orElseThrow(() -> new AssertionError("缺少 resumeId=" + resumeId)).getReason();
+    }
+
     private static club.boyuan.official.persistence.entity.InterviewSessionDept sessionDept(int sessionId, int deptId) {
         return new club.boyuan.official.persistence.entity.InterviewSessionDept()
                 .setSessionId(sessionId).setDeptId(deptId);

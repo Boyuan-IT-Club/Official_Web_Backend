@@ -56,6 +56,10 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
     private static final int SCHEDULE_STATUS_ACTIVE = 1;
     private static final int DEFAULT_DURATION_MINUTES = 10;
 
+    static final String REASON_NO_TIME_SLOT = "未勾选可接受的时间窗";
+    static final String REASON_NO_MATCHING_SESSION = "志愿部门的可选场次已满或无匹配时段";
+    static final String REASON_NOT_YET_ASSIGNED = "有可用场次，待执行一键分配";
+
     private final IRecruitmentCycleService recruitmentCycleService;
     private final IInterviewPreferenceService interviewPreferenceService;
     private final InterviewPreferenceTimeMapper preferenceTimeMapper;
@@ -106,7 +110,7 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
             List<Integer> acceptable = acceptedTimeSlotIds.getOrDefault(pref.getResumeId(), List.of());
 
             if (acceptable.isEmpty()) {
-                result.getUnassigned().add(buildUnassigned(pref, resume, deptNames, "未勾选可接受的时间窗"));
+                result.getUnassigned().add(buildUnassigned(pref, resume, deptNames, REASON_NO_TIME_SLOT));
                 continue;
             }
 
@@ -129,8 +133,7 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
             }
 
             if (chosen == null) {
-                result.getUnassigned().add(buildUnassigned(pref, resume, deptNames,
-                        "志愿部门的可选场次已满或无匹配时段"));
+                result.getUnassigned().add(buildUnassigned(pref, resume, deptNames, REASON_NO_MATCHING_SESSION));
                 continue;
             }
 
@@ -158,14 +161,42 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
         Set<Integer> alreadyScheduled = loadActivelyScheduledResumeIds(cycleId);
         Map<Integer, String> deptNames = loadAllDeptNames();
 
-        List<InterviewPreference> preferences = interviewPreferenceService.list(
-                new LambdaQueryWrapper<InterviewPreference>().eq(InterviewPreference::getCycleId, cycleId));
-
-        return preferences.stream()
+        List<InterviewPreference> pending = interviewPreferenceService.list(
+                        new LambdaQueryWrapper<InterviewPreference>().eq(InterviewPreference::getCycleId, cycleId))
+                .stream()
                 .filter(p -> resumeById.containsKey(p.getResumeId()))
                 .filter(p -> !alreadyScheduled.contains(p.getResumeId()))
-                .map(p -> buildUnassigned(p, resumeById.get(p.getResumeId()), deptNames, "待人工调剂"))
                 .collect(Collectors.toList());
+        if (pending.isEmpty()) {
+            return List.of();
+        }
+
+        // 原因按当前数据即时推断（与 assign 用同一套判定），而不是写死一句「待人工调剂」：
+        // 管理员看名单时要知道是学生没勾时间、还是场次不够、还是只差点一下分配。
+        Map<Integer, List<Integer>> acceptedTimeSlotIds = loadAcceptedTimeSlotIds(
+                pending.stream().map(InterviewPreference::getResumeId).collect(Collectors.toList()));
+        Map<Integer, List<SessionState>> statesByDept = loadSessionStates(cycleId);
+
+        return pending.stream()
+                .map(p -> buildUnassigned(p, resumeById.get(p.getResumeId()), deptNames,
+                        explainUnassigned(p, acceptedTimeSlotIds.getOrDefault(p.getResumeId(), List.of()), statesByDept)))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 用与 {@link #assign} 相同的判定解释一名候选人此刻为什么还没被排上。
+     * 剩余名额按库里当前占用计算，所以「有可用场次」意味着现在点一键分配就能排进去。
+     */
+    private String explainUnassigned(InterviewPreference pref, List<Integer> acceptable,
+                                     Map<Integer, List<SessionState>> statesByDept) {
+        if (acceptable.isEmpty()) {
+            return REASON_NO_TIME_SLOT;
+        }
+        boolean firstOk = pref.getFirstDeptId() != null
+                && pickSession(statesByDept.get(pref.getFirstDeptId()), acceptable) != null;
+        boolean secondOk = pref.getSecondDeptId() != null
+                && pickSession(statesByDept.get(pref.getSecondDeptId()), acceptable) != null;
+        return firstOk || secondOk ? REASON_NOT_YET_ASSIGNED : REASON_NO_MATCHING_SESSION;
     }
 
     @Override
