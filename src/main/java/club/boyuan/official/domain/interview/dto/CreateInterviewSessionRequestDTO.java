@@ -17,10 +17,13 @@ public class CreateInterviewSessionRequestDTO {
     @NotNull(message = "时间窗ID不能为空")
     private Integer timeSlotId;
 
-    @NotNull(message = "部门ID不能为空")
     /**
      * 主部门。保留是为了兼容既有调用方与飞书同步等只认单值的地方；
      * 真正的覆盖范围以 deptIds 为准，未传 deptIds 时视同只服务这一个部门。
+     * <p>
+     * 不加 {@code @NotNull}：前端建场次已改为只传 deptIds（部门多选），
+     * 这里再强制 deptId 会让请求在参数校验阶段就被拒。
+     * 「deptId 与 deptIds 至少给一个」由服务层校验。
      */
     private Integer deptId;
 
