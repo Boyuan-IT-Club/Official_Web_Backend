@@ -320,13 +320,9 @@ public class ResumeController {
             @RequestBody Map<String, Integer> body) {
         Integer score = body == null ? null : body.get("score");
         logger.info("更新简历评分，简历ID: {}，分数: {}", resumeId, score);
-        Resume updated = resumeService.updateResumeScore(resumeId, score, currentUser().getUserId());
-        ResumeDTO dto = new ResumeDTO();
-        dto.setResumeId(updated.getResumeId());
-        dto.setUserId(updated.getUserId());
-        dto.setCycleId(updated.getCycleId());
-        dto.setStatus(updated.getStatus());
-        dto.setResumeScore(updated.getResumeScore());
+        // 语义：写入或更新「当前登录人」的那一票；返回的 resumeScore 是全部票的平均分，
+        // scoreEntries 是逐人明细
+        ResumeDTO dto = resumeService.updateResumeScore(resumeId, score, currentUser().getUserId());
         return ResponseEntity.ok(new ResponseMessage<>(200, "简历评分已更新", dto));
     }
 
