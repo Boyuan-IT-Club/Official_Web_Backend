@@ -4204,8 +4204,14 @@ paths:
       summary: 当前开放投递的周期
       deprecated: false
       description: >-
-        返回「现在真的可以投递」的招募周期列表：is_active = 1 且今天落在
-        start_date ~ end_date 之间，按 start_date 倒序（前端以第一项为默认选中）。
+        返回「当前周期」列表：今天落在 start_date ~ end_date 之间且未删除，
+        按 start_date 倒序（前端以第一项为默认选中）。
+
+        不按 is_active 过滤。管理员「停止投递」（is_active = 0）后周期在时间内仍对
+        用户端可见（看自己的简历与进度），只是不能再提交、修改或新建简历——
+        每项以 intakeOpen 标出是否仍接收投递，前端据此把「可投」与「只读可见」分开；
+        写入闸门在后端简历接口（3010），与本列表无关。周期时间过了才从列表消失，
+        那时没投过的同学才看不到它。
 
         与 /api/cycles/active/{isActive} 的区别：is_active 只表示「是否启用」，
         往届周期为了能查历史简历通常也保持启用，所以「启用中」不等于「现在能投」。
@@ -4231,7 +4237,7 @@ paths:
                     description: 提示信息
                   data:
                     type: array
-                    description: 当前开放投递的周期，可能为空数组（此时无周期在招）
+                    description: 当前周期（含已停止投递但仍在时间内的），可能为空数组（此时无周期在招）
                     items:
                       type: object
                       properties:
@@ -4261,12 +4267,18 @@ paths:
                             投递页无内容可填 —— /api/resumes/fields/{cycleId}
                             在无定义时返回 200 + 空数组且不报错，前端需据此提示，
                             否则表现为一张空白表单。
+                        intakeOpen:
+                          type: boolean
+                          description: >-
+                            是否仍接收投递（is_active = 1）。false 表示管理员已「停止投递」：
+                            周期在时间内仍可见，但不能提交、修改或新建简历。
                       required:
                       - cycleId
                       - cycleName
                       - startDate
                       - endDate
                       - fieldCount
+                      - intakeOpen
                 required:
                 - code
                 - message
@@ -4329,12 +4341,17 @@ paths:
                         fieldCount:
                           type: integer
                           description: 该周期已配置的简历字段数
+                        intakeOpen:
+                          type: boolean
+                          description: >-
+                            是否仍接收投递。预告列表只返回 is_active = 1 的周期，这里恒为 true
                       required:
                       - cycleId
                       - cycleName
                       - startDate
                       - endDate
                       - fieldCount
+                      - intakeOpen
                 required:
                 - code
                 - message

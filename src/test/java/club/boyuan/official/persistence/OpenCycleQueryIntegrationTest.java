@@ -29,7 +29,7 @@ class OpenCycleQueryIntegrationTest {
     private RecruitmentCycleMapper cycleMapper;
 
     @Test
-    @DisplayName("同时开放的多个周期都要返回,按 start_date 倒序;已过期与未启用的不返回")
+    @DisplayName("同时开放的多个周期都要返回,按 start_date 倒序;已过期的不返回,停止投递但在时间内的仍返回")
     void openCyclesAreResolvedByDateWindow() {
         LocalDate today = LocalDate.now();
         List<Integer> created = new ArrayList<>();
@@ -39,8 +39,8 @@ class OpenCycleQueryIntegrationTest {
             Integer later = insert("测试-较晚开放", today.minusDays(2), today.plusDays(20), 1, created);
             // 窗口已过去
             Integer expired = insert("测试-已截止", today.minusDays(60), today.minusDays(30), 1, created);
-            // 在窗口内但被禁用
-            Integer disabled = insert("测试-未启用", today.minusDays(5), today.plusDays(5), 0, created);
+            // 在窗口内但已「停止投递」（is_active=0）
+            Integer paused = insert("测试-已停止投递", today.minusDays(5), today.plusDays(5), 0, created);
 
             List<Integer> ids = cycleMapper.findOpenForApplication(today).stream()
                     .map(RecruitmentCycle::getCycleId)
@@ -49,7 +49,9 @@ class OpenCycleQueryIntegrationTest {
             assertTrue(ids.contains(earlier), "窗口覆盖今天的周期必须返回");
             assertTrue(ids.contains(later), "同时开放的第二个周期也必须返回,不能只给一个");
             assertFalse(ids.contains(expired), "end_date 已过的周期不该出现在开放列表里");
-            assertFalse(ids.contains(disabled), "is_active=0 的周期不该出现在开放列表里");
+            // 停止投递 != 结束：周期时间没过就要继续对用户端可见（看简历、看进度），
+            // 只是不能再提交/修改/新建——那道闸在 requireCycleOpen，前端靠 intakeOpen 区分
+            assertTrue(ids.contains(paused), "停止投递但仍在起止日期内的周期要保留在列表里，用户端才看得到");
 
             // 默认选中项取列表第一个,所以顺序必须是 start_date 倒序
             assertTrue(ids.indexOf(later) < ids.indexOf(earlier),

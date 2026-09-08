@@ -201,10 +201,16 @@
         WHERE is_active = 1 AND is_deleted = 0
     </update>
 
+    <!--
+        「当前周期」= 今天落在起止日期内且未删除。不再按 is_active 过滤：
+        管理员点「停止投递」（is_active=0）后周期在用户端要继续可见（看简历、看进度），
+        只是不能再提交/修改/新建——那道闸在 ResumeServiceImpl.requireCycleOpen，
+        本查询的结果里用 is_active 映射成 OpenCycleDTO.intakeOpen 交给前端区分。
+        周期时间过了之后才从这里消失，没投过的同学自然看不到。
+    -->
     <select id="findOpenForApplication" resultMap="RecruitmentCycleResultMap">
         SELECT * FROM recruitment_cycle
-        WHERE is_active = 1
-          AND is_deleted = 0
+        WHERE is_deleted = 0
           AND #{today} BETWEEN start_date AND end_date
         ORDER BY start_date DESC, cycle_id DESC
     </select>
