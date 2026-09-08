@@ -23,4 +23,8 @@ public interface InterviewResultMapper extends BaseMapper<InterviewResult> {
      * 过滤出确实属于该周期的 result_id，用于批量操作前的归属校验。
      */
     List<Integer> selectResultIdsInCycle(@Param("cycleId") Integer cycleId, @Param("resultIds") List<Integer> resultIds);
+
+    /** 只返回该周期仍未发布决定（decision=0）的结果，用于加入预录取名单。 */
+    List<Integer> selectPendingResultIdsInCycle(@Param("cycleId") Integer cycleId,
+                                                @Param("resultIds") List<Integer> resultIds);
 }

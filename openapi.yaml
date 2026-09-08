@@ -8350,6 +8350,127 @@ paths:
                 - data
           headers: {}
 
+  /api/interview/result/pre-admission:
+    get:
+      summary: 查看预录取名单及部门统计
+      description: >-
+        返回仅管理端可见的录取草稿。候选人按拟录取部门排序，并在 departmentStats
+        中返回各部门人数；草稿不会改变学生端进度，也不会触发通知或正式名册。
+      tags:
+      - 面试管理/结果与通知
+      parameters:
+      - name: cycleId
+        in: query
+        required: true
+        schema:
+          type: integer
+      - name: name
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: department
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 1
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 20
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreAdmissionListResponse'
+  /api/interview/result/pre-admission/batch:
+    post:
+      summary: 批量加入或调整预录取名单
+      description: >-
+        将本周期仍为待定状态的候选人加入预录取名单。已在名单中的候选人会调整到
+        assignedDeptId 指定的部门；已定稿、跨周期或不存在的 resultId 返回在 skipped 中。
+      tags:
+      - 面试管理/结果与通知
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreAdmissionBatchRequest'
+      responses:
+        '200':
+          description: 保存成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreAdmissionMutationResponse'
+  /api/interview/result/pre-admission/remove:
+    post:
+      summary: 批量移出预录取名单
+      description: 只删除草稿，不改变面试最终结果和学生端状态。
+      tags:
+      - 面试管理/结果与通知
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreAdmissionRemoveRequest'
+      responses:
+        '200':
+          description: 移出成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreAdmissionMutationResponse'
+  /api/interview/result/pre-admission/finalize:
+    post:
+      summary: 一键转正预录取名单
+      description: >-
+        在一个事务中把本周期整份预录取名单写为正式“通过”决定及录取部门，然后清空草稿。
+        若其中任何候选人已被其他入口定稿，整批回滚并提示刷新。接口不会自动发邮件；
+        转正成功后继续调用既有 send-notifications 接口显式通知。
+      tags:
+      - 面试管理/结果与通知
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - cycleId
+              properties:
+                cycleId:
+                  type: integer
+      responses:
+        '200':
+          description: 转正成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      published:
+                        type: integer
+
   /api/interview/result/list:
     get:
       summary: 查看录取结果
@@ -12956,6 +13077,99 @@ components:
           type: object
           description: 响应数据
           nullable: true
+    PreAdmissionBatchRequest:
+      type: object
+      required:
+      - cycleId
+      - resultIds
+      - assignedDeptId
+      properties:
+        cycleId:
+          type: integer
+        resultIds:
+          type: array
+          minItems: 1
+          items:
+            type: integer
+        assignedDeptId:
+          type: integer
+          description: 拟录取部门；重复加入时用于调剂到新部门
+    PreAdmissionRemoveRequest:
+      type: object
+      required:
+      - cycleId
+      - resultIds
+      properties:
+        cycleId:
+          type: integer
+        resultIds:
+          type: array
+          minItems: 1
+          items:
+            type: integer
+    PreAdmissionMutationResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            affected:
+              type: integer
+            skipped:
+              type: array
+              items:
+                type: integer
+    PreAdmissionListResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            total:
+              type: integer
+              format: int64
+            candidates:
+              type: array
+              items:
+                type: object
+                properties:
+                  draftId:
+                    type: integer
+                  cycleId:
+                    type: integer
+                  resultId:
+                    type: integer
+                  userId:
+                    type: integer
+                  userName:
+                    type: string
+                  assignedDeptId:
+                    type: integer
+                  departmentName:
+                    type: string
+                  updatedAt:
+                    type: string
+                    format: date-time
+            departmentStats:
+              type: array
+              items:
+                type: object
+                properties:
+                  deptId:
+                    type: integer
+                  departmentName:
+                    type: string
+                  candidateCount:
+                    type: integer
+                    format: int64
   responses: {}
   securitySchemes:
     bearerAuth:

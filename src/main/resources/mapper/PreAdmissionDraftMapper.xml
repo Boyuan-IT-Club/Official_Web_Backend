@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="club.boyuan.official.persistence.mapper.PreAdmissionDraftMapper">
+
+    <select id="selectDraftPage" resultType="club.boyuan.official.persistence.entity.PreAdmissionDraft">
+        SELECT pad.*, ir.user_id, u.name AS user_name, d.dept_name AS department_name
+        FROM pre_admission_draft pad
+        JOIN interview_result ir ON ir.result_id = pad.result_id
+        JOIN user u ON u.user_id = ir.user_id
+        JOIN department d ON d.dept_id = pad.assigned_dept_id
+        <where>
+            pad.cycle_id = #{cycleId}
+            <if test="name != null and name != ''">
+                AND u.name LIKE CONCAT('%', #{name}, '%')
+            </if>
+            <if test="department != null and department != ''">
+                AND d.dept_name LIKE CONCAT('%', #{department}, '%')
+            </if>
+        </where>
+        ORDER BY d.dept_name, pad.updated_at DESC, pad.draft_id DESC
+    </select>
+
+    <select id="selectDepartmentStats" resultType="java.util.LinkedHashMap">
+        SELECT d.dept_id AS deptId, d.dept_name AS departmentName, COUNT(*) AS candidateCount
+        FROM pre_admission_draft pad
+        JOIN department d ON d.dept_id = pad.assigned_dept_id
+        WHERE pad.cycle_id = #{cycleId}
+        GROUP BY d.dept_id, d.dept_name
+        ORDER BY d.dept_name
+    </select>
+
+    <insert id="upsertBatch">
+        INSERT INTO pre_admission_draft
+            (cycle_id, result_id, assigned_dept_id, created_by, updated_by, created_at, updated_at)
+        VALUES
+        <foreach collection="resultIds" item="resultId" separator=",">
+            (#{cycleId}, #{resultId}, #{assignedDeptId}, #{operatorId}, #{operatorId}, NOW(), NOW())
+        </foreach>
+        ON DUPLICATE KEY UPDATE
+            assigned_dept_id = VALUES(assigned_dept_id),
+            updated_by = VALUES(updated_by),
+            updated_at = NOW()
+    </insert>
+
+    <delete id="deleteBatch">
+        DELETE FROM pre_admission_draft
+        WHERE cycle_id = #{cycleId}
+          AND result_id IN
+        <foreach collection="resultIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <select id="selectForFinalize" resultType="club.boyuan.official.persistence.entity.PreAdmissionDraft">
+        SELECT * FROM pre_admission_draft
+        WHERE cycle_id = #{cycleId}
+        ORDER BY draft_id
+        FOR UPDATE
+    </select>
+
+    <update id="publishToResults">
+        UPDATE interview_result ir
+        JOIN pre_admission_draft pad ON pad.result_id = ir.result_id
+        SET ir.decision = 1,
+            ir.assigned_dept_id = pad.assigned_dept_id,
+            ir.decision_by = #{operatorId},
+            ir.decision_at = NOW()
+        WHERE pad.cycle_id = #{cycleId}
+          AND ir.decision = 0
+          AND COALESCE(ir.cycle_id,
+              (SELECT isc.cycle_id FROM interview_schedule isc WHERE isc.schedule_id = ir.schedule_id)) = #{cycleId}
+    </update>
+</mapper>
