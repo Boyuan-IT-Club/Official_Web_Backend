@@ -23,6 +23,12 @@ public class OpenCycleDTO {
     private LocalDate endDate;
     /** 该周期已配置的简历字段数；为 0 表示表单还没配，投递页无内容可填 */
     private int fieldCount;
+    /**
+     * 是否仍接收投递（is_active = 1）。
+     * false = 管理员已点「停止投递」：周期在时间内仍对用户端可见（看简历、看进度），
+     * 但不能提交、修改或新建简历——后端 requireCycleOpen 同样会拒绝。
+     */
+    private boolean intakeOpen;
 
     public OpenCycleDTO() {
     }
@@ -35,6 +41,7 @@ public class OpenCycleDTO {
         this.startDate = cycle.getStartDate();
         this.endDate = cycle.getEndDate();
         this.fieldCount = fieldCount;
+        this.intakeOpen = Integer.valueOf(1).equals(cycle.getIsActive());
     }
 
     public Integer getCycleId() {
@@ -91,5 +98,13 @@ public class OpenCycleDTO {
 
     public void setFieldCount(int fieldCount) {
         this.fieldCount = fieldCount;
+    }
+
+    public boolean isIntakeOpen() {
+        return intakeOpen;
+    }
+
+    public void setIntakeOpen(boolean intakeOpen) {
+        this.intakeOpen = intakeOpen;
     }
 }
