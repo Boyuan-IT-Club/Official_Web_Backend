@@ -45,9 +45,19 @@
     <select id="selectResultIdsInCycle" resultType="java.lang.Integer">
         SELECT ir.result_id
         FROM interview_result ir
-        JOIN interview_schedule isc ON ir.schedule_id = isc.schedule_id
-        WHERE isc.cycle_id = #{cycleId}
+        LEFT JOIN interview_schedule isc ON ir.schedule_id = isc.schedule_id
+        WHERE COALESCE(ir.cycle_id, isc.cycle_id) = #{cycleId}
         AND ir.result_id IN
+        <foreach collection="resultIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </select>
+
+    <select id="selectPendingResultIdsInCycle" resultType="java.lang.Integer">
+        SELECT ir.result_id
+        FROM interview_result ir
+        LEFT JOIN interview_schedule isc ON ir.schedule_id = isc.schedule_id
+        WHERE COALESCE(ir.cycle_id, isc.cycle_id) = #{cycleId}
+          AND ir.decision = 0
+          AND ir.result_id IN
         <foreach collection="resultIds" item="id" open="(" separator="," close=")">#{id}</foreach>
     </select>
 </mapper>

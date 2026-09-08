@@ -4,6 +4,7 @@ import club.boyuan.official.domain.interview.dto.BatchDecisionRequestDTO;
 import club.boyuan.official.domain.interview.dto.InterviewResultSaveDTO;
 import club.boyuan.official.domain.interview.dto.SendNotificationsRequestDTO;
 import club.boyuan.official.domain.interview.service.IInterviewResultService;
+import club.boyuan.official.domain.interview.service.PreAdmissionService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,8 +47,14 @@ class InterviewResultApiSecurityTest {
         }
 
         @Bean
-        InterviewResultController interviewResultController(IInterviewResultService service) {
-            return new InterviewResultController(service);
+        PreAdmissionService preAdmissionService() {
+            return mock(PreAdmissionService.class);
+        }
+
+        @Bean
+        InterviewResultController interviewResultController(IInterviewResultService service,
+                                                             PreAdmissionService preAdmissionService) {
+            return new InterviewResultController(service, preAdmissionService);
         }
     }
 
@@ -79,6 +86,7 @@ class InterviewResultApiSecurityTest {
         assertDoesNotThrow(() -> controller.update(10, new InterviewResultSaveDTO()));
         assertDoesNotThrow(() -> controller.list(1, null, null, null, 1, 10));
         assertDoesNotThrow(() -> controller.sendNotifications(notifyRequest()));
+        assertDoesNotThrow(() -> controller.preAdmissionList(1, null, null, 1, 20));
     }
 
     /**
@@ -103,5 +111,7 @@ class InterviewResultApiSecurityTest {
         assertThrows(AccessDeniedException.class, () -> controller.update(10, new InterviewResultSaveDTO()));
         assertThrows(AccessDeniedException.class, () -> controller.list(1, null, null, null, 1, 10));
         assertThrows(AccessDeniedException.class, () -> controller.get(10));
+        assertThrows(AccessDeniedException.class,
+                () -> controller.preAdmissionList(1, null, null, 1, 20));
     }
 }

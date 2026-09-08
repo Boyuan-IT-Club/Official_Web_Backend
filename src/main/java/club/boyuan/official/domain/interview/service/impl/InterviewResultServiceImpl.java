@@ -31,7 +31,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -297,9 +296,10 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
     private Boolean sendEmailNotification(InterviewResult interviewResult, String customMessage) {
         try {
             Integer decision = interviewResult.getDecision();
-            if (!StringUtils.hasText(customMessage)
-                    && (decision == null || (decision != 1 && decision != 2))) {
-                log.warn("结果 decision={} 无自定义正文且不支持自动邮件，resultId={}",
+            // 自定义正文也不能绕过最终决定闸门，否则管理员可能在草稿讨论期
+            // 误选待定结果并提前把录取信息发给学生。
+            if (decision == null || (decision != 1 && decision != 2)) {
+                log.warn("结果 decision={} 尚未定稿，拒绝发送结果通知，resultId={}",
                         decision, interviewResult.getResultId());
                 return false;
             }

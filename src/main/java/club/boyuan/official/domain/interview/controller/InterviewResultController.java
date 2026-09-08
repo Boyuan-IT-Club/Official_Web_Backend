@@ -6,6 +6,7 @@ import club.boyuan.official.common.dto.*;
 import club.boyuan.official.domain.interview.dto.*;
 import club.boyuan.official.persistence.entity.InterviewResult;
 import club.boyuan.official.domain.interview.service.IInterviewResultService;
+import club.boyuan.official.domain.interview.service.PreAdmissionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +35,44 @@ import java.util.List;
 public class InterviewResultController {
 
     private final IInterviewResultService interviewResultService;
+    private final PreAdmissionService preAdmissionService;
+
+    /** 预录取草稿列表，同时返回各拟录取部门人数。 */
+    @GetMapping("/pre-admission")
+    public ResponseEntity<ResponseMessage<PreAdmissionListResponseDTO>> preAdmissionList(
+            @RequestParam Integer cycleId,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String department,
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "20") Integer size) {
+        return ResponseEntity.ok(ResponseMessage.success(
+                preAdmissionService.list(cycleId, name, department, page, size)));
+    }
+
+    /** 批量加入预录取名单；重复加入等价于换到新的拟录取部门。 */
+    @PostMapping("/pre-admission/batch")
+    public ResponseEntity<ResponseMessage<PreAdmissionMutationResponseDTO>> savePreAdmission(
+            @Valid @RequestBody PreAdmissionBatchRequestDTO request) {
+        return ResponseEntity.ok(ResponseMessage.success(preAdmissionService.save(request)));
+    }
+
+    /** 从草稿名单移出，不改变任何学生可见状态。 */
+    @PostMapping("/pre-admission/remove")
+    public ResponseEntity<ResponseMessage<PreAdmissionMutationResponseDTO>> removePreAdmission(
+            @Valid @RequestBody PreAdmissionRemoveRequestDTO request) {
+        return ResponseEntity.ok(ResponseMessage.success(preAdmissionService.remove(request)));
+    }
+
+    /**
+     * 将本周期整份预录取名单原子转成正式“通过”决定。
+     * 此处不发邮件，发布后仍由既有 send-notifications 接口显式通知。
+     */
+    @PostMapping("/pre-admission/finalize")
+    public ResponseEntity<ResponseMessage<Map<String, Integer>>> finalizePreAdmission(
+            @Valid @RequestBody PreAdmissionFinalizeRequestDTO request) {
+        int published = preAdmissionService.finalizeCycle(request.getCycleId());
+        return ResponseEntity.ok(ResponseMessage.success(Map.of("published", published)));
+    }
     @PostMapping("/send-notifications")
     public ResponseEntity<ResponseMessage<SendNotificationsResponseDTO>> sendNotifications(
             @Valid @RequestBody SendNotificationsRequestDTO requestDTO

@@ -78,22 +78,17 @@ public class InterviewScheduleController {
         if (resume == null) {
             return ResponseEntity.ok(ResponseMessage.success(null));
         }
-        InterviewSchedule schedule = interviewScheduleMapper.selectOne(
-                new LambdaQueryWrapper<InterviewSchedule>()
-                        .eq(InterviewSchedule::getResumeId, resume.getResumeId())
-                        .eq(InterviewSchedule::getCycleId, cycleId)
-                        .orderByDesc(InterviewSchedule::getScheduleId)
-                        .last("LIMIT 1"));
-        if (schedule == null) {
-            return ResponseEntity.ok(ResponseMessage.success(null));
-        }
         club.boyuan.official.persistence.entity.InterviewResult result = interviewResultMapper.selectOne(
                 new LambdaQueryWrapper<club.boyuan.official.persistence.entity.InterviewResult>()
-                        .eq(club.boyuan.official.persistence.entity.InterviewResult::getScheduleId, schedule.getScheduleId())
+                        .eq(club.boyuan.official.persistence.entity.InterviewResult::getResumeId, resume.getResumeId())
+                        .eq(club.boyuan.official.persistence.entity.InterviewResult::getCycleId, cycleId)
                         .eq(club.boyuan.official.persistence.entity.InterviewResult::getUserId, currentUser.getUserId())
                         .orderByDesc(club.boyuan.official.persistence.entity.InterviewResult::getResultId)
                         .last("LIMIT 1"));
-        if (result == null || result.getDecision() == null) {
+        // 只有正式的通过/未通过才对学生公开。decision=0(待定)、3(待调剂)
+        // 以及独立的预录取草稿都必须表现为“尚未出结果”。
+        if (result == null || (!Integer.valueOf(1).equals(result.getDecision())
+                && !Integer.valueOf(2).equals(result.getDecision()))) {
             return ResponseEntity.ok(ResponseMessage.success(null));
         }
         Map<String, Object> data = new LinkedHashMap<>();
