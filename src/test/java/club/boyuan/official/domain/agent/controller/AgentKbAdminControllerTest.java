@@ -122,4 +122,13 @@ class AgentKbAdminControllerTest {
                 ResourceAccessException.class,
                 () -> controller.sources(AUTH, null, null, null, null));
     }
+
+    @Test
+    @DisplayName("502 handler 直调:BAD_GATEWAY + code 502(评审 P2 补,与先例对齐)")
+    void unreachableHandlerReturns502() {
+        ResponseEntity<ResponseMessage<Void>> handled = controller.handleUnreachable(
+                new ResourceAccessException("Connection refused"));
+        assertEquals(HttpStatus.BAD_GATEWAY, handled.getStatusCode());
+        assertEquals(502, handled.getBody().getCode());
+    }
 }
