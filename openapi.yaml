@@ -9789,6 +9789,62 @@ paths:
                     description: 响应数据
         '409':
           description: 目标场次已满（3604）
+  /api/interview/admin/schedules/{scheduleId}/interview-time:
+    put:
+      summary: 手动调整面试时间（管理员）
+      deprecated: false
+      description: '把某条面试安排（按 scheduleId）的 `interviewTime` 手动调整到精确的几点几分，并标记 `timeOverridden=1`。更新时把 `syncStatus`/`notifStatus` 重置为 0 以触发飞书重新同步与后续提醒。
+
+        一键自动分配不会触碰已安排的人；之后若再「换场」则重置回公式计算。
+
+        边界：scheduleId 不存在(3612)、安排已取消(3614)、场次/时间窗被删或跨周期(3603/3605/3601/3602) 抛业务异常；
+        指定时间超出该场次时间窗、或同场次他人已占该时刻时，不拒绝，仅在响应 `warning` 中给可读告警。
+        接口幂等，可重复调用。需权限 `resume:audit`。
+
+        '
+      tags:
+      - 面试管理/结果与通知
+      parameters:
+      - name: scheduleId
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 面试安排 ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - interviewTime
+              properties:
+                interviewTime:
+                  type: string
+                  description: 面试具体时间，格式 yyyy-MM-ddTHH:mm
+                  example: '2026-04-18T15:30'
+            example:
+              interviewTime: '2026-04-18T15:30'
+      responses:
+        '200':
+          description: 调整成功，返回该安排的最新状态与告警
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                    description: 业务状态码（200 表示成功）
+                  message:
+                    type: string
+                    example: 操作成功
+                    description: 提示信息
+                  data:
+                    $ref: '#/components/schemas/UpdateInterviewTimeResponse'
+                    description: 响应数据
   /api/interview/feishu/import-from-table:
     post:
       summary: 从飞书多维表格同步导入面试安排（同步）
@@ -11022,6 +11078,30 @@ components:
         assignedByPreference:
           type: integer
           description: 命中的志愿序位：1 第一志愿 / 2 第二志愿 / 0 人工调剂
+    UpdateInterviewTimeResponse:
+      type: object
+      description: 手动调整面试时间的返回结果
+      properties:
+        scheduleId:
+          type: integer
+          description: 面试安排 ID
+        interviewTime:
+          type: string
+          format: date-time
+          description: 调整后的面试具体时间
+        timeOverridden:
+          type: integer
+          description: 是否人工指定（本次调整后恒为 1）
+        syncStatus:
+          type: integer
+          description: 已重置为 0，触发飞书重新同步
+        notifStatus:
+          type: integer
+          description: 已重置为 0，标记需重新通知
+        warning:
+          type: string
+          nullable: true
+          description: 越界或同场次时间冲突时的可读告警；无告警时为 null
     UnassignedCandidate:
       type: object
       description: 待人工调剂的候选人

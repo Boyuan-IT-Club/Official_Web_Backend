@@ -75,6 +75,13 @@ public class InterviewSchedule implements Serializable {
     private LocalDateTime interviewTime;
 
     /**
+     * 是否人工指定面试时间：0=公式生成（自动分配/换场，默认），1=人工指定。
+     * 人工指定后，自动分配(assign)天然不触碰已安排的人；换场(manualAssign)会重置回 0。
+     */
+    @TableField("time_overridden")
+    private Integer timeOverridden;
+
+    /**
      * 状态：0（未安排），1(已安排), 2(已取消)
      */
     @TableField("status")

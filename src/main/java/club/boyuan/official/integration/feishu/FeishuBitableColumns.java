@@ -6,6 +6,8 @@ package club.boyuan.official.integration.feishu;
 public final class FeishuBitableColumns {
 
     public static final String NAME = "姓名";
+    /** 该候选人精确到场时间（平台 → 飞书） */
+    public static final String INTERVIEW_TIME = "面试时间";
     /** 录取/分配部门（飞书 → 平台） */
     public static final String ASSIGNED_DEPT = "录取部门";
     /** 兼容旧列名 */
