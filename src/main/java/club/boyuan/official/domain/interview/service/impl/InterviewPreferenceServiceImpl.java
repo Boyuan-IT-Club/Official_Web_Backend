@@ -5,6 +5,7 @@ import club.boyuan.official.persistence.entity.InterviewSchedule;
 import club.boyuan.official.common.exception.BusinessException;
 import club.boyuan.official.common.exception.BusinessExceptionEnum;
 import club.boyuan.official.domain.interview.dto.InterviewPreferenceDTO;
+import club.boyuan.official.domain.interview.dto.UpdateAttendanceRequestDTO;
 import club.boyuan.official.domain.interview.dto.InterviewTimeSlotDTO;
 import club.boyuan.official.domain.interview.dto.SubmitInterviewPreferenceRequestDTO;
 import club.boyuan.official.domain.interview.service.IInterviewPreferenceService;
@@ -48,6 +49,8 @@ public class InterviewPreferenceServiceImpl extends ServiceImpl<InterviewPrefere
     private final InterviewPreferenceTimeMapper preferenceTimeMapper;
     private final DepartmentMapper departmentMapper;
     private final InterviewScheduleMapper interviewScheduleMapper;
+    private final club.boyuan.official.persistence.mapper.ResumeFieldDefinitionMapper resumeFieldDefinitionMapper;
+    private final club.boyuan.official.persistence.mapper.ResumeFieldValueMapper resumeFieldValueMapper;
 
     @Override
     @Transactional
@@ -178,6 +181,91 @@ public class InterviewPreferenceServiceImpl extends ServiceImpl<InterviewPrefere
         }
         Department dept = departmentMapper.selectById(deptId);
         return dept == null ? null : dept.getDeptName();
+    }
+
+    /**
+     * 更新「能否到线下参加面试」。
+     *
+     * 为什么不走 /api/resumes/.../field-values：那条路要求投递期开放，而改
+     * 线上/线下恰恰多发生在投递期结束、分配已跑之后（Publish 页还承诺过
+     * 「情况有变可随时改回」）。这里对齐志愿修改的锁定规则——只在已排上
+     * 生效场次时拒绝（改期走 InterviewRescheduleController），其余时间放行。
+     *
+     * 只合并 canAttend / customTime 两个键，志愿部门（first/second）原样保留。
+     */
+    @Override
+    @Transactional
+    public java.util.Map<String, Object> updateAttendance(Integer userId, UpdateAttendanceRequestDTO request) {
+        Resume resume = requireSubmittedResume(userId, request.getCycleId());
+
+        boolean scheduled = interviewScheduleMapper.exists(new LambdaQueryWrapper<InterviewSchedule>()
+                .eq(InterviewSchedule::getResumeId, resume.getResumeId())
+                .eq(InterviewSchedule::getCycleId, request.getCycleId())
+                .eq(InterviewSchedule::getStatus, 1));
+        if (scheduled) {
+            throw new BusinessException(BusinessExceptionEnum.INTERVIEW_PREFERENCE_LOCKED_BY_SCHEDULE);
+        }
+
+        club.boyuan.official.persistence.entity.ResumeFieldDefinition def =
+                resumeFieldDefinitionMapper.selectOne(
+                        new LambdaQueryWrapper<club.boyuan.official.persistence.entity.ResumeFieldDefinition>()
+                                .eq(club.boyuan.official.persistence.entity.ResumeFieldDefinition::getCycleId,
+                                        request.getCycleId())
+                                .eq(club.boyuan.official.persistence.entity.ResumeFieldDefinition::getFieldKey,
+                                        "expected_interview_time")
+                                .last("LIMIT 1"));
+        if (def == null) {
+            throw new BusinessException(BusinessExceptionEnum.PARAMETER_VALIDATION_FAILED,
+                    "本周期未配置面试意向字段，请联系管理员");
+        }
+
+        club.boyuan.official.persistence.entity.ResumeFieldValue value =
+                resumeFieldValueMapper.selectOne(
+                        new LambdaQueryWrapper<club.boyuan.official.persistence.entity.ResumeFieldValue>()
+                                .eq(club.boyuan.official.persistence.entity.ResumeFieldValue::getResumeId,
+                                        resume.getResumeId())
+                                .eq(club.boyuan.official.persistence.entity.ResumeFieldValue::getFieldId,
+                                        def.getFieldId())
+                                .last("LIMIT 1"));
+
+        // 在既有 JSON 上合并，脏数据当成空对象重建（不能因为一行坏 JSON 卡死学生）
+        com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
+        com.fasterxml.jackson.databind.node.ObjectNode node;
+        try {
+            com.fasterxml.jackson.databind.JsonNode parsed =
+                    (value != null && org.springframework.util.StringUtils.hasText(value.getFieldValue()))
+                            ? om.readTree(value.getFieldValue()) : null;
+            node = (parsed instanceof com.fasterxml.jackson.databind.node.ObjectNode)
+                    ? (com.fasterxml.jackson.databind.node.ObjectNode) parsed
+                    : om.createObjectNode();
+        } catch (Exception e) {
+            node = om.createObjectNode();
+        }
+        boolean offline = Boolean.TRUE.equals(request.getCanAttendOffline());
+        node.put("canAttend", offline ? "yes" : "no");
+        // 改回线下时清掉旧说明，免得「待约线上面试」名单里残留过期原因
+        node.put("customTime", offline ? "" : (request.getCustomTime() == null ? "" : request.getCustomTime()));
+
+        String json = node.toString();
+        LocalDateTime now = LocalDateTime.now();
+        if (value == null) {
+            club.boyuan.official.persistence.entity.ResumeFieldValue fresh =
+                    new club.boyuan.official.persistence.entity.ResumeFieldValue();
+            fresh.setResumeId(resume.getResumeId());
+            fresh.setFieldId(def.getFieldId());
+            fresh.setFieldValue(json);
+            fresh.setCreatedAt(now);
+            fresh.setUpdatedAt(now);
+            resumeFieldValueMapper.insert(fresh);
+        } else {
+            value.setFieldValue(json);
+            value.setUpdatedAt(now);
+            resumeFieldValueMapper.updateById(value);
+        }
+        log.info("学生更新线下参加意向，userId={}, resumeId={}, canAttendOffline={}",
+                userId, resume.getResumeId(), offline);
+        return java.util.Map.of("canAttendOffline", offline,
+                "customTime", node.path("customTime").asText(""));
     }
 
     private Resume requireSubmittedResume(Integer userId, Integer cycleId) {

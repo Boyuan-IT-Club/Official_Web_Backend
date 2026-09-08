@@ -8717,6 +8717,61 @@ paths:
                 $ref: '#/components/schemas/ResponseMessageInterviewPreference'
         '400':
           description: 简历未提交、志愿部门重复/不存在、时间窗无效等
+  /api/interview/preference/attendance:
+    put:
+      summary: 更新能否到线下参加面试
+      deprecated: false
+      description: >-
+        学生更新「能否到线下参加面试」（转线上 / 改回线下）。写回简历字段
+        expected_interview_time 的 JSON（canAttend / customTime，志愿部门键原样保留）。
+        与简历表单不同，投递期结束、简历进入评审后仍可调用——这个调整恰恰多发生在
+        分配已跑之后；仅在已排上生效面试场次时返回业务错误（应走改期申请）。
+        改回线下会清空 customTime，避免「待约线上面试」名单残留过期原因。
+      tags:
+      - 面试志愿（方案B）
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cycleId:
+                  type: integer
+                canAttendOffline:
+                  type: boolean
+                  description: true=能到线下；false=不能（转线上面试）
+                customTime:
+                  type: string
+                  nullable: true
+                  description: 不能线下时的情况说明（≤200 字），管理端待约名单直接展示
+              required:
+              - cycleId
+              - canAttendOffline
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      canAttendOffline:
+                        type: boolean
+                      customTime:
+                        type: string
+                required:
+                - code
+                - message
+                - data
+          headers: {}
+
   /api/interview/preference/my:
     get:
       summary: 查询本人面试志愿（学生）

@@ -62,6 +62,20 @@ public class InterviewPreferenceController {
     /**
      * 查询本人在指定周期的志愿；未填写时 data 为 null。
      */
+    /**
+     * 更新「能否到线下参加面试」。投递期结束后也放行——这个选择的调整
+     * 恰恰多发生在那之后；已排上场次则拒绝（走改期申请）。
+     */
+    @PutMapping("/attendance")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ResponseMessage<java.util.Map<String, Object>>> updateAttendance(
+            @jakarta.validation.Valid @RequestBody
+            club.boyuan.official.domain.interview.dto.UpdateAttendanceRequestDTO request) {
+        Integer userId = getAuthenticatedUserId();
+        return ResponseEntity.ok(ResponseMessage.success(
+                interviewPreferenceService.updateAttendance(userId, request)));
+    }
+
     @GetMapping("/my")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<InterviewPreferenceDTO>> getMyPreference(@RequestParam Integer cycleId) {
