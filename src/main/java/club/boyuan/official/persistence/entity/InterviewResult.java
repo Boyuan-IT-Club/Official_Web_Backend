@@ -100,6 +100,25 @@ public class InterviewResult implements Serializable {
     @TableField(value = "user_name", exist = false)
     private String userName;
 
+    /** 简历平均分；未打过分为 null（列默认 0 不代表打过 0 分），联表展示字段 */
+    @TableField(value = "resume_score", exist = false)
+    private Integer resumeScore;
+
+    /** 面试评价加权总分（interview_evaluation.total_score），无评价为 null */
+    @TableField(value = "eval_total_score", exist = false)
+    private java.math.BigDecimal evalTotalScore;
+
+    /** 面试官共同结论：1 倾向通过 2 待定 3 不倾向，无评价为 null */
+    @TableField(value = "eval_recommendation", exist = false)
+    private Integer evalRecommendation;
+
+    /** 第一/第二志愿部门名（interview_preference 联表），录取分配时参考 */
+    @TableField(value = "first_dept_name", exist = false)
+    private String firstDeptName;
+
+    @TableField(value = "second_dept_name", exist = false)
+    private String secondDeptName;
+
     @TableField(value = "department_name", exist = false)
     private String departmentName;
 }
