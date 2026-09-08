@@ -270,6 +270,34 @@ public class AgentAdminClient {
                 .body(body));
     }
 
+    /** 勾选流水(resume:audit 管理面反哺分析)。 */
+    public ResponseEntity<String> getEvaluationPicks(
+            String authorization, long resumeId, int cycleId) {
+        return exchange(restClient.get()
+                .uri(uri -> {
+                    uri.path("/admin/evaluation/qbank/picks");
+                    uri.queryParam("resume_id", resumeId);
+                    uri.queryParam("cycle_id", cycleId);
+                    return uri.build();
+                })
+                .header("Authorization", authorization));
+    }
+
+    /** 失败 job 重试(含残留恢复开关)。 */
+    public ResponseEntity<String> postEvaluationRetry(
+            String authorization, int cycleId, boolean includeStale) {
+        return exchange(restClient.post()
+                .uri(uri -> {
+                    uri.path("/admin/evaluation/jobs/retry");
+                    uri.queryParam("cycle_id", cycleId);
+                    if (includeStale) {
+                        uri.queryParam("include_stale", true);
+                    }
+                    return uri.build();
+                })
+                .header("Authorization", authorization));
+    }
+
     private ResponseEntity<String> exchange(RestClient.RequestHeadersSpec<?> spec) {
         return spec.exchange((request, response) -> new ResponseEntity<>(
                 response.bodyTo(String.class), response.getHeaders(), response.getStatusCode()));

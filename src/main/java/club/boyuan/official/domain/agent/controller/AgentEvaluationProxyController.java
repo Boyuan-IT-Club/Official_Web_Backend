@@ -122,6 +122,27 @@ public class AgentEvaluationProxyController {
         return wrap(agentAdminClient.postEvaluationPick(authorization, body));
     }
 
+    /** 勾选流水(resume:audit)。 */
+    @GetMapping("/qbank/picks")
+    @PreAuthorize("hasAuthority('resume:audit')")
+    public ResponseEntity<ResponseMessage<?>> picks(
+            @RequestHeader("Authorization") String authorization,
+            @RequestParam("resumeId") long resumeId,
+            @RequestParam("cycleId") int cycleId) {
+        return wrap(agentAdminClient.getEvaluationPicks(authorization, resumeId, cycleId));
+    }
+
+    /** 失败 job 重试;includeStale 连进程重启残留一起恢复。 */
+    @PostMapping("/jobs/retry")
+    @PreAuthorize("hasAuthority('resume:audit')")
+    public ResponseEntity<ResponseMessage<?>> retryJobs(
+            @RequestHeader("Authorization") String authorization,
+            @RequestParam("cycleId") int cycleId,
+            @RequestParam(value = "includeStale", required = false, defaultValue = "false")
+            boolean includeStale) {
+        return wrap(agentAdminClient.postEvaluationRetry(authorization, cycleId, includeStale));
+    }
+
     private ResponseEntity<ResponseMessage<?>> wrap(ResponseEntity<String> upstream) {
         var status = upstream.getStatusCode();
         String body = upstream.getBody();
