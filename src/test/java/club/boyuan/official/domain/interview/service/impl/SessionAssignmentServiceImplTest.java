@@ -1,6 +1,9 @@
 package club.boyuan.official.domain.interview.service.impl;
 
+import club.boyuan.official.common.exception.BusinessException;
+import club.boyuan.official.common.exception.BusinessExceptionEnum;
 import club.boyuan.official.domain.interview.dto.SessionAssignmentResultDTO;
+import club.boyuan.official.domain.interview.dto.UpdateInterviewTimeResponseDTO;
 import club.boyuan.official.domain.interview.service.IInterviewPreferenceService;
 import club.boyuan.official.domain.interview.service.IInterviewScheduleService;
 import club.boyuan.official.domain.interview.service.IInterviewSessionService;
@@ -22,6 +25,7 @@ import club.boyuan.official.persistence.mapper.InterviewSessionMapper;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -36,9 +40,12 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -376,5 +383,117 @@ class SessionAssignmentServiceImplTest {
         d.setDeptId(id);
         d.setDeptName(name);
         return d;
+    }
+
+    // ── 手动调整面试时间（updateInterviewTime）────────────────────
+
+    @Test
+    void updateInterviewTime_scheduleNotFound_throws() {
+        when(interviewScheduleService.getById(999)).thenReturn(null);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.updateInterviewTime(999, LocalDateTime.of(2026, 3, 1, 15, 30)));
+
+        assertEquals(BusinessExceptionEnum.INTERVIEW_SCHEDULE_NOT_FOUND.getCode(), ex.getCode());
+    }
+
+    @Test
+    void updateInterviewTime_cancelledSchedule_throws() {
+        when(interviewScheduleService.getById(1)).thenReturn(scheduleRow(1, 1, 101, 1000, 2));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.updateInterviewTime(1, LocalDateTime.of(2026, 3, 1, 15, 30)));
+
+        assertEquals(BusinessExceptionEnum.INTERVIEW_SCHEDULE_NOT_ACTIVE.getCode(), ex.getCode());
+    }
+
+    @Test
+    void updateInterviewTime_sessionMissing_throws() {
+        when(interviewScheduleService.getById(1)).thenReturn(scheduleRow(1, 1, 101, 1000, 1));
+        when(interviewSessionService.getById(1000)).thenReturn(null);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.updateInterviewTime(1, LocalDateTime.of(2026, 3, 1, 15, 30)));
+
+        assertEquals(BusinessExceptionEnum.INTERVIEW_SESSION_NOT_FOUND.getCode(), ex.getCode());
+    }
+
+    @Test
+    void updateInterviewTime_timeSlotMissing_throws() {
+        when(interviewScheduleService.getById(1)).thenReturn(scheduleRow(1, 1, 101, 1000, 1));
+        when(interviewSessionService.getById(1000)).thenReturn(session(1000, 1, 10, 1, "301", 5));
+        when(interviewTimeSlotService.getById(10)).thenReturn(null);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.updateInterviewTime(1, LocalDateTime.of(2026, 3, 1, 15, 30)));
+
+        assertEquals(BusinessExceptionEnum.INTERVIEW_TIME_SLOT_NOT_FOUND.getCode(), ex.getCode());
+    }
+
+    @Test
+    void updateInterviewTime_persistsOverrideAndResetsFlags() {
+        when(interviewScheduleService.getById(1)).thenReturn(scheduleRow(1, 1, 101, 1000, 1));
+        when(interviewSessionService.getById(1000)).thenReturn(session(1000, 1, 10, 1, "301", 5));
+        when(interviewTimeSlotService.getById(10)).thenReturn(timeSlot(10, 1));
+        when(interviewScheduleService.count(any())).thenReturn(0L);
+        when(interviewScheduleService.updateById(any(InterviewSchedule.class))).thenReturn(true);
+
+        LocalDateTime newTime = LocalDateTime.of(2026, 3, 1, 9, 30);
+        UpdateInterviewTimeResponseDTO resp = service.updateInterviewTime(1, newTime);
+
+        assertEquals(Integer.valueOf(1), resp.getScheduleId());
+        assertEquals(newTime, resp.getInterviewTime());
+        assertEquals(Integer.valueOf(1), resp.getTimeOverridden());
+        assertEquals(Integer.valueOf(0), resp.getSyncStatus());
+        assertEquals(Integer.valueOf(0), resp.getNotifStatus());
+        assertNull(resp.getWarning());
+
+        ArgumentCaptor<InterviewSchedule> captor = ArgumentCaptor.forClass(InterviewSchedule.class);
+        verify(interviewScheduleService).updateById(captor.capture());
+        InterviewSchedule saved = captor.getValue();
+        assertEquals(newTime, saved.getInterviewTime());
+        assertEquals(Integer.valueOf(1), saved.getTimeOverridden());
+        assertEquals(Integer.valueOf(0), saved.getSyncStatus());
+        assertEquals(Integer.valueOf(0), saved.getNotifStatus());
+        // 不碰 feishu_record_id / status / notes，避免覆盖掉飞书同步用的已有行
+        assertNull(saved.getFeishuRecordId());
+        assertNull(saved.getStatus());
+    }
+
+    @Test
+    void updateInterviewTime_warnsOnOutOfWindowAndConflict() {
+        when(interviewScheduleService.getById(1)).thenReturn(scheduleRow(1, 1, 101, 1000, 1));
+        when(interviewSessionService.getById(1000)).thenReturn(session(1000, 1, 10, 1, "301", 5));
+        when(interviewTimeSlotService.getById(10)).thenReturn(timeSlot(10, 1));
+        when(interviewScheduleService.count(any())).thenReturn(1L);   // 同场次他人已占该时刻
+        when(interviewScheduleService.updateById(any(InterviewSchedule.class))).thenReturn(true);
+
+        LocalDateTime newTime = LocalDateTime.of(2026, 3, 1, 15, 30); // 超出 09:00-12:00
+        UpdateInterviewTimeResponseDTO resp = service.updateInterviewTime(1, newTime);
+
+        assertNotNull(resp.getWarning());
+        assertTrue(resp.getWarning().contains("超出该场次时间窗"));
+        assertTrue(resp.getWarning().contains("冲突"));
+    }
+
+    private static InterviewSchedule scheduleRow(int scheduleId, int cycleId, int resumeId, int sessionId, int status) {
+        return new InterviewSchedule()
+                .setScheduleId(scheduleId)
+                .setCycleId(cycleId)
+                .setResumeId(resumeId)
+                .setUserId(1)
+                .setSessionId(sessionId)
+                .setStatus(status)
+                .setInterviewTime(LocalDateTime.of(2026, 3, 1, 9, 0));
+    }
+
+    private static InterviewTimeSlot timeSlot(int id, int cycleId) {
+        return new InterviewTimeSlot()
+                .setTimeSlotId(id)
+                .setCycleId(cycleId)
+                .setInterviewDate(LocalDate.of(2026, 3, 1))
+                .setStartTime(LocalTime.of(9, 0))
+                .setEndTime(LocalTime.of(12, 0))
+                .setStatus(1);
     }
 }

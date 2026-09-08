@@ -3,6 +3,7 @@ package club.boyuan.official.domain.interview.service.impl;
 import club.boyuan.official.common.exception.BusinessException;
 import club.boyuan.official.common.exception.BusinessExceptionEnum;
 import club.boyuan.official.domain.interview.dto.SessionAssignmentResultDTO;
+import club.boyuan.official.domain.interview.dto.UpdateInterviewTimeResponseDTO;
 import club.boyuan.official.domain.interview.service.IInterviewPreferenceService;
 import club.boyuan.official.domain.interview.service.IInterviewScheduleService;
 import club.boyuan.official.domain.interview.service.IInterviewSessionService;
@@ -30,6 +31,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -247,6 +249,8 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
                 .setSessionId(targetSessionId)
                 .setDeptId(target.getDeptId())
                 .setInterviewTime(start)
+                // 换场已经改变了时间窗/日期，旧的人工指定时间语义错误，故重置回公式生成
+                .setTimeOverridden(0)
                 .setStatus(SCHEDULE_STATUS_ACTIVE)
                 .setNotes("人工调剂 - " + target.getLocation());
         if (isNew) {
@@ -261,6 +265,100 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
         log.info("人工调剂完成，resumeId={}, targetSessionId={}, scheduleId={}",
                 resumeId, targetSessionId, schedule.getScheduleId());
         return item;
+    }
+
+    @Override
+    @Transactional
+    public UpdateInterviewTimeResponseDTO updateInterviewTime(Integer scheduleId, LocalDateTime interviewTime) {
+        if (scheduleId == null) {
+            throw new BusinessException(BusinessExceptionEnum.INTERVIEW_SCHEDULE_NOT_FOUND);
+        }
+        if (interviewTime == null) {
+            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "面试时间不能为空");
+        }
+
+        InterviewSchedule schedule = interviewScheduleService.getById(scheduleId);
+        if (schedule == null) {
+            throw new BusinessException(BusinessExceptionEnum.INTERVIEW_SCHEDULE_NOT_FOUND);
+        }
+        if (!Integer.valueOf(SCHEDULE_STATUS_ACTIVE).equals(schedule.getStatus())) {
+            throw new BusinessException(BusinessExceptionEnum.INTERVIEW_SCHEDULE_NOT_ACTIVE);
+        }
+
+        List<String> warnings = new ArrayList<>();
+
+        // 场次 / 时间窗存在性与跨周期一致性：被删或错配 → 明确业务异常
+        InterviewTimeSlot timeSlot = null;
+        if (schedule.getSessionId() != null) {
+            InterviewSession session = interviewSessionService.getById(schedule.getSessionId());
+            if (session == null) {
+                throw new BusinessException(BusinessExceptionEnum.INTERVIEW_SESSION_NOT_FOUND);
+            }
+            if (!Objects.equals(schedule.getCycleId(), session.getCycleId())) {
+                throw new BusinessException(BusinessExceptionEnum.INTERVIEW_SESSION_CYCLE_MISMATCH);
+            }
+            if (session.getTimeSlotId() != null) {
+                timeSlot = interviewTimeSlotService.getById(session.getTimeSlotId());
+                if (timeSlot == null) {
+                    throw new BusinessException(BusinessExceptionEnum.INTERVIEW_TIME_SLOT_NOT_FOUND);
+                }
+                if (!Objects.equals(schedule.getCycleId(), timeSlot.getCycleId())) {
+                    throw new BusinessException(BusinessExceptionEnum.INTERVIEW_TIME_SLOT_CYCLE_MISMATCH);
+                }
+                // 越界只告警不拒绝：核心诉求就是允许指定时间窗之外的任意钟点
+                if (timeSlot.getInterviewDate() != null
+                        && !timeSlot.getInterviewDate().equals(interviewTime.toLocalDate())) {
+                    warnings.add("指定时间 " + formatTime(interviewTime)
+                            + " 不在场次时间窗日期 " + timeSlot.getInterviewDate() + " 内");
+                } else if (timeSlot.getStartTime() != null && timeSlot.getEndTime() != null
+                        && (interviewTime.toLocalTime().isBefore(timeSlot.getStartTime())
+                        || interviewTime.toLocalTime().isAfter(timeSlot.getEndTime()))) {
+                    warnings.add("指定时间 " + formatTime(interviewTime) + " 超出该场次时间窗 "
+                            + timeSlot.getStartTime() + "-" + timeSlot.getEndTime());
+                }
+            }
+        }
+
+        // 同场次同时刻冲突：只给可读告警，不拒绝（管理员可能安排背靠背/双人同场）
+        if (schedule.getSessionId() != null) {
+            long conflict = interviewScheduleService.count(new LambdaQueryWrapper<InterviewSchedule>()
+                    .eq(InterviewSchedule::getSessionId, schedule.getSessionId())
+                    .eq(InterviewSchedule::getInterviewTime, interviewTime)
+                    .eq(InterviewSchedule::getStatus, SCHEDULE_STATUS_ACTIVE)
+                    .ne(InterviewSchedule::getScheduleId, scheduleId));
+            if (conflict > 0) {
+                warnings.add("该场次在 " + formatTime(interviewTime) + " 已有其他候选人，请注意时间冲突");
+            }
+        }
+
+        // 只更新非空字段：interview_time / time_overridden / sync_status / notif_status。
+        // 保留 feishu_record_id，飞书同步按 sync_status=0 拉到后走 batch_update 更新已有行。
+        InterviewSchedule update = new InterviewSchedule()
+                .setScheduleId(scheduleId)
+                .setInterviewTime(interviewTime)
+                .setTimeOverridden(1)
+                .setSyncStatus(0)
+                .setNotifStatus(0);
+        interviewScheduleService.updateById(update);
+
+        UpdateInterviewTimeResponseDTO response = new UpdateInterviewTimeResponseDTO();
+        response.setScheduleId(scheduleId);
+        response.setInterviewTime(interviewTime);
+        response.setTimeOverridden(1);
+        response.setSyncStatus(0);
+        response.setNotifStatus(0);
+        if (!warnings.isEmpty()) {
+            response.setWarning(String.join("；", warnings));
+            log.warn("手动调整面试时间 scheduleId={}, interviewTime={}, warnings={}",
+                    scheduleId, interviewTime, warnings);
+        } else {
+            log.info("手动调整面试时间 scheduleId={}, interviewTime={}", scheduleId, interviewTime);
+        }
+        return response;
+    }
+
+    private String formatTime(LocalDateTime time) {
+        return time == null ? "" : time.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
     }
 
     // ------------------------------------------------------------------ 内部

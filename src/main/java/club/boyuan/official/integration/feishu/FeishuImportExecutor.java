@@ -22,6 +22,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -45,6 +46,8 @@ public class FeishuImportExecutor {
 
     private static final int STATUS_ACTIVE = 1;
     private static final int SYNC_DONE = 1;
+    private static final DateTimeFormatter INTERVIEW_TIME_FMT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private final IInterviewScheduleService interviewScheduleService;
     private final IInterviewSlotService interviewSlotService;
@@ -352,6 +355,11 @@ public class FeishuImportExecutor {
         // 线上实际建出了「自我介绍」在最左、「姓名」在中间的乱序表。
         Map<String, Object> fields = new LinkedHashMap<>();
         fields.put(FeishuBitableColumns.NAME, snapshot.name());
+        // 精确到场时间：管理员手动调整 interview_time 后，sync_status=0 触发重同步，
+        // 该列（自动补建）随 batch_update 更新为最新时间；为空时写空串，避免整批连坐。
+        fields.put(FeishuBitableColumns.INTERVIEW_TIME,
+                schedule.getInterviewTime() == null
+                        ? "" : schedule.getInterviewTime().format(INTERVIEW_TIME_FMT));
         fields.put(FeishuBitableColumns.INTENDED_DEPT, snapshot.intendedDepartments());
         fields.put(FeishuBitableColumns.GRADE, snapshot.grade());
         fields.put(FeishuBitableColumns.MAJOR, snapshot.major());

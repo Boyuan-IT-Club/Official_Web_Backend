@@ -4,6 +4,8 @@ import club.boyuan.official.common.dto.ResponseMessage;
 import club.boyuan.official.domain.interview.dto.InterviewSessionDTO;
 import club.boyuan.official.domain.interview.dto.ReassignScheduleRequestDTO;
 import club.boyuan.official.domain.interview.dto.SessionAssignmentResultDTO;
+import club.boyuan.official.domain.interview.dto.UpdateInterviewTimeRequestDTO;
+import club.boyuan.official.domain.interview.dto.UpdateInterviewTimeResponseDTO;
 import club.boyuan.official.domain.interview.service.IInterviewSessionService;
 import club.boyuan.official.domain.interview.service.ISessionAssignmentService;
 import club.boyuan.official.persistence.entity.Resume;
@@ -66,6 +68,7 @@ public class SessionAssignmentController {
             item.put("userId", sc.getUserId());
             item.put("sessionId", sc.getSessionId());
             item.put("interviewTime", sc.getInterviewTime());
+            item.put("timeOverridden", sc.getTimeOverridden());
             item.put("status", sc.getStatus());
             item.put("syncStatus", sc.getSyncStatus());
             item.put("notifStatus", sc.getNotifStatus());
@@ -125,6 +128,21 @@ public class SessionAssignmentController {
         SessionAssignmentResultDTO.AssignedItem item =
                 sessionAssignmentService.manualAssign(resumeId, request.getTargetSessionId());
         return ResponseEntity.ok(ResponseMessage.success(item));
+    }
+
+    /**
+     * 手动把某条面试安排的 interview_time 调整到精确的几点几分。
+     * <p>标记该条时间为「人工指定」，并把 sync_status / notif_status 重置为 0
+     * 以触发飞书重新同步与后续提醒。越界或同场次时间冲突只告警不拒绝。</p>
+     */
+    @PutMapping("/schedules/{scheduleId}/interview-time")
+    public ResponseEntity<ResponseMessage<UpdateInterviewTimeResponseDTO>> updateInterviewTime(
+            @PathVariable Integer scheduleId,
+            @Valid @RequestBody UpdateInterviewTimeRequestDTO request) {
+        log.info("管理员手动调整面试时间 scheduleId={}, interviewTime={}", scheduleId, request.getInterviewTime());
+        UpdateInterviewTimeResponseDTO result =
+                sessionAssignmentService.updateInterviewTime(scheduleId, request.getInterviewTime());
+        return ResponseEntity.ok(ResponseMessage.success(result));
     }
 
     /**
