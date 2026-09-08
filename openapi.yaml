@@ -160,7 +160,7 @@ paths:
       - bearerAuth: []
       responses:
         '200':
-          description: [{evaluatedAt, totalScore}]
+          description: '[{evaluatedAt, totalScore}] 数组'
   /api/auth/register:
     post:
       summary: 社团官网-注册
@@ -314,11 +314,10 @@ paths:
                     - roleNames
                     - permissionCodes
                     description: 响应数据
-                    required:
-                    - code
-                    - message
-                    - data
-                description: 响应数据
+                required:
+                - code
+                - message
+                - data
           headers: {}
       security: []
   /api/auth/me:
