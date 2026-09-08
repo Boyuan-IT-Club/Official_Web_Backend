@@ -1,4 +1,6 @@
--- V37: 播种 agent:monitor 权限码(M6 #115,客服 Agent 管理面板)
+-- V41: 播种 agent:monitor 权限码(M6 #115,客服 Agent 管理面板)。
+-- (原占 V37,与 main 的 V37__notification_log_request_id 撞号,改 V41;种子幂等,
+--  曾以 V37 应用于库的,flyway 历史里 V37 行需已删或本版本幂等重放无害)
 --
 -- 用途:管理面板三块(运营/配置/用量)统一权限码;Backend /api/admin/agent/**
 -- 代理与 Agent 服务 /admin/** 都校验它(决策 #102)。
