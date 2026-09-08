@@ -18,6 +18,8 @@ public class ResumeDTO {
     private Integer scoredBy;
     /** 打分人姓名，管理端展示用 */
     private String scoredByName;
+    /** 打分明细：谁打了几分。resumeScore 是这些分的平均（四舍五入） */
+    private List<ResumeScoreEntryDTO> scoreEntries;
     private LocalDateTime submittedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -88,6 +90,14 @@ public class ResumeDTO {
 
     public String getScoredByName() {
         return scoredByName;
+    }
+
+    public List<ResumeScoreEntryDTO> getScoreEntries() {
+        return scoreEntries;
+    }
+
+    public void setScoreEntries(List<ResumeScoreEntryDTO> scoreEntries) {
+        this.scoreEntries = scoreEntries;
     }
 
     public void setScoredByName(String scoredByName) {

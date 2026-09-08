@@ -4,6 +4,9 @@ import club.boyuan.official.persistence.mapper.RecruitmentCycleMapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import club.boyuan.official.common.dto.PageResultDTO;
 import club.boyuan.official.domain.resume.dto.ResumeDTO;
+import club.boyuan.official.domain.resume.dto.ResumeScoreEntryDTO;
+import club.boyuan.official.persistence.entity.ResumeScoreEntry;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import club.boyuan.official.domain.resume.dto.ResumeFieldValueDTO;
 import club.boyuan.official.domain.resume.dto.SimpleResumeFieldDTO;
 import club.boyuan.official.persistence.entity.Resume;
@@ -38,6 +41,7 @@ public class ResumeServiceImpl implements IResumeService {
     private final ResumeMapper resumeMapper;
     private final RecruitmentCycleMapper recruitmentCycleMapper;
     private final club.boyuan.official.persistence.mapper.UserMapper userMapper;
+    private final club.boyuan.official.persistence.mapper.ResumeScoreEntryMapper resumeScoreEntryMapper;
     private final ResumeFieldValueMapper resumeFieldValueMapper;
     private final IResumeFieldDefinitionService fieldDefinitionService;
     private final RedisTemplate<String, Object> redisTemplate;
@@ -300,6 +304,7 @@ public class ResumeServiceImpl implements IResumeService {
                         resume.getResumeId(), java.util.Collections.emptyList()));
                 result.add(dto);
             }
+            attachScoreEntries(result);
             
             // 将结果存入缓存
             redisTemplate.opsForValue().set(cacheKey, result, CACHE_EXPIRE_TIME, TimeUnit.SECONDS);
@@ -356,6 +361,7 @@ public class ResumeServiceImpl implements IResumeService {
                         resume.getResumeId(), java.util.Collections.emptyList()));
                 result.add(dto);
             }
+            attachScoreEntries(result);
             
             // 计算分页信息
             int totalPages = (int) Math.ceil((double) totalElements / size);
@@ -392,6 +398,7 @@ public class ResumeServiceImpl implements IResumeService {
             resumeDTO.setResumeScore(displayScore(resume));
             fillScorer(resumeDTO, resume, resolveScorerNames(List.of(resume)));
             fillCandidateUser(resumeDTO, resume, resolveCandidateUsers(List.of(resume)));
+            attachScoreEntries(List.of(resumeDTO));
             resumeDTO.setSubmittedAt(resume.getSubmittedAt());
             resumeDTO.setCreatedAt(resume.getCreatedAt());
             resumeDTO.setUpdatedAt(resume.getUpdatedAt());
@@ -426,6 +433,7 @@ public class ResumeServiceImpl implements IResumeService {
             resumeDTO.setResumeScore(displayScore(resume));
             fillScorer(resumeDTO, resume, resolveScorerNames(List.of(resume)));
             fillCandidateUser(resumeDTO, resume, resolveCandidateUsers(List.of(resume)));
+            attachScoreEntries(List.of(resumeDTO));
             resumeDTO.setSubmittedAt(resume.getSubmittedAt());
             resumeDTO.setCreatedAt(resume.getCreatedAt());
             resumeDTO.setUpdatedAt(resume.getUpdatedAt());
@@ -441,9 +449,10 @@ public class ResumeServiceImpl implements IResumeService {
         }
     }
     
-        @Override
-    public Resume updateResumeScore(Integer resumeId, Integer score, Integer scorerUserId) {
-        if (resumeId == null || score == null) {
+    @Override
+    @Transactional
+    public ResumeDTO updateResumeScore(Integer resumeId, Integer score, Integer scorerUserId) {
+        if (resumeId == null || score == null || scorerUserId == null) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
         }
         if (score < 0 || score > 100) {
@@ -454,19 +463,112 @@ public class ResumeServiceImpl implements IResumeService {
         if (resume == null) {
             throw new BusinessException(BusinessExceptionEnum.RESUME_NOT_FOUND);
         }
-        // 显式 UpdateWrapper 只动打分三列 —— updateById 走整个实体，
-        // 会把并发窗口里其它字段的旧值一起写回去
-        LocalDateTime scoredAt = LocalDateTime.now();
+
+        // 写入或更新「我这一票」：一人一份简历一条（uk_resume_scorer）
+        LocalDateTime now = LocalDateTime.now();
+        ResumeScoreEntry mine = resumeScoreEntryMapper.selectOne(new LambdaQueryWrapper<ResumeScoreEntry>()
+                .eq(ResumeScoreEntry::getResumeId, resumeId)
+                .eq(ResumeScoreEntry::getScorerId, scorerUserId));
+        if (mine == null) {
+            resumeScoreEntryMapper.insert(new ResumeScoreEntry()
+                    .setResumeId(resumeId).setScorerId(scorerUserId)
+                    .setScore(score).setCreatedAt(now).setUpdatedAt(now));
+        } else {
+            resumeScoreEntryMapper.updateById(mine.setScore(score).setUpdatedAt(now));
+        }
+
+        // 重算平均分写回聚合列。四舍五入取整，和列类型（int）一致；
+        // scored_by / scored_at 语义变为「最近一次打分」。
+        // 显式 UpdateWrapper 只动这三列，避免整实体写回覆盖并发修改。
+        List<ResumeScoreEntry> entries = resumeScoreEntryMapper.selectList(
+                new LambdaQueryWrapper<ResumeScoreEntry>()
+                        .eq(ResumeScoreEntry::getResumeId, resumeId)
+                        .orderByAsc(ResumeScoreEntry::getCreatedAt));
+        int average = (int) Math.round(entries.stream()
+                .mapToInt(ResumeScoreEntry::getScore).average().orElse(score));
         resumeMapper.update(null, new LambdaUpdateWrapper<Resume>()
                 .eq(Resume::getResumeId, resumeId)
-                .set(Resume::getResumeScore, score)
+                .set(Resume::getResumeScore, average)
                 .set(Resume::getScoredBy, scorerUserId)
-                .set(Resume::getScoredAt, scoredAt));
-        resume.setResumeScore(score);
+                .set(Resume::getScoredAt, now));
+        resume.setResumeScore(average);
         resume.setScoredBy(scorerUserId);
-        resume.setScoredAt(scoredAt);
-        logger.info("简历评分已更新，简历ID: {}，分数: {}，打分人: {}", resumeId, score, scorerUserId);
-        return resume;
+        resume.setScoredAt(now);
+        logger.info("简历评分已更新，简历ID: {}，我的分: {}，平均分: {}（{} 人），打分人: {}",
+                resumeId, score, average, entries.size(), scorerUserId);
+
+        ResumeDTO dto = new ResumeDTO();
+        dto.setResumeId(resume.getResumeId());
+        dto.setUserId(resume.getUserId());
+        dto.setCycleId(resume.getCycleId());
+        dto.setStatus(resume.getStatus());
+        dto.setResumeScore(average);
+        fillScorer(dto, resume, resolveScorerNames(List.of(resume)));
+        dto.setScoreEntries(toEntryDTOs(entries));
+        return dto;
+    }
+
+    /** 明细实体 → 展示视图，补打分人姓名（批量查一次） */
+    private List<ResumeScoreEntryDTO> toEntryDTOs(List<ResumeScoreEntry> entries) {
+        if (entries == null || entries.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+        List<Integer> scorerIds = entries.stream()
+                .map(ResumeScoreEntry::getScorerId).distinct().collect(Collectors.toList());
+        java.util.Map<Integer, String> names = userMapper.selectUsersByIds(scorerIds).stream()
+                .collect(Collectors.toMap(
+                        club.boyuan.official.persistence.entity.User::getUserId,
+                        u -> u.getName() == null ? "" : u.getName(),
+                        (a, b) -> a));
+        return entries.stream().map(e -> new ResumeScoreEntryDTO()
+                .setScorerId(e.getScorerId())
+                .setScorerName(names.get(e.getScorerId()))
+                .setScore(e.getScore())
+                .setScoredAt(e.getUpdatedAt() != null ? e.getUpdatedAt() : e.getCreatedAt()))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 给一批 DTO 补打分明细。列表页和详情共用；一批只查两次
+     * （明细一次、打分人姓名一次），不随简历数放大。
+     */
+    private void attachScoreEntries(List<ResumeDTO> dtos) {
+        List<Integer> resumeIds = dtos.stream()
+                .map(ResumeDTO::getResumeId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toList());
+        if (resumeIds.isEmpty()) {
+            return;
+        }
+        List<ResumeScoreEntry> entries = resumeScoreEntryMapper.selectList(
+                new LambdaQueryWrapper<ResumeScoreEntry>()
+                        .in(ResumeScoreEntry::getResumeId, resumeIds)
+                        .orderByAsc(ResumeScoreEntry::getCreatedAt));
+        java.util.Map<Integer, List<ResumeScoreEntry>> byResume = entries.stream()
+                .collect(Collectors.groupingBy(ResumeScoreEntry::getResumeId,
+                        java.util.LinkedHashMap::new, Collectors.toList()));
+        // 姓名一次性解析，避免 toEntryDTOs 在循环里反复查库
+        java.util.Map<Integer, List<ResumeScoreEntryDTO>> dtoByResume = new java.util.HashMap<>();
+        if (!entries.isEmpty()) {
+            List<Integer> scorerIds = entries.stream()
+                    .map(ResumeScoreEntry::getScorerId).distinct().collect(Collectors.toList());
+            java.util.Map<Integer, String> names = userMapper.selectUsersByIds(scorerIds).stream()
+                    .collect(Collectors.toMap(
+                            club.boyuan.official.persistence.entity.User::getUserId,
+                            u -> u.getName() == null ? "" : u.getName(),
+                            (a, b) -> a));
+            byResume.forEach((rid, list) -> dtoByResume.put(rid, list.stream()
+                    .map(e -> new ResumeScoreEntryDTO()
+                            .setScorerId(e.getScorerId())
+                            .setScorerName(names.get(e.getScorerId()))
+                            .setScore(e.getScore())
+                            .setScoredAt(e.getUpdatedAt() != null ? e.getUpdatedAt() : e.getCreatedAt()))
+                    .collect(Collectors.toList())));
+        }
+        for (ResumeDTO dto : dtos) {
+            dto.setScoreEntries(dtoByResume.getOrDefault(dto.getResumeId(),
+                    java.util.Collections.emptyList()));
+        }
     }
 
     /**

@@ -3607,9 +3607,12 @@ paths:
       summary: 简历打分
       deprecated: false
       description: >-
-        管理员为简历打分（0~100），落库到 resume.resume_score，并署名记录打分人
-        （resume.scored_by / scored_at，V30 起）。列表与详情接口随 ResumeDTO 返回
-        scoredBy / scoredByName 供管理端展示。
+        管理员为简历打分（0~100）。V38 起支持多人打分：本接口写入或更新
+        「当前登录人」的那一票（一人一份简历一条明细，落 resume_score_entry），
+        resume.resume_score 存全部明细的平均分（四舍五入），
+        resume.scored_by / scored_at 为最近一次打分的人和时间。
+        列表与详情接口随 ResumeDTO 返回 scoreEntries（逐人明细：scorerId /
+        scorerName / score / scoredAt）与 scoredBy / scoredByName。
         权限与改状态/删除同属 resume:audit（打分正是「审核简历」的一部分）。
       tags:
       - 简历相关接口
@@ -3651,6 +3654,30 @@ paths:
                         type: integer
                       resumeScore:
                         type: integer
+                        description: 全部明细的平均分（四舍五入）
+                      scoredBy:
+                        type: integer
+                        description: 最近一次打分人 userId
+                      scoredByName:
+                        type: string
+                        nullable: true
+                      scoreEntries:
+                        type: array
+                        description: 打分明细，按首次打分时间升序
+                        items:
+                          type: object
+                          properties:
+                            scorerId:
+                              type: integer
+                            scorerName:
+                              type: string
+                              nullable: true
+                              description: 打分人姓名；账号已注销时为 null
+                            score:
+                              type: integer
+                            scoredAt:
+                              type: string
+                              description: 最近一次改分时间
                 required:
                 - code
                 - message
