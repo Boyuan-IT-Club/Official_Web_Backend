@@ -174,6 +174,102 @@ public class AgentAdminClient {
                 .header("Authorization", authorization));
     }
 
+
+    // ── 简历评估代理(RAG 后 B 模块 #135,B6/B7):/admin/evaluation* ——
+    // 双道闸 resume:audit(AgentKbAdminController 同款分离权限)──
+
+    /** 评审队列(queue=zero|all;job/评分卡面同源)。 */
+    public ResponseEntity<String> getEvaluationQueue(
+            String authorization, int cycleId, String queue) {
+        return exchange(restClient.get()
+                .uri(uri -> {
+                    uri.path("/admin/evaluation/queue");
+                    uri.queryParam("cycle_id", cycleId);
+                    if (queue != null && !queue.isBlank()) {
+                        uri.queryParam("queue", queue);
+                    }
+                    return uri.build();
+                })
+                .header("Authorization", authorization));
+    }
+
+    /** 触发初筛(job 面,B2)。 */
+    public ResponseEntity<String> postEvaluationRun(
+            String authorization, Object body) {
+        return exchange(restClient.post()
+                .uri("/admin/evaluation/run")
+                .header("Authorization", authorization)
+                .body(body));
+    }
+
+    /** job 列表。 */
+    public ResponseEntity<String> getEvaluationJobs(
+            String authorization, int cycleId, String status) {
+        return exchange(restClient.get()
+                .uri(uri -> {
+                    uri.path("/admin/evaluation/jobs");
+                    uri.queryParam("cycle_id", cycleId);
+                    if (status != null && !status.isBlank()) {
+                        uri.queryParam("status", status);
+                    }
+                    return uri.build();
+                })
+                .header("Authorization", authorization));
+    }
+
+    /** 单候选评分卡(面试官场景内只读;Backend 侧放行 interview:evaluate 或 resume:audit)。 */
+    public ResponseEntity<String> getEvaluationScorecard(
+            String authorization, long resumeId, int cycleId) {
+        return exchange(restClient.get()
+                .uri(uri -> {
+                    uri.path("/admin/evaluation/scorecard");
+                    uri.queryParam("resume_id", resumeId);
+                    uri.queryParam("cycle_id", cycleId);
+                    return uri.build();
+                })
+                .header("Authorization", authorization));
+    }
+
+    /** 采纳(评审本人令牌投一票;令牌透传)。 */
+    public ResponseEntity<String> postEvaluationAdopt(
+            String authorization, Object body) {
+        return exchange(restClient.post()
+                .uri("/admin/evaluation/adopt")
+                .header("Authorization", authorization)
+                .body(body));
+    }
+
+    /** 驳回。 */
+    public ResponseEntity<String> postEvaluationReject(
+            String authorization, Object body) {
+        return exchange(restClient.post()
+                .uri("/admin/evaluation/reject")
+                .header("Authorization", authorization)
+                .body(body));
+    }
+
+    /** 预置题库(面试官/评审)。 */
+    public ResponseEntity<String> getEvaluationQbank(
+            String authorization, long resumeId, int cycleId) {
+        return exchange(restClient.get()
+                .uri(uri -> {
+                    uri.path("/admin/evaluation/qbank");
+                    uri.queryParam("resume_id", resumeId);
+                    uri.queryParam("cycle_id", cycleId);
+                    return uri.build();
+                })
+                .header("Authorization", authorization));
+    }
+
+    /** 记录面试官勾选(pick log)。 */
+    public ResponseEntity<String> postEvaluationPick(
+            String authorization, Object body) {
+        return exchange(restClient.post()
+                .uri("/admin/evaluation/qbank/pick")
+                .header("Authorization", authorization)
+                .body(body));
+    }
+
     private ResponseEntity<String> exchange(RestClient.RequestHeadersSpec<?> spec) {
         return spec.exchange((request, response) -> new ResponseEntity<>(
                 response.bodyTo(String.class), response.getHeaders(), response.getStatusCode()));
