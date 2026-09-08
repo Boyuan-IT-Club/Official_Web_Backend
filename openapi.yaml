@@ -4487,6 +4487,77 @@ paths:
           content:
             application/octet-stream:
               schema: { type: string, format: binary }
+  /api/resumes/{resumeId}/photo:
+    post:
+      summary: 上传简历个人照片
+      description: >-
+        照片字节存 COS，本接口只上传并返回 objectKey，不写库；前端应把返回的
+        objectKey 作为 personal_photo 字段值随简历字段保存流提交。
+        只能传到自己的简历上，且该周期须开放投递。
+        仅收位图（png/jpeg/gif/webp/bmp），不超过 5MB；svg 能携带脚本，不收。
+      tags: [简历相关接口]
+      parameters:
+      - name: resumeId
+        in: path
+        required: true
+        schema: { type: integer }
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+              required: [file]
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: integer }
+                  message: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      objectKey:
+                        type: string
+                        description: COS 对象键（resume-photos/ 前缀），作为 personal_photo 字段值保存
+                    required: [objectKey]
+                required: [code, message, data]
+    get:
+      summary: 取简历个人照片内容
+      description: >-
+        按简历取 personal_photo 的图片字节。字段值是 COS objectKey 时从 COS 流式返回；
+        历史数据（整段 base64 data URL）就地解码返回，前端无需区分。
+        学生看自己的、管理端看候选人的，门槛与附件列表一致（仅需登录）。
+
+        照片是申请人的个人资料，**不在** /api/files 的公开白名单里。
+        前端不能把本地址直接塞进 img 的 src——那样发出的请求不带 Authorization 头，
+        一律 401；应先取回 blob 再用 blob: URL 渲染。
+        响应带 Cache-Control: private, max-age=86400，换照片后 objectKey 会变，
+        前端应把字段值作为 v 参数做 cache-busting。
+      tags: [简历相关接口]
+      parameters:
+      - name: resumeId
+        in: path
+        required: true
+        schema: { type: integer }
+      - name: v
+        in: query
+        required: false
+        description: cache-busting 参数，传 personal_photo 字段值（或其哈希），服务端忽略其内容
+        schema: { type: string }
+      responses:
+        '200':
+          description: 图片内容
+          content:
+            image/*:
+              schema: { type: string, format: binary }
+        '404':
+          description: 简历不存在，或该简历没有照片
   /api/cycles/page:
     get:
       summary: 分页获取招募周期

@@ -43,6 +43,7 @@ public class ResumeController {
     private static final Logger logger = LoggerFactory.getLogger(ResumeController.class);
 
     private final IResumeService resumeService;
+    private final club.boyuan.official.domain.resume.service.IResumePhotoService resumePhotoService;
     private final IResumeFieldDefinitionService fieldDefinitionService;
     private final IUserService userService;
     private final club.boyuan.official.persistence.mapper.ResumeMapper resumeMapper;
@@ -427,7 +428,15 @@ public class ResumeController {
                 return;
             }
 
-            byte[] pdfBytes = PdfExportUtil.exportResumeToPdf(resumeDTO);
+            // 照片迁到 COS 后字段值是 objectKey，先取回字节再交给导出工具；
+            // 历史 base64 数据返回 null，由工具内部按旧逻辑解析
+            byte[] photoBytes = resumeDTO.getSimpleFields() == null ? null
+                    : resumeDTO.getSimpleFields().stream()
+                            .filter(f -> "personal_photo".equals(f.getFieldKey()))
+                            .map(f -> resumePhotoService.readBytesIfObjectKey(f.getFieldValue()))
+                            .filter(java.util.Objects::nonNull)
+                            .findFirst().orElse(null);
+            byte[] pdfBytes = PdfExportUtil.exportResumeToPdf(resumeDTO, photoBytes);
             response.setContentType("application/pdf");
             response.setHeader("Content-Disposition", "attachment; filename=resume_" + resumeId + ".pdf");
             response.setContentLength(pdfBytes.length);

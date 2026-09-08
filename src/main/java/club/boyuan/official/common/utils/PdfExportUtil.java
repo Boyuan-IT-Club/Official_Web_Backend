@@ -68,6 +68,15 @@ public class PdfExportUtil {
      * @throws BusinessException 导出失败时抛出业务异常
      */
     public static byte[] exportResumeToPdf(ResumeDTO resumeDTO) throws BusinessException {
+        return exportResumeToPdf(resumeDTO, null);
+    }
+
+    /**
+     * @param photoBytes 照片字节。personal_photo 字段值迁到 COS 后存的是 objectKey，
+     *                   本类拿不到存储服务（静态工具类），由调用方先取回字节传入；
+     *                   传 null 则退回旧逻辑——扫字段里的 base64 data URL。
+     */
+    public static byte[] exportResumeToPdf(ResumeDTO resumeDTO, byte[] photoBytes) throws BusinessException {
         try {
             // 在开始之前检查字体可用性
             System.out.println("开始初始化PDF字体...");
@@ -111,7 +120,7 @@ public class PdfExportUtil {
                 java.util.Map<String, String> byKey = new java.util.LinkedHashMap<>();
                 java.util.List<SimpleResumeFieldDTO> fields = resumeDTO.getSimpleFields() != null
                         ? resumeDTO.getSimpleFields() : new ArrayList<>();
-                Image photoImage = null;
+                Image photoImage = createImageFromBytes(photoBytes);
                 // 管理员在字段配置里改过的标签，导出要跟着走 ——
                 // 否则表单显示「代码仓库」而 PDF 里还写着 GitHub，
                 // 同一份简历「表里填的」和「导出的」对不上。
@@ -784,10 +793,27 @@ public class PdfExportUtil {
         try {
             // 提取Base64数据部分（去掉data:image/jpeg;base64,前缀）
             String base64Data = base64String.substring(base64String.indexOf(",") + 1);
-            
+
             // 解码Base64
             byte[] imageBytes = Base64.getDecoder().decode(base64Data);
-            
+
+            return createImageFromBytes(imageBytes);
+
+        } catch (Exception e) {
+            System.err.println("Base64图片转换失败: " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 由原始字节构造照片 Image（COS 迁移后照片以字节传入）。
+     * @return Image对象，字节为空或解析失败返回null
+     */
+    private static Image createImageFromBytes(byte[] imageBytes) {
+        if (imageBytes == null || imageBytes.length == 0) {
+            return null;
+        }
+        try {
             // 创建Image对象
             Image image = Image.getInstance(imageBytes);
             
@@ -801,11 +827,11 @@ public class PdfExportUtil {
                 image.scaleToFit(maxWidth, maxHeight);
             }
             
-            System.out.println("成功解析Base64图片，原始尺寸: " + image.getPlainWidth() + "x" + image.getPlainHeight());
+            System.out.println("成功解析照片，原始尺寸: " + image.getPlainWidth() + "x" + image.getPlainHeight());
             return image;
-            
+
         } catch (Exception e) {
-            System.err.println("Base64图片转换失败: " + e.getMessage());
+            System.err.println("照片解析失败: " + e.getMessage());
             return null;
         }
     }
