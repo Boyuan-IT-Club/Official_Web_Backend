@@ -169,14 +169,32 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
             return;
         }
         boolean templated = !StringUtils.hasText(message.getCustomBody());
-        if (templated) {
-            if (type == null) {
+        if (templated && type == null) {
+            return;
+        }
+        /*
+         * 去重按「这一次发送」而不是按「这份结果」。
+         *
+         * 去重的目的只有一个：MQ 重投（acknowledge-mode: auto 下 SMTP 超时会触发）
+         * 不该让同一封邮件发两遍。那对应的键是 requestId——同一条消息重投，id 相同。
+         * 管理员点第二次「发送通知」是一次新的入队、新的 id，理应放行。
+         *
+         * 原来按 (type, resultId) 去重，把这两种情况混为一谈：录取邮件只能发一次，
+         * 第二次静默跳过，而上层照样返回成功、更新 notified_at——界面「已通知」，
+         * 邮箱里没有。
+         *
+         * 没有 requestId 的消息（部署前已入队、仍在队列里的旧消息）退回旧逻辑，
+         * 免得那一小段窗口里重投失去保护。
+         */
+        String requestId = message.getRequestId();
+        if (StringUtils.hasText(requestId)) {
+            if (alreadySentByRequest(requestId)) {
+                log.info("同一次发送已投递过（MQ 重投），跳过 requestId={}, resultId={}", requestId, resultId);
                 return;
             }
-            if (alreadySent(type, null, resultId)) {
-                log.info("结果通知已发送过，跳过 type={}, resultId={}", type, resultId);
-                return;
-            }
+        } else if (templated && alreadySent(type, null, resultId)) {
+            log.info("旧格式消息且结果通知已发送过，跳过 type={}, resultId={}", type, resultId);
+            return;
         }
 
         InterviewResult result = interviewResultMapper.selectById(resultId);
@@ -228,7 +246,8 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
                     cfg.academicYear(), cfg.waitingRoom(), qrs, cfg.contactInfo()).html();
         }
 
-        sendAndLog(effectiveType, result.getScheduleId(), resultId, email, subject, body, html, schedule, null);
+        sendAndLog(effectiveType, result.getScheduleId(), resultId, email, subject, body, html, schedule,
+                message.getRequestId());
     }
 
     /** 邮件要用到的周期级配置。周期取不到时全部为空，模板会自动省略对应段落 */
@@ -326,6 +345,7 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
                 .setNotificationType(type.name())
                 .setScheduleId(scheduleId)
                 .setResultId(resultId)
+                .setRequestId(requestId)
                 .setRecipientEmail(email)
                 .setSentAt(LocalDateTime.now());
         notificationLogMapper.insert(logEntry);
@@ -337,6 +357,12 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
 
         log.info("面试通知已发送 type={}, scheduleId={}, resultId={}, email={}, requestId={}",
                 type, scheduleId, resultId, email, requestId);
+    }
+
+    /** 按本次发送的 requestId 判重——只拦 MQ 重投同一条消息。 */
+    private boolean alreadySentByRequest(String requestId) {
+        return notificationLogMapper.selectCount(new LambdaQueryWrapper<InterviewNotificationLog>()
+                .eq(InterviewNotificationLog::getRequestId, requestId)) > 0;
     }
 
     private boolean alreadySent(InterviewNotificationType type, Integer scheduleId, Integer resultId) {
