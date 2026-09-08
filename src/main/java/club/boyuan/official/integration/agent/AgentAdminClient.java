@@ -26,7 +26,11 @@ public class AgentAdminClient {
     private final RestClient restClient;
 
     public AgentAdminClient(@Value("${agent.base-url:http://127.0.0.1:8001/api/agent}") String baseUrl) {
+        // 钉 HTTP/1.1:默认 HTTP_2 会对明文端点发 h2c 升级,uvicorn(h11) 对
+        // 带 body 的升级请求直接判 Invalid HTTP request(night-run E2E 实测),
+        // GET 能容忍、POST 不能。Agent 侧是 HTTP/1.1 服务,无需协商。
         HttpClient httpClient = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofSeconds(5))
                 .build();
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
