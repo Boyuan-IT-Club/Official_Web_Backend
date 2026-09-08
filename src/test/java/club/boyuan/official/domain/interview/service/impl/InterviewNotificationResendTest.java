@@ -160,6 +160,47 @@ class InterviewNotificationResendTest {
     }
 
     @Test
+    @DisplayName("无面试安排的结果（V34），录取邮件也要带上周期配的入群二维码")
+    void admissionWithoutScheduleStillCarriesQrCodes() {
+        InterviewResult noSchedule = new InterviewResult()
+                .setResultId(RESULT_ID).setUserId(7).setDecision(1)
+                .setScheduleId(null).setCycleId(6).setAssignedDeptId(2).setResumeId(33);
+        when(interviewResultMapper.selectById(RESULT_ID)).thenReturn(noSchedule);
+        when(qrCodeService.forAdmitted(6, 2)).thenReturn(List.of(
+                new club.boyuan.official.persistence.entity.RecruitmentQrCode()
+                        .setQrType(club.boyuan.official.persistence.entity.RecruitmentQrCode.TYPE_DEPT)
+                        .setDeptId(2).setRemark("综合部群")
+                        .setImageUrl("https://static.boyuan.club/api/files/qrcodes/x.jpg")));
+
+        service.deliver(templated("req-qr"));
+
+        // 修复前：周期号只从面试安排上取，安排为空时二维码查询被整个跳过，
+        // 这个 verify 会因为 forAdmitted 从未被调用而失败
+        verify(qrCodeService).forAdmitted(6, 2);
+        verify(messageUtils).sendHtmlEmail(anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("无面试安排的结果，收件邮箱用简历里填的，不是注册邮箱")
+    void admissionWithoutScheduleUsesResumeEmail() {
+        InterviewResult noSchedule = new InterviewResult()
+                .setResultId(RESULT_ID).setUserId(7).setDecision(1)
+                .setScheduleId(null).setCycleId(6).setAssignedDeptId(2).setResumeId(33);
+        when(interviewResultMapper.selectById(RESULT_ID)).thenReturn(noSchedule);
+        club.boyuan.official.persistence.entity.Resume resume =
+                new club.boyuan.official.persistence.entity.Resume();
+        when(resumeService.getResumeById(33)).thenReturn(resume);
+        when(resumeDataService.getResumeEmail(resume)).thenReturn("resume-mail@stu.ecnu.edu.cn");
+        when(resumeDataService.getResumeName(resume)).thenReturn("李四");
+
+        service.deliver(templated("req-mail"));
+
+        verify(messageUtils).sendHtmlEmail(
+                org.mockito.ArgumentMatchers.eq("resume-mail@stu.ecnu.edu.cn"),
+                anyString(), anyString(), anyString());
+    }
+
+    @Test
     @DisplayName("自定义正文不受去重影响，每次都发")
     void customBodyAlwaysDelivers() {
         InterviewNotificationMessage custom =

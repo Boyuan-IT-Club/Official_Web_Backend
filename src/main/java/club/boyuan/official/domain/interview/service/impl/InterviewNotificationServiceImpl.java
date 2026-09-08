@@ -207,11 +207,11 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
             return;
         }
 
-        Resume resume = null;
         InterviewSchedule schedule = interviewScheduleService.getById(result.getScheduleId());
-        if (schedule != null) {
-            resume = resumeService.getResumeById(schedule.getResumeId());
-        }
+        // V34 起结果可以不挂面试安排（如无法线下参加的同学），这时简历要从
+        // 结果自带的 resume_id 找，姓名与收件邮箱才是简历里填的那份
+        Integer resumeId = schedule != null ? schedule.getResumeId() : result.getResumeId();
+        Resume resume = resumeId != null ? resumeService.getResumeById(resumeId) : null;
 
         String email = resume != null ? resumeDataService.getResumeEmail(resume) : user.getEmail();
         String name = resume != null ? resumeDataService.getResumeName(resume) : user.getName();
@@ -237,9 +237,14 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
         // 「恭喜录取」的壳里
         String html = null;
         if (templated) {
-            NoticeConfig cfg = noticeConfig(schedule == null ? null : schedule.getCycleId());
+            // 周期号优先取结果自带的（V34 起无安排的结果也有 cycle_id），
+            // 老数据没这列时再退回从面试安排上取。之前只从安排上取，
+            // 无安排的录取通知会整封丢掉二维码和候场/联系方式配置
+            Integer cycleId = result.getCycleId() != null ? result.getCycleId()
+                    : (schedule != null ? schedule.getCycleId() : null);
+            NoticeConfig cfg = noticeConfig(cycleId);
             List<MailTemplate.QrItem> qrs = effectiveType == InterviewNotificationType.ADMISSION
-                    ? qrItems(schedule == null ? null : schedule.getCycleId(), result.getAssignedDeptId())
+                    ? qrItems(cycleId, result.getAssignedDeptId())
                     : List.of();
             html = InterviewNotificationEmailBuilder.html(
                     effectiveType, name, booking, departmentName,
