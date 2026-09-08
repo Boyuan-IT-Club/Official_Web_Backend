@@ -289,7 +289,7 @@ public class ResumeServiceImpl implements IResumeService {
                 dto.setUserId(resume.getUserId());
                 dto.setCycleId(resume.getCycleId());
                 dto.setStatus(resume.getStatus());
-                dto.setResumeScore(resume.getResumeScore());
+                dto.setResumeScore(displayScore(resume));
                 fillScorer(dto, resume, scorerNames);
                 fillCandidateUser(dto, resume, candidates);
                 dto.setSubmittedAt(resume.getSubmittedAt());
@@ -345,7 +345,7 @@ public class ResumeServiceImpl implements IResumeService {
                 dto.setUserId(resume.getUserId());
                 dto.setCycleId(resume.getCycleId());
                 dto.setStatus(resume.getStatus());
-                dto.setResumeScore(resume.getResumeScore());
+                dto.setResumeScore(displayScore(resume));
                 fillScorer(dto, resume, scorerNames);
                 fillCandidateUser(dto, resume, candidates);
                 dto.setSubmittedAt(resume.getSubmittedAt());
@@ -389,7 +389,7 @@ public class ResumeServiceImpl implements IResumeService {
             resumeDTO.setUserId(resume.getUserId());
             resumeDTO.setCycleId(resume.getCycleId());
             resumeDTO.setStatus(resume.getStatus());
-            resumeDTO.setResumeScore(resume.getResumeScore());
+            resumeDTO.setResumeScore(displayScore(resume));
             fillScorer(resumeDTO, resume, resolveScorerNames(List.of(resume)));
             fillCandidateUser(resumeDTO, resume, resolveCandidateUsers(List.of(resume)));
             resumeDTO.setSubmittedAt(resume.getSubmittedAt());
@@ -423,7 +423,7 @@ public class ResumeServiceImpl implements IResumeService {
             resumeDTO.setUserId(resume.getUserId());
             resumeDTO.setCycleId(resume.getCycleId());
             resumeDTO.setStatus(resume.getStatus());
-            resumeDTO.setResumeScore(resume.getResumeScore());
+            resumeDTO.setResumeScore(displayScore(resume));
             fillScorer(resumeDTO, resume, resolveScorerNames(List.of(resume)));
             fillCandidateUser(resumeDTO, resume, resolveCandidateUsers(List.of(resume)));
             resumeDTO.setSubmittedAt(resume.getSubmittedAt());
@@ -519,6 +519,21 @@ public class ResumeServiceImpl implements IResumeService {
     }
 
     /** DTO 上补打分署名（分数本身各处已在填） */
+    /**
+     * 对外展示的简历分数。resume_score 列是 NOT NULL DEFAULT 0，
+     * 「没打过分」和「打了 0 分」在这一列上没法区分——署名与时间才是有没有打过分的事实。
+     * 没署名就返回 null，前端各处（未评分标记、下一位未打分）都以 null 为准。
+     */
+    static Integer displayScore(Resume resume) {
+        if (resume == null) {
+            return null;
+        }
+        if (resume.getScoredAt() == null && resume.getScoredBy() == null) {
+            return null;
+        }
+        return resume.getResumeScore();
+    }
+
     private void fillScorer(ResumeDTO dto, Resume resume, java.util.Map<Integer, String> scorerNames) {
         dto.setScoredBy(resume.getScoredBy());
         dto.setScoredByName(resume.getScoredBy() == null ? null : scorerNames.get(resume.getScoredBy()));
