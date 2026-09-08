@@ -8474,7 +8474,12 @@ paths:
     get:
       summary: 查看录取结果
       deprecated: false
-      description: 获取录取结果列表
+      description: >-
+        获取录取结果列表。每行除结果字段外并入录取决策的三个依据（免于在
+        评价汇总/简历管理之间来回切）：resumeScore 简历平均分（未打过分为
+        null，与打 0 分区分）、evalTotalScore / evalRecommendation 面试评价
+        加权总分与结论（1 倾向通过 2 待定 3 不倾向，无评价为 null）、
+        firstDeptName / secondDeptName 志愿部门。
       tags:
       - 面试结果模块
       parameters:

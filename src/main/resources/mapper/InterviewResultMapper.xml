@@ -18,11 +18,25 @@
         -- 优先用结果自身的 cycle_id：没有面试安排的结果查不到 isc.cycle_id（V34）
         COALESCE(ir.cycle_id, isc.cycle_id) AS cycle_id,
         u.name as user_name,
-        d.dept_name as department_name
+        d.dept_name as department_name,
+        -- 录取决策的三个依据并到一行，免得在「评价汇总」「简历管理」之间来回切：
+        -- 简历分（未署名 = 没打过分 → NULL，不能把默认 0 当成打过 0 分）、
+        -- 面试评价加权总分与结论、志愿部门
+        CASE WHEN rs.scored_by IS NULL AND rs.scored_at IS NULL THEN NULL
+             ELSE rs.resume_score END AS resume_score,
+        ev.total_score AS eval_total_score,
+        ev.recommendation AS eval_recommendation,
+        d1.dept_name AS first_dept_name,
+        d2.dept_name AS second_dept_name
         FROM interview_result ir
         LEFT JOIN interview_schedule isc ON ir.schedule_id = isc.schedule_id
         LEFT JOIN user u ON ir.user_id = u.user_id
         LEFT JOIN department d ON ir.assigned_dept_id = d.dept_id
+        LEFT JOIN resume rs ON rs.resume_id = COALESCE(ir.resume_id, isc.resume_id)
+        LEFT JOIN interview_evaluation ev ON ev.schedule_id = ir.schedule_id
+        LEFT JOIN interview_preference ip ON ip.resume_id = COALESCE(ir.resume_id, isc.resume_id)
+        LEFT JOIN department d1 ON ip.first_dept_id = d1.dept_id
+        LEFT JOIN department d2 ON ip.second_dept_id = d2.dept_id
         <where>
             <if test="cycleId != null">
                 AND COALESCE(ir.cycle_id, isc.cycle_id) = #{cycleId}
