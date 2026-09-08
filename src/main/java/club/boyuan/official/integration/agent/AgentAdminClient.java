@@ -97,6 +97,79 @@ public class AgentAdminClient {
                 .header("Authorization", authorization));
     }
 
+
+    // ── 知识库代理(RAG #134 R5):/admin/kb* —— 双道闸 kb:manage
+    // (Backend @PreAuthorize 见 AgentKbAdminController;Agent 侧同码自校)──
+
+    /** 知识条目分页列表(page/size/kind/keyword 透传)。 */
+    public ResponseEntity<String> getKbSources(
+            String authorization, Integer page, Integer size, String kind, String keyword) {
+        return exchange(restClient.get()
+                .uri(uri -> {
+                    uri.path("/admin/kb/sources");
+                    if (page != null) {
+                        uri.queryParam("page", page);
+                    }
+                    if (size != null) {
+                        uri.queryParam("size", size);
+                    }
+                    if (kind != null && !kind.isBlank()) {
+                        uri.queryParam("kind", kind);
+                    }
+                    if (keyword != null && !keyword.isBlank()) {
+                        uri.queryParam("keyword", keyword);
+                    }
+                    return uri.build();
+                })
+                .header("Authorization", authorization));
+    }
+
+    /** 新建知识条目(入库即重嵌)。 */
+    public ResponseEntity<String> postKbSource(String authorization, Object body) {
+        return exchange(restClient.post()
+                .uri("/admin/kb/sources")
+                .header("Authorization", authorization)
+                .body(body));
+    }
+
+    /** 条目详情。 */
+    public ResponseEntity<String> getKbSource(String authorization, String sourceId) {
+        return exchange(restClient.get()
+                .uri("/admin/kb/sources/{id}", sourceId)
+                .header("Authorization", authorization));
+    }
+
+    /** 更新条目(重嵌)。 */
+    public ResponseEntity<String> putKbSource(String authorization, String sourceId, Object body) {
+        return exchange(restClient.put()
+                .uri("/admin/kb/sources/{id}", sourceId)
+                .header("Authorization", authorization)
+                .body(body));
+    }
+
+    /** 启/停用(停用立即退出生检索)。 */
+    public ResponseEntity<String> putKbSourceEnabled(
+            String authorization, String sourceId, Object body) {
+        return exchange(restClient.put()
+                .uri("/admin/kb/sources/{id}/enabled", sourceId)
+                .header("Authorization", authorization)
+                .body(body));
+    }
+
+    /** 删除条目(级联 chunks)。 */
+    public ResponseEntity<String> deleteKbSource(String authorization, String sourceId) {
+        return exchange(restClient.delete()
+                .uri("/admin/kb/sources/{id}", sourceId)
+                .header("Authorization", authorization));
+    }
+
+    /** 重嵌(按已存内容重建向量;换 embedding 模型后逐条补齐)。 */
+    public ResponseEntity<String> postKbReembed(String authorization, String sourceId) {
+        return exchange(restClient.post()
+                .uri("/admin/kb/sources/{id}/reembed", sourceId)
+                .header("Authorization", authorization));
+    }
+
     private ResponseEntity<String> exchange(RestClient.RequestHeadersSpec<?> spec) {
         return spec.exchange((request, response) -> new ResponseEntity<>(
                 response.bodyTo(String.class), response.getHeaders(), response.getStatusCode()));
