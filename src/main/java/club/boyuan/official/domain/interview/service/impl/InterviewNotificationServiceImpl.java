@@ -251,7 +251,24 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
                     cfg.academicYear(), cfg.waitingRoom(), qrs, cfg.contactInfo()).html();
         }
 
-        sendAndLog(effectiveType, result.getScheduleId(), resultId, email, subject, body, html, schedule,
+        /*
+         * 日志不写 scheduleId —— 这里是修「重发变成连发 3 封」的关键。
+         *
+         * uk_type_schedule（类型 × 场次唯一）是给场次类通知用的：预约成功、
+         * 面试前提醒由系统自动触发，一场一封才是对的语义（见 V37 的说明）。
+         * 而结果通知是管理员有意发的、允许重发，它由 result_id + request_id
+         * 唯一确定，本来就不该占场次的槽位。
+         *
+         * 之前把 result.getScheduleId() 一起写进去，于是给「有面试安排」的同学
+         * 重发同类型结果通知时撞键：邮件已发出 → 写日志抛 DuplicateKey →
+         * 消息被判消费失败 → MQ 按 max-attempts:3 重投 → 每次重投再发一封，
+         * 收件人精确收到 3 封（线上实测：A/B 两台日志里都是这个异常栈）。
+         * 无面试安排的同学 scheduleId 为空、MySQL 唯一键不管 NULL，所以没事。
+         *
+         * 这一行改动之后，历史行照旧保留，新行 scheduleId 为空，不再有冲突；
+         * 结果对应的场次可经 interview_result.schedule_id 反查，信息不丢。
+         */
+        sendAndLog(effectiveType, null, resultId, email, subject, body, html, schedule,
                 message.getRequestId());
     }
 
@@ -346,18 +363,32 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
             messageUtils.sendEmail(email, subject, body);
         }
 
-        InterviewNotificationLog logEntry = new InterviewNotificationLog()
-                .setNotificationType(type.name())
-                .setScheduleId(scheduleId)
-                .setResultId(resultId)
-                .setRequestId(requestId)
-                .setRecipientEmail(email)
-                .setSentAt(LocalDateTime.now());
-        notificationLogMapper.insert(logEntry);
+        /*
+         * 分界线：以上邮件已经真的发出去了，以下都是记账。
+         *
+         * 记账失败绝不能抛出去——@RabbitListener 的 acknowledge-mode: auto 下
+         * 任何异常都会被判为消费失败并按 max-attempts 重投，而重投会把这封
+         * 已经送达的邮件再发一遍。用户的收件箱不该为我们写不进一行日志买单。
+         * 失败只记 error 日志，人工可从邮件服务商侧核对。
+         */
+        try {
+            InterviewNotificationLog logEntry = new InterviewNotificationLog()
+                    .setNotificationType(type.name())
+                    .setScheduleId(scheduleId)
+                    .setResultId(resultId)
+                    .setRequestId(requestId)
+                    .setRecipientEmail(email)
+                    .setSentAt(LocalDateTime.now());
+            notificationLogMapper.insert(logEntry);
 
-        if (schedule != null && type == InterviewNotificationType.BOOKING_SUCCESS) {
-            schedule.setNotifStatus(1);
-            interviewScheduleService.updateById(schedule);
+            if (schedule != null && type == InterviewNotificationType.BOOKING_SUCCESS) {
+                schedule.setNotifStatus(1);
+                interviewScheduleService.updateById(schedule);
+            }
+        } catch (Exception e) {
+            log.error("邮件已发送但记录发送日志失败（不重投，避免重复发信）"
+                    + " type={}, scheduleId={}, resultId={}, email={}, requestId={}",
+                    type, scheduleId, resultId, email, requestId, e);
         }
 
         log.info("面试通知已发送 type={}, scheduleId={}, resultId={}, email={}, requestId={}",
