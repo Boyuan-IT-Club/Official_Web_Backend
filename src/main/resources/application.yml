@@ -182,3 +182,7 @@ cos:
   bucket: ${COS_BUCKET:}
   public-base-url: ${COS_PUBLIC_BASE_URL:}
   avatar-prefix: ${COS_AVATAR_PREFIX:avatars/}
+
+# 客服 Agent 服务(INF-04;M6 #115 管理代理转发目标,路径含 /api/agent 前缀)
+agent:
+  base-url: ${AGENT_BASE_URL:http://127.0.0.1:8001/api/agent}

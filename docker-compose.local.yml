@@ -1,0 +1,6 @@
+# 本地临时 override:修复 mysql 端口映射(容器内 3306 固定,宿主 3307)
+# 不提交——compose 的 "${MYSQL_PORT}:${MYSQL_PORT}" 是 bug(容器内也是 3307 无服务)
+services:
+  mysql:
+    ports:
+      - "3307:3306"

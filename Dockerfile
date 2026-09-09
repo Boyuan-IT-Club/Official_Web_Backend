@@ -19,8 +19,9 @@ FROM eclipse-temurin:17-jre-jammy
 #   - fonts-dejavu-core：覆盖拉丁字符
 # 刻意不装 fonts-noto-cjk-extra（数百 MB，仅含罕用扩展字，简历用不到）、
 # fonts-noto、dejavu-extra 等大体积包，以大幅缩小镜像。
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+# Acquire::Retries:ubuntu 源偶发 502 Bad Gateway,加重试避免构建随机失败
+RUN apt-get update -o Acquire::Retries=5 && \
+    apt-get install -y --no-install-recommends -o Acquire::Retries=5 \
         fontconfig \
         libfontconfig1 \
         fonts-noto-cjk \
