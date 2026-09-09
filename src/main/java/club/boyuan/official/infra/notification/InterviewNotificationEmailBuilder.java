@@ -34,6 +34,29 @@ public final class InterviewNotificationEmailBuilder {
                               String recipientName,
                               InterviewBookingDTO booking,
                               String departmentName) {
+        return body(type, recipientName, booking, departmentName, null);
+    }
+
+    /** @param extraNote 管理员补充内容，附在模板正文之后（纯文本兜底那份） */
+    public static String body(InterviewNotificationType type,
+                              String recipientName,
+                              InterviewBookingDTO booking,
+                              String departmentName,
+                              String extraNote) {
+        return withExtraNote(bodyTemplate(type, recipientName, booking, departmentName), extraNote);
+    }
+
+    private static String withExtraNote(String body, String extraNote) {
+        if (!StringUtils.hasText(extraNote)) {
+            return body;
+        }
+        return body + "\n\n--------\n社团补充说明\n" + extraNote.trim();
+    }
+
+    private static String bodyTemplate(InterviewNotificationType type,
+                                       String recipientName,
+                                       InterviewBookingDTO booking,
+                                       String departmentName) {
         String greeting = greeting(recipientName);
         return switch (type) {
             case BOOKING_SUCCESS -> greeting + "\n\n"
@@ -84,10 +107,24 @@ public final class InterviewNotificationEmailBuilder {
                                              String waitingRoom,
                                              List<MailTemplate.QrItem> qrCodes,
                                              String contactInfo) {
+        return html(type, recipientName, booking, departmentName,
+                academicYear, waitingRoom, qrCodes, contactInfo, null);
+    }
+
+    /** @param extraNote 管理员补充内容，附在模板正文之后；结果类通知才有 */
+    public static MailTemplate.Rendered html(InterviewNotificationType type,
+                                             String recipientName,
+                                             InterviewBookingDTO booking,
+                                             String departmentName,
+                                             String academicYear,
+                                             String waitingRoom,
+                                             List<MailTemplate.QrItem> qrCodes,
+                                             String contactInfo,
+                                             String extraNote) {
         return switch (type) {
             case ADMISSION -> RecruitmentMails.admitted(
-                    recipientName, academicYear, departmentName, qrCodes);
-            case REJECTION -> RecruitmentMails.rejected(recipientName, contactInfo);
+                    recipientName, academicYear, departmentName, qrCodes, extraNote);
+            case REJECTION -> RecruitmentMails.rejected(recipientName, contactInfo, extraNote);
             // 预约成功 / 前一日提醒 / 当日提醒共用同一封「面试安排」——
             // 三者要说的事完全一样（什么时候、在哪、怎么改期），
             // 分成三套文案只会让维护时改漏一处

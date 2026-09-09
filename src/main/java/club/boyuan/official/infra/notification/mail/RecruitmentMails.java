@@ -54,6 +54,18 @@ public final class RecruitmentMails {
      */
     public static MailTemplate.Rendered admitted(
             String name, String academicYear, String deptName, List<MailTemplate.QrItem> qrCodes) {
+        return admitted(name, academicYear, deptName, qrCodes, null);
+    }
+
+    /**
+     * @param extraNote 管理员在发送时填的补充内容。<b>附在模板正文之后</b>，
+     *                  不替换原文——管理员想说的是"另外还有一件事"，
+     *                  而不是"这封信别的都不要了"（线上实测过：早期实现直接
+     *                  覆盖，学生收到的录取信里只剩管理员随手打的几个字）
+     */
+    public static MailTemplate.Rendered admitted(
+            String name, String academicYear, String deptName,
+            List<MailTemplate.QrItem> qrCodes, String extraNote) {
 
         MailTemplate.Builder b = MailTemplate.builder("Admission Notice", "欢迎加入博远信息技术社")
                 .paragraph(nz(name, "同学") + "：\n你好！感谢你积极参与博远招新系列活动，"
@@ -70,7 +82,9 @@ public final class RecruitmentMails {
             b.paragraph("入群二维码稍后奉上，也可以登录官网「申请进度」随时查看。");
         }
 
-        return b.button("登录官网查看", PROGRESS_URL).build();
+        b.button("登录官网查看", PROGRESS_URL);
+        appendExtraNote(b, extraNote);
+        return b.build();
     }
 
     /**
@@ -79,6 +93,11 @@ public final class RecruitmentMails {
      * @param contactInfo 本届负责人联系方式，按周期配置
      */
     public static MailTemplate.Rendered rejected(String name, String contactInfo) {
+        return rejected(name, contactInfo, null);
+    }
+
+    /** @param extraNote 管理员补充内容，附在正文之后（不替换原文） */
+    public static MailTemplate.Rendered rejected(String name, String contactInfo, String extraNote) {
         MailTemplate.Builder b = MailTemplate.builder("Application Result", "感谢你参与博远招新")
                 .paragraph(nz(name, "同学") + "，你好：\n感谢你积极参与博远招新系列活动，"
                         + "并对我们的工作给予了极大的支持和帮助。")
@@ -94,7 +113,19 @@ public final class RecruitmentMails {
         if (StringUtils.hasText(contactInfo)) {
             b.divider().paragraph("本届负责人联系方式\n" + contactInfo);
         }
+        appendExtraNote(b, extraNote);
         return b.build();
+    }
+
+    /**
+     * 管理员补充内容统一的呈现方式：分隔线 + 「社团补充说明」小标题 + 原样正文。
+     * 加标题是为了让收件人分得清哪段是模板、哪段是这次特意写的。
+     */
+    private static void appendExtraNote(MailTemplate.Builder b, String extraNote) {
+        if (!StringUtils.hasText(extraNote)) {
+            return;
+        }
+        b.divider().paragraph("社团补充说明\n" + extraNote.trim());
     }
 
     /** 验证码。与三封通知同一套视觉，不再是一行裸文本 */

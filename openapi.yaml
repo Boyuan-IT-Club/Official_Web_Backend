@@ -12948,8 +12948,11 @@ components:
           example: email
         customMessage:
           type: string
-          description: 自定义消息
-          example: 恭喜您通过面试，期待您的加入！
+          description: >-
+            管理员补充说明。**附加**在模板正文之后（以分隔线 +「社团补充说明」小节呈现），
+            不替换模板——录取信里的祝贺、分配部门、入群二维码等内容照常保留。
+            仅当结果既非通过也非未通过（待定/待调剂，无对应模板）时，才单独作为纯文本正文发出。
+          example: 本周五 19:00 理科大楼 B226 见面会，请准时参加。
     SendNotificationsResponse:
       type: object
       properties:
