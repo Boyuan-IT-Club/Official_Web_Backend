@@ -168,8 +168,19 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
         if (resultId == null) {
             return;
         }
-        boolean templated = !StringUtils.hasText(message.getCustomBody());
-        if (templated && type == null) {
+        /*
+         * 管理员填的内容是「补充」而不是「替换」。
+         *
+         * 早先的实现把 customBody 当整封正文：管理员随手写两句，学生收到的
+         * 录取信里就只剩那两句——模板里的祝贺、分配部门、入群二维码全没了。
+         * 现在一律走模板，customBody 以「社团补充说明」附在正文之后。
+         *
+         * 例外：decision 不是通过/未通过（待定、待调剂）时没有对应模板，
+         * 此时仍按管理员写的纯文本发——这种场景本来就是「我要单独说点事」。
+         */
+        String extraNote = message.getCustomBody();
+        boolean templated = type != null;
+        if (!templated && !StringUtils.hasText(extraNote)) {
             return;
         }
         /*
@@ -192,7 +203,7 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
                 log.info("同一次发送已投递过（MQ 重投），跳过 requestId={}, resultId={}", requestId, resultId);
                 return;
             }
-        } else if (templated && alreadySent(type, null, resultId)) {
+        } else if (alreadySent(type, null, resultId)) {
             log.info("旧格式消息且结果通知已发送过，跳过 type={}, resultId={}", type, resultId);
             return;
         }
@@ -230,11 +241,11 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
                 ? InterviewNotificationEmailBuilder.subject(effectiveType)
                 : "【博远信息技术社】面试结果通知";
         String body = templated
-                ? InterviewNotificationEmailBuilder.body(effectiveType, name, booking, departmentName)
-                : message.getCustomBody();
+                ? InterviewNotificationEmailBuilder.body(
+                        effectiveType, name, booking, departmentName, extraNote)
+                : extraNote;
 
-        // 管理员写了自定义正文时不套模板 —— 那是他要说的话，不该被包进
-        // 「恭喜录取」的壳里
+        // 无模板可用（待定/待调剂）时才发纯文本，其余一律模板 + 补充说明
         String html = null;
         if (templated) {
             // 周期号优先取结果自带的（V34 起无安排的结果也有 cycle_id），
@@ -248,7 +259,7 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
                     : List.of();
             html = InterviewNotificationEmailBuilder.html(
                     effectiveType, name, booking, departmentName,
-                    cfg.academicYear(), cfg.waitingRoom(), qrs, cfg.contactInfo()).html();
+                    cfg.academicYear(), cfg.waitingRoom(), qrs, cfg.contactInfo(), extraNote).html();
         }
 
         /*

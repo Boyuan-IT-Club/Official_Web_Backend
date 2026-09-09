@@ -238,15 +238,32 @@ class InterviewNotificationResendTest {
     }
 
     @Test
-    @DisplayName("自定义正文不受去重影响，每次都发")
+    @DisplayName("带补充说明的通知照样每次都发，且走模板（HTML）而非纯文本")
     void customBodyAlwaysDelivers() {
         InterviewNotificationMessage custom =
                 new InterviewNotificationMessage(null, null, RESULT_ID, "req-c1", "请于周五来签约");
         service.deliver(custom);
         service.deliver(new InterviewNotificationMessage(null, null, RESULT_ID, "req-c2", "请于周五来签约"));
 
-        // 自定义正文走的是纯文本 sendEmail
-        verify(messageUtils, times(2)).sendEmail(anyString(), anyString(), anyString());
-        verify(messageUtils, never()).sendHtmlEmail(anyString(), anyString(), anyString(), anyString());
+        // 管理员填的内容是补充而非替换：仍走录取模板，补充说明附在正文之后
+        verify(messageUtils, times(2)).sendHtmlEmail(anyString(), anyString(), anyString(), anyString());
+        verify(messageUtils, never()).sendEmail(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("补充说明真的进了正文，且模板原文仍在")
+    void customBodyIsAppendedNotReplacing() {
+        service.deliver(new InterviewNotificationMessage(
+                null, null, RESULT_ID, "req-append", "周五 19:00 见面会"));
+
+        org.mockito.ArgumentCaptor<String> html = org.mockito.ArgumentCaptor.forClass(String.class);
+        org.mockito.ArgumentCaptor<String> plain = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(messageUtils).sendHtmlEmail(anyString(), anyString(), html.capture(), plain.capture());
+
+        // 模板原文与补充说明共存 —— 早先的实现会把整封信换成那一句
+        org.junit.jupiter.api.Assertions.assertTrue(html.getValue().contains("恭喜"));
+        org.junit.jupiter.api.Assertions.assertTrue(html.getValue().contains("见面会"));
+        org.junit.jupiter.api.Assertions.assertTrue(plain.getValue().contains("恭喜"));
+        org.junit.jupiter.api.Assertions.assertTrue(plain.getValue().contains("见面会"));
     }
 }
