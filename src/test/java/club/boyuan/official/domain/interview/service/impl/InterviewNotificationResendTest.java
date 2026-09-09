@@ -201,6 +201,43 @@ class InterviewNotificationResendTest {
     }
 
     @Test
+    @DisplayName("有面试安排的同学重发：日志不占场次唯一槽位，不会连发")
+    void resultLogDoesNotOccupyScheduleSlot() {
+        // 线上事故：给有面试安排的同学重发结果通知，日志把 scheduleId 一起写进去，
+        // 撞上 uk_type_schedule（类型×场次唯一，本是给预约/提醒类通知用的）；
+        // 邮件已发出、写库抛异常 → MQ 判失败重投 → 每次重投再发一封，共 3 封。
+        InterviewResult scheduled = new InterviewResult()
+                .setResultId(RESULT_ID).setUserId(7).setDecision(1)
+                .setScheduleId(55).setCycleId(6);
+        when(interviewResultMapper.selectById(RESULT_ID)).thenReturn(scheduled);
+        club.boyuan.official.persistence.entity.InterviewSchedule sc =
+                new club.boyuan.official.persistence.entity.InterviewSchedule();
+        sc.setScheduleId(55);
+        sc.setResumeId(33);
+        sc.setCycleId(6);
+        when(interviewScheduleService.getById(55)).thenReturn(sc);
+
+        service.deliver(templated("req-scheduled"));
+
+        org.junit.jupiter.api.Assertions.assertEquals(1, logRows.size());
+        // 结果通知由 result_id + request_id 唯一确定，不该再占用场次的槽位
+        org.junit.jupiter.api.Assertions.assertNull(logRows.get(0).getScheduleId());
+        org.junit.jupiter.api.Assertions.assertEquals(RESULT_ID, logRows.get(0).getResultId());
+    }
+
+    @Test
+    @DisplayName("写日志失败不上抛：邮件只发一次，不触发 MQ 重投")
+    void loggingFailureNeverTriggersRetry() {
+        // 记账失败不该让已送达的邮件被重投再发一遍
+        when(notificationLogMapper.insert(any(InterviewNotificationLog.class)))
+                .thenThrow(new org.springframework.dao.DuplicateKeyException("uk_type_schedule"));
+
+        service.deliver(templated("req-log-fail"));   // 不抛异常即为通过
+
+        verify(messageUtils, times(1)).sendHtmlEmail(anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
     @DisplayName("自定义正文不受去重影响，每次都发")
     void customBodyAlwaysDelivers() {
         InterviewNotificationMessage custom =
