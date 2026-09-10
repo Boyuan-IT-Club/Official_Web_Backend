@@ -42,6 +42,7 @@ public class InterviewPreferenceServiceImpl extends ServiceImpl<InterviewPrefere
         implements IInterviewPreferenceService {
 
     private static final int RESUME_STATUS_SUBMITTED = 2;
+    private static final int RESUME_STATUS_SCREEN_REJECTED = 5;
     private static final int TIME_SLOT_STATUS_OPEN = 1;
 
     private final IResumeService resumeService;
@@ -275,6 +276,10 @@ public class InterviewPreferenceServiceImpl extends ServiceImpl<InterviewPrefere
         }
         if (resume.getStatus() == null || resume.getStatus() < RESUME_STATUS_SUBMITTED) {
             throw new BusinessException(BusinessExceptionEnum.RESUME_NOT_SUBMITTED_FOR_BOOKING);
+        }
+        // 初筛未通过的同学本届流程已结束，不再收志愿与时间窗
+        if (Integer.valueOf(RESUME_STATUS_SCREEN_REJECTED).equals(resume.getStatus())) {
+            throw new BusinessException(BusinessExceptionEnum.RESUME_SCREENED_OUT);
         }
         return resume;
     }

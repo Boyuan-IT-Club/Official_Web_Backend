@@ -15,4 +15,7 @@ public interface InterviewNotificationService {
 
     /** 批量发送面试结果通知（录取/未录取） */
     void enqueueResultNotification(Integer resultId, String customBody);
+
+    /** 简历未通过初筛的通知入队（面试之前发，按简历定位收件人） */
+    void enqueueResumeRejectedNotification(Integer resumeId, String customBody);
 }

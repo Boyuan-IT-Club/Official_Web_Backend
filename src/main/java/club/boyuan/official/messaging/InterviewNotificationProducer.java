@@ -22,11 +22,11 @@ public class InterviewNotificationProducer {
 
     public void publishBookingSuccess(Integer scheduleId, String requestId) {
         publish(new InterviewNotificationMessage(
-                InterviewNotificationType.BOOKING_SUCCESS, scheduleId, null, requestId, null));
+                InterviewNotificationType.BOOKING_SUCCESS, scheduleId, null, requestId, null, null));
     }
 
     public void publishReminder(InterviewNotificationType type, Integer scheduleId) {
-        publish(new InterviewNotificationMessage(type, scheduleId, null, null, null));
+        publish(new InterviewNotificationMessage(type, scheduleId, null, null, null, null));
     }
 
     public void publishResult(Integer resultId, String customBody) {
@@ -34,6 +34,13 @@ public class InterviewNotificationProducer {
         // 这样 MQ 重投同一条消息会被拦（同 id），管理员点第二次重发会放行（新 id）。
         // 原来这里传 null，消费端只能退回按 (type, resultId) 去重，把重发也拦掉了。
         publish(new InterviewNotificationMessage(
-                null, null, resultId, java.util.UUID.randomUUID().toString(), customBody));
+                null, null, resultId, java.util.UUID.randomUUID().toString(), customBody, null));
+    }
+
+    /** 简历未通过初筛的通知。与结果通知一样每次一个新 requestId，允许重发。 */
+    public void publishResumeRejected(Integer resumeId, String customBody) {
+        publish(new InterviewNotificationMessage(
+                InterviewNotificationType.RESUME_REJECTED, null, null,
+                java.util.UUID.randomUUID().toString(), customBody, resumeId));
     }
 }

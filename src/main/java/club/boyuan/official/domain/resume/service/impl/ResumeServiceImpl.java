@@ -35,6 +35,12 @@ import java.util.stream.Collectors;
 @Service
 @AllArgsConstructor
 public class ResumeServiceImpl implements IResumeService {
+
+    /** 简历状态：1草稿 2已提交 3(草稿且周期已截止，派生态) 4通过初筛 5未通过初筛 */
+    public static final int STATUS_DRAFT = 1;
+    public static final int STATUS_SUBMITTED = 2;
+    public static final int STATUS_SCREEN_PASSED = 4;
+    public static final int STATUS_SCREEN_REJECTED = 5;
     
     private static final Logger logger = LoggerFactory.getLogger(ResumeServiceImpl.class);
     
@@ -494,6 +500,29 @@ public class ResumeServiceImpl implements IResumeService {
         resume.setResumeScore(average);
         resume.setScoredBy(scorerUserId);
         resume.setScoredAt(now);
+
+        /*
+         * 0 分即未通过初筛：这是社团的评分约定——打 0 分就是「这份简历不用看了」，
+         * 与其让管理员再去勾一遍状态，不如打分时直接落定。
+         *
+         * 反向也要成立：分数从 0 改成非 0 时把「未通过」收回（未通过是分数推出来的，
+         * 分数变了结论就该跟着变），否则改错分的人会被永久挡在流程外。
+         * 手动标记的「通过」不会被这里覆盖，除非分数确实被改成了 0。
+         */
+        Integer derived = null;
+        if (average == 0) {
+            derived = STATUS_SCREEN_REJECTED;
+        } else if (Integer.valueOf(STATUS_SCREEN_REJECTED).equals(resume.getStatus())) {
+            derived = STATUS_SUBMITTED;
+        }
+        if (derived != null && !derived.equals(resume.getStatus())) {
+            resumeMapper.update(null, new LambdaUpdateWrapper<Resume>()
+                    .eq(Resume::getResumeId, resumeId)
+                    .set(Resume::getStatus, derived));
+            resume.setStatus(derived);
+            logger.info("简历初筛结论随打分变更，简历ID: {}，平均分: {}，状态: {}", resumeId, average, derived);
+        }
+
         logger.info("简历评分已更新，简历ID: {}，我的分: {}，平均分: {}（{} 人），打分人: {}",
                 resumeId, score, average, entries.size(), scorerUserId);
 
@@ -503,9 +532,31 @@ public class ResumeServiceImpl implements IResumeService {
         dto.setCycleId(resume.getCycleId());
         dto.setStatus(resume.getStatus());
         dto.setResumeScore(average);
+        dto.setStatus(resume.getStatus());
         fillScorer(dto, resume, resolveScorerNames(List.of(resume)));
         dto.setScoreEntries(toEntryDTOs(entries));
         return dto;
+    }
+
+    /**
+     * 批量初筛：把选中的简历标为通过/未通过。
+     *
+     * 只动「已提交及以后」的简历——草稿还没投，谈不上筛；
+     * 周期归属由调用方（Controller）保证，这里只按 id 精确更新。
+     */
+    @Override
+    @Transactional
+    public int batchScreening(List<Integer> resumeIds, boolean passed) {
+        if (resumeIds == null || resumeIds.isEmpty()) {
+            return 0;
+        }
+        int target = passed ? STATUS_SCREEN_PASSED : STATUS_SCREEN_REJECTED;
+        int rows = resumeMapper.update(null, new LambdaUpdateWrapper<Resume>()
+                .in(Resume::getResumeId, resumeIds)
+                .ge(Resume::getStatus, STATUS_SUBMITTED)
+                .set(Resume::getStatus, target));
+        logger.info("批量初筛完成，目标状态: {}，请求 {} 份，实际更新 {} 份", target, resumeIds.size(), rows);
+        return rows;
     }
 
     /** 明细实体 → 展示视图，补打分人姓名（批量查一次） */

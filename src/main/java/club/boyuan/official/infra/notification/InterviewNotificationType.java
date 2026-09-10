@@ -18,5 +18,13 @@ public enum InterviewNotificationType {
     ADMISSION,
 
     /** 未录取通知 */
-    REJECTION
+    REJECTION,
+
+    /**
+     * 简历未通过初筛。
+     *
+     * 与 REJECTION 的区别：这封在面试之前发出，收件人根本没进过面试环节，
+     * 因此文案不能提「面试时你的表现」，也不该出现候场、改期一类的字眼。
+     */
+    RESUME_REJECTED
 }

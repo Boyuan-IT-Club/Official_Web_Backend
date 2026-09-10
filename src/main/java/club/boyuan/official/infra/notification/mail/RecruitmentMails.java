@@ -128,6 +128,31 @@ public final class RecruitmentMails {
         b.divider().paragraph("社团补充说明\n" + extraNote.trim());
     }
 
+    /**
+     * 简历未通过初筛。
+     *
+     * 与「未录取」分开写：这批同学没进过面试，文案里不能出现
+     * 「面试时你的表现」；同时明确告诉他们本届流程到此为止，
+     * 免得继续等面试通知。
+     */
+    public static MailTemplate.Rendered resumeRejected(String name, String contactInfo, String extraNote) {
+        MailTemplate.Builder b = MailTemplate.builder("Application Result", "感谢你投递博远信息技术社")
+                .paragraph(nz(name, "同学") + "，你好：\n感谢你投递博远信息技术社招新简历，"
+                        + "也感谢你愿意花时间了解我们。")
+                .paragraph("经过简历评审，很遗憾，本次你的简历未能进入面试环节，"
+                        + "本届招新流程到此结束。")
+                .paragraph("这并不代表对你能力的否定——名额与方向的匹配往往比能力本身更受限。"
+                        + "社团的技术分享、学习小组与寒假 OwnerPro 活动都对所有同学开放，"
+                        + "欢迎继续参与，我们也会在活动中留意积极的同学。")
+                .paragraph("期待下一届与你相遇。");
+
+        if (StringUtils.hasText(contactInfo)) {
+            b.divider().paragraph("本届负责人联系方式\n" + contactInfo);
+        }
+        appendExtraNote(b, extraNote);
+        return b.build();
+    }
+
     /** 验证码。与三封通知同一套视觉，不再是一行裸文本 */
     public static MailTemplate.Rendered verificationCode(String code, int validMinutes) {
         return MailTemplate.builder("Verification Code", "你的验证码")
