@@ -49,15 +49,50 @@
             <if test="major != null and major != ''">
                 AND u.major LIKE CONCAT('%', #{major}, '%')
             </if>
+            <!--
+                志愿部门筛选。
+                choiceRank 为 first/second 时按志愿位次精确匹配 interview_preference
+                （那张表是规范化的一二志愿，排期与结果页显示的也是它）；
+                不限时再并上老路——简历字段 expected_departments 存的是
+                ["第一志愿","第二志愿"] 数组，只能 LIKE，分不出位次，
+                但老周期可能没有 interview_preference 行，留作兜底。
+            -->
             <if test="expectedDepartment != null and expectedDepartment != ''">
-                <!-- 在这里需要根据实际需求调整，因为期望部门可能存储在简历字段值中 -->
-                AND EXISTS (
-                    SELECT 1 FROM resume_field_value rv
-                    JOIN resume_field_definition rf ON rv.field_id = rf.field_id
-                    WHERE rv.resume_id = r.resume_id
-                    AND rf.field_label = '期望部门'
-                    AND rv.field_value LIKE CONCAT('%', #{expectedDepartment}, '%')
-                )
+                <choose>
+                    <when test="&quot;first&quot;.equals(choiceRank) or &quot;second&quot;.equals(choiceRank)">
+                        AND EXISTS (
+                            SELECT 1 FROM interview_preference ip
+                            LEFT JOIN department pd1 ON pd1.dept_id = ip.first_dept_id
+                            LEFT JOIN department pd2 ON pd2.dept_id = ip.second_dept_id
+                            WHERE ip.resume_id = r.resume_id
+                            <if test="&quot;first&quot;.equals(choiceRank)">
+                                AND pd1.dept_name = #{expectedDepartment}
+                            </if>
+                            <if test="&quot;second&quot;.equals(choiceRank)">
+                                AND pd2.dept_name = #{expectedDepartment}
+                            </if>
+                        )
+                    </when>
+                    <otherwise>
+                        AND (
+                            EXISTS (
+                                SELECT 1 FROM interview_preference ip
+                                LEFT JOIN department pd1 ON pd1.dept_id = ip.first_dept_id
+                                LEFT JOIN department pd2 ON pd2.dept_id = ip.second_dept_id
+                                WHERE ip.resume_id = r.resume_id
+                                AND (pd1.dept_name = #{expectedDepartment}
+                                     OR pd2.dept_name = #{expectedDepartment})
+                            )
+                            OR EXISTS (
+                                SELECT 1 FROM resume_field_value rv
+                                JOIN resume_field_definition rf ON rv.field_id = rf.field_id
+                                WHERE rv.resume_id = r.resume_id
+                                AND rf.field_key = 'expected_departments'
+                                AND rv.field_value LIKE CONCAT('%', #{expectedDepartment}, '%')
+                            )
+                        )
+                    </otherwise>
+                </choose>
             </if>
             <if test="cycleId != null">
                 AND r.cycle_id = #{cycleId}
@@ -82,15 +117,50 @@
             <if test="major != null and major != ''">
                 AND u.major LIKE CONCAT('%', #{major}, '%')
             </if>
+            <!--
+                志愿部门筛选。
+                choiceRank 为 first/second 时按志愿位次精确匹配 interview_preference
+                （那张表是规范化的一二志愿，排期与结果页显示的也是它）；
+                不限时再并上老路——简历字段 expected_departments 存的是
+                ["第一志愿","第二志愿"] 数组，只能 LIKE，分不出位次，
+                但老周期可能没有 interview_preference 行，留作兜底。
+            -->
             <if test="expectedDepartment != null and expectedDepartment != ''">
-                <!-- 在这里需要根据实际需求调整，因为期望部门可能存储在简历字段值中 -->
-                AND EXISTS (
-                    SELECT 1 FROM resume_field_value rv
-                    JOIN resume_field_definition rf ON rv.field_id = rf.field_id
-                    WHERE rv.resume_id = r.resume_id
-                    AND rf.field_label = '期望部门'
-                    AND rv.field_value LIKE CONCAT('%', #{expectedDepartment}, '%')
-                )
+                <choose>
+                    <when test="&quot;first&quot;.equals(choiceRank) or &quot;second&quot;.equals(choiceRank)">
+                        AND EXISTS (
+                            SELECT 1 FROM interview_preference ip
+                            LEFT JOIN department pd1 ON pd1.dept_id = ip.first_dept_id
+                            LEFT JOIN department pd2 ON pd2.dept_id = ip.second_dept_id
+                            WHERE ip.resume_id = r.resume_id
+                            <if test="&quot;first&quot;.equals(choiceRank)">
+                                AND pd1.dept_name = #{expectedDepartment}
+                            </if>
+                            <if test="&quot;second&quot;.equals(choiceRank)">
+                                AND pd2.dept_name = #{expectedDepartment}
+                            </if>
+                        )
+                    </when>
+                    <otherwise>
+                        AND (
+                            EXISTS (
+                                SELECT 1 FROM interview_preference ip
+                                LEFT JOIN department pd1 ON pd1.dept_id = ip.first_dept_id
+                                LEFT JOIN department pd2 ON pd2.dept_id = ip.second_dept_id
+                                WHERE ip.resume_id = r.resume_id
+                                AND (pd1.dept_name = #{expectedDepartment}
+                                     OR pd2.dept_name = #{expectedDepartment})
+                            )
+                            OR EXISTS (
+                                SELECT 1 FROM resume_field_value rv
+                                JOIN resume_field_definition rf ON rv.field_id = rf.field_id
+                                WHERE rv.resume_id = r.resume_id
+                                AND rf.field_key = 'expected_departments'
+                                AND rv.field_value LIKE CONCAT('%', #{expectedDepartment}, '%')
+                            )
+                        )
+                    </otherwise>
+                </choose>
             </if>
             <if test="cycleId != null">
                 AND r.cycle_id = #{cycleId}
@@ -132,15 +202,50 @@
             <if test="major != null and major != ''">
                 AND u.major LIKE CONCAT('%', #{major}, '%')
             </if>
+            <!--
+                志愿部门筛选。
+                choiceRank 为 first/second 时按志愿位次精确匹配 interview_preference
+                （那张表是规范化的一二志愿，排期与结果页显示的也是它）；
+                不限时再并上老路——简历字段 expected_departments 存的是
+                ["第一志愿","第二志愿"] 数组，只能 LIKE，分不出位次，
+                但老周期可能没有 interview_preference 行，留作兜底。
+            -->
             <if test="expectedDepartment != null and expectedDepartment != ''">
-                <!-- 在这里需要根据实际需求调整，因为期望部门可能存储在简历字段值中 -->
-                AND EXISTS (
-                    SELECT 1 FROM resume_field_value rv
-                    JOIN resume_field_definition rf ON rv.field_id = rf.field_id
-                    WHERE rv.resume_id = r.resume_id
-                    AND rf.field_label = '期望部门'
-                    AND rv.field_value LIKE CONCAT('%', #{expectedDepartment}, '%')
-                )
+                <choose>
+                    <when test="&quot;first&quot;.equals(choiceRank) or &quot;second&quot;.equals(choiceRank)">
+                        AND EXISTS (
+                            SELECT 1 FROM interview_preference ip
+                            LEFT JOIN department pd1 ON pd1.dept_id = ip.first_dept_id
+                            LEFT JOIN department pd2 ON pd2.dept_id = ip.second_dept_id
+                            WHERE ip.resume_id = r.resume_id
+                            <if test="&quot;first&quot;.equals(choiceRank)">
+                                AND pd1.dept_name = #{expectedDepartment}
+                            </if>
+                            <if test="&quot;second&quot;.equals(choiceRank)">
+                                AND pd2.dept_name = #{expectedDepartment}
+                            </if>
+                        )
+                    </when>
+                    <otherwise>
+                        AND (
+                            EXISTS (
+                                SELECT 1 FROM interview_preference ip
+                                LEFT JOIN department pd1 ON pd1.dept_id = ip.first_dept_id
+                                LEFT JOIN department pd2 ON pd2.dept_id = ip.second_dept_id
+                                WHERE ip.resume_id = r.resume_id
+                                AND (pd1.dept_name = #{expectedDepartment}
+                                     OR pd2.dept_name = #{expectedDepartment})
+                            )
+                            OR EXISTS (
+                                SELECT 1 FROM resume_field_value rv
+                                JOIN resume_field_definition rf ON rv.field_id = rf.field_id
+                                WHERE rv.resume_id = r.resume_id
+                                AND rf.field_key = 'expected_departments'
+                                AND rv.field_value LIKE CONCAT('%', #{expectedDepartment}, '%')
+                            )
+                        )
+                    </otherwise>
+                </choose>
             </if>
             <if test="cycleId != null">
                 AND r.cycle_id = #{cycleId}

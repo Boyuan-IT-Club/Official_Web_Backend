@@ -535,21 +535,6 @@ public class ResumeController {
     }
 
     /**
-     * 表单里不渲染的字段。
-     *
-     * 与前端 resumeFieldRegistry 的 inForm=false 加 DEPRECATED_RESUME_FIELD_KEYS
-     * 同一份清单——那张规范表在前端，Java 侧只能手抄，改那边时记得成对改这里。
-     * 只影响空白模板：已填简历的导出照常展示历史数据。
-     */
-    private static final java.util.Set<String> NON_FORM_FIELD_KEYS = java.util.Set.of(
-            // 由第一/第二志愿合成，不单独成栏
-            "expected_departments",
-            // 与「自我介绍」重复，2026-09 已从表单撤下
-            "introduction",
-            // 方案A（自助抢时段）遗留：时间窗现在由投递页的「面试意向」卡管
-            "expected_interview_time", "second_interview_time", "can_attend_offline_interview");
-
-    /**
      * 导出本周期的空白报名表模板（PDF）。
      *
      * 周期还没开始时表单不可填，但个人简介、项目经验这类题现场憋很吃亏。
@@ -571,7 +556,7 @@ public class ResumeController {
                     // 「期望部门」（由第一/第二志愿合成）和「第一/第二面试时间」
                     // （方案A 遗留，时间窗现在归面试意向卡管）都印了出来，
                     // 看着像要填三遍志愿
-                    .filter(d -> !NON_FORM_FIELD_KEYS.contains(d.getFieldKey()))
+                    .filter(d -> !PdfExportUtil.NON_FORM_FIELD_KEYS.contains(d.getFieldKey()))
                     .sorted(java.util.Comparator.comparing(
                             d -> d.getSortOrder() == null ? Integer.MAX_VALUE : d.getSortOrder()))
                     .map(d -> new PdfExportUtil.TemplateField(
@@ -613,7 +598,12 @@ public class ResumeController {
 
     /**
      * 条件查询简历列表（管理员）。
-     * 支持按姓名、专业、期望部门、招募周期、状态等多条件组合查询。
+     * 支持按姓名、专业、志愿部门、招募周期、状态等多条件组合查询。
+     *
+     * expectedDepartment 配合 choiceRank 使用：给了 first/second 就按志愿位次
+     * 精确匹配（走 interview_preference，那张表是规范化的一二志愿），
+     * 不给则一二志愿命中任一即可。原来只能在 expected_departments 那个
+     * ["第一志愿","第二志愿"] 数组里 LIKE，分不出位次。
      */
     @GetMapping("/search")
     @PreAuthorize("hasAuthority('resume:view')")
@@ -621,6 +611,7 @@ public class ResumeController {
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String major,
             @RequestParam(required = false) String expectedDepartment,
+            @RequestParam(required = false) String choiceRank,
             @RequestParam(required = false) Integer cycleId,
             @RequestParam(required = false) String status,
             @RequestParam(required = false, defaultValue = "0") Integer page,
@@ -631,12 +622,12 @@ public class ResumeController {
 
         // 若 page/size 均为默认且未指定排序，使用非分页查询（保持向后兼容）
         if (page == 0 && size == 10 && sortBy == null) {
-            List<ResumeDTO> result = resumeService.queryResumes(name, major, expectedDepartment, cycleId, status);
+            List<ResumeDTO> result = resumeService.queryResumes(name, major, expectedDepartment, choiceRank, cycleId, status);
             logger.info("管理员{}执行条件查询简历，结果数量: {}", username, result.size());
             return ResponseEntity.ok(ResponseMessage.success(result));
         }
         PageResultDTO<ResumeDTO> result = resumeService.queryResumesWithPagination(
-                name, major, expectedDepartment, cycleId, status, page, size, sortBy, sortOrder);
+                name, major, expectedDepartment, choiceRank, cycleId, status, page, size, sortBy, sortOrder);
         logger.info("管理员{}执行分页条件查询简历，结果数量: {}，总记录数: {}",
                 username, result.getContent().size(), result.getTotalElements());
         return ResponseEntity.ok(ResponseMessage.success(result));

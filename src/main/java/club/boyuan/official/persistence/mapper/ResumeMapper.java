@@ -40,20 +40,23 @@ public interface ResumeMapper extends BaseMapper<Resume> {
      * 多条件查询简历列表
      * @param name 姓名（可选）
      * @param major 专业（可选）
-     * @param expectedDepartment 期望部门（可选）
+     * @param expectedDepartment 志愿部门名（可选）
+     * @param choiceRank 志愿位次：first/second，为空表示不限（可选）
      * @param cycleId 年份ID（可选）
      * @param status 简历状态（可选），支持多个状态，用逗号分隔，如"2,3,4,5"
      * @return 简历列表
      */
     List<Resume> queryResumes(@Param("name") String name, @Param("major") String major, 
                              @Param("expectedDepartment") String expectedDepartment,
+                             @Param("choiceRank") String choiceRank,
                              @Param("cycleId") Integer cycleId, @Param("status") String status);
     
     /**
      * 多条件查询简历列表（分页）
      * @param name 姓名（可选）
      * @param major 专业（可选）
-     * @param expectedDepartment 期望部门（可选）
+     * @param expectedDepartment 志愿部门名（可选）
+     * @param choiceRank 志愿位次：first/second，为空表示不限（可选）
      * @param cycleId 年份ID（可选）
      * @param status 简历状态（可选），支持多个状态，用逗号分隔，如"2,3,4,5"
      * @param offset 偏移量
@@ -64,6 +67,7 @@ public interface ResumeMapper extends BaseMapper<Resume> {
      */
     List<Resume> queryResumesWithPagination(@Param("name") String name, @Param("major") String major, 
                                            @Param("expectedDepartment") String expectedDepartment,
+                                           @Param("choiceRank") String choiceRank,
                                            @Param("cycleId") Integer cycleId, @Param("status") String status, 
                                            @Param("offset") int offset, @Param("limit") int limit,
                                            @Param("sortBy") String sortBy, @Param("sortOrder") String sortOrder);
@@ -72,12 +76,14 @@ public interface ResumeMapper extends BaseMapper<Resume> {
      * 统计多条件查询简历数量
      * @param name 姓名（可选）
      * @param major 专业（可选）
-     * @param expectedDepartment 期望部门（可选）
+     * @param expectedDepartment 志愿部门名（可选）
+     * @param choiceRank 志愿位次：first/second，为空表示不限（可选）
      * @param cycleId 年份ID（可选）
      * @param status 简历状态（可选），支持多个状态，用逗号分隔，如"2,3,4,5"
      * @return 简历数量
      */
     int countResumes(@Param("name") String name, @Param("major") String major, 
                     @Param("expectedDepartment") String expectedDepartment,
+                    @Param("choiceRank") String choiceRank,
                     @Param("cycleId") Integer cycleId, @Param("status") String status);
 }

@@ -182,6 +182,25 @@ class PdfExportFontTest {
         assertTrue(text.contains("github.com/zhangsan"), "GitHub 没出现在 PDF 里，实际抽到: " + text);
     }
 
+    @Test
+    @DisplayName("表单里不渲染的字段不进导出：个人简介与自我介绍重复，早已从表单撤下")
+    void skipsNonFormFields() throws Exception {
+        ResumeDTO dto = new ResumeDTO();
+        dto.setUserId(1);
+        dto.setStatus(2);
+        dto.setSimpleFields(java.util.List.of(
+                field("self_introduction", "自我介绍", "热爱后端开发"),
+                // 字段定义表里它还 is_active=1（历史周期建的），但表单不渲染。
+                // 不滤的话导出会多出一个学生自己都填不了的空栏（用户实测反馈）
+                field("introduction", "个人简介", "这段不该出现在导出里"),
+                field("expected_departments", "期望部门", "[\"技术部\"]")));
+
+        String text = extractText(dto);
+        assertTrue(text.contains("自我介绍"), "正常字段被误滤了，实际抽到: " + text);
+        assertTrue(!text.contains("个人简介"), "表单不渲染的字段仍进了导出: " + text);
+        assertTrue(!text.contains("期望部门"), "期望部门由第一/第二志愿合成，不该单独成栏: " + text);
+    }
+
     private static SimpleResumeFieldDTO field(String key, String label, String value) {
         SimpleResumeFieldDTO f = new SimpleResumeFieldDTO();
         f.setFieldKey(key);
