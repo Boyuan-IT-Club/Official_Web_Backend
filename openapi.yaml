@@ -8898,6 +8898,31 @@ paths:
                       published:
                         type: integer
 
+  /api/interview/flow/progress:
+    get:
+      summary: 招新流程进度
+      deprecated: false
+      description: >-
+        返回一届招新各环节的产出量，管理端据此提示「现在该做哪一步」
+        （周期配置 → 简历初筛 → 面试排期 → 面试评价 → 预录取与录取 → 结果通知）。
+        只回计数不回结论，后端不拦截乱序操作。
+      tags:
+      - 面试结果模块
+      parameters:
+      - name: cycleId
+        in: query
+        description: 招募活动ID
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecruitFlowProgressResponse'
+          headers: {}
   /api/interview/result/list:
     get:
       summary: 查看录取结果
@@ -10059,6 +10084,76 @@ paths:
               schema:
                 $ref: '#/components/schemas/ResponseMessageMaterializeResult'
       security: []
+  /api/interview/admin/cycles/{cycleId}/schedules:
+    get:
+      summary: 面试名单（全周期或单场次）
+      deprecated: false
+      description: >-
+        按面试时间升序返回本周期的面试安排名单。不传 sessionId 即全周期统一名单，
+        管理端「面试名单」页据此一屏看完所有场次。除安排本身外并入了学号、
+        志愿部门与场次地点，便于就地核对。
+      tags:
+      - 面试管理模块
+      parameters:
+      - name: cycleId
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: sessionId
+        in: query
+        description: 只看某个场次；不传为全周期
+        required: false
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: 操作成功
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ScheduleRosterItem'
+                required:
+                - code
+                - message
+                - data
+          headers: {}
+  /api/interview/notifications/overview:
+    get:
+      summary: 通知中心总览
+      deprecated: false
+      description: >-
+        一届招新对外邮件的收口视图：简历初筛未通过、面试安排通知、面试前一天与
+        当天提醒、录取/未录取结果，各自给出应发/已发/待发人数；并附初筛未通过
+        名单（含是否已通知），供管理端直接勾选补发。提醒类由系统定时发送，
+        这里只读。
+      tags:
+      - 面试结果模块
+      parameters:
+      - name: cycleId
+        in: query
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationCenterResponse'
+          headers: {}
   /api/interview/admin/cycles/{cycleId}/assign:
     post:
       summary: 一键场次分配（管理员）
@@ -12010,6 +12105,199 @@ components:
       - code
       - message
       - data
+    ScheduleRosterItem:
+      type: object
+      description: 面试名单的一行（面试安排 + 便于核对的并入字段）
+      properties:
+        scheduleId:
+          type: integer
+        resumeId:
+          type: integer
+        userId:
+          type: integer
+          nullable: true
+        sessionId:
+          type: integer
+          nullable: true
+        interviewTime:
+          type: string
+          format: date-time
+          nullable: true
+        timeOverridden:
+          type: integer
+          nullable: true
+          description: 1 = 时间被管理员手动调整过，自动分配不再覆盖
+        status:
+          type: integer
+          description: 1 已安排 / 2 已取消
+        syncStatus:
+          type: integer
+          nullable: true
+        notifStatus:
+          type: integer
+          nullable: true
+          description: 1 = 面试安排通知已发出
+        notes:
+          type: string
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        username:
+          type: string
+          nullable: true
+          description: 登录名。早期账号是姓名拼音，不要当学号显示
+        studentId:
+          type: string
+          nullable: true
+          description: 简历里填的学号；本届没有学号字段时为 null
+        deptName:
+          type: string
+          nullable: true
+          description: 面试所属部门
+        location:
+          type: string
+          nullable: true
+          description: 场次地点
+        firstDeptName:
+          type: string
+          nullable: true
+          description: 第一志愿部门
+        secondDeptName:
+          type: string
+          nullable: true
+          description: 第二志愿部门
+    NotificationCenterResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: 操作成功
+        data:
+          type: object
+          properties:
+            resumeRejected:
+              $ref: '#/components/schemas/NotificationBucket'
+            interviewArranged:
+              $ref: '#/components/schemas/NotificationBucket'
+            eveReminder:
+              $ref: '#/components/schemas/NotificationBucket'
+            dayReminder:
+              $ref: '#/components/schemas/NotificationBucket'
+            result:
+              $ref: '#/components/schemas/NotificationBucket'
+            screenedOut:
+              type: array
+              description: 初筛未通过名单
+              items:
+                $ref: '#/components/schemas/ScreenedOutItem'
+      required:
+      - code
+      - message
+      - data
+    NotificationBucket:
+      type: object
+      description: 某类通知的进度
+      properties:
+        total:
+          type: integer
+          format: int64
+          description: 按当前数据应收到这类通知的人数
+        sent:
+          type: integer
+          format: int64
+        pending:
+          type: integer
+          format: int64
+    ScreenedOutItem:
+      type: object
+      description: 初筛未通过的一位同学
+      properties:
+        resumeId:
+          type: integer
+        userId:
+          type: integer
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        studentId:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        resumeScore:
+          type: integer
+          nullable: true
+          description: 简历平均分；未打过分为 null，与打 0 分区分
+        notifiedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: 最近一次初筛未通过通知的发送时间；null 表示还没通知
+    RecruitFlowProgressResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: 响应码
+          example: 200
+        message:
+          type: string
+          description: 响应消息
+          example: 操作成功
+        data:
+          type: object
+          description: 各环节产出量
+          properties:
+            fieldCount:
+              type: integer
+              format: int64
+              description: 本届启用中的简历字段数；为 0 时学生无法投递
+              example: 12
+            submittedResumes:
+              type: integer
+              format: int64
+              description: 已提交（含已初筛）的简历份数
+              example: 48
+            screenedResumes:
+              type: integer
+              format: int64
+              description: 已出初筛结论（通过/未通过）的份数
+              example: 48
+            schedules:
+              type: integer
+              format: int64
+              description: 生效中的面试安排数
+              example: 40
+            finalizedEvaluations:
+              type: integer
+              format: int64
+              description: 已定稿的面试评价数
+              example: 40
+            preAdmitted:
+              type: integer
+              format: int64
+              description: 已进预录取草稿名单的人数
+              example: 20
+            decided:
+              type: integer
+              format: int64
+              description: 已录入录取/未录取决定的结果数
+              example: 40
+            notified:
+              type: integer
+              format: int64
+              description: 已发出结果通知的人数
+              example: 40
+      required:
+      - code
+      - message
+      - data
     InterviewResultItem:
       type: object
       properties:
@@ -12051,6 +12339,14 @@ components:
           type: string
           format: date-time
           description: 更新时间
+          example: '2025-09-16T10:00:00Z'
+        interviewTime:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            面试时间。按简历+周期反查本届生效的面试安排得到，因此「先生成名单、
+            后排面试」的结果行也能显示；未排面试为 null。
           example: '2025-09-16T10:00:00Z'
       required:
       - resultId

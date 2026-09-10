@@ -42,10 +42,18 @@ public class SessionAssignmentController {
     private final club.boyuan.official.persistence.mapper.ResumeMapper resumeMapper;
     private final club.boyuan.official.persistence.mapper.ResumeFieldDefinitionMapper resumeFieldDefinitionMapper;
     private final club.boyuan.official.persistence.mapper.ResumeFieldValueMapper resumeFieldValueMapper;
+    private final club.boyuan.official.persistence.mapper.InterviewSessionMapper interviewSessionMapper;
+    private final club.boyuan.official.persistence.mapper.InterviewPreferenceMapper interviewPreferenceMapper;
 
     /**
      * 查询某周期的已分配名单（可按场次过滤），按面试时间排序。
-     * 供管理端「场次」查看每个场次/时间段实际分配到的候选人。
+     *
+     * <p>不带 sessionId 时是全周期的统一名单——管理端「面试名单」页据此
+     * 一屏看完所有场次，不必逐个场次点开。除安排本身外并入了决策时要看的
+     * 信息：学号、志愿部门、场次地点，免得再去简历页对人。</p>
+     *
+     * <p>一律批量查询：原先每行都去 selectById 查用户和部门，一届几十人就是
+     * 上百次往返，单场次时还不明显，全周期名单就很慢了。</p>
      */
     @GetMapping("/cycles/{cycleId}/schedules")
     public ResponseEntity<ResponseMessage<java.util.List<java.util.Map<String, Object>>>> listSchedules(
@@ -60,6 +68,41 @@ public class SessionAssignmentController {
         }
         java.util.List<club.boyuan.official.persistence.entity.InterviewSchedule> schedules =
                 interviewScheduleMapper.selectList(qw);
+        if (schedules.isEmpty()) {
+            return ResponseEntity.ok(ResponseMessage.success(java.util.List.of()));
+        }
+
+        java.util.Set<Integer> userIds = new java.util.HashSet<>();
+        java.util.Set<Integer> resumeIds = new java.util.HashSet<>();
+        java.util.Set<Integer> sessionIds = new java.util.HashSet<>();
+        for (club.boyuan.official.persistence.entity.InterviewSchedule sc : schedules) {
+            if (sc.getUserId() != null) userIds.add(sc.getUserId());
+            if (sc.getResumeId() != null) resumeIds.add(sc.getResumeId());
+            if (sc.getSessionId() != null) sessionIds.add(sc.getSessionId());
+        }
+
+        java.util.Map<Integer, club.boyuan.official.persistence.entity.User> users = userIds.isEmpty()
+                ? java.util.Map.of()
+                : userMapper.selectBatchIds(userIds).stream().collect(java.util.stream.Collectors.toMap(
+                        club.boyuan.official.persistence.entity.User::getUserId, u -> u, (a, b) -> a));
+        java.util.Map<Integer, String> deptNames = departmentMapper.selectList(null).stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        club.boyuan.official.persistence.entity.Department::getDeptId,
+                        club.boyuan.official.persistence.entity.Department::getDeptName, (a, b) -> a));
+        java.util.Map<Integer, club.boyuan.official.persistence.entity.InterviewSession> sessions = sessionIds.isEmpty()
+                ? java.util.Map.of()
+                : interviewSessionMapper.selectBatchIds(sessionIds).stream().collect(java.util.stream.Collectors.toMap(
+                        club.boyuan.official.persistence.entity.InterviewSession::getSessionId, x -> x, (a, b) -> a));
+        java.util.Map<Integer, club.boyuan.official.persistence.entity.InterviewPreference> prefs = resumeIds.isEmpty()
+                ? java.util.Map.of()
+                : interviewPreferenceMapper.selectList(
+                        new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<club.boyuan.official.persistence.entity.InterviewPreference>()
+                                .in(club.boyuan.official.persistence.entity.InterviewPreference::getResumeId, resumeIds))
+                        .stream().collect(java.util.stream.Collectors.toMap(
+                                club.boyuan.official.persistence.entity.InterviewPreference::getResumeId, x -> x, (a, b) -> a));
+        // 学号在简历字段里，不在 user 上（user.username 多数是学号但早期账号是拼音）
+        java.util.Map<Integer, String> studentIds = studentIdsOf(cycleId, resumeIds);
+
         java.util.List<java.util.Map<String, Object>> result = new java.util.ArrayList<>();
         for (club.boyuan.official.persistence.entity.InterviewSchedule sc : schedules) {
             java.util.Map<String, Object> item = new java.util.LinkedHashMap<>();
@@ -73,18 +116,52 @@ public class SessionAssignmentController {
             item.put("syncStatus", sc.getSyncStatus());
             item.put("notifStatus", sc.getNotifStatus());
             item.put("notes", sc.getNotes());
-            if (sc.getUserId() != null) {
-                club.boyuan.official.persistence.entity.User u = userMapper.selectById(sc.getUserId());
-                item.put("name", u != null ? (u.getName() != null ? u.getName() : u.getUsername()) : null);
-                item.put("username", u != null ? u.getUsername() : null);
-            }
-            if (sc.getDeptId() != null) {
-                club.boyuan.official.persistence.entity.Department d = departmentMapper.selectById(sc.getDeptId());
-                item.put("deptName", d != null ? d.getDeptName() : null);
-            }
+            club.boyuan.official.persistence.entity.User u =
+                    sc.getUserId() == null ? null : users.get(sc.getUserId());
+            item.put("name", u != null ? (u.getName() != null ? u.getName() : u.getUsername()) : null);
+            item.put("username", u != null ? u.getUsername() : null);
+            item.put("studentId", studentIds.get(sc.getResumeId()));
+            item.put("deptName", sc.getDeptId() == null ? null : deptNames.get(sc.getDeptId()));
+            club.boyuan.official.persistence.entity.InterviewSession ss =
+                    sc.getSessionId() == null ? null : sessions.get(sc.getSessionId());
+            item.put("location", ss != null ? ss.getLocation() : null);
+            club.boyuan.official.persistence.entity.InterviewPreference pf =
+                    sc.getResumeId() == null ? null : prefs.get(sc.getResumeId());
+            item.put("firstDeptName", pf == null || pf.getFirstDeptId() == null
+                    ? null : deptNames.get(pf.getFirstDeptId()));
+            item.put("secondDeptName", pf == null || pf.getSecondDeptId() == null
+                    ? null : deptNames.get(pf.getSecondDeptId()));
             result.add(item);
         }
         return ResponseEntity.ok(ResponseMessage.success(result));
+    }
+
+    /** 批量取这批简历里填的学号；本届没有学号字段时返回空表 */
+    private java.util.Map<Integer, String> studentIdsOf(Integer cycleId, java.util.Set<Integer> resumeIds) {
+        if (resumeIds.isEmpty()) {
+            return java.util.Map.of();
+        }
+        java.util.List<club.boyuan.official.persistence.entity.ResumeFieldDefinition> defs =
+                resumeFieldDefinitionMapper.selectList(
+                        new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<club.boyuan.official.persistence.entity.ResumeFieldDefinition>()
+                                .eq(club.boyuan.official.persistence.entity.ResumeFieldDefinition::getCycleId, cycleId));
+        Integer fieldId = defs.stream()
+                .filter(d -> d.getFieldLabel() != null && d.getFieldLabel().contains("学号"))
+                .map(club.boyuan.official.persistence.entity.ResumeFieldDefinition::getFieldId)
+                .findFirst().orElse(null);
+        if (fieldId == null) {
+            return java.util.Map.of();
+        }
+        java.util.Map<Integer, String> out = new java.util.HashMap<>();
+        for (club.boyuan.official.persistence.entity.ResumeFieldValue v : resumeFieldValueMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<club.boyuan.official.persistence.entity.ResumeFieldValue>()
+                        .in(club.boyuan.official.persistence.entity.ResumeFieldValue::getResumeId, resumeIds)
+                        .eq(club.boyuan.official.persistence.entity.ResumeFieldValue::getFieldId, fieldId))) {
+            if (v.getFieldValue() != null && !v.getFieldValue().isBlank()) {
+                out.put(v.getResumeId(), v.getFieldValue());
+            }
+        }
+        return out;
     }
 
     /**
