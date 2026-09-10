@@ -44,6 +44,7 @@ public class SessionAssignmentController {
     private final club.boyuan.official.persistence.mapper.ResumeFieldValueMapper resumeFieldValueMapper;
     private final club.boyuan.official.persistence.mapper.InterviewSessionMapper interviewSessionMapper;
     private final club.boyuan.official.persistence.mapper.InterviewPreferenceMapper interviewPreferenceMapper;
+    private final club.boyuan.official.persistence.mapper.InterviewNotificationLogMapper notificationLogMapper;
 
     /**
      * 查询某周期的已分配名单（可按场次过滤），按面试时间排序。
@@ -103,6 +104,27 @@ public class SessionAssignmentController {
         // 学号在简历字段里，不在 user 上（user.username 多数是学号但早期账号是拼音）
         java.util.Map<Integer, String> studentIds = studentIdsOf(cycleId, resumeIds);
 
+        /*
+         * 三类面试通知各自发到没发到。
+         *
+         * 原来这一列读的是 interview_schedule.notif_status，而那个字段只在发送
+         * 「面试安排通知」时才置 1，别的通知发出去它一动不动——列名叫「通知」
+         * 却只代表一类，用户发完初筛通知回头看名单，看到的还是「未通知」。
+         * 改为直接问通知日志，它才是发送的真实记录。
+         */
+        java.util.Set<Integer> arrangedSent = sentSchedules("BOOKING_SUCCESS", scheduleIdsOf(schedules));
+        java.util.Set<Integer> eveSent = sentSchedules("EVE_REMINDER", scheduleIdsOf(schedules));
+        java.util.Set<Integer> daySent = sentSchedules("DAY_REMINDER", scheduleIdsOf(schedules));
+
+        // 简历状态：初筛未通过的人不该还占着场次，名单上要标出来
+        java.util.Map<Integer, Integer> resumeStatus = resumeIds.isEmpty()
+                ? java.util.Map.of()
+                : resumeMapper.selectBatchIds(resumeIds).stream()
+                        .filter(r -> r.getStatus() != null)
+                        .collect(java.util.stream.Collectors.toMap(
+                                club.boyuan.official.persistence.entity.Resume::getResumeId,
+                                club.boyuan.official.persistence.entity.Resume::getStatus, (a, b) -> a));
+
         java.util.List<java.util.Map<String, Object>> result = new java.util.ArrayList<>();
         for (club.boyuan.official.persistence.entity.InterviewSchedule sc : schedules) {
             java.util.Map<String, Object> item = new java.util.LinkedHashMap<>();
@@ -131,9 +153,36 @@ public class SessionAssignmentController {
                     ? null : deptNames.get(pf.getFirstDeptId()));
             item.put("secondDeptName", pf == null || pf.getSecondDeptId() == null
                     ? null : deptNames.get(pf.getSecondDeptId()));
+            item.put("notifiedArranged", arrangedSent.contains(sc.getScheduleId()));
+            item.put("notifiedEve", eveSent.contains(sc.getScheduleId()));
+            item.put("notifiedDay", daySent.contains(sc.getScheduleId()));
+            item.put("resumeStatus", sc.getResumeId() == null ? null : resumeStatus.get(sc.getResumeId()));
             result.add(item);
         }
         return ResponseEntity.ok(ResponseMessage.success(result));
+    }
+
+    private static java.util.Set<Integer> scheduleIdsOf(
+            java.util.List<club.boyuan.official.persistence.entity.InterviewSchedule> schedules) {
+        return schedules.stream()
+                .map(club.boyuan.official.persistence.entity.InterviewSchedule::getScheduleId)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+    }
+
+    /** 某类通知实际发到了哪些安排上 */
+    private java.util.Set<Integer> sentSchedules(String type, java.util.Set<Integer> scheduleIds) {
+        if (scheduleIds.isEmpty()) {
+            return java.util.Set.of();
+        }
+        return notificationLogMapper.selectList(
+                        new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<club.boyuan.official.persistence.entity.InterviewNotificationLog>()
+                                .eq(club.boyuan.official.persistence.entity.InterviewNotificationLog::getNotificationType, type)
+                                .in(club.boyuan.official.persistence.entity.InterviewNotificationLog::getScheduleId, scheduleIds))
+                .stream()
+                .map(club.boyuan.official.persistence.entity.InterviewNotificationLog::getScheduleId)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
     }
 
     /** 批量取这批简历里填的学号；本届没有学号字段时返回空表 */
@@ -162,6 +211,71 @@ public class SessionAssignmentController {
             }
         }
         return out;
+    }
+
+    /**
+     * 取消若干条面试安排（管理端）。
+     *
+     * 用途是把初筛之后才被刷掉的人从场次里摘出来：他们的安排是初筛之前排的，
+     * 初筛不会回收，于是面试官白等一个不会来的人，场次名额也一直被占着。
+     *
+     * 取消 = 安排置为已取消 + 清空面试时间 + 归还场次名额。
+     * 名额要减回去，否则「已占 5/5」是假的，后面的人再也排不进这个场次。
+     */
+    @PostMapping("/cycles/{cycleId}/schedules/cancel")
+    public ResponseEntity<ResponseMessage<java.util.Map<String, Object>>> cancelSchedules(
+            @PathVariable Integer cycleId,
+            @RequestBody java.util.Map<String, Object> body) {
+        java.util.List<Integer> ids = new java.util.ArrayList<>();
+        if (body.get("scheduleIds") instanceof java.util.List<?> list) {
+            for (Object o : list) {
+                if (o == null) continue;
+                try {
+                    ids.add(Integer.valueOf(String.valueOf(o)));
+                } catch (NumberFormatException ignored) {
+                    // 单个脏值不该让整批失败
+                }
+            }
+        }
+        if (ids.isEmpty()) {
+            throw new club.boyuan.official.common.exception.BusinessException(
+                    club.boyuan.official.common.exception.BusinessExceptionEnum.MISSING_REQUIRED_FIELD,
+                    "请提供 scheduleIds");
+        }
+
+        // 归属校验：只认属于本周期且仍生效的安排，免得请求里夹带别届的 id
+        java.util.List<club.boyuan.official.persistence.entity.InterviewSchedule> targets =
+                interviewScheduleMapper.selectList(
+                        new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<club.boyuan.official.persistence.entity.InterviewSchedule>()
+                                .eq(club.boyuan.official.persistence.entity.InterviewSchedule::getCycleId, cycleId)
+                                .eq(club.boyuan.official.persistence.entity.InterviewSchedule::getStatus, 1)
+                                .in(club.boyuan.official.persistence.entity.InterviewSchedule::getScheduleId, ids));
+
+        java.util.Map<Integer, Long> freedPerSession = new java.util.HashMap<>();
+        for (club.boyuan.official.persistence.entity.InterviewSchedule sc : targets) {
+            if (sc.getSessionId() != null) {
+                freedPerSession.merge(sc.getSessionId(), 1L, Long::sum);
+            }
+            sc.setStatus(2).setInterviewTime(null).setSyncStatus(0).setNotifStatus(0);
+            interviewScheduleMapper.updateById(sc);
+        }
+        for (java.util.Map.Entry<Integer, Long> e : freedPerSession.entrySet()) {
+            club.boyuan.official.persistence.entity.InterviewSession sess =
+                    interviewSessionMapper.selectById(e.getKey());
+            if (sess == null) continue;
+            int occupied = sess.getCurrentOccupied() == null ? 0 : sess.getCurrentOccupied();
+            // 不减到负数：历史数据里 current_occupied 可能本来就对不上
+            interviewSessionMapper.updateById(new club.boyuan.official.persistence.entity.InterviewSession()
+                    .setSessionId(sess.getSessionId())
+                    .setCurrentOccupied(Math.max(0, occupied - e.getValue().intValue())));
+        }
+
+        java.util.List<Integer> done = targets.stream()
+                .map(club.boyuan.official.persistence.entity.InterviewSchedule::getScheduleId).toList();
+        java.util.List<Integer> skipped = ids.stream().filter(i -> !done.contains(i)).toList();
+        log.info("管理员取消面试安排，cycleId={}，取消 {} 条，跳过 {} 条", cycleId, done.size(), skipped.size());
+        return ResponseEntity.ok(ResponseMessage.success(
+                java.util.Map.of("cancelled", done.size(), "skipped", skipped)));
     }
 
     /**
