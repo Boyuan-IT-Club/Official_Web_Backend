@@ -10256,6 +10256,63 @@ paths:
               schema:
                 $ref: '#/components/schemas/NotificationCenterResponse'
           headers: {}
+  /api/interview/admin/cycles/{cycleId}/schedules/cancel:
+    post:
+      summary: 取消面试安排
+      deprecated: false
+      description: >-
+        批量取消面试安排：置为已取消、清空面试时间、归还场次名额。
+        主要用于把初筛之后才被刷掉的人从场次里摘出来——他们的安排是初筛之前
+        排的，初筛不会回收，面试官会白等，名额也一直被占着。
+        只处理属于本周期且仍生效的安排，其余计入 skipped。
+      tags:
+      - 面试管理模块
+      parameters:
+      - name: cycleId
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scheduleIds:
+                  type: array
+                  items:
+                    type: integer
+              required:
+              - scheduleIds
+      responses:
+        '200':
+          description: 已取消
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: 操作成功
+                  data:
+                    type: object
+                    properties:
+                      cancelled:
+                        type: integer
+                      skipped:
+                        type: array
+                        items:
+                          type: integer
+                required:
+                - code
+                - message
+                - data
+          headers: {}
   /api/interview/admin/cycles/{cycleId}/assign:
     post:
       summary: 一键场次分配（管理员）
@@ -12269,6 +12326,19 @@ components:
           type: string
           nullable: true
           description: 第二志愿部门
+        notifiedArranged:
+          type: boolean
+          description: 面试安排通知已发出（查通知日志得出，不是 notifStatus）
+        notifiedEve:
+          type: boolean
+          description: 面试前一天提醒已发出
+        notifiedDay:
+          type: boolean
+          description: 面试当天提醒已发出
+        resumeStatus:
+          type: integer
+          nullable: true
+          description: 简历状态；5 = 未通过初筛（这类人不该还占着场次）
     NotificationCenterResponse:
       type: object
       properties:

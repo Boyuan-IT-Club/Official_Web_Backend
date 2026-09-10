@@ -45,6 +45,8 @@ import java.time.LocalTime;
 public class InterviewNotificationServiceImpl implements InterviewNotificationService {
 
     private static final int SCHEDULE_STATUS_ACTIVE = 1;
+    /** 简历状态：未通过初筛（与 ResumeServiceImpl.STATUS_SCREEN_REJECTED 一致） */
+    private static final int RESUME_STATUS_SCREEN_REJECTED = 5;
     private static final int DECISION_PASSED = 1;
     private static final int DECISION_REJECTED = 2;
 
@@ -157,6 +159,23 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
         }
 
         Resume resume = resumeService.getResumeById(schedule.getResumeId());
+        /*
+         * 初筛未通过的人不再收面试相关邮件。
+         *
+         * 面试安排是初筛之前排的，初筛后那条安排还在（status 仍是 1），
+         * 而提醒的定时任务只看「面试时间 + 安排生效」，不看简历状态——
+         * 于是一个刚收到「未通过初筛」的同学，当天还会再收到一封
+         * 「明天来面试」。线上就差点这么发出去（丁华烨已初筛未通过，
+         * 却仍占着次日 09:05 的场次）。
+         *
+         * 拦在这里而不是拦在定时任务里：手动补发走的也是这条路径，
+         * 两边都要拦，放在投递前的统一检查点只写一次。
+         */
+        if (resume != null && Integer.valueOf(RESUME_STATUS_SCREEN_REJECTED).equals(resume.getStatus())) {
+            log.info("简历已初筛未通过，跳过面试类通知 type={}, scheduleId={}, resumeId={}",
+                    type, scheduleId, resume.getResumeId());
+            return;
+        }
         String email = resume != null ? resumeDataService.getResumeEmail(resume) : null;
         String name = resume != null ? resumeDataService.getResumeName(resume) : null;
         if (!StringUtils.hasText(email)) {
