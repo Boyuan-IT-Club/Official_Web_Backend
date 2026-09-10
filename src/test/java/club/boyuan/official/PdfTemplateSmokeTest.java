@@ -67,5 +67,50 @@ class PdfTemplateSmokeTest {
         Files.createDirectories(out.getParent());
         Files.write(out, pdf);
         System.out.println("PDF 已生成：" + out.toAbsolutePath() + "  " + pdf.length + " bytes");
+
+        // 带照片再走一遍：圆形头像是裁剪路径画的，只有渲染出来才看得出
+        // 有没有被拉变形、有没有盖住姓名
+        byte[] withPhoto = PdfExportUtil.exportResumeToPdf(dto, portraitJpeg());
+        assertTrue(withPhoto.length > pdf.length, "带照片的 PDF 反而更小，照片多半没画进去");
+        Path out2 = Path.of(System.getProperty("pdf.photo.out", "target/resume-sample-photo.pdf"));
+        Files.write(out2, withPhoto);
+        System.out.println("PDF（含头像）已生成：" + out2.toAbsolutePath() + "  " + withPhoto.length + " bytes");
+    }
+
+    @Test
+    void 生成一份空白报名表模板PDF() throws Exception {
+        List<PdfExportUtil.TemplateField> fields = List.of(
+                new PdfExportUtil.TemplateField("姓名", "input", true, List.of(), "请填写真实姓名"),
+                new PdfExportUtil.TemplateField("学号", "input", true, List.of(), null),
+                new PdfExportUtil.TemplateField("年级", "select", true, List.of("大一", "大二", "大三"), null),
+                new PdfExportUtil.TemplateField("意愿加入部门", "checkbox", true,
+                        List.of("技术部", "项目部", "媒体部", "综合部"), "最多选两个"),
+                new PdfExportUtil.TemplateField("个人简介", "textarea", true, List.of(),
+                        "特长、兴趣、经历，以及为什么想加入"),
+                new PdfExportUtil.TemplateField("项目经验", "textarea", false, List.of(), null));
+
+        byte[] pdf = PdfExportUtil.exportBlankTemplateToPdf("2026 秋季招新", fields);
+        assertTrue(pdf.length > 3000, "模板 PDF 明显过小：" + pdf.length);
+        Path out = Path.of(System.getProperty("tpl.out", "target/resume-template-sample.pdf"));
+        Files.createDirectories(out.getParent());
+        Files.write(out, pdf);
+        System.out.println("模板 PDF 已生成：" + out.toAbsolutePath() + "  " + pdf.length + " bytes");
+    }
+
+    /** 造一张竖构图的假证件照：验证圆形裁剪是「铺满后裁」而不是把人脸压扁 */
+    private static byte[] portraitJpeg() throws Exception {
+        int w = 240, h = 320;
+        java.awt.image.BufferedImage img =
+                new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        java.awt.Graphics2D g = img.createGraphics();
+        g.setColor(new java.awt.Color(226, 232, 240));
+        g.fillRect(0, 0, w, h);
+        g.setColor(new java.awt.Color(120, 144, 180));
+        g.fillOval(w / 2 - 46, 54, 92, 92);              // 头
+        g.fillRoundRect(w / 2 - 74, 168, 148, 150, 40, 40); // 肩
+        g.dispose();
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(img, "jpg", bos);
+        return bos.toByteArray();
     }
 }

@@ -96,7 +96,34 @@ public class PdfExportUtil {
             
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
-            Document document = new Document(PageSize.A4, 48, 48, 44, 52);
+            // 字段与照片要在建 Document 之前就取好：首页上边距取决于有没有照片
+            // （没照片时页眉整体上移一截），而边距只能在 open() 前设定。
+            java.util.Map<String, String> byKey = new java.util.LinkedHashMap<>();
+            java.util.List<SimpleResumeFieldDTO> fields = resumeDTO.getSimpleFields() != null
+                    ? resumeDTO.getSimpleFields() : new ArrayList<>();
+            // 管理员在字段配置里改过的标签，导出要跟着走 ——
+            // 否则表单显示「代码仓库」而 PDF 里还写着 GitHub，
+            // 同一份简历「表里填的」和「导出的」对不上。
+            java.util.Map<String, String> labelOf = new java.util.LinkedHashMap<>();
+            for (SimpleResumeFieldDTO f : fields) {
+                if (f.getFieldKey() != null && f.getFieldLabel() != null
+                        && !f.getFieldLabel().trim().isEmpty()) {
+                    labelOf.put(f.getFieldKey(), f.getFieldLabel().trim());
+                }
+            }
+            Image photoImage = createImageFromBytes(photoBytes);
+            for (SimpleResumeFieldDTO f : fields) {
+                if (f.getFieldKey() != null) byKey.put(f.getFieldKey(), f.getFieldValue());
+                if (photoImage == null && isBase64Image(f.getFieldValue())) {
+                    photoImage = createImageFromBase64(f.getFieldValue());
+                }
+            }
+            boolean hasPhoto = photoImage != null;
+
+            // 首页上边距要给弧形页眉与头像让位；第二页起由 FooterPageEvent 收回，
+            // 否则后面每页都白掉两指宽
+            Document document = new Document(PageSize.A4, 48, 48,
+                    hasPhoto ? HEAD_BODY_TOP_WITH_PHOTO : HEAD_BODY_TOP_NO_PHOTO, 52);
             PdfWriter writer = PdfWriter.getInstance(document, baos);
             // 页码画在每页底部：项目经验写得长时简历会有两三页，没页码的多页文档在
             // 打印出来传阅时很容易乱序
@@ -117,75 +144,25 @@ public class PdfExportUtil {
             BaseColor chipBg = new BaseColor(234, 239, 247);
 
             try {
-                java.util.Map<String, String> byKey = new java.util.LinkedHashMap<>();
-                java.util.List<SimpleResumeFieldDTO> fields = resumeDTO.getSimpleFields() != null
-                        ? resumeDTO.getSimpleFields() : new ArrayList<>();
-                Image photoImage = createImageFromBytes(photoBytes);
-                // 管理员在字段配置里改过的标签，导出要跟着走 ——
-                // 否则表单显示「代码仓库」而 PDF 里还写着 GitHub，
-                // 同一份简历「表里填的」和「导出的」对不上。
-                java.util.Map<String, String> labelOf = new java.util.LinkedHashMap<>();
-                for (SimpleResumeFieldDTO f : fields) {
-                    if (f.getFieldKey() != null && f.getFieldLabel() != null
-                            && !f.getFieldLabel().trim().isEmpty()) {
-                        labelOf.put(f.getFieldKey(), f.getFieldLabel().trim());
-                    }
-                }
-                for (SimpleResumeFieldDTO f : fields) {
-                    if (f.getFieldKey() != null) byKey.put(f.getFieldKey(), f.getFieldValue());
-                    if (photoImage == null && isBase64Image(f.getFieldValue())) {
-                        photoImage = createImageFromBase64(f.getFieldValue());
-                    }
-                }
-
                 String name = firstNonBlank(byKey.get("name"), "未填写姓名");
 
-                // ── 页眉：大号姓名 + 品牌色副标题 + 品牌色细线 ──
-                // 原先是整块深蓝横幅，打印/黑白复印时一团黑；改为留白页眉更耐看，
-                // 与前端 Word 导出（exportResume.ts）保持同一版式语言
-                PdfPTable head = new PdfPTable(photoImage != null ? new float[]{4f, 1f} : new float[]{1f});
-                head.setWidthPercentage(100);
-                PdfPCell hc = new PdfPCell();
-                hc.setBorder(Rectangle.NO_BORDER);
-                hc.setPaddingLeft(0);
-                Paragraph bt = new Paragraph(name, getFont(24, Font.BOLD, new BaseColor(35, 40, 48)));
-                Paragraph bs = new Paragraph("博远信息技术社 · 招新申请简历", getFont(10, Font.NORMAL, accent));
-                bs.setSpacingBefore(5);
-                // 社徽跟在副标题这一行的行首，和文字同高（12pt），
-                // 不单独占一行——简历的主角是姓名，logo 只是署名
-                Image mark = loadBrandLogo();
-                if (mark != null) {
-                    mark.scaleToFit(14f, 14f);
-                    Chunk markChunk = new Chunk(mark, 0, -3f, true);
-                    bs.add(0, new Chunk("  "));
-                    bs.add(0, markChunk);
+                // ── 页眉：弧形色带 + 居中圆形头像 + 姓名与联系方式 ──
+                // 之前是留白页眉（大号姓名左对齐 + 一条品牌色横线）。改成居中弧形版
+                // 是社团选定的模板样式；居中排布让没有照片的简历也不显得左重右轻。
+                drawCurvedHeader(writer, document);
+                float pageTop = document.getPageSize().getHeight();
+                float nameY = pageTop - (hasPhoto ? 162f : 118f);
+                if (hasPhoto) {
+                    drawCirclePhoto(writer, document, photoImage, pageTop - HEADER_BAND - 4f, 34f);
                 }
-                hc.addElement(bt);
-                hc.addElement(bs);
-                head.addCell(hc);
-                if (photoImage != null) {
-                    PdfPCell hp = new PdfPCell(photoImage, true);
-                    hp.setBorder(Rectangle.BOX);
-                    hp.setBorderColor(lightLine);
-                    hp.setBorderWidth(0.8f);
-                    hp.setHorizontalAlignment(Element.ALIGN_RIGHT);
-                    hp.setPadding(3f);
-                    head.addCell(hp);
-                }
-                head.setSpacingAfter(6);
-                document.add(head);
-
-                // 品牌色分隔线
-                PdfPTable rule = new PdfPTable(1);
-                rule.setWidthPercentage(100);
-                PdfPCell rc = new PdfPCell();
-                rc.setBorder(Rectangle.BOTTOM);
-                rc.setBorderColorBottom(accent);
-                rc.setBorderWidthBottom(1.6f);
-                rc.setFixedHeight(2f);
-                rule.addCell(rc);
-                rule.setSpacingAfter(12);
-                document.add(rule);
+                drawCenteredText(writer, document, name,
+                        getFont(21, Font.BOLD, new BaseColor(28, 33, 42)), nameY);
+                // 联系方式并成一行：两三项分行排会把页眉撑得很松
+                String contact = java.util.stream.Stream.of(byKey.get("phone"), byKey.get("email"))
+                        .filter(v -> v != null && !v.isBlank())
+                        .collect(java.util.stream.Collectors.joining("   |   "));
+                drawCenteredText(writer, document, contact,
+                        getFont(9, Font.NORMAL, subText), nameY - 19f);
 
                 // ── 基本信息（双列，空字段也列出标签——空草稿导出不再是"什么都没有"）──
                 // 顺序与网页、Word 导出一致（学号 → 性别 → 年级 → 专业 → 邮箱 →
@@ -196,8 +173,8 @@ public class PdfExportUtil {
                 addBasic(basics, labelOf.getOrDefault("gender", "性别"), byKey.get("gender"));
                 addBasic(basics, labelOf.getOrDefault("grade", "年级"), byKey.get("grade"));
                 addBasic(basics, labelOf.getOrDefault("major", "专业"), byKey.get("major"));
-                addBasic(basics, labelOf.getOrDefault("email", "邮箱"), byKey.get("email"));
-                addBasic(basics, labelOf.getOrDefault("phone", "手机"), byKey.get("phone"));
+                // 邮箱与手机不进这张网格：页眉里已经居中排过一遍，重复列出既占版面
+                // 又让人怀疑是不是两处不一致
                 addBasic(basics, labelOf.getOrDefault("github", "GitHub"), byKey.get("github"));
 
                 addBasicGrid(document, basics, labelFont, valueFont);
@@ -313,7 +290,8 @@ public class PdfExportUtil {
         try {
             getChineseBaseFont();
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            Document document = new Document(PageSize.A4, 48, 48, 44, 52);
+            // 首页上边距给弧形页眉留位，与简历导出同一套（第二页起由页脚事件收回）
+            Document document = new Document(PageSize.A4, 48, 48, 176, 52);
             PdfWriter writer = PdfWriter.getInstance(document, baos);
             writer.setPageEvent(new FooterPageEvent());
             document.open();
@@ -327,36 +305,13 @@ public class PdfExportUtil {
             String title = (cycleName == null || cycleName.isBlank()) ? "招新报名表" : cycleName.trim();
 
             try {
-                // ── 页眉：与简历导出同构，只是主标题换成周期名 ──
-                PdfPTable head = new PdfPTable(1);
-                head.setWidthPercentage(100);
-                PdfPCell hc = new PdfPCell();
-                hc.setBorder(Rectangle.NO_BORDER);
-                hc.setPaddingLeft(0);
-                hc.addElement(new Paragraph(title, getFont(22, Font.BOLD, new BaseColor(35, 40, 48))));
-                Paragraph sub = new Paragraph("博远信息技术社 · 招新报名表（空白模板）", getFont(10, Font.NORMAL, accent));
-                sub.setSpacingBefore(5);
-                Image mark = loadBrandLogo();
-                if (mark != null) {
-                    mark.scaleToFit(14f, 14f);
-                    sub.add(0, new Chunk("  "));
-                    sub.add(0, new Chunk(mark, 0, -3f, true));
-                }
-                hc.addElement(sub);
-                head.addCell(hc);
-                head.setSpacingAfter(6);
-                document.add(head);
-
-                PdfPTable rule = new PdfPTable(1);
-                rule.setWidthPercentage(100);
-                PdfPCell rc = new PdfPCell();
-                rc.setBorder(Rectangle.BOTTOM);
-                rc.setBorderColorBottom(accent);
-                rc.setBorderWidthBottom(1.6f);
-                rc.setFixedHeight(2f);
-                rule.addCell(rc);
-                rule.setSpacingAfter(10);
-                document.add(rule);
+                // ── 页眉：与简历导出同一套弧形色带，只是没有头像、主标题换成周期名 ──
+                drawCurvedHeader(writer, document);
+                float pageTop = document.getPageSize().getHeight();
+                drawCenteredText(writer, document, title,
+                        getFont(21, Font.BOLD, new BaseColor(28, 33, 42)), pageTop - 132f);
+                drawCenteredText(writer, document, "博远信息技术社 · 招新报名表（空白模板）",
+                        getFont(9, Font.NORMAL, subText), pageTop - 150f);
 
                 Paragraph lead = new Paragraph(
                         "本表仅供提前准备内容，不能代替在线报名；招募开放后请到官网填写并提交。带 * 的为必填项。",
@@ -429,6 +384,106 @@ public class PdfExportUtil {
         box.addCell(cell);
         box.setSpacingAfter(2f);
         return box;
+    }
+
+    // ── 弧形页眉 ────────────────────────────────────────────────────────────
+    // 社团选定的模板样式：顶部一条渐变蓝色带，底边是一道向下鼓的弧；
+    // 圆形头像居中压在弧上，姓名与联系方式居中排在弧下。
+    //
+    // 这几样都得手画：iText 的 Image 是矩形，圆头像要靠裁剪路径；
+    // 弧形色块也没有现成元素，用贝塞尔曲线围出路径再填渐变。
+
+    /** 色带高度（不含中间鼓出的部分） */
+    private static final float HEADER_BAND = 96f;
+    /** 弧在正中额外向下鼓出多少 */
+    private static final float HEADER_DIP = 24f;
+    /**
+     * 首页正文的上边距。两档：有照片时头像压在弧上、姓名排在头像下方，
+     * 要多让出一个头像的高度；没照片时姓名直接跟在弧下，页眉整体上移。
+     */
+    private static final float HEAD_BODY_TOP_WITH_PHOTO = 198f;
+    private static final float HEAD_BODY_TOP_NO_PHOTO = 154f;
+    private static final BaseColor HEADER_FROM = new BaseColor(37, 99, 205);
+    private static final BaseColor HEADER_TO = new BaseColor(122, 162, 232);
+
+    /**
+     * 画顶部弧形色带。
+     *
+     * 画在 DirectContentUnder：正文与头像都要压在它上面，
+     * 画到普通层会盖住后加的元素。
+     */
+    private static void drawCurvedHeader(PdfWriter writer, Document document) {
+        try {
+            com.itextpdf.text.pdf.PdfContentByte cb = writer.getDirectContentUnder();
+            float w = document.getPageSize().getWidth();
+            float top = document.getPageSize().getHeight();
+            float base = top - HEADER_BAND;
+
+            cb.saveState();
+            cb.moveTo(0, top);
+            cb.lineTo(w, top);
+            cb.lineTo(w, base);
+            // 控制点取在两侧 28%/72% 处：太靠中间弧会显得尖，太靠边又几乎是直线
+            cb.curveTo(w * 0.72f, base - HEADER_DIP, w * 0.28f, base - HEADER_DIP, 0, base);
+            cb.closePath();
+            cb.clip();
+            cb.newPath();
+            com.itextpdf.text.pdf.PdfShading shading = com.itextpdf.text.pdf.PdfShading.simpleAxial(
+                    writer, 0, top, w, base - HEADER_DIP, HEADER_FROM, HEADER_TO);
+            cb.paintShading(shading);
+            cb.restoreState();
+        } catch (Exception e) {
+            // 页眉画不出来不该让整份导出失败，正文才是主体
+            log.warn("弧形页眉绘制失败，改为无页眉输出", e);
+        }
+    }
+
+    /**
+     * 画居中的圆形头像（带白色描边）。
+     *
+     * 按「铺满」缩放再裁剪，不是把图拉成正方形——证件照多是竖构图，
+     * 直接拉伸会把脸压扁。
+     */
+    private static void drawCirclePhoto(PdfWriter writer, Document document, Image photo,
+                                        float centerY, float radius) {
+        if (photo == null) {
+            // 没照片就整个不画：只画白色描边会在蓝色带上挖出一个白圆盘，
+            // 看着像渲染出错（第一版就是这样，样张一眼看出来）
+            return;
+        }
+        com.itextpdf.text.pdf.PdfContentByte cb = writer.getDirectContent();
+        float cx = document.getPageSize().getWidth() / 2f;
+        try {
+            cb.saveState();
+            cb.setColorFill(BaseColor.WHITE);
+            cb.circle(cx, centerY, radius + 3.5f);
+            cb.fill();
+            cb.restoreState();
+
+            float scale = Math.max(2 * radius / photo.getWidth(), 2 * radius / photo.getHeight());
+            float dw = photo.getWidth() * scale;
+            float dh = photo.getHeight() * scale;
+            cb.saveState();
+            cb.circle(cx, centerY, radius);
+            cb.clip();
+            cb.newPath();
+            photo.scaleAbsolute(dw, dh);
+            photo.setAbsolutePosition(cx - dw / 2f, centerY - dh / 2f);
+            cb.addImage(photo);
+            cb.restoreState();
+        } catch (Exception e) {
+            log.warn("圆形头像绘制失败，跳过头像", e);
+        }
+    }
+
+    /** 页眉里居中的一行字（姓名、联系方式）。用 ColumnText 才能绝对定位 */
+    private static void drawCenteredText(PdfWriter writer, Document document, String text, Font font, float y) {
+        if (text == null || text.isBlank()) {
+            return;
+        }
+        com.itextpdf.text.pdf.ColumnText.showTextAligned(
+                writer.getDirectContent(), Element.ALIGN_CENTER,
+                new Phrase(text, font), document.getPageSize().getWidth() / 2f, y, 0);
     }
 
     private static String firstNonBlank(String... values) {
@@ -512,10 +567,11 @@ public class PdfExportUtil {
     }
 
     /**
-     * 小节：标题左侧加一段品牌色竖条，正文缩进对齐到标题。
+     * 小节：标题居中，下面压一条通栏细线。
      *
-     * 原先是「彩色标题 + 一条通栏细线」，通栏线会把版面切成一段一段，
-     * 读起来像表单而不像简历；竖条只标记起点，段落之间靠间距分隔，更接近排版物。
+     * 版式几经反复：最早是「彩色标题 + 通栏线」，中间改过「左侧品牌色竖条」，
+     * 现在回到居中带线——这一版是照着社团选定的模板样式做的，
+     * 居中标题把整页的视觉中轴立起来，配合居中的页眉与头像才成套。
      */
     private static void addSection(Document document, String title, String content,
                                    Font sectionFont, Font bodyFont, BaseColor barColor) throws DocumentException {
@@ -602,23 +658,24 @@ public class PdfExportUtil {
     /** 小节标题：左侧品牌色竖条 + 标题，正文与之左对齐 */
     private static void addSectionHeader(Document document, String title,
                                          Font sectionFont, BaseColor barColor) throws DocumentException {
-        PdfPTable head = new PdfPTable(new float[]{0.16f, 20f});
-        head.setWidthPercentage(100);
-        head.setSpacingBefore(16f);
-        head.setSpacingAfter(6f);
+        Paragraph t = new Paragraph(title, sectionFont);
+        t.setAlignment(Element.ALIGN_CENTER);
+        t.setSpacingBefore(15f);
+        t.setSpacingAfter(3f);
+        document.add(t);
 
-        PdfPCell bar = new PdfPCell();
-        bar.setBackgroundColor(barColor);
-        bar.setBorder(Rectangle.NO_BORDER);
-        bar.setFixedHeight(13f);
-        head.addCell(bar);
-
-        PdfPCell titleCell = new PdfPCell(new Paragraph(title, sectionFont));
-        titleCell.setBorder(Rectangle.NO_BORDER);
-        titleCell.setPaddingLeft(7f);
-        titleCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
-        head.addCell(titleCell);
-        document.add(head);
+        // 线用单元格的下边框画：Chunk.UNDERLINE 画出来的线跟着文字宽度走，
+        // 通栏要的是整幅宽度
+        PdfPTable rule = new PdfPTable(1);
+        rule.setWidthPercentage(100);
+        PdfPCell c = new PdfPCell();
+        c.setBorder(Rectangle.BOTTOM);
+        c.setBorderColorBottom(barColor);
+        c.setBorderWidthBottom(0.8f);
+        c.setFixedHeight(1f);
+        rule.addCell(c);
+        rule.setSpacingAfter(7f);
+        document.add(rule);
     }
 
     /**
@@ -630,6 +687,11 @@ public class PdfExportUtil {
     private static class FooterPageEvent extends com.itextpdf.text.pdf.PdfPageEventHelper {
         @Override
         public void onEndPage(PdfWriter writer, Document document) {
+            // 首页的上边距是给弧形页眉与头像留的，第二页起收回正常值。
+            // setMargins 对「下一页」生效，所以放在第一页结束时调。
+            if (writer.getPageNumber() == 1) {
+                document.setMargins(48, 48, 44, 52);
+            }
             try {
                 Font f = getFont(8, Font.NORMAL, new BaseColor(150, 158, 170));
                 com.itextpdf.text.pdf.PdfContentByte cb = writer.getDirectContent();
