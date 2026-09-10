@@ -33,6 +33,8 @@ public class NotificationCenterService {
     private final InterviewScheduleMapper scheduleMapper;
     private final InterviewResultMapper resultMapper;
     private final InterviewNotificationLogMapper notificationLogMapper;
+    private final InterviewSessionMapper sessionMapper;
+    private final DepartmentMapper departmentMapper;
 
     public NotificationCenterDTO overview(Integer cycleId) {
         List<Resume> rejected = resumeMapper.selectList(new LambdaQueryWrapper<Resume>()
@@ -61,15 +63,17 @@ public class NotificationCenterService {
                 .ne(InterviewResult::getDecision, 0));
         long resultSent = results.stream().filter(r -> r.getNotifiedAt() != null).count();
 
+        Set<Integer> eveSent = sentScheduleIds(InterviewNotificationType.EVE_REMINDER, scheduleIds);
+        Set<Integer> daySent = sentScheduleIds(InterviewNotificationType.DAY_REMINDER, scheduleIds);
+
         return NotificationCenterDTO.builder()
                 .resumeRejected(bucket(screenedOut.size(), rejectedSent))
                 .interviewArranged(bucket(schedules.size(), arrangedSent))
-                .eveReminder(bucket(schedules.size(),
-                        countSentSchedules(InterviewNotificationType.EVE_REMINDER, scheduleIds)))
-                .dayReminder(bucket(schedules.size(),
-                        countSentSchedules(InterviewNotificationType.DAY_REMINDER, scheduleIds)))
+                .eveReminder(bucket(schedules.size(), eveSent.size()))
+                .dayReminder(bucket(schedules.size(), daySent.size()))
                 .result(bucket(results.size(), resultSent))
                 .screenedOut(screenedOut)
+                .schedules(buildScheduleNotices(cycleId, schedules, eveSent, daySent))
                 .build();
     }
 
@@ -78,18 +82,94 @@ public class NotificationCenterService {
                 .total(total).sent(sent).pending(Math.max(0, total - sent)).build();
     }
 
-    /** 某类通知在本届安排里覆盖到多少人 */
-    private long countSentSchedules(InterviewNotificationType type, Set<Integer> scheduleIds) {
+    /** 某类通知实际发到了哪些安排上。回集合而不是计数：名单要逐人标已发/未发 */
+    private Set<Integer> sentScheduleIds(InterviewNotificationType type, Set<Integer> scheduleIds) {
         if (scheduleIds.isEmpty()) {
-            return 0;
+            return Set.of();
         }
         return notificationLogMapper.selectList(new LambdaQueryWrapper<InterviewNotificationLog>()
                         .eq(InterviewNotificationLog::getNotificationType, type.name())
                         .in(InterviewNotificationLog::getScheduleId, scheduleIds))
                 .stream()
                 .map(InterviewNotificationLog::getScheduleId)
-                .distinct()
-                .count();
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * 面试安排名单 + 三类通知逐人的发送状态。
+     *
+     * 姓名与学号从简历字段取，跟名单页同一套口径——user.username 多数是学号
+     * 但早期账号是姓名拼音，拿它当学号会骗人。
+     */
+    private List<NotificationCenterDTO.ScheduleNoticeItem> buildScheduleNotices(
+            Integer cycleId, List<InterviewSchedule> schedules,
+            Set<Integer> eveSent, Set<Integer> daySent) {
+        if (schedules.isEmpty()) {
+            return List.of();
+        }
+        List<Integer> resumeIds = schedules.stream()
+                .map(InterviewSchedule::getResumeId).filter(Objects::nonNull).distinct().toList();
+        List<Integer> userIds = schedules.stream()
+                .map(InterviewSchedule::getUserId).filter(Objects::nonNull).distinct().toList();
+        Map<Integer, User> users = userIds.isEmpty() ? Map.of()
+                : userMapper.selectBatchIds(userIds).stream()
+                        .collect(Collectors.toMap(User::getUserId, Function.identity(), (a, b) -> a));
+        Map<Integer, String> deptNames = departmentMapper.selectList(null).stream()
+                .collect(Collectors.toMap(Department::getDeptId, Department::getDeptName, (a, b) -> a));
+        Map<Integer, String> locations = schedules.stream()
+                .map(InterviewSchedule::getSessionId).filter(Objects::nonNull).distinct().toList().isEmpty()
+                ? Map.of()
+                : sessionMapper.selectBatchIds(schedules.stream()
+                        .map(InterviewSchedule::getSessionId).filter(Objects::nonNull).distinct().toList())
+                        .stream().collect(Collectors.toMap(
+                                InterviewSession::getSessionId, InterviewSession::getLocation, (a, b) -> a));
+        Map<Integer, String> names = fieldValues(cycleId, resumeIds, List.of("姓名"));
+        Map<Integer, String> studentIds = fieldValues(cycleId, resumeIds, STUDENT_ID_LABELS);
+
+        List<NotificationCenterDTO.ScheduleNoticeItem> out = new ArrayList<>();
+        for (InterviewSchedule sc : schedules) {
+            User u = sc.getUserId() == null ? null : users.get(sc.getUserId());
+            String name = names.get(sc.getResumeId());
+            out.add(NotificationCenterDTO.ScheduleNoticeItem.builder()
+                    .scheduleId(sc.getScheduleId())
+                    .userId(sc.getUserId())
+                    .name(name != null ? name : (u != null ? u.getName() : null))
+                    .studentId(studentIds.get(sc.getResumeId()))
+                    .interviewTime(sc.getInterviewTime())
+                    .deptName(sc.getDeptId() == null ? null : deptNames.get(sc.getDeptId()))
+                    .location(sc.getSessionId() == null ? null : locations.get(sc.getSessionId()))
+                    .arranged(Integer.valueOf(1).equals(sc.getNotifStatus()))
+                    .eve(eveSent.contains(sc.getScheduleId()))
+                    .day(daySent.contains(sc.getScheduleId()))
+                    .build());
+        }
+        out.sort(Comparator.comparing(
+                NotificationCenterDTO.ScheduleNoticeItem::getInterviewTime,
+                Comparator.nullsLast(Comparator.naturalOrder())));
+        return out;
+    }
+
+    /** 批量取某组简历里某个字段的值；本届没有这个字段时返回空表 */
+    private Map<Integer, String> fieldValues(Integer cycleId, List<Integer> resumeIds, List<String> labels) {
+        if (resumeIds.isEmpty()) {
+            return Map.of();
+        }
+        Integer fieldId = fieldIdOf(fieldDefinitionMapper.selectList(
+                new LambdaQueryWrapper<ResumeFieldDefinition>()
+                        .eq(ResumeFieldDefinition::getCycleId, cycleId)), labels);
+        if (fieldId == null) {
+            return Map.of();
+        }
+        Map<Integer, String> out = new HashMap<>();
+        for (ResumeFieldValue v : fieldValueMapper.selectList(new LambdaQueryWrapper<ResumeFieldValue>()
+                .in(ResumeFieldValue::getResumeId, resumeIds)
+                .eq(ResumeFieldValue::getFieldId, fieldId))) {
+            if (v.getFieldValue() != null && !v.getFieldValue().isBlank()) {
+                out.put(v.getResumeId(), v.getFieldValue());
+            }
+        }
+        return out;
     }
 
     /** 每份简历最近一次「初筛未通过」通知的时间。重发会留多条日志，取最新的 */

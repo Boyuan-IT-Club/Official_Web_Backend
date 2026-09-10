@@ -12224,6 +12224,11 @@ components:
               description: 初筛未通过名单
               items:
                 $ref: '#/components/schemas/ScreenedOutItem'
+            schedules:
+              type: array
+              description: 面试安排名单，附三类通知各自发没发
+              items:
+                $ref: '#/components/schemas/ScheduleNoticeItem'
       required:
       - code
       - message
@@ -12242,6 +12247,40 @@ components:
         pending:
           type: integer
           format: int64
+    ScheduleNoticeItem:
+      type: object
+      description: 面试安排名单的一行，附三类通知的发送状态
+      properties:
+        scheduleId:
+          type: integer
+        userId:
+          type: integer
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        studentId:
+          type: string
+          nullable: true
+        interviewTime:
+          type: string
+          format: date-time
+          nullable: true
+        deptName:
+          type: string
+          nullable: true
+        location:
+          type: string
+          nullable: true
+        arranged:
+          type: boolean
+          description: 面试安排通知已发
+        eve:
+          type: boolean
+          description: 面试前一天提醒已发
+        day:
+          type: boolean
+          description: 面试当天提醒已发
     ScreenedOutItem:
       type: object
       description: 初筛未通过的一位同学

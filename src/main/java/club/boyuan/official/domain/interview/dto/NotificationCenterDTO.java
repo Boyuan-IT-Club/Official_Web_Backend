@@ -61,4 +61,30 @@ public class NotificationCenterDTO {
 
     /** 初筛未通过名单（在 overview 里一并返回，省一次请求） */
     private List<ScreenedOutItem> screenedOut;
+
+    /**
+     * 面试安排名单，附三类通知各自发没发。
+     *
+     * 提醒是系统定时发的，管理端管不着——但「有没有发到」必须看得见：
+     * 出过手动改时间后提醒没重发的情况，只给个总数看不出漏了谁。
+     */
+    @Data
+    @Builder
+    public static class ScheduleNoticeItem {
+        private Integer scheduleId;
+        private Integer userId;
+        private String name;
+        private String studentId;
+        private LocalDateTime interviewTime;
+        private String deptName;
+        private String location;
+        /** 面试安排通知是否已发 */
+        private boolean arranged;
+        /** 前一天提醒是否已发 */
+        private boolean eve;
+        /** 当天提醒是否已发 */
+        private boolean day;
+    }
+
+    private List<ScheduleNoticeItem> schedules;
 }
