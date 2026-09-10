@@ -184,6 +184,11 @@ public class RecruitmentCycleController {
      *
      * 本接口以起止日期为权威(管理端唯一真正维护的字段)，不看 status 列：
      * status 只有一个手动管理接口会刷新，没有定时任务，实际长期陈旧。
+     *
+     * 也不按 is_active 过滤：管理员「停止投递」后周期在时间内仍要对用户端可见
+     * （看自己的简历与进度），只是不能再提交/修改/新建。每项带 intakeOpen 标记，
+     * 前端据此把「可投」与「只读可见」分开；写入闸门在 requireCycleOpen，与此无关。
+     * 周期时间过了才从列表消失——那时没投过的同学才看不到它。
      */
     @GetMapping("/open")
     @PreAuthorize("isAuthenticated()")

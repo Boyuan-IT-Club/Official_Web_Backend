@@ -27,6 +27,7 @@ public final class InterviewNotificationEmailBuilder {
             case DAY_REMINDER -> "【博远信息技术社】面试提醒（今日面试）";
             case ADMISSION -> "【博远信息技术社】面试录取通知";
             case REJECTION -> "【博远信息技术社】面试结果通知";
+            case RESUME_REJECTED -> "【博远信息技术社】简历评审结果通知";
         };
     }
 
@@ -34,6 +35,29 @@ public final class InterviewNotificationEmailBuilder {
                               String recipientName,
                               InterviewBookingDTO booking,
                               String departmentName) {
+        return body(type, recipientName, booking, departmentName, null);
+    }
+
+    /** @param extraNote 管理员补充内容，附在模板正文之后（纯文本兜底那份） */
+    public static String body(InterviewNotificationType type,
+                              String recipientName,
+                              InterviewBookingDTO booking,
+                              String departmentName,
+                              String extraNote) {
+        return withExtraNote(bodyTemplate(type, recipientName, booking, departmentName), extraNote);
+    }
+
+    private static String withExtraNote(String body, String extraNote) {
+        if (!StringUtils.hasText(extraNote)) {
+            return body;
+        }
+        return body + "\n\n--------\n社团补充说明\n" + extraNote.trim();
+    }
+
+    private static String bodyTemplate(InterviewNotificationType type,
+                                       String recipientName,
+                                       InterviewBookingDTO booking,
+                                       String departmentName) {
         String greeting = greeting(recipientName);
         return switch (type) {
             case BOOKING_SUCCESS -> greeting + "\n\n"
@@ -58,6 +82,10 @@ public final class InterviewNotificationEmailBuilder {
                     + "感谢您对博远信息技术社的关注与参与。\n"
                     + "很遗憾，本次面试未能通过，期待未来有机会再次相见。\n"
                     + "\n祝您学业顺利！";
+            case RESUME_REJECTED -> greeting + "\n\n"
+                    + "感谢您投递博远信息技术社招新简历。\n"
+                    + "经过简历评审，很遗憾本次未能进入面试环节，本届招新流程到此结束。\n"
+                    + "\n社团的技术分享与公开活动欢迎你继续参与，期待下一届与你相遇！";
         };
     }
 
@@ -84,10 +112,25 @@ public final class InterviewNotificationEmailBuilder {
                                              String waitingRoom,
                                              List<MailTemplate.QrItem> qrCodes,
                                              String contactInfo) {
+        return html(type, recipientName, booking, departmentName,
+                academicYear, waitingRoom, qrCodes, contactInfo, null);
+    }
+
+    /** @param extraNote 管理员补充内容，附在模板正文之后；结果类通知才有 */
+    public static MailTemplate.Rendered html(InterviewNotificationType type,
+                                             String recipientName,
+                                             InterviewBookingDTO booking,
+                                             String departmentName,
+                                             String academicYear,
+                                             String waitingRoom,
+                                             List<MailTemplate.QrItem> qrCodes,
+                                             String contactInfo,
+                                             String extraNote) {
         return switch (type) {
             case ADMISSION -> RecruitmentMails.admitted(
-                    recipientName, academicYear, departmentName, qrCodes);
-            case REJECTION -> RecruitmentMails.rejected(recipientName, contactInfo);
+                    recipientName, academicYear, departmentName, qrCodes, extraNote);
+            case REJECTION -> RecruitmentMails.rejected(recipientName, contactInfo, extraNote);
+            case RESUME_REJECTED -> RecruitmentMails.resumeRejected(recipientName, contactInfo, extraNote);
             // 预约成功 / 前一日提醒 / 当日提醒共用同一封「面试安排」——
             // 三者要说的事完全一样（什么时候、在哪、怎么改期），
             // 分成三套文案只会让维护时改漏一处

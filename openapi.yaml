@@ -1793,6 +1793,36 @@ paths:
                 - message
                 - data
           headers: {}
+  /api/resumes/fields/{cycleId}/template.pdf:
+    get:
+      summary: 导出空白报名表模板（PDF）
+      deprecated: false
+      description: >-
+        按该周期已启用的简历字段渲染一份空白报名表，供周期还没开始时提前准备
+        内容。每项标出是否必填、填写方式与可选项，并留出书写区。版式与
+        `/api/resumes/export/pdf/{resumeId}` 同一套（服务端 iText + Noto CJK 字体）。
+        周期未配置任何字段时返回 404。
+      tags:
+      - 简历模块
+      parameters:
+      - name: cycleId
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: 导出成功，返回 PDF 二进制
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+          headers: {}
+        '404':
+          description: 该周期还没有配置报名表字段
+          content: {}
+          headers: {}
   /api/resumes/export/pdf/{resumeId}:
     get:
       summary: 导出简历pdf
@@ -3730,6 +3760,288 @@ paths:
                 - message
                 - data
           headers: {}
+  /api/resumes/screening/batch:
+    post:
+      summary: 批量简历初筛
+      deprecated: false
+      description: >-
+        把选中的简历标为通过初筛(status=4)或未通过初筛(status=5)。草稿不受影响。
+        与「面试结果」是两件事：初筛决定谁能进面试，结果决定谁被录取。
+        未通过初筛的简历不再参与自动分配、也不能再提交面试意向（返回 3408）。
+        本接口只改状态不发邮件，通知走 /api/resumes/screening/notify。
+        另：打分平均分为 0 时会自动置为未通过；分数改回非 0 时自动收回该结论。
+        权限 resume:audit。
+      tags:
+      - 简历相关接口
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                resumeIds:
+                  type: array
+                  items:
+                    type: integer
+                passed:
+                  type: boolean
+                  description: true=通过初筛(4)，false=未通过初筛(5)
+              required:
+              - resumeIds
+              - passed
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      updated:
+                        type: integer
+                        description: 实际更新份数（草稿会被跳过）
+          headers: {}
+
+  /api/resumes/screening/notify:
+    post:
+      summary: 发送简历初筛未通过通知
+      deprecated: false
+      description: >-
+        给初筛未通过的同学批量发邮件（RESUME_REJECTED 模板：说明未进入面试环节、
+        本届流程结束，不含任何面试相关措辞）。只对状态确为 5 的简历发送，
+        其余计入 skipped，避免误选把还在流程里的人通知成落选。
+        每份简历各自一个 requestId，允许重复发送。customMessage 为补充说明，
+        附加在模板正文之后。权限 resume:audit。
+      tags:
+      - 简历相关接口
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                resumeIds:
+                  type: array
+                  items:
+                    type: integer
+                customMessage:
+                  type: string
+                  nullable: true
+              required:
+              - resumeIds
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      queued:
+                        type: integer
+                      skipped:
+                        type: array
+                        items:
+                          type: integer
+                        description: 状态不是「未通过初筛」而被跳过的简历 id
+          headers: {}
+
+  /api/member-claims:
+    post:
+      summary: 提交老社员认领申请
+      deprecated: false
+      description: >-
+        往届社员注册后自助认领身份。已是社员或已有待审申请时返回业务错误。
+        提交后等管理员审批，通过即置为社员并归入部门。登录即可调用。
+      tags:
+      - 老社员认领
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                realName:
+                  type: string
+                  description: 真实姓名，用于与社团名册核对（必填）
+                studentId:
+                  type: string
+                  nullable: true
+                joinYear:
+                  type: string
+                  nullable: true
+                  description: 入社年份/届别
+                deptId:
+                  type: integer
+                  nullable: true
+                evidence:
+                  type: string
+                  nullable: true
+                  description: 证明说明：职务、参与项目、可作证的社员等
+              required:
+              - realName
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+          headers: {}
+    get:
+      summary: 老社员认领申请列表
+      deprecated: false
+      description: 管理端分页列表，待审的排最前。权限 user:manage。
+      tags:
+      - 老社员认领
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: 0待审核 1已通过 2已驳回；不传为全部
+      - name: keyword
+        in: query
+        required: false
+        schema:
+          type: string
+        description: 按姓名/学号/登录名模糊搜索
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+          headers: {}
+
+  /api/member-claims/my:
+    get:
+      summary: 我的老社员认领状态
+      deprecated: false
+      description: >-
+        返回 isMember 与最近一条申请（claim 为 null 表示从未申请）。
+        前端据此决定是否显示认领入口、显示审批进度还是驳回理由。登录即可调用。
+      tags:
+      - 老社员认领
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+          headers: {}
+
+  /api/member-claims/pending-count:
+    get:
+      summary: 待审认领数量
+      deprecated: false
+      description: 管理端菜单角标用。权限 user:manage。
+      tags:
+      - 老社员认领
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+          headers: {}
+
+  /api/member-claims/{claimId}/approve:
+    post:
+      summary: 通过老社员认领
+      deprecated: false
+      description: >-
+        置 user.is_member=1 并写入部门（只更新这两列，不整实体写回，
+        避免覆盖审批窗口里用户自己改过的资料）。deptId 可在审批时纠正申请人填错的部门。
+        只对待审申请生效，重复审批返回 5006。权限 user:manage。
+      tags:
+      - 老社员认领
+      parameters:
+      - name: claimId
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                deptId:
+                  type: integer
+                  nullable: true
+                note:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+          headers: {}
+
+  /api/member-claims/{claimId}/reject:
+    post:
+      summary: 驳回老社员认领
+      deprecated: false
+      description: 记录驳回理由；申请人可补充材料后重新提交。权限 user:manage。
+      tags:
+      - 老社员认领
+      parameters:
+      - name: claimId
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+          headers: {}
+
   /api/resumes/{resumeId}/score:
     put:
       summary: 简历打分
@@ -4359,8 +4671,14 @@ paths:
       summary: 当前开放投递的周期
       deprecated: false
       description: >-
-        返回「现在真的可以投递」的招募周期列表：is_active = 1 且今天落在
-        start_date ~ end_date 之间，按 start_date 倒序（前端以第一项为默认选中）。
+        返回「当前周期」列表：今天落在 start_date ~ end_date 之间且未删除，
+        按 start_date 倒序（前端以第一项为默认选中）。
+
+        不按 is_active 过滤。管理员「停止投递」（is_active = 0）后周期在时间内仍对
+        用户端可见（看自己的简历与进度），只是不能再提交、修改或新建简历——
+        每项以 intakeOpen 标出是否仍接收投递，前端据此把「可投」与「只读可见」分开；
+        写入闸门在后端简历接口（3010），与本列表无关。周期时间过了才从列表消失，
+        那时没投过的同学才看不到它。
 
         与 /api/cycles/active/{isActive} 的区别：is_active 只表示「是否启用」，
         往届周期为了能查历史简历通常也保持启用，所以「启用中」不等于「现在能投」。
@@ -4386,7 +4704,7 @@ paths:
                     description: 提示信息
                   data:
                     type: array
-                    description: 当前开放投递的周期，可能为空数组（此时无周期在招）
+                    description: 当前周期（含已停止投递但仍在时间内的），可能为空数组（此时无周期在招）
                     items:
                       type: object
                       properties:
@@ -4416,12 +4734,18 @@ paths:
                             投递页无内容可填 —— /api/resumes/fields/{cycleId}
                             在无定义时返回 200 + 空数组且不报错，前端需据此提示，
                             否则表现为一张空白表单。
+                        intakeOpen:
+                          type: boolean
+                          description: >-
+                            是否仍接收投递（is_active = 1）。false 表示管理员已「停止投递」：
+                            周期在时间内仍可见，但不能提交、修改或新建简历。
                       required:
                       - cycleId
                       - cycleName
                       - startDate
                       - endDate
                       - fieldCount
+                      - intakeOpen
                 required:
                 - code
                 - message
@@ -4484,12 +4808,17 @@ paths:
                         fieldCount:
                           type: integer
                           description: 该周期已配置的简历字段数
+                        intakeOpen:
+                          type: boolean
+                          description: >-
+                            是否仍接收投递。预告列表只返回 is_active = 1 的周期，这里恒为 true
                       required:
                       - cycleId
                       - cycleName
                       - startDate
                       - endDate
                       - fieldCount
+                      - intakeOpen
                 required:
                 - code
                 - message
@@ -8599,6 +8928,92 @@ paths:
                       published:
                         type: integer
 
+  /api/interview/flow/progress:
+    get:
+      summary: 招新流程进度
+      deprecated: false
+      description: >-
+        返回一届招新各环节的产出量，管理端据此提示「现在该做哪一步」
+        （周期配置 → 简历初筛 → 面试排期 → 面试评价 → 预录取与录取 → 结果通知）。
+        只回计数不回结论，后端不拦截乱序操作。
+      tags:
+      - 面试结果模块
+      parameters:
+      - name: cycleId
+        in: query
+        description: 招募活动ID
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecruitFlowProgressResponse'
+          headers: {}
+  /api/interview/notifications/send:
+    post:
+      summary: 手动补发面试相关通知
+      deprecated: false
+      description: >-
+        手动补发挂在面试安排上的三类通知：BOOKING_SUCCESS（面试安排通知）、
+        EVE_REMINDER（面试前一天提醒）、DAY_REMINDER（面试当天提醒）。
+        平时由系统触发，但会漏——手动改过面试时间、场次是提醒跑完之后才排的、
+        MQ 堵过，都会留下没收到通知的人。只投递没发过的，已发过的计入 skipped，
+        不会重复打扰。
+      tags:
+      - 面试结果模块
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cycleId:
+                  type: integer
+                type:
+                  type: string
+                  enum: [BOOKING_SUCCESS, EVE_REMINDER, DAY_REMINDER]
+                scheduleIds:
+                  type: array
+                  items:
+                    type: integer
+              required:
+              - cycleId
+              - type
+              - scheduleIds
+      responses:
+        '200':
+          description: 已入队
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: 操作成功
+                  data:
+                    type: object
+                    properties:
+                      queued:
+                        type: integer
+                        description: 本次实际入队的数量
+                      skipped:
+                        type: array
+                        description: 跳过的 scheduleId（已发过，或不属于本周期）
+                        items:
+                          type: integer
+                required:
+                - code
+                - message
+                - data
+          headers: {}
   /api/interview/result/list:
     get:
       summary: 查看录取结果
@@ -9760,6 +10175,76 @@ paths:
               schema:
                 $ref: '#/components/schemas/ResponseMessageMaterializeResult'
       security: []
+  /api/interview/admin/cycles/{cycleId}/schedules:
+    get:
+      summary: 面试名单（全周期或单场次）
+      deprecated: false
+      description: >-
+        按面试时间升序返回本周期的面试安排名单。不传 sessionId 即全周期统一名单，
+        管理端「面试名单」页据此一屏看完所有场次。除安排本身外并入了学号、
+        志愿部门与场次地点，便于就地核对。
+      tags:
+      - 面试管理模块
+      parameters:
+      - name: cycleId
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: sessionId
+        in: query
+        description: 只看某个场次；不传为全周期
+        required: false
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: 操作成功
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ScheduleRosterItem'
+                required:
+                - code
+                - message
+                - data
+          headers: {}
+  /api/interview/notifications/overview:
+    get:
+      summary: 通知中心总览
+      deprecated: false
+      description: >-
+        一届招新对外邮件的收口视图：简历初筛未通过、面试安排通知、面试前一天与
+        当天提醒、录取/未录取结果，各自给出应发/已发/待发人数；并附初筛未通过
+        名单（含是否已通知），供管理端直接勾选补发。提醒类由系统定时发送，
+        这里只读。
+      tags:
+      - 面试结果模块
+      parameters:
+      - name: cycleId
+        in: query
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationCenterResponse'
+          headers: {}
   /api/interview/admin/cycles/{cycleId}/assign:
     post:
       summary: 一键场次分配（管理员）
@@ -11711,6 +12196,238 @@ components:
       - code
       - message
       - data
+    ScheduleRosterItem:
+      type: object
+      description: 面试名单的一行（面试安排 + 便于核对的并入字段）
+      properties:
+        scheduleId:
+          type: integer
+        resumeId:
+          type: integer
+        userId:
+          type: integer
+          nullable: true
+        sessionId:
+          type: integer
+          nullable: true
+        interviewTime:
+          type: string
+          format: date-time
+          nullable: true
+        timeOverridden:
+          type: integer
+          nullable: true
+          description: 1 = 时间被管理员手动调整过，自动分配不再覆盖
+        status:
+          type: integer
+          description: 1 已安排 / 2 已取消
+        syncStatus:
+          type: integer
+          nullable: true
+        notifStatus:
+          type: integer
+          nullable: true
+          description: 1 = 面试安排通知已发出
+        notes:
+          type: string
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        username:
+          type: string
+          nullable: true
+          description: 登录名。早期账号是姓名拼音，不要当学号显示
+        studentId:
+          type: string
+          nullable: true
+          description: 简历里填的学号；本届没有学号字段时为 null
+        deptName:
+          type: string
+          nullable: true
+          description: 面试所属部门
+        location:
+          type: string
+          nullable: true
+          description: 场次地点
+        firstDeptName:
+          type: string
+          nullable: true
+          description: 第一志愿部门
+        secondDeptName:
+          type: string
+          nullable: true
+          description: 第二志愿部门
+    NotificationCenterResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: 操作成功
+        data:
+          type: object
+          properties:
+            resumeRejected:
+              $ref: '#/components/schemas/NotificationBucket'
+            interviewArranged:
+              $ref: '#/components/schemas/NotificationBucket'
+            eveReminder:
+              $ref: '#/components/schemas/NotificationBucket'
+            dayReminder:
+              $ref: '#/components/schemas/NotificationBucket'
+            result:
+              $ref: '#/components/schemas/NotificationBucket'
+            screenedOut:
+              type: array
+              description: 初筛未通过名单
+              items:
+                $ref: '#/components/schemas/ScreenedOutItem'
+            schedules:
+              type: array
+              description: 面试安排名单，附三类通知各自发没发
+              items:
+                $ref: '#/components/schemas/ScheduleNoticeItem'
+      required:
+      - code
+      - message
+      - data
+    NotificationBucket:
+      type: object
+      description: 某类通知的进度
+      properties:
+        total:
+          type: integer
+          format: int64
+          description: 按当前数据应收到这类通知的人数
+        sent:
+          type: integer
+          format: int64
+        pending:
+          type: integer
+          format: int64
+    ScheduleNoticeItem:
+      type: object
+      description: 面试安排名单的一行，附三类通知的发送状态
+      properties:
+        scheduleId:
+          type: integer
+        userId:
+          type: integer
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        studentId:
+          type: string
+          nullable: true
+        interviewTime:
+          type: string
+          format: date-time
+          nullable: true
+        deptName:
+          type: string
+          nullable: true
+        location:
+          type: string
+          nullable: true
+        arranged:
+          type: boolean
+          description: 面试安排通知已发
+        eve:
+          type: boolean
+          description: 面试前一天提醒已发
+        day:
+          type: boolean
+          description: 面试当天提醒已发
+    ScreenedOutItem:
+      type: object
+      description: 初筛未通过的一位同学
+      properties:
+        resumeId:
+          type: integer
+        userId:
+          type: integer
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        studentId:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        resumeScore:
+          type: integer
+          nullable: true
+          description: 简历平均分；未打过分为 null，与打 0 分区分
+        notifiedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: 最近一次初筛未通过通知的发送时间；null 表示还没通知
+    RecruitFlowProgressResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: 响应码
+          example: 200
+        message:
+          type: string
+          description: 响应消息
+          example: 操作成功
+        data:
+          type: object
+          description: 各环节产出量
+          properties:
+            fieldCount:
+              type: integer
+              format: int64
+              description: 本届启用中的简历字段数；为 0 时学生无法投递
+              example: 12
+            submittedResumes:
+              type: integer
+              format: int64
+              description: 已提交（含已初筛）的简历份数
+              example: 48
+            screenedResumes:
+              type: integer
+              format: int64
+              description: 已出初筛结论（通过/未通过）的份数
+              example: 48
+            schedules:
+              type: integer
+              format: int64
+              description: 生效中的面试安排数
+              example: 40
+            finalizedEvaluations:
+              type: integer
+              format: int64
+              description: 已定稿的面试评价数
+              example: 40
+            preAdmitted:
+              type: integer
+              format: int64
+              description: 已进预录取草稿名单的人数
+              example: 20
+            decided:
+              type: integer
+              format: int64
+              description: 已录入录取/未录取决定的结果数
+              example: 40
+            notified:
+              type: integer
+              format: int64
+              description: 已发出结果通知的人数
+              example: 40
+      required:
+      - code
+      - message
+      - data
     InterviewResultItem:
       type: object
       properties:
@@ -11752,6 +12469,14 @@ components:
           type: string
           format: date-time
           description: 更新时间
+          example: '2025-09-16T10:00:00Z'
+        interviewTime:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            面试时间。按简历+周期反查本届生效的面试安排得到，因此「先生成名单、
+            后排面试」的结果行也能显示；未排面试为 null。
           example: '2025-09-16T10:00:00Z'
       required:
       - resultId
@@ -12931,8 +13656,11 @@ components:
           example: email
         customMessage:
           type: string
-          description: 自定义消息
-          example: 恭喜您通过面试，期待您的加入！
+          description: >-
+            管理员补充说明。**附加**在模板正文之后（以分隔线 +「社团补充说明」小节呈现），
+            不替换模板——录取信里的祝贺、分配部门、入群二维码等内容照常保留。
+            仅当结果既非通过也非未通过（待定/待调剂，无对应模板）时，才单独作为纯文本正文发出。
+          example: 本周五 19:00 理科大楼 B226 见面会，请准时参加。
     SendNotificationsResponse:
       type: object
       properties:

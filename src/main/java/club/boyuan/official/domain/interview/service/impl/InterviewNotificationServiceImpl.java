@@ -105,6 +105,14 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
         notificationProducer.publishResult(resultId, customBody);
     }
 
+    @Override
+    public void enqueueResumeRejectedNotification(Integer resumeId, String customBody) {
+        if (resumeId == null) {
+            return;
+        }
+        notificationProducer.publishResumeRejected(resumeId, customBody);
+    }
+
     /**
      * 由 MQ 消费者调用：解析消息、发送邮件、记录日志。
      */
@@ -125,6 +133,11 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
 
         if (type == InterviewNotificationType.ADMISSION || type == InterviewNotificationType.REJECTION) {
             deliverResult(type, message);
+            return;
+        }
+
+        if (type == InterviewNotificationType.RESUME_REJECTED) {
+            deliverResumeRejected(message);
             return;
         }
 
@@ -168,8 +181,19 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
         if (resultId == null) {
             return;
         }
-        boolean templated = !StringUtils.hasText(message.getCustomBody());
-        if (templated && type == null) {
+        /*
+         * 管理员填的内容是「补充」而不是「替换」。
+         *
+         * 早先的实现把 customBody 当整封正文：管理员随手写两句，学生收到的
+         * 录取信里就只剩那两句——模板里的祝贺、分配部门、入群二维码全没了。
+         * 现在一律走模板，customBody 以「社团补充说明」附在正文之后。
+         *
+         * 例外：decision 不是通过/未通过（待定、待调剂）时没有对应模板，
+         * 此时仍按管理员写的纯文本发——这种场景本来就是「我要单独说点事」。
+         */
+        String extraNote = message.getCustomBody();
+        boolean templated = type != null;
+        if (!templated && !StringUtils.hasText(extraNote)) {
             return;
         }
         /*
@@ -192,7 +216,7 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
                 log.info("同一次发送已投递过（MQ 重投），跳过 requestId={}, resultId={}", requestId, resultId);
                 return;
             }
-        } else if (templated && alreadySent(type, null, resultId)) {
+        } else if (alreadySent(type, null, resultId)) {
             log.info("旧格式消息且结果通知已发送过，跳过 type={}, resultId={}", type, resultId);
             return;
         }
@@ -230,11 +254,11 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
                 ? InterviewNotificationEmailBuilder.subject(effectiveType)
                 : "【博远信息技术社】面试结果通知";
         String body = templated
-                ? InterviewNotificationEmailBuilder.body(effectiveType, name, booking, departmentName)
-                : message.getCustomBody();
+                ? InterviewNotificationEmailBuilder.body(
+                        effectiveType, name, booking, departmentName, extraNote)
+                : extraNote;
 
-        // 管理员写了自定义正文时不套模板 —— 那是他要说的话，不该被包进
-        // 「恭喜录取」的壳里
+        // 无模板可用（待定/待调剂）时才发纯文本，其余一律模板 + 补充说明
         String html = null;
         if (templated) {
             // 周期号优先取结果自带的（V34 起无安排的结果也有 cycle_id），
@@ -248,11 +272,76 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
                     : List.of();
             html = InterviewNotificationEmailBuilder.html(
                     effectiveType, name, booking, departmentName,
-                    cfg.academicYear(), cfg.waitingRoom(), qrs, cfg.contactInfo()).html();
+                    cfg.academicYear(), cfg.waitingRoom(), qrs, cfg.contactInfo(), extraNote).html();
         }
 
-        sendAndLog(effectiveType, result.getScheduleId(), resultId, email, subject, body, html, schedule,
+        /*
+         * 日志不写 scheduleId —— 这里是修「重发变成连发 3 封」的关键。
+         *
+         * uk_type_schedule（类型 × 场次唯一）是给场次类通知用的：预约成功、
+         * 面试前提醒由系统自动触发，一场一封才是对的语义（见 V37 的说明）。
+         * 而结果通知是管理员有意发的、允许重发，它由 result_id + request_id
+         * 唯一确定，本来就不该占场次的槽位。
+         *
+         * 之前把 result.getScheduleId() 一起写进去，于是给「有面试安排」的同学
+         * 重发同类型结果通知时撞键：邮件已发出 → 写日志抛 DuplicateKey →
+         * 消息被判消费失败 → MQ 按 max-attempts:3 重投 → 每次重投再发一封，
+         * 收件人精确收到 3 封（线上实测：A/B 两台日志里都是这个异常栈）。
+         * 无面试安排的同学 scheduleId 为空、MySQL 唯一键不管 NULL，所以没事。
+         *
+         * 这一行改动之后，历史行照旧保留，新行 scheduleId 为空，不再有冲突；
+         * 结果对应的场次可经 interview_result.schedule_id 反查，信息不丢。
+         */
+        sendAndLog(effectiveType, null, resultId, email, subject, body, html, schedule,
                 message.getRequestId());
+    }
+
+    /**
+     * 简历未通过初筛的通知。
+     *
+     * 与结果通知的差别：这时还没有面试安排、没有结果行，收件人只能从简历定位；
+     * 周期配置里只用得上「本届负责人联系方式」（没有面试时间地点可言）。
+     * 去重同样按 requestId——管理员想重发就能重发。
+     */
+    private void deliverResumeRejected(InterviewNotificationMessage message) {
+        Integer resumeId = message.getResumeId();
+        if (resumeId == null) {
+            return;
+        }
+        String requestId = message.getRequestId();
+        if (StringUtils.hasText(requestId) && alreadySentByRequest(requestId)) {
+            log.info("同一次发送已投递过（MQ 重投），跳过 requestId={}, resumeId={}", requestId, resumeId);
+            return;
+        }
+
+        Resume resume = resumeService.getResumeById(resumeId);
+        if (resume == null) {
+            return;
+        }
+        String email = resumeDataService.getResumeEmail(resume);
+        String name = resumeDataService.getResumeName(resume);
+        if (!StringUtils.hasText(email)) {
+            User user = resume.getUserId() == null ? null : userService.getById(resume.getUserId());
+            email = user != null ? user.getEmail() : null;
+            if (name == null && user != null) {
+                name = user.getName();
+            }
+        }
+        if (!StringUtils.hasText(email)) {
+            log.warn("简历初筛通知无邮箱 resumeId={}", resumeId);
+            return;
+        }
+
+        NoticeConfig cfg = noticeConfig(resume.getCycleId());
+        InterviewNotificationType type = InterviewNotificationType.RESUME_REJECTED;
+        String subject = InterviewNotificationEmailBuilder.subject(type);
+        String body = InterviewNotificationEmailBuilder.body(
+                type, name, null, null, message.getCustomBody());
+        String html = InterviewNotificationEmailBuilder.html(
+                type, name, null, null, cfg.academicYear(), null, List.of(),
+                cfg.contactInfo(), message.getCustomBody()).html();
+
+        sendAndLog(type, null, null, resumeId, email, subject, body, html, null, requestId);
     }
 
     /** 邮件要用到的周期级配置。周期取不到时全部为空，模板会自动省略对应段落 */
@@ -329,9 +418,23 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
         return dept != null ? dept.getDeptName() : null;
     }
 
+    /** 挂在面试安排或录取结果上的通知走这个重载；简历维度留空。 */
     private void sendAndLog(InterviewNotificationType type,
                             Integer scheduleId,
                             Integer resultId,
+                            String email,
+                            String subject,
+                            String body,
+                            String html,
+                            InterviewSchedule schedule,
+                            String requestId) {
+        sendAndLog(type, scheduleId, resultId, null, email, subject, body, html, schedule, requestId);
+    }
+
+    private void sendAndLog(InterviewNotificationType type,
+                            Integer scheduleId,
+                            Integer resultId,
+                            Integer resumeId,
                             String email,
                             String subject,
                             String body,
@@ -346,18 +449,33 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
             messageUtils.sendEmail(email, subject, body);
         }
 
-        InterviewNotificationLog logEntry = new InterviewNotificationLog()
-                .setNotificationType(type.name())
-                .setScheduleId(scheduleId)
-                .setResultId(resultId)
-                .setRequestId(requestId)
-                .setRecipientEmail(email)
-                .setSentAt(LocalDateTime.now());
-        notificationLogMapper.insert(logEntry);
+        /*
+         * 分界线：以上邮件已经真的发出去了，以下都是记账。
+         *
+         * 记账失败绝不能抛出去——@RabbitListener 的 acknowledge-mode: auto 下
+         * 任何异常都会被判为消费失败并按 max-attempts 重投，而重投会把这封
+         * 已经送达的邮件再发一遍。用户的收件箱不该为我们写不进一行日志买单。
+         * 失败只记 error 日志，人工可从邮件服务商侧核对。
+         */
+        try {
+            InterviewNotificationLog logEntry = new InterviewNotificationLog()
+                    .setNotificationType(type.name())
+                    .setScheduleId(scheduleId)
+                    .setResultId(resultId)
+                    .setResumeId(resumeId)
+                    .setRequestId(requestId)
+                    .setRecipientEmail(email)
+                    .setSentAt(LocalDateTime.now());
+            notificationLogMapper.insert(logEntry);
 
-        if (schedule != null && type == InterviewNotificationType.BOOKING_SUCCESS) {
-            schedule.setNotifStatus(1);
-            interviewScheduleService.updateById(schedule);
+            if (schedule != null && type == InterviewNotificationType.BOOKING_SUCCESS) {
+                schedule.setNotifStatus(1);
+                interviewScheduleService.updateById(schedule);
+            }
+        } catch (Exception e) {
+            log.error("邮件已发送但记录发送日志失败（不重投，避免重复发信）"
+                    + " type={}, scheduleId={}, resultId={}, email={}, requestId={}",
+                    type, scheduleId, resultId, email, requestId, e);
         }
 
         log.info("面试通知已发送 type={}, scheduleId={}, resultId={}, email={}, requestId={}",

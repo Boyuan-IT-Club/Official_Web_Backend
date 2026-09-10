@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="club.boyuan.official.persistence.mapper.MemberClaimMapper">
+
+    <select id="selectClaimPage" resultType="club.boyuan.official.persistence.entity.MemberClaim">
+        SELECT mc.*,
+               u.username    AS username,
+               u.email       AS email,
+               d.dept_name   AS dept_name,
+               r.name        AS reviewed_by_name
+        FROM member_claim mc
+        LEFT JOIN user u       ON mc.user_id = u.user_id
+        LEFT JOIN department d ON mc.dept_id = d.dept_id
+        LEFT JOIN user r       ON mc.reviewed_by = r.user_id
+        <where>
+            <if test="status != null">
+                AND mc.status = #{status}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (mc.real_name LIKE CONCAT('%', #{keyword}, '%')
+                     OR mc.student_id LIKE CONCAT('%', #{keyword}, '%')
+                     OR u.username LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+        </where>
+        <!-- 待审的排在最前：管理员打开页面就该先看到要处理的 -->
+        ORDER BY mc.status ASC, mc.created_at DESC
+    </select>
+</mapper>
