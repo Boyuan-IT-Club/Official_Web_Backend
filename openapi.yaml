@@ -3730,6 +3730,288 @@ paths:
                 - message
                 - data
           headers: {}
+  /api/resumes/screening/batch:
+    post:
+      summary: 批量简历初筛
+      deprecated: false
+      description: >-
+        把选中的简历标为通过初筛(status=4)或未通过初筛(status=5)。草稿不受影响。
+        与「面试结果」是两件事：初筛决定谁能进面试，结果决定谁被录取。
+        未通过初筛的简历不再参与自动分配、也不能再提交面试意向（返回 3408）。
+        本接口只改状态不发邮件，通知走 /api/resumes/screening/notify。
+        另：打分平均分为 0 时会自动置为未通过；分数改回非 0 时自动收回该结论。
+        权限 resume:audit。
+      tags:
+      - 简历相关接口
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                resumeIds:
+                  type: array
+                  items:
+                    type: integer
+                passed:
+                  type: boolean
+                  description: true=通过初筛(4)，false=未通过初筛(5)
+              required:
+              - resumeIds
+              - passed
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      updated:
+                        type: integer
+                        description: 实际更新份数（草稿会被跳过）
+          headers: {}
+
+  /api/resumes/screening/notify:
+    post:
+      summary: 发送简历初筛未通过通知
+      deprecated: false
+      description: >-
+        给初筛未通过的同学批量发邮件（RESUME_REJECTED 模板：说明未进入面试环节、
+        本届流程结束，不含任何面试相关措辞）。只对状态确为 5 的简历发送，
+        其余计入 skipped，避免误选把还在流程里的人通知成落选。
+        每份简历各自一个 requestId，允许重复发送。customMessage 为补充说明，
+        附加在模板正文之后。权限 resume:audit。
+      tags:
+      - 简历相关接口
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                resumeIds:
+                  type: array
+                  items:
+                    type: integer
+                customMessage:
+                  type: string
+                  nullable: true
+              required:
+              - resumeIds
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      queued:
+                        type: integer
+                      skipped:
+                        type: array
+                        items:
+                          type: integer
+                        description: 状态不是「未通过初筛」而被跳过的简历 id
+          headers: {}
+
+  /api/member-claims:
+    post:
+      summary: 提交老社员认领申请
+      deprecated: false
+      description: >-
+        往届社员注册后自助认领身份。已是社员或已有待审申请时返回业务错误。
+        提交后等管理员审批，通过即置为社员并归入部门。登录即可调用。
+      tags:
+      - 老社员认领
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                realName:
+                  type: string
+                  description: 真实姓名，用于与社团名册核对（必填）
+                studentId:
+                  type: string
+                  nullable: true
+                joinYear:
+                  type: string
+                  nullable: true
+                  description: 入社年份/届别
+                deptId:
+                  type: integer
+                  nullable: true
+                evidence:
+                  type: string
+                  nullable: true
+                  description: 证明说明：职务、参与项目、可作证的社员等
+              required:
+              - realName
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+          headers: {}
+    get:
+      summary: 老社员认领申请列表
+      deprecated: false
+      description: 管理端分页列表，待审的排最前。权限 user:manage。
+      tags:
+      - 老社员认领
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: 0待审核 1已通过 2已驳回；不传为全部
+      - name: keyword
+        in: query
+        required: false
+        schema:
+          type: string
+        description: 按姓名/学号/登录名模糊搜索
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+          headers: {}
+
+  /api/member-claims/my:
+    get:
+      summary: 我的老社员认领状态
+      deprecated: false
+      description: >-
+        返回 isMember 与最近一条申请（claim 为 null 表示从未申请）。
+        前端据此决定是否显示认领入口、显示审批进度还是驳回理由。登录即可调用。
+      tags:
+      - 老社员认领
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+          headers: {}
+
+  /api/member-claims/pending-count:
+    get:
+      summary: 待审认领数量
+      deprecated: false
+      description: 管理端菜单角标用。权限 user:manage。
+      tags:
+      - 老社员认领
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+          headers: {}
+
+  /api/member-claims/{claimId}/approve:
+    post:
+      summary: 通过老社员认领
+      deprecated: false
+      description: >-
+        置 user.is_member=1 并写入部门（只更新这两列，不整实体写回，
+        避免覆盖审批窗口里用户自己改过的资料）。deptId 可在审批时纠正申请人填错的部门。
+        只对待审申请生效，重复审批返回 5006。权限 user:manage。
+      tags:
+      - 老社员认领
+      parameters:
+      - name: claimId
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                deptId:
+                  type: integer
+                  nullable: true
+                note:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+          headers: {}
+
+  /api/member-claims/{claimId}/reject:
+    post:
+      summary: 驳回老社员认领
+      deprecated: false
+      description: 记录驳回理由；申请人可补充材料后重新提交。权限 user:manage。
+      tags:
+      - 老社员认领
+      parameters:
+      - name: claimId
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+          headers: {}
+
   /api/resumes/{resumeId}/score:
     put:
       summary: 简历打分
