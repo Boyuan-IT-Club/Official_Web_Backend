@@ -287,6 +287,150 @@ public class PdfExportUtil {
         }
     }
     
+    /**
+     * 空白报名表模板的一项。
+     *
+     * 用本地 record 而不是直接收 ResumeFieldDefinition：这个工具类在 common 层，
+     * 不该反过来依赖持久层实体。调用方（ResumeController）负责翻译。
+     */
+    public record TemplateField(String label, String type, boolean required,
+                                java.util.List<String> options, String placeholder) {
+    }
+
+    /**
+     * 渲染一份空白报名表，供周期还没开始时提前准备内容用。
+     *
+     * 为什么不复用 exportResumeToPdf 塞一份空简历：那条路上长文本小节遇到空值
+     * 会整节跳过（对已填的简历是对的——没写就别占版面），空模板走一遍只剩
+     * 一张基本信息表，看不出要写什么。这里给每一项都留出书写区，
+     * 并把填写方式与选项标出来，才是「模板」该有的样子。
+     *
+     * 版式与简历导出同一套：同样的页眉、品牌线、小节竖条与页脚，
+     * 打印出来和正式简历是一家人。
+     */
+    public static byte[] exportBlankTemplateToPdf(String cycleName, java.util.List<TemplateField> fields)
+            throws BusinessException {
+        try {
+            getChineseBaseFont();
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            Document document = new Document(PageSize.A4, 48, 48, 44, 52);
+            PdfWriter writer = PdfWriter.getInstance(document, baos);
+            writer.setPageEvent(new FooterPageEvent());
+            document.open();
+
+            BaseColor accent = new BaseColor(31, 118, 204);
+            BaseColor subText = new BaseColor(110, 120, 135);
+            BaseColor blankBorder = new BaseColor(205, 214, 226);
+            Font sectionFont = getFont(12, Font.BOLD, accent);
+            Font hintFont = getFont(9, Font.NORMAL, subText);
+            Font footFont = getFont(8, Font.NORMAL, subText);
+            String title = (cycleName == null || cycleName.isBlank()) ? "招新报名表" : cycleName.trim();
+
+            try {
+                // ── 页眉：与简历导出同构，只是主标题换成周期名 ──
+                PdfPTable head = new PdfPTable(1);
+                head.setWidthPercentage(100);
+                PdfPCell hc = new PdfPCell();
+                hc.setBorder(Rectangle.NO_BORDER);
+                hc.setPaddingLeft(0);
+                hc.addElement(new Paragraph(title, getFont(22, Font.BOLD, new BaseColor(35, 40, 48))));
+                Paragraph sub = new Paragraph("博远信息技术社 · 招新报名表（空白模板）", getFont(10, Font.NORMAL, accent));
+                sub.setSpacingBefore(5);
+                Image mark = loadBrandLogo();
+                if (mark != null) {
+                    mark.scaleToFit(14f, 14f);
+                    sub.add(0, new Chunk("  "));
+                    sub.add(0, new Chunk(mark, 0, -3f, true));
+                }
+                hc.addElement(sub);
+                head.addCell(hc);
+                head.setSpacingAfter(6);
+                document.add(head);
+
+                PdfPTable rule = new PdfPTable(1);
+                rule.setWidthPercentage(100);
+                PdfPCell rc = new PdfPCell();
+                rc.setBorder(Rectangle.BOTTOM);
+                rc.setBorderColorBottom(accent);
+                rc.setBorderWidthBottom(1.6f);
+                rc.setFixedHeight(2f);
+                rule.addCell(rc);
+                rule.setSpacingAfter(10);
+                document.add(rule);
+
+                Paragraph lead = new Paragraph(
+                        "本表仅供提前准备内容，不能代替在线报名；招募开放后请到官网填写并提交。带 * 的为必填项。",
+                        hintFont);
+                lead.setSpacingAfter(4);
+                document.add(lead);
+
+                for (TemplateField f : fields) {
+                    if (f == null || f.label() == null || f.label().isBlank()) continue;
+                    addSectionHeader(document, f.label() + (f.required() ? " *" : ""), sectionFont, accent);
+
+                    String hint = typeHint(f);
+                    if (f.placeholder() != null && !f.placeholder().isBlank()) {
+                        hint = hint + "｜" + f.placeholder().trim();
+                    }
+                    Paragraph hp = new Paragraph(hint, hintFont);
+                    hp.setIndentationLeft(7f);
+                    hp.setSpacingAfter(4f);
+                    document.add(hp);
+
+                    // 书写区：多行题给足高度，单行题一行就够——照着框的大小
+                    // 就能估出该写多少，这是纸质表单最有用的一点提示
+                    document.add(blankBox(isLongText(f.type()) ? 74f : 26f, blankBorder));
+                }
+
+                Paragraph foot = new Paragraph("导出时间：" + formatDateTime(LocalDateTime.now()), footFont);
+                foot.setAlignment(Element.ALIGN_RIGHT);
+                foot.setSpacingBefore(20);
+                document.add(foot);
+            } finally {
+                document.close();
+            }
+            return baos.toByteArray();
+        } catch (Exception e) {
+            log.error("空白报名表导出失败 cycleName={}", cycleName, e);
+            throw new BusinessException(BusinessExceptionEnum.EXPORT_PDF_FAILED,
+                    "模板导出失败: " + e.getMessage());
+        }
+    }
+
+    private static boolean isLongText(String type) {
+        return "textarea".equals(type) || "project_experience".equals(type);
+    }
+
+    /** 「怎么填」的一句话说明；选项类把选项列出来，免得对着空框猜 */
+    private static String typeHint(TemplateField f) {
+        java.util.List<String> opts = f.options() == null ? List.of() : f.options();
+        String joined = String.join(" / ", opts);
+        return switch (f.type() == null ? "" : f.type()) {
+            case "textarea" -> "多行文本";
+            case "radio" -> opts.isEmpty() ? "单选" : "单选：" + joined;
+            case "checkbox" -> opts.isEmpty() ? "多选" : "多选：" + joined;
+            case "select" -> opts.isEmpty() ? "下拉选择" : "下拉选择：" + joined;
+            case "photo", "image" -> "上传图片（在线填写时上传）";
+            case "file" -> "上传附件（在线填写时上传）";
+            case "date" -> "选择日期";
+            default -> "单行文本";
+        };
+    }
+
+    /** 一个留白书写框。用浅色细边而不是下划线：多行题下划线画不出高度 */
+    private static PdfPTable blankBox(float height, BaseColor border) {
+        PdfPTable box = new PdfPTable(1);
+        box.setWidthPercentage(100);
+        PdfPCell cell = new PdfPCell();
+        cell.setFixedHeight(height);
+        cell.setBorder(Rectangle.BOX);
+        cell.setBorderColor(border);
+        cell.setBorderWidth(0.7f);
+        box.addCell(cell);
+        box.setSpacingAfter(2f);
+        return box;
+    }
+
     private static String firstNonBlank(String... values) {
         for (String v : values) {
             if (v != null && !v.trim().isEmpty()) return v;

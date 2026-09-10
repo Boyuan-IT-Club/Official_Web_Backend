@@ -1793,6 +1793,36 @@ paths:
                 - message
                 - data
           headers: {}
+  /api/resumes/fields/{cycleId}/template.pdf:
+    get:
+      summary: 导出空白报名表模板（PDF）
+      deprecated: false
+      description: >-
+        按该周期已启用的简历字段渲染一份空白报名表，供周期还没开始时提前准备
+        内容。每项标出是否必填、填写方式与可选项，并留出书写区。版式与
+        `/api/resumes/export/pdf/{resumeId}` 同一套（服务端 iText + Noto CJK 字体）。
+        周期未配置任何字段时返回 404。
+      tags:
+      - 简历模块
+      parameters:
+      - name: cycleId
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: 导出成功，返回 PDF 二进制
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+          headers: {}
+        '404':
+          description: 该周期还没有配置报名表字段
+          content: {}
+          headers: {}
   /api/resumes/export/pdf/{resumeId}:
     get:
       summary: 导出简历pdf
