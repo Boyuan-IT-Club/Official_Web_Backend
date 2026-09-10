@@ -535,6 +535,63 @@ public class ResumeController {
     }
 
     /**
+     * 导出本周期的空白报名表模板（PDF）。
+     *
+     * 周期还没开始时表单不可填，但个人简介、项目经验这类题现场憋很吃亏。
+     * 这里按已配置的字段渲染一份可打印的空白表，同学先在纸上/文档里打草稿。
+     *
+     * 走后端渲染而不是前端生成：前端 PDF 库默认字体不含中文，导出来是方框，
+     * 要正常显示得再打包几 MB 字体；而容器里已装了 Noto CJK，简历导出用的
+     * 就是它，版式也能和正式简历保持一致。
+     */
+    @GetMapping("/fields/{cycleId}/template.pdf")
+    @PreAuthorize("isAuthenticated()")
+    public void exportBlankTemplate(@PathVariable Integer cycleId, HttpServletResponse response) {
+        try {
+            List<ResumeFieldDefinition> defs = fieldDefinitionService.getFieldDefinitionsByCycleId(cycleId);
+            List<PdfExportUtil.TemplateField> fields = defs.stream()
+                    // 停用的字段学生根本看不到，模板里也不该出现
+                    .filter(d -> !Boolean.FALSE.equals(d.getIsActive()))
+                    .sorted(java.util.Comparator.comparing(
+                            d -> d.getSortOrder() == null ? Integer.MAX_VALUE : d.getSortOrder()))
+                    .map(d -> new PdfExportUtil.TemplateField(
+                            d.getFieldLabel(), d.getFieldType(),
+                            Boolean.TRUE.equals(d.getIsRequired()),
+                            d.getOptions() == null ? List.of() : d.getOptions(),
+                            d.getPlaceholder()))
+                    .toList();
+            if (fields.isEmpty()) {
+                response.sendError(HttpServletResponse.SC_NOT_FOUND, "该周期还没有配置报名表字段");
+                return;
+            }
+
+            club.boyuan.official.persistence.entity.RecruitmentCycle cycle =
+                    recruitmentCycleMapper.selectById(cycleId);
+            String cycleName = cycle != null && cycle.getCycleName() != null ? cycle.getCycleName() : "招新报名表";
+            byte[] pdf = PdfExportUtil.exportBlankTemplateToPdf(cycleName, fields);
+
+            response.setContentType("application/pdf");
+            // 文件名含中文，按 RFC 5987 给 filename* —— 直接写会被部分浏览器截成乱码
+            String ascii = "resume_template_" + cycleId + ".pdf";
+            String utf8 = java.net.URLEncoder.encode(cycleName + "报名表模板.pdf",
+                    java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
+            response.setHeader("Content-Disposition",
+                    "attachment; filename=\"" + ascii + "\"; filename*=UTF-8''" + utf8);
+            response.setContentLength(pdf.length);
+            response.getOutputStream().write(pdf);
+            response.getOutputStream().flush();
+            logger.info("导出周期{}的空白报名表模板，共{}项", cycleId, fields.size());
+        } catch (Exception e) {
+            logger.error("导出空白报名表模板失败，周期ID: {}", cycleId, e);
+            try {
+                response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "导出失败");
+            } catch (Exception ex) {
+                logger.error("设置错误响应失败", ex);
+            }
+        }
+    }
+
+    /**
      * 条件查询简历列表（管理员）。
      * 支持按姓名、专业、期望部门、招募周期、状态等多条件组合查询。
      */
