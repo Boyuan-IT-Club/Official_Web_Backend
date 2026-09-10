@@ -54,6 +54,8 @@ import java.util.stream.Collectors;
 public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
 
     private static final int RESUME_STATUS_SUBMITTED = 2;
+    /** 初筛未通过：不参与分配 */
+    private static final int RESUME_STATUS_SCREEN_REJECTED = 5;
     private static final int SESSION_STATUS_AVAILABLE = 1;
     private static final int SCHEDULE_STATUS_ACTIVE = 1;
     private static final int DEFAULT_DURATION_MINUTES = 10;
@@ -428,9 +430,15 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
                 ? DEFAULT_DURATION_MINUTES : session.getInterviewDurationMinutes();
     }
 
+    /**
+     * 参与分配的简历：已提交及以后，但<b>排除初筛未通过</b>(5)。
+     * 未通过初筛的同学本届流程已结束，再把他排进场次会让面试官白等一个不会来的人。
+     */
     private Map<Integer, Resume> loadSubmittedResumes(Integer cycleId) {
         return resumeService.getAllResumesByCycleId(cycleId).stream()
-                .filter(r -> r.getStatus() != null && r.getStatus() >= RESUME_STATUS_SUBMITTED)
+                .filter(r -> r.getStatus() != null
+                        && r.getStatus() >= RESUME_STATUS_SUBMITTED
+                        && r.getStatus() != RESUME_STATUS_SCREEN_REJECTED)
                 .collect(Collectors.toMap(Resume::getResumeId, r -> r, (a, b) -> a));
     }
 

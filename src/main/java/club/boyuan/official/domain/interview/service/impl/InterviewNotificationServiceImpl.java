@@ -105,6 +105,14 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
         notificationProducer.publishResult(resultId, customBody);
     }
 
+    @Override
+    public void enqueueResumeRejectedNotification(Integer resumeId, String customBody) {
+        if (resumeId == null) {
+            return;
+        }
+        notificationProducer.publishResumeRejected(resumeId, customBody);
+    }
+
     /**
      * 由 MQ 消费者调用：解析消息、发送邮件、记录日志。
      */
@@ -125,6 +133,11 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
 
         if (type == InterviewNotificationType.ADMISSION || type == InterviewNotificationType.REJECTION) {
             deliverResult(type, message);
+            return;
+        }
+
+        if (type == InterviewNotificationType.RESUME_REJECTED) {
+            deliverResumeRejected(message);
             return;
         }
 
@@ -281,6 +294,54 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
          */
         sendAndLog(effectiveType, null, resultId, email, subject, body, html, schedule,
                 message.getRequestId());
+    }
+
+    /**
+     * 简历未通过初筛的通知。
+     *
+     * 与结果通知的差别：这时还没有面试安排、没有结果行，收件人只能从简历定位；
+     * 周期配置里只用得上「本届负责人联系方式」（没有面试时间地点可言）。
+     * 去重同样按 requestId——管理员想重发就能重发。
+     */
+    private void deliverResumeRejected(InterviewNotificationMessage message) {
+        Integer resumeId = message.getResumeId();
+        if (resumeId == null) {
+            return;
+        }
+        String requestId = message.getRequestId();
+        if (StringUtils.hasText(requestId) && alreadySentByRequest(requestId)) {
+            log.info("同一次发送已投递过（MQ 重投），跳过 requestId={}, resumeId={}", requestId, resumeId);
+            return;
+        }
+
+        Resume resume = resumeService.getResumeById(resumeId);
+        if (resume == null) {
+            return;
+        }
+        String email = resumeDataService.getResumeEmail(resume);
+        String name = resumeDataService.getResumeName(resume);
+        if (!StringUtils.hasText(email)) {
+            User user = resume.getUserId() == null ? null : userService.getById(resume.getUserId());
+            email = user != null ? user.getEmail() : null;
+            if (name == null && user != null) {
+                name = user.getName();
+            }
+        }
+        if (!StringUtils.hasText(email)) {
+            log.warn("简历初筛通知无邮箱 resumeId={}", resumeId);
+            return;
+        }
+
+        NoticeConfig cfg = noticeConfig(resume.getCycleId());
+        InterviewNotificationType type = InterviewNotificationType.RESUME_REJECTED;
+        String subject = InterviewNotificationEmailBuilder.subject(type);
+        String body = InterviewNotificationEmailBuilder.body(
+                type, name, null, null, message.getCustomBody());
+        String html = InterviewNotificationEmailBuilder.html(
+                type, name, null, null, cfg.academicYear(), null, List.of(),
+                cfg.contactInfo(), message.getCustomBody()).html();
+
+        sendAndLog(type, null, null, email, subject, body, html, null, requestId);
     }
 
     /** 邮件要用到的周期级配置。周期取不到时全部为空，模板会自动省略对应段落 */

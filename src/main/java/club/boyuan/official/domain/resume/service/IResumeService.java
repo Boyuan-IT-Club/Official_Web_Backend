@@ -143,4 +143,11 @@ public interface IResumeService {
      * 全后端没有任何写入口 —— 管理端因此没有打分的地方。
      */
     ResumeDTO updateResumeScore(Integer resumeId, Integer score, Integer scorerUserId);
+
+    /**
+     * 批量初筛：把简历标为通过(4)/未通过(5)。草稿不受影响。
+     *
+     * @return 实际更新的份数
+     */
+    int batchScreening(java.util.List<Integer> resumeIds, boolean passed);
 }

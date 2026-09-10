@@ -48,6 +48,7 @@ public class ResumeController {
     private final IUserService userService;
     private final club.boyuan.official.persistence.mapper.ResumeMapper resumeMapper;
     private final club.boyuan.official.persistence.mapper.RecruitmentCycleMapper recruitmentCycleMapper;
+    private final club.boyuan.official.domain.interview.service.InterviewNotificationService interviewNotificationService;
 
 
     /** 三态化：草稿且周期已截止 → 状态 3（已截止未提交），仅影响展示层 */
@@ -327,16 +328,95 @@ public class ResumeController {
         return ResponseEntity.ok(new ResponseMessage<>(200, "简历评分已更新", dto));
     }
 
+    /**
+     * 批量初筛：把选中的简历标为通过(4)/未通过(5)。
+     *
+     * 与「面试结果」是两回事：初筛决定谁能进面试，结果决定谁被录取。
+     * 未通过初筛的简历不再参与自动分配、也不能再提交面试意向。
+     * 本接口只改状态、不发邮件——通知走下面的 screening/notify，
+     * 让管理员先核对名单再决定什么时候通知（与录取流程一致）。
+     */
+    @PostMapping("/screening/batch")
+    @PreAuthorize("hasAuthority('resume:audit')")
+    public ResponseEntity<ResponseMessage<Map<String, Integer>>> batchScreening(
+            @RequestBody Map<String, Object> body) {
+        List<Integer> resumeIds = toIntList(body.get("resumeIds"));
+        Object passedRaw = body == null ? null : body.get("passed");
+        if (resumeIds.isEmpty() || passedRaw == null) {
+            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD,
+                    "请提供 resumeIds 与 passed");
+        }
+        boolean passed = Boolean.parseBoolean(String.valueOf(passedRaw));
+        logger.info("管理员{}批量初筛 {} 份简历，结论: {}",
+                SecurityUtil.getCurrentUsername(), resumeIds.size(), passed ? "通过" : "未通过");
+        int updated = resumeService.batchScreening(resumeIds, passed);
+        return ResponseEntity.ok(ResponseMessage.success(Map.of("updated", updated)));
+    }
+
+    /**
+     * 给初筛未通过的同学批量发送通知。
+     *
+     * 只对状态确为「未通过初筛」的简历发送——避免误选把还在流程里的人
+     * 通知成落选。每份简历一次入队、各自一个 requestId，可重复发送。
+     */
+    @PostMapping("/screening/notify")
+    @PreAuthorize("hasAuthority('resume:audit')")
+    public ResponseEntity<ResponseMessage<Map<String, Object>>> notifyScreenedOut(
+            @RequestBody Map<String, Object> body) {
+        List<Integer> resumeIds = toIntList(body.get("resumeIds"));
+        if (resumeIds.isEmpty()) {
+            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "请提供 resumeIds");
+        }
+        String customBody = body.get("customMessage") == null
+                ? null : String.valueOf(body.get("customMessage"));
+
+        List<Integer> queued = new java.util.ArrayList<>();
+        List<Integer> skipped = new java.util.ArrayList<>();
+        for (Integer resumeId : resumeIds) {
+            Resume resume = resumeService.getResumeById(resumeId);
+            if (resume != null && Integer.valueOf(5).equals(resume.getStatus())) {
+                interviewNotificationService.enqueueResumeRejectedNotification(resumeId, customBody);
+                queued.add(resumeId);
+            } else {
+                skipped.add(resumeId);
+            }
+        }
+        logger.info("管理员{}发送初筛未通过通知，入队 {} 份，跳过 {} 份",
+                SecurityUtil.getCurrentUsername(), queued.size(), skipped.size());
+        return ResponseEntity.ok(ResponseMessage.success(
+                Map.of("queued", queued.size(), "skipped", skipped)));
+    }
+
+    /** 请求体里的 id 数组转 List<Integer>，容忍字符串与数字混写 */
+    private static List<Integer> toIntList(Object raw) {
+        if (!(raw instanceof List<?> list)) {
+            return List.of();
+        }
+        List<Integer> out = new java.util.ArrayList<>();
+        for (Object o : list) {
+            if (o != null) {
+                try {
+                    out.add(Integer.valueOf(String.valueOf(o)));
+                } catch (NumberFormatException ignored) {
+                    // 非法 id 直接跳过，不因为一个脏值让整批失败
+                }
+            }
+        }
+        return out;
+    }
+
     @PutMapping("/{resumeId}/status/{status}")
     @PreAuthorize("hasAuthority('resume:audit')")
     public ResponseEntity<ResponseMessage<?>> updateResumeStatus(
             @PathVariable Integer resumeId, @PathVariable Integer status) {
         logger.info("管理员{}更新简历{}状态为{}", SecurityUtil.getCurrentUsername(), resumeId, status);
 
-        // 状态三态化：1草稿 2已提交（3=已截止由系统按周期截止派生，不允许手工设置）
-        if (status == null || (status != 1 && status != 2)) {
+        // 1草稿 2已提交 4通过初筛 5未通过初筛；
+        // 3 是「草稿且周期已截止」的派生态，不允许手工设置
+        if (status == null || (status != 1 && status != 2 && status != 4 && status != 5)) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD,
-                    "简历状态仅支持 1(草稿)/2(已提交)，评审结论请使用面试结果模块");
+                    "简历状态仅支持 1(草稿)/2(已提交)/4(通过初筛)/5(未通过初筛)，"
+                            + "录取结论请使用面试结果模块");
         }
         Resume resume = resumeService.getResumeById(resumeId);
         if (resume == null) {
