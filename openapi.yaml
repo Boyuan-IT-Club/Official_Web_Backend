@@ -1315,6 +1315,82 @@ paths:
                 - message
                 - data
           headers: {}
+  /api/resumes/admin/by-resume/{resumeId}:
+    get:
+      summary: 按简历ID查看简历(含权威归属)
+      deprecated: false
+      description: 初筛执行(Agent)的权威取数入口——只认 resume_id 一个事实源，由本端点派生简历归属的
+        userId 与 cycleId（方案 A：run API 不再信任前端传入的 user_id）。
+      tags:
+      - 简历相关功能——管理员
+      parameters:
+      - name: resumeId
+        in: path
+        description: 简历ID
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: 业务状态码（200 表示成功）
+                  message:
+                    type: string
+                    description: 提示信息
+                  data:
+                    type: object
+                    properties:
+                      resumeId:
+                        type: integer
+                        description: 简历 ID
+                      userId:
+                        type: integer
+                        description: 用户 ID
+                      cycleId:
+                        type: integer
+                        description: 招募周期 ID
+                      status:
+                        type: integer
+                        description: 状态
+                      submittedAt:
+                        type: string
+                        format: date-time
+                        description: 提交时间
+                      createdAt:
+                        type: string
+                        format: date-time
+                        description: 创建时间
+                      updatedAt:
+                        type: string
+                        format: date-time
+                        description: 更新时间
+                      simpleFields:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/SimpleResumeField'
+                        description: 简历字段简要列表
+                    required:
+                    - resumeId
+                    - userId
+                    - cycleId
+                    - status
+                    - submittedAt
+                    - createdAt
+                    - updatedAt
+                    - simpleFields
+                    description: 响应数据
+                required:
+                - code
+                - message
+                - data
+          headers: {}
   /api/resumes/admin/{userId}/{cycleId}:
     get:
       summary: 查看用户简历

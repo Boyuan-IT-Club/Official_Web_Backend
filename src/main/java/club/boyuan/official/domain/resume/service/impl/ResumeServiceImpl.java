@@ -36,11 +36,13 @@ import java.util.stream.Collectors;
 @AllArgsConstructor
 public class ResumeServiceImpl implements IResumeService {
 
-    /** 简历状态：1草稿 2已提交 3(草稿且周期已截止，派生态) 4通过初筛 5未通过初筛 */
+    /** 简历状态：1草稿 2已提交 3(草稿且周期已截止，派生态) 4通过初筛 5未通过初筛 6=AI初筛中(瞬态,仅 agent 初筛 job 运行期间) */
     public static final int STATUS_DRAFT = 1;
     public static final int STATUS_SUBMITTED = 2;
     public static final int STATUS_SCREEN_PASSED = 4;
     public static final int STATUS_SCREEN_REJECTED = 5;
+    /** 6=AI初筛中：瞬态，仅 agent 初筛 job 运行期间设置，结束后回落 2；与 4/5 正交。 */
+    public static final int STATUS_AI_SCREENING = 6;
     
     private static final Logger logger = LoggerFactory.getLogger(ResumeServiceImpl.class);
     
