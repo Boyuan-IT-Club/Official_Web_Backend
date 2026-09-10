@@ -1,5 +1,7 @@
 package club.boyuan.official.domain.interview.service;
 
+import club.boyuan.official.common.exception.BusinessException;
+import club.boyuan.official.common.exception.BusinessExceptionEnum;
 import club.boyuan.official.domain.interview.dto.NotificationCenterDTO;
 import club.boyuan.official.domain.resume.service.impl.ResumeServiceImpl;
 import club.boyuan.official.infra.notification.InterviewNotificationType;
@@ -35,6 +37,7 @@ public class NotificationCenterService {
     private final InterviewNotificationLogMapper notificationLogMapper;
     private final InterviewSessionMapper sessionMapper;
     private final DepartmentMapper departmentMapper;
+    private final club.boyuan.official.messaging.InterviewNotificationProducer notificationProducer;
 
     public NotificationCenterDTO overview(Integer cycleId) {
         List<Resume> rejected = resumeMapper.selectList(new LambdaQueryWrapper<Resume>()
@@ -75,6 +78,53 @@ public class NotificationCenterService {
                 .screenedOut(screenedOut)
                 .schedules(buildScheduleNotices(cycleId, schedules, eveSent, daySent))
                 .build();
+    }
+
+    /**
+     * 手动补发挂在面试安排上的通知（安排通知 / 前一天提醒 / 当天提醒）。
+     *
+     * 这三类平时由系统触发：排上场次时发安排通知，定时任务按面试日期发提醒。
+     * 但会漏——手动改过面试时间、场次是提醒跑完之后才排的、MQ 那阵子堵了，
+     * 管理员发现「待发 6」却没有任何办法补，只能干等下一次定时。
+     *
+     * 只投递没发过的：消费端本来就有 alreadySent 去重，这里先滤一遍是为了
+     * 能如实告诉管理员「这次发了几个、几个本来就发过」，而不是投进去石沉大海。
+     */
+    public Map<String, Object> sendScheduleNotices(Integer cycleId, InterviewNotificationType type,
+                                                   List<Integer> scheduleIds) {
+        if (type != InterviewNotificationType.BOOKING_SUCCESS
+                && type != InterviewNotificationType.EVE_REMINDER
+                && type != InterviewNotificationType.DAY_REMINDER) {
+            throw new BusinessException(BusinessExceptionEnum.ILLEGAL_ARGUMENT,
+                    "这类通知不能按面试安排发送");
+        }
+        if (scheduleIds == null || scheduleIds.isEmpty()) {
+            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "请提供 scheduleIds");
+        }
+
+        // 归属校验：只认属于本周期且仍生效的安排，免得请求里夹带别届的 id
+        Set<Integer> valid = scheduleMapper.selectList(new LambdaQueryWrapper<InterviewSchedule>()
+                        .eq(InterviewSchedule::getCycleId, cycleId)
+                        .eq(InterviewSchedule::getStatus, 1)
+                        .in(InterviewSchedule::getScheduleId, scheduleIds))
+                .stream().map(InterviewSchedule::getScheduleId).collect(Collectors.toSet());
+
+        Set<Integer> sent = sentScheduleIds(type, valid);
+        List<Integer> queued = new ArrayList<>();
+        List<Integer> skipped = new ArrayList<>();
+        for (Integer id : scheduleIds) {
+            if (!valid.contains(id) || sent.contains(id)) {
+                skipped.add(id);
+                continue;
+            }
+            if (type == InterviewNotificationType.BOOKING_SUCCESS) {
+                notificationProducer.publishBookingSuccess(id, java.util.UUID.randomUUID().toString());
+            } else {
+                notificationProducer.publishReminder(type, id);
+            }
+            queued.add(id);
+        }
+        return Map.of("queued", queued.size(), "skipped", skipped);
     }
 
     private NotificationCenterDTO.Bucket bucket(long total, long sent) {
