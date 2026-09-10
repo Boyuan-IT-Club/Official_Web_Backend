@@ -1636,11 +1636,22 @@ paths:
           type: integer
       - name: expectedDepartment
         in: query
-        description: ''
+        description: >-
+          志愿部门名。配合 choiceRank 使用：给了 first/second 就按志愿位次精确匹配
+          （走 interview_preference），不给则一二志愿命中任一即可。
         required: false
         example: 技术部
         schema:
           type: string
+      - name: choiceRank
+        in: query
+        description: >-
+          志愿位次：first 只看第一志愿、second 只看第二志愿；不传表示不限。
+          只在给了 expectedDepartment 时生效。
+        required: false
+        schema:
+          type: string
+          enum: [first, second]
       - name: sortBy
         in: query
         description: ''

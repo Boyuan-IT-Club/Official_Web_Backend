@@ -267,14 +267,16 @@ public class ResumeServiceImpl implements IResumeService {
     }
 
     @Override
-    public List<ResumeDTO> queryResumes(String name, String major, String expectedDepartment, Integer cycleId, String status) {
+    public List<ResumeDTO> queryResumes(String name, String major, String expectedDepartment, String choiceRank, Integer cycleId, String status) {
         logger.info("条件查询简历：name={}, major={}, expectedDepartment={}, cycleId={}, status={}", name, major, expectedDepartment, cycleId, status);
         // 构建缓存键
         String cacheKey = QUERY_RESUME_CACHE_PREFIX + "name:" + (name != null ? name : "") 
                 + ":major:" + (major != null ? major : "")
                 + ":expectedDepartment:" + (expectedDepartment != null ? expectedDepartment : "")
                 + ":cycleId:" + (cycleId != null ? cycleId : "") 
-                + ":status:" + (status != null ? status : "");
+                + ":status:" + (status != null ? status : "")
+                // 位次必须进缓存键：不带它，切「第一志愿/第二志愿」查到的是上一次的结果
+                + ":rank:" + (choiceRank != null ? choiceRank : "");
         
         try {
             // 尝试从缓存中获取
@@ -285,7 +287,7 @@ public class ResumeServiceImpl implements IResumeService {
             }
             
             // 缓存未命中，从数据库查询
-            List<Resume> resumes = resumeMapper.queryResumes(name, major, expectedDepartment, cycleId, status);
+            List<Resume> resumes = resumeMapper.queryResumes(name, major, expectedDepartment, choiceRank, cycleId, status);
             List<ResumeDTO> result = new ArrayList<>();
             // 一次批量取回本页所有简历的字段值，替掉循环里的逐份查询
             java.util.Map<Integer, List<SimpleResumeFieldDTO>> fieldsByResume =
@@ -324,7 +326,7 @@ public class ResumeServiceImpl implements IResumeService {
     }
 
     @Override
-    public PageResultDTO<ResumeDTO> queryResumesWithPagination(String name, String major, String expectedDepartment, Integer cycleId, String status, int page, int size, String sortBy, String sortOrder) {
+    public PageResultDTO<ResumeDTO> queryResumesWithPagination(String name, String major, String expectedDepartment, String choiceRank, Integer cycleId, String status, int page, int size, String sortBy, String sortOrder) {
         logger.info("分页条件查询简历：name={}, major={}, expectedDepartment={}, cycleId={}, status={}, page={}, size={}, sortBy={}, sortOrder={}", name, major, expectedDepartment, cycleId, status, page, size, sortBy, sortOrder);
         
         try {
@@ -337,10 +339,10 @@ public class ResumeServiceImpl implements IResumeService {
             int offset = page * size;
             
             // 查询总数
-            int totalElements = resumeMapper.countResumes(name, major, expectedDepartment, cycleId, status);
+            int totalElements = resumeMapper.countResumes(name, major, expectedDepartment, choiceRank, cycleId, status);
             
             // 查询数据
-            List<Resume> resumes = resumeMapper.queryResumesWithPagination(name, major, expectedDepartment, cycleId, status, offset, size, sortBy, sortOrder);
+            List<Resume> resumes = resumeMapper.queryResumesWithPagination(name, major, expectedDepartment, choiceRank, cycleId, status, offset, size, sortBy, sortOrder);
             
             // 转换为DTO
             List<ResumeDTO> result = new ArrayList<>();

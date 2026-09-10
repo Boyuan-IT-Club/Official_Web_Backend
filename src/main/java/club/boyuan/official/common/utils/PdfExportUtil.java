@@ -152,6 +152,24 @@ public class PdfExportUtil {
     }
 
     /**
+     * 表单里不渲染的字段——导出一律不印。
+     *
+     * 与前端 resumeFieldRegistry 的 inForm=false 加 DEPRECATED_RESUME_FIELD_KEYS
+     * 同一份清单。那张规范表在前端，Java 侧只能手抄，改那边时记得成对改这里。
+     *
+     * 为什么导出也要滤：字段定义表里这些 key 大多还 is_active=1（历史周期建的），
+     * 只是表单不渲染。不滤的话导出的简历会多出「个人简介」这类空栏，
+     * 学生看到一个自己从没填过、也填不了的标题，合理地问「我简历里没有这一项啊」。
+     */
+    public static final java.util.Set<String> NON_FORM_FIELD_KEYS = java.util.Set.of(
+            // 由第一/第二志愿合成，不单独成栏
+            "expected_departments",
+            // 与「自我介绍」重复，2026-09 已从表单撤下
+            "introduction",
+            // 方案A（自助抢时段）遗留：时间窗现在由投递页的「面试意向」卡管
+            "expected_interview_time", "second_interview_time", "can_attend_offline_interview");
+
+    /**
      * 空白报名表模板的一项。
      *
      * 用本地 record 而不是直接收 ResumeFieldDefinition：这个工具类在 common 层，
@@ -329,7 +347,11 @@ public class PdfExportUtil {
         }
         getChineseBaseFont();
         Content c = new Content();
-        c.fields = dto.getSimpleFields() != null ? dto.getSimpleFields() : new ArrayList<>();
+        // 表单里不渲染的字段在这一步就滤掉，后面每个小节都不必各自判断
+        c.fields = (dto.getSimpleFields() != null ? dto.getSimpleFields() : new ArrayList<SimpleResumeFieldDTO>())
+                .stream()
+                .filter(f -> f.getFieldKey() == null || !NON_FORM_FIELD_KEYS.contains(f.getFieldKey()))
+                .toList();
         for (SimpleResumeFieldDTO f : c.fields) {
             if (f.getFieldKey() != null) {
                 c.byKey.put(f.getFieldKey(), f.getFieldValue());
