@@ -115,28 +115,27 @@ class PdfExportFontTest {
     }
 
     @Test
-    @DisplayName("PDF 用管理员配置的标签，而不是写死的中文名")
+    @DisplayName("管理员改过的小节标题要出现在 PDF 里")
     void usesAdminConfiguredLabels() throws Exception {
-        // 管理员把「GitHub主页」改成「代码仓库」后，表单跟着变而 PDF 不变，
+        // 管理员把「项目经验」改成「作品集」后，表单跟着变而 PDF 不变，
         // 同一份简历「表里填的」和「导出的」就对不上了
         ResumeDTO dto = new ResumeDTO();
         dto.setUserId(1);
         dto.setUserName("张三");
         dto.setStatus(2);
 
-        SimpleResumeFieldDTO gh = new SimpleResumeFieldDTO();
-        gh.setFieldKey("github");
-        gh.setFieldLabel("代码仓库");
-        gh.setFieldValue("github.com/zhangsan");
-        gh.setFieldType("text");
-        gh.setSortOrder(1);
-        dto.setSimpleFields(java.util.List.of(gh));
+        SimpleResumeFieldDTO f = new SimpleResumeFieldDTO();
+        f.setFieldKey("project_experience");
+        f.setFieldLabel("作品集");
+        f.setFieldValue("给社团写过一套部署脚本");
+        f.setFieldType("textarea");
+        f.setSortOrder(1);
+        dto.setSimpleFields(java.util.List.of(f));
 
-        String text = com.itextpdf.text.pdf.parser.PdfTextExtractor.getTextFromPage(
-                new com.itextpdf.text.pdf.PdfReader(PdfExportUtil.exportResumeToPdf(dto)), 1);
+        String text = extractText(dto);
 
-        assertTrue(text.contains("代码仓库"), "没用上管理员改的标签，实际抽到: " + text);
-        assertTrue(!text.contains("GitHub主页"), "仍在使用写死的标签");
+        assertTrue(text.contains("作品集"), "没用上管理员改的标签，实际抽到: " + text);
+        assertTrue(!text.contains("项目经验"), "仍在使用写死的标签");
     }
 
     @Test
@@ -148,15 +147,53 @@ class PdfExportFontTest {
         dto.setStatus(2);
 
         SimpleResumeFieldDTO f = new SimpleResumeFieldDTO();
-        f.setFieldKey("student_id");
+        f.setFieldKey("self_introduction");
         f.setFieldLabel(null);            // 没有标签
-        f.setFieldValue("10235101468");
-        f.setFieldType("text");
+        f.setFieldValue("热爱后端开发");
+        f.setFieldType("textarea");
         f.setSortOrder(1);
         dto.setSimpleFields(java.util.List.of(f));
 
-        String text = com.itextpdf.text.pdf.parser.PdfTextExtractor.getTextFromPage(
+        assertTrue(extractText(dto).contains("自我介绍"),
+                "没有回落到内置标签，实际抽到: " + extractText(dto));
+    }
+
+    /**
+     * 身份行里的字段只出值、不出标签。
+     *
+     * 经典单栏版式把学号、专业、手机、邮箱、GitHub 压成抬头下的两行小字，
+     * 那里加标签只会变吵，而值本身已经自明（一串数字、一个邮箱、一个仓库地址）。
+     * 所以这些字段不再有「标签对不对得上」的问题——但值必须在。
+     */
+    @Test
+    @DisplayName("学号与联系方式出现在抬头的身份行里")
+    void identityLineCarriesValues() throws Exception {
+        ResumeDTO dto = new ResumeDTO();
+        dto.setUserId(1);
+        dto.setUserName("张三");
+        dto.setStatus(2);
+        dto.setSimpleFields(java.util.List.of(
+                field("name", "姓名", "张三"),
+                field("student_id", "学号", "10235101468"),
+                field("github", "代码仓库", "github.com/zhangsan")));
+
+        String text = extractText(dto);
+        assertTrue(text.contains("10235101468"), "学号没出现在 PDF 里，实际抽到: " + text);
+        assertTrue(text.contains("github.com/zhangsan"), "GitHub 没出现在 PDF 里，实际抽到: " + text);
+    }
+
+    private static SimpleResumeFieldDTO field(String key, String label, String value) {
+        SimpleResumeFieldDTO f = new SimpleResumeFieldDTO();
+        f.setFieldKey(key);
+        f.setFieldLabel(label);
+        f.setFieldValue(value);
+        f.setFieldType("text");
+        f.setSortOrder(1);
+        return f;
+    }
+
+    private static String extractText(ResumeDTO dto) throws Exception {
+        return com.itextpdf.text.pdf.parser.PdfTextExtractor.getTextFromPage(
                 new com.itextpdf.text.pdf.PdfReader(PdfExportUtil.exportResumeToPdf(dto)), 1);
-        assertTrue(text.contains("学号"), "没有回落到内置标签，实际抽到: " + text);
     }
 }

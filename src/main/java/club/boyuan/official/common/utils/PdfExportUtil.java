@@ -54,7 +54,11 @@ public class PdfExportUtil {
             // 本地开发环境。这里黑体排在宋体前面，是为了跟生产对齐：
             // 容器里命中的是 Noto **Sans** CJK，本地若先选到宋体，
             // 调版式时看到的字面观感和线上不是一回事。
+            //
+            // PingFang 在新版 macOS 上已不在这个路径（本机实测落到了宋体，
+            // 导出的样张是衬线体，和线上完全两个观感）。补上 Hiragino Sans GB 兜底。
             "/System/Library/Fonts/PingFang.ttc",
+            "/System/Library/Fonts/Hiragino Sans GB.ttc",
             "/System/Library/Fonts/STHeiti Medium.ttc",
             "/System/Library/Fonts/Supplemental/Songti.ttc",
             "C:/Windows/Fonts/msyh.ttc",
@@ -76,217 +80,77 @@ public class PdfExportUtil {
      *                   本类拿不到存储服务（静态工具类），由调用方先取回字节传入；
      *                   传 null 则退回旧逻辑——扫字段里的 base64 data URL。
      */
-    public static byte[] exportResumeToPdf(ResumeDTO resumeDTO, byte[] photoBytes) throws BusinessException {
+    public static byte[] exportResumeToPdf(ResumeDTO dto, byte[] photoBytes) throws BusinessException {
         try {
-            // 在开始之前检查字体可用性
-            System.out.println("开始初始化PDF字体...");
-            BaseFont testFont = getChineseBaseFont();
-            
-            // 检查简历数据是否为空
-            if (resumeDTO == null) {
-                throw new BusinessException(BusinessExceptionEnum.EXPORT_PDF_FAILED, "PDF导出失败: 简历数据为空");
-            }
-            
-            System.out.println("开始导出PDF，用户ID: " + resumeDTO.getUserId());
-            if (resumeDTO.getSimpleFields() != null) {
-                System.out.println("简历字段数量: " + resumeDTO.getSimpleFields().size());
-            } else {
-                System.out.println("警告: 简历字段为null");
-            }
-            
+            Content c = readContent(dto, photoBytes);
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
-
-            Document document = new Document(PageSize.A4, 48, 48, 44, 52);
-            PdfWriter writer = PdfWriter.getInstance(document, baos);
-            // 页码画在每页底部：项目经验写得长时简历会有两三页，没页码的多页文档在
-            // 打印出来传阅时很容易乱序
+            Document doc = new Document(PageSize.A4, 52, 52, 44, 52);
+            PdfWriter writer = PdfWriter.getInstance(doc, baos);
             writer.setPageEvent(new FooterPageEvent());
-            document.open();
+            doc.open();
 
-            BaseColor brand = new BaseColor(31, 58, 96);      // 深蓝
-            BaseColor accent = new BaseColor(31, 118, 204);   // 品牌蓝
-            BaseColor lightLine = new BaseColor(225, 232, 240);
-            BaseColor subText = new BaseColor(110, 120, 135);
-
-            Font sectionFont = getFont(12, Font.BOLD, accent);
-            Font labelFont = getFont(9, Font.NORMAL, subText);
-            Font valueFont = getFont(11, Font.NORMAL, new BaseColor(35, 40, 48));
+            BaseColor accent = new BaseColor(31, 118, 204);
+            BaseColor sub = new BaseColor(110, 120, 135);
+            BaseColor ink = new BaseColor(35, 40, 48);
             Font bodyFont = getFont(10, Font.NORMAL, new BaseColor(55, 62, 72));
-            Font footFont = getFont(8, Font.NORMAL, subText);
+            Font sectionFont = getFont(11, Font.BOLD, accent);
             Font chipFont = getFont(9, Font.NORMAL, new BaseColor(31, 58, 96));
             BaseColor chipBg = new BaseColor(234, 239, 247);
 
-            try {
-                java.util.Map<String, String> byKey = new java.util.LinkedHashMap<>();
-                java.util.List<SimpleResumeFieldDTO> fields = resumeDTO.getSimpleFields() != null
-                        ? resumeDTO.getSimpleFields() : new ArrayList<>();
-                Image photoImage = createImageFromBytes(photoBytes);
-                // 管理员在字段配置里改过的标签，导出要跟着走 ——
-                // 否则表单显示「代码仓库」而 PDF 里还写着 GitHub，
-                // 同一份简历「表里填的」和「导出的」对不上。
-                java.util.Map<String, String> labelOf = new java.util.LinkedHashMap<>();
-                for (SimpleResumeFieldDTO f : fields) {
-                    if (f.getFieldKey() != null && f.getFieldLabel() != null
-                            && !f.getFieldLabel().trim().isEmpty()) {
-                        labelOf.put(f.getFieldKey(), f.getFieldLabel().trim());
-                    }
-                }
-                for (SimpleResumeFieldDTO f : fields) {
-                    if (f.getFieldKey() != null) byKey.put(f.getFieldKey(), f.getFieldValue());
-                    if (photoImage == null && isBase64Image(f.getFieldValue())) {
-                        photoImage = createImageFromBase64(f.getFieldValue());
-                    }
-                }
-
-                String name = firstNonBlank(byKey.get("name"), "未填写姓名");
-
-                // ── 页眉：大号姓名 + 品牌色副标题 + 品牌色细线 ──
-                // 原先是整块深蓝横幅，打印/黑白复印时一团黑；改为留白页眉更耐看，
-                // 与前端 Word 导出（exportResume.ts）保持同一版式语言
-                PdfPTable head = new PdfPTable(photoImage != null ? new float[]{4f, 1f} : new float[]{1f});
-                head.setWidthPercentage(100);
-                PdfPCell hc = new PdfPCell();
-                hc.setBorder(Rectangle.NO_BORDER);
-                hc.setPaddingLeft(0);
-                Paragraph bt = new Paragraph(name, getFont(24, Font.BOLD, new BaseColor(35, 40, 48)));
-                Paragraph bs = new Paragraph("博远信息技术社 · 招新申请简历", getFont(10, Font.NORMAL, accent));
-                bs.setSpacingBefore(5);
-                // 社徽跟在副标题这一行的行首，和文字同高（12pt），
-                // 不单独占一行——简历的主角是姓名，logo 只是署名
-                Image mark = loadBrandLogo();
-                if (mark != null) {
-                    mark.scaleToFit(14f, 14f);
-                    Chunk markChunk = new Chunk(mark, 0, -3f, true);
-                    bs.add(0, new Chunk("  "));
-                    bs.add(0, markChunk);
-                }
-                hc.addElement(bt);
-                hc.addElement(bs);
-                head.addCell(hc);
-                if (photoImage != null) {
-                    PdfPCell hp = new PdfPCell(photoImage, true);
-                    hp.setBorder(Rectangle.BOX);
-                    hp.setBorderColor(lightLine);
-                    hp.setBorderWidth(0.8f);
-                    hp.setHorizontalAlignment(Element.ALIGN_RIGHT);
-                    hp.setPadding(3f);
-                    head.addCell(hp);
-                }
-                head.setSpacingAfter(6);
-                document.add(head);
-
-                // 品牌色分隔线
-                PdfPTable rule = new PdfPTable(1);
-                rule.setWidthPercentage(100);
-                PdfPCell rc = new PdfPCell();
-                rc.setBorder(Rectangle.BOTTOM);
-                rc.setBorderColorBottom(accent);
-                rc.setBorderWidthBottom(1.6f);
-                rc.setFixedHeight(2f);
-                rule.addCell(rc);
-                rule.setSpacingAfter(12);
-                document.add(rule);
-
-                // ── 基本信息（双列，空字段也列出标签——空草稿导出不再是"什么都没有"）──
-                // 顺序与网页、Word 导出一致（学号 → 性别 → 年级 → 专业 → 邮箱 →
-                // 手机 → GitHub）。三处此前各有一套写死的顺序，同一份简历
-                // 在网页、PDF、Word 里长得都不一样。
-                java.util.List<String[]> basics = new ArrayList<>();
-                addBasic(basics, labelOf.getOrDefault("student_id", "学号"), byKey.get("student_id"));
-                addBasic(basics, labelOf.getOrDefault("gender", "性别"), byKey.get("gender"));
-                addBasic(basics, labelOf.getOrDefault("grade", "年级"), byKey.get("grade"));
-                addBasic(basics, labelOf.getOrDefault("major", "专业"), byKey.get("major"));
-                addBasic(basics, labelOf.getOrDefault("email", "邮箱"), byKey.get("email"));
-                addBasic(basics, labelOf.getOrDefault("phone", "手机"), byKey.get("phone"));
-                addBasic(basics, labelOf.getOrDefault("github", "GitHub"), byKey.get("github"));
-
-                addBasicGrid(document, basics, labelFont, valueFont);
-
-                // ── 长文本小节 ──────────────────────────────
-                // 小节顺序同样对齐：自我介绍 → 加入理由 → 个人简介 → 期望部门 →
-                // 技术栈 → 项目经验。
-                //
-                // 自我介绍与个人简介拆成两节：原来是 firstNonBlank(两者)，
-                // 学生两个都填时后一个被静默丢掉（网页与 Word 导出有同样的毛病，
-                // 已一并修掉）。
-                addSection(document, labelOf.getOrDefault("self_introduction", "自我介绍"), byKey.get("self_introduction"), sectionFont, bodyFont, accent);
-                addSection(document, labelOf.getOrDefault("reason", "加入理由"), byKey.get("reason"), sectionFont, bodyFont, accent);
-                addSection(document, labelOf.getOrDefault("introduction", "个人简介"), byKey.get("introduction"), sectionFont, bodyFont, accent);
-                addChipSection(document, labelOf.getOrDefault("expected_departments", "期望部门"), byKey.get("expected_departments"),
-                        sectionFont, chipFont, accent, chipBg);
-                addChipSection(document, labelOf.getOrDefault("tech_stack", "技术栈"), byKey.get("tech_stack"),
-                        sectionFont, chipFont, accent, chipBg);
-                addSection(document, labelOf.getOrDefault("project_experience", "项目经验"), byKey.get("project_experience"), sectionFont, bodyFont, accent);
-
-                // 其余未归类字段（模板可扩展，逐条列出）
-                // 「其他信息」只收管理员自己加的字段：标准字段上面已经排过了。
-                //
-                // 这份清单必须与前端 resumeFieldRegistry 的 RESUME_FIELDS 保持一致
-                // （Word 导出那侧已改为从规范表推导）。此前三处各维护一份、互相漂移：
-                // 前端漏了 introduction，导致「个人简介」在 Word 里出现两次；
-                // 这边则漏了 first_choice / second_choice 与两个方案A 遗留字段，
-                // 历史数据里若存过值，就会在 PDF 末尾冒出几栏本不该露面的内容。
-                //
-                // Java 侧没有那张规范表，只能手抄；改规范表时记得成对改这里。
-                java.util.Set<String> known = new java.util.HashSet<>(java.util.Arrays.asList(
-                        "name", "student_id", "gender", "grade", "major", "email", "phone", "github",
-                        "personal_photo", "photo",
-                        "self_introduction", "reason", "introduction",
-                        "first_choice", "second_choice", "expected_departments",
-                        "tech_stack", "project_experience",
-                        // 方案A 遗留，任何界面都不展示
-                        "can_attend_offline_interview", "expected_interview_time",
-                        "second_interview_time"));
-                StringBuilder extras = new StringBuilder();
-                // 自定义字段按管理员配置的 sort_order 排，别按数据库返回的偶然顺序
-                java.util.List<SimpleResumeFieldDTO> orderedExtras = new ArrayList<>(fields);
-                orderedExtras.sort(java.util.Comparator.comparing(
-                        f -> f.getSortOrder() == null ? Integer.MAX_VALUE : f.getSortOrder()));
-                for (SimpleResumeFieldDTO f : orderedExtras) {
-                    if (f.getFieldKey() == null || known.contains(f.getFieldKey())) continue;
-                    if (f.getFieldValue() == null || f.getFieldValue().trim().isEmpty()) continue;
-                    if (isBase64Image(f.getFieldValue())) continue;
-                    if (extras.length() > 0) extras.append("\n");
-                    extras.append(f.getFieldLabel() != null ? f.getFieldLabel() : f.getFieldKey())
-                          .append("：").append(joinIfJsonArray(f.getFieldValue()));
-                }
-                if (extras.length() > 0) {
-                    addSection(document, "其他信息", extras.toString(), sectionFont, bodyFont, accent);
-                }
-
-                // 提交/导出信息放在正文末尾；页码由 PageEvent 画在每页底部
-                Paragraph foot = new Paragraph(
-                        "状态：" + getStatusText(resumeDTO.getStatus())
-                                + (resumeDTO.getSubmittedAt() != null
-                                        ? "    提交时间：" + formatDateTime(resumeDTO.getSubmittedAt()) : "")
-                                + "    导出时间：" + formatDateTime(LocalDateTime.now()),
-                        footFont);
-                foot.setAlignment(Element.ALIGN_RIGHT);
-                foot.setSpacingBefore(22);
-                document.add(foot);
-
-            } finally {
-                document.close();
+            // ── 抬头：姓名左对齐，照片贴右上；两行灰色小字交代身份与联系方式 ──
+            // 密度是这一版的重点：三行就把「你是谁、怎么找到你」说完，
+            // 剩下的纵向空间全留给正文。
+            PdfPTable head = new PdfPTable(c.photo != null ? new float[]{5.2f, 1f} : new float[]{1f});
+            head.setWidthPercentage(100);
+            PdfPCell left = new PdfPCell();
+            left.setBorder(Rectangle.NO_BORDER);
+            left.setPaddingLeft(0);
+            Paragraph nm = new Paragraph(c.name, getFont(23, Font.BOLD, ink));
+            nm.setSpacingAfter(3);
+            left.addElement(nm);
+            String idLine = joinNonBlank(" · ", c.get("major"), c.get("grade"), c.get("student_id"), c.get("gender"));
+            if (!idLine.isBlank()) {
+                left.addElement(new Paragraph(idLine, getFont(9, Font.NORMAL, sub)));
             }
-            
-            byte[] pdfBytes = baos.toByteArray();
-            System.out.println("PDF导出成功，文件大小: " + pdfBytes.length + " bytes");
-            return pdfBytes;
+            String contactLine = joinNonBlank("   |   ", c.get("phone"), c.get("email"), c.get("github"));
+            if (!contactLine.isBlank()) {
+                Paragraph ct = new Paragraph(contactLine, getFont(9, Font.NORMAL, sub));
+                ct.setSpacingBefore(2);
+                left.addElement(ct);
+            }
+            head.addCell(left);
+            if (c.photo != null) {
+                PdfPCell ph = new PdfPCell(c.photo, true);
+                ph.setBorder(Rectangle.NO_BORDER);
+                ph.setHorizontalAlignment(Element.ALIGN_RIGHT);
+                ph.setFixedHeight(62f);
+                head.addCell(ph);
+            }
+            head.setSpacingAfter(9);
+            doc.add(head);
+            doc.add(hairline(accent, 1.4f, 10f));
+
+            addFlatSection(doc, c, "expected_departments", "期望部门", true, sectionFont, bodyFont, chipFont, chipBg, accent);
+            addFlatSection(doc, c, "tech_stack", "技术栈", true, sectionFont, bodyFont, chipFont, chipBg, accent);
+            addFlatSection(doc, c, "self_introduction", "自我介绍", false, sectionFont, bodyFont, chipFont, chipBg, accent);
+            addFlatSection(doc, c, "reason", "加入原因", false, sectionFont, bodyFont, chipFont, chipBg, accent);
+            addFlatSection(doc, c, "introduction", "个人简介", false, sectionFont, bodyFont, chipFont, chipBg, accent);
+            addFlatSection(doc, c, "project_experience", "项目经验", false, sectionFont, bodyFont, chipFont, chipBg, accent);
+            String extras = extraFields(c);
+            if (!extras.isBlank()) {
+                addLeftSectionHeader(doc, "其他信息", sectionFont, accent);
+                doc.add(indented(extras, bodyFont));
+            }
+
+            doc.close();
+            return baos.toByteArray();
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
-            System.err.println("PDF导出失败: " + e.getClass().getSimpleName() + " - " + e.getMessage());
-            e.printStackTrace();
-            
-            // 提供更详细的错误信息
-            if (e.getMessage() != null && e.getMessage().contains("FontManager")) {
-                throw new BusinessException(BusinessExceptionEnum.EXPORT_PDF_FAILED, 
-                    "PDF导出失败: 字体初始化错误，请联系管理员检查服务器配置");
-            } else {
-                throw new BusinessException(BusinessExceptionEnum.EXPORT_PDF_FAILED, 
-                    "PDF导出失败: " + e.getMessage());
-            }
+            throw new BusinessException(BusinessExceptionEnum.EXPORT_PDF_FAILED, "PDF导出失败: " + e.getMessage());
         }
     }
-    
+
     /**
      * 空白报名表模板的一项。
      *
@@ -313,7 +177,7 @@ public class PdfExportUtil {
         try {
             getChineseBaseFont();
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            Document document = new Document(PageSize.A4, 48, 48, 44, 52);
+            Document document = new Document(PageSize.A4, 52, 52, 44, 52);
             PdfWriter writer = PdfWriter.getInstance(document, baos);
             writer.setPageEvent(new FooterPageEvent());
             document.open();
@@ -327,36 +191,15 @@ public class PdfExportUtil {
             String title = (cycleName == null || cycleName.isBlank()) ? "招新报名表" : cycleName.trim();
 
             try {
-                // ── 页眉：与简历导出同构，只是主标题换成周期名 ──
-                PdfPTable head = new PdfPTable(1);
-                head.setWidthPercentage(100);
-                PdfPCell hc = new PdfPCell();
-                hc.setBorder(Rectangle.NO_BORDER);
-                hc.setPaddingLeft(0);
-                hc.addElement(new Paragraph(title, getFont(22, Font.BOLD, new BaseColor(35, 40, 48))));
-                Paragraph sub = new Paragraph("博远信息技术社 · 招新报名表（空白模板）", getFont(10, Font.NORMAL, accent));
-                sub.setSpacingBefore(5);
-                Image mark = loadBrandLogo();
-                if (mark != null) {
-                    mark.scaleToFit(14f, 14f);
-                    sub.add(0, new Chunk("  "));
-                    sub.add(0, new Chunk(mark, 0, -3f, true));
-                }
-                hc.addElement(sub);
-                head.addCell(hc);
-                head.setSpacingAfter(6);
-                document.add(head);
-
-                PdfPTable rule = new PdfPTable(1);
-                rule.setWidthPercentage(100);
-                PdfPCell rc = new PdfPCell();
-                rc.setBorder(Rectangle.BOTTOM);
-                rc.setBorderColorBottom(accent);
-                rc.setBorderWidthBottom(1.6f);
-                rc.setFixedHeight(2f);
-                rule.addCell(rc);
-                rule.setSpacingAfter(10);
-                document.add(rule);
+                // ── 抬头：与简历导出同构（左对齐标题 + 灰色副标题 + 品牌色通栏线）──
+                Paragraph h = new Paragraph(title, getFont(21, Font.BOLD, new BaseColor(28, 33, 42)));
+                h.setSpacingAfter(3f);
+                document.add(h);
+                Paragraph subtitle = new Paragraph("博远信息技术社 · 招新报名表（空白模板）",
+                        getFont(9, Font.NORMAL, subText));
+                subtitle.setSpacingAfter(6f);
+                document.add(subtitle);
+                document.add(hairline(accent, 1.4f, 10f));
 
                 Paragraph lead = new Paragraph(
                         "本表仅供提前准备内容，不能代替在线报名；招募开放后请到官网填写并提交。带 * 的为必填项。",
@@ -429,6 +272,162 @@ public class PdfExportUtil {
         box.addCell(cell);
         box.setSpacingAfter(2f);
         return box;
+    }
+
+    // ── 版式零件 ────────────────────────────────────────────────
+
+    /**
+     * 切标签。只按分隔符切，不按空白切：按 \s+ 切会把「Spring Boot」
+     * 「Machine Learning」这类含空格的技术名拆成两个标签。
+     */
+    private static java.util.List<String> splitChips(String joined) {
+        java.util.List<String> chips = new ArrayList<>();
+        for (String part : joined.split("[,，、;；\\n\\r]+")) {
+            String t = part.trim();
+            if (!t.isEmpty()) chips.add(t);
+        }
+        return chips;
+    }
+
+    /** 左对齐标题版的标签小节；只有一项时退回普通段落，做成标签反而突兀 */
+    private static void addLeftChipSection(Document doc, String title, String rawValue,
+                                           Font sectionFont, Font chipFont, Font bodyFont,
+                                           BaseColor accent, BaseColor chipBg) throws DocumentException {
+        String joined = joinIfJsonArray(rawValue);
+        if (joined == null || joined.isBlank()) return;
+        java.util.List<String> chips = splitChips(joined);
+        if (chips.isEmpty()) return;
+        addLeftSectionHeader(doc, title, sectionFont, accent);
+        if (chips.size() == 1) {
+            doc.add(indented(chips.get(0), bodyFont));
+        } else {
+            addChips(doc, chips, chipFont, chipBg);
+        }
+    }
+
+    /** 一份简历读一次就够的东西：字段值、标签覆盖、照片、姓名 */
+    private static final class Content {
+        java.util.Map<String, String> byKey = new java.util.LinkedHashMap<>();
+        java.util.Map<String, String> labelOf = new java.util.LinkedHashMap<>();
+        java.util.List<SimpleResumeFieldDTO> fields = new ArrayList<>();
+        Image photo;
+        String name;
+
+        String get(String key) {
+            String v = byKey.get(key);
+            return v == null ? "" : v;
+        }
+
+        String label(String key, String fallback) {
+            return labelOf.getOrDefault(key, fallback);
+        }
+    }
+
+    private static Content readContent(ResumeDTO dto, byte[] photoBytes) throws BusinessException {
+        if (dto == null) {
+            throw new BusinessException(BusinessExceptionEnum.EXPORT_PDF_FAILED, "PDF导出失败: 简历数据为空");
+        }
+        getChineseBaseFont();
+        Content c = new Content();
+        c.fields = dto.getSimpleFields() != null ? dto.getSimpleFields() : new ArrayList<>();
+        for (SimpleResumeFieldDTO f : c.fields) {
+            if (f.getFieldKey() != null) {
+                c.byKey.put(f.getFieldKey(), f.getFieldValue());
+                if (f.getFieldLabel() != null && !f.getFieldLabel().trim().isEmpty()) {
+                    c.labelOf.put(f.getFieldKey(), f.getFieldLabel().trim());
+                }
+            }
+        }
+        c.photo = createImageFromBytes(photoBytes);
+        if (c.photo == null) {
+            for (SimpleResumeFieldDTO f : c.fields) {
+                if (isBase64Image(f.getFieldValue())) {
+                    c.photo = createImageFromBase64(f.getFieldValue());
+                    break;
+                }
+            }
+        }
+        c.name = firstNonBlank(c.get("name"), "未填写姓名");
+        return c;
+    }
+
+    /** 用分隔符连起非空片段；全空返回空串 */
+    private static String joinNonBlank(String sep, String... parts) {
+        return java.util.Arrays.stream(parts)
+                .filter(v -> v != null && !v.isBlank())
+                .collect(java.util.stream.Collectors.joining(sep));
+    }
+
+    /** 通栏细线 */
+    private static PdfPTable hairline(BaseColor color, float width, float spacingAfter) {
+        PdfPTable t = new PdfPTable(1);
+        t.setWidthPercentage(100);
+        PdfPCell c = new PdfPCell();
+        c.setBorder(Rectangle.BOTTOM);
+        c.setBorderColorBottom(color);
+        c.setBorderWidthBottom(width);
+        c.setFixedHeight(1f);
+        t.addCell(c);
+        t.setSpacingAfter(spacingAfter);
+        return t;
+    }
+
+    /** 左对齐小节标题 + 紧贴的通栏细线 */
+    private static void addLeftSectionHeader(Document doc, String title, Font f, BaseColor line)
+            throws DocumentException {
+        Paragraph p = new Paragraph(title, f);
+        p.setSpacingBefore(13f);
+        p.setSpacingAfter(2f);
+        doc.add(p);
+        doc.add(hairline(new BaseColor(210, 222, 238), 0.8f, 6f));
+    }
+
+    private static Paragraph indented(String text, Font f) {
+        Paragraph p = new Paragraph(text, f);
+        applyCjkLineBreaking(p);
+        p.setLeading(15f);
+        return p;
+    }
+
+    /** 单栏版的一节：chips 与整段文字两种呈现 */
+    private static void addFlatSection(Document doc, Content c, String key, String fallbackTitle,
+                                       boolean asChips, Font sectionFont, Font bodyFont,
+                                       Font chipFont, BaseColor chipBg, BaseColor accent)
+            throws DocumentException {
+        String raw = c.get(key);
+        if (raw == null || raw.isBlank()) return;
+        String title = c.label(key, fallbackTitle);
+        if (asChips) {
+            // 走左对齐标题：addChipSection 里调的是居中版标题，
+            // 和这一版其余小节混在一起会一半居中一半靠左（第一张样张就是这样）
+            addLeftChipSection(doc, title, raw, sectionFont, chipFont, bodyFont, accent, chipBg);
+        } else {
+            addLeftSectionHeader(doc, title, sectionFont, accent);
+            doc.add(indented(raw, bodyFont));
+        }
+    }
+
+    /** 管理员自定义字段拼成一段；标准字段已各自成节 */
+    private static String extraFields(Content c) {
+        java.util.Set<String> known = new java.util.HashSet<>(java.util.Arrays.asList(
+                "name", "student_id", "gender", "grade", "major", "email", "phone", "github",
+                "personal_photo", "photo", "self_introduction", "reason", "introduction",
+                "first_choice", "second_choice", "expected_departments",
+                "tech_stack", "project_experience",
+                "can_attend_offline_interview", "expected_interview_time", "second_interview_time"));
+        java.util.List<SimpleResumeFieldDTO> ordered = new ArrayList<>(c.fields);
+        ordered.sort(java.util.Comparator.comparing(
+                f -> f.getSortOrder() == null ? Integer.MAX_VALUE : f.getSortOrder()));
+        StringBuilder sb = new StringBuilder();
+        for (SimpleResumeFieldDTO f : ordered) {
+            if (f.getFieldKey() == null || known.contains(f.getFieldKey())) continue;
+            if (f.getFieldValue() == null || f.getFieldValue().trim().isEmpty()) continue;
+            if (isBase64Image(f.getFieldValue())) continue;
+            if (sb.length() > 0) sb.append("\n");
+            sb.append(f.getFieldLabel() != null ? f.getFieldLabel() : f.getFieldKey())
+              .append("：").append(joinIfJsonArray(f.getFieldValue()));
+        }
+        return sb.toString();
     }
 
     private static String firstNonBlank(String... values) {
@@ -512,10 +511,9 @@ public class PdfExportUtil {
     }
 
     /**
-     * 小节：标题左侧加一段品牌色竖条，正文缩进对齐到标题。
-     *
-     * 原先是「彩色标题 + 一条通栏细线」，通栏线会把版面切成一段一段，
-     * 读起来像表单而不像简历；竖条只标记起点，段落之间靠间距分隔，更接近排版物。
+     * 小节标题。版式几经反复：「彩色标题 + 通栏线」→「左侧品牌色竖条」→
+     * 「居中 + 通栏线」，最后定在左对齐 + 通栏细线（社团选的经典单栏那一版）。
+     * 保留这个名字是因为 addSection / addChipSection 都在调它。
      */
     private static void addSection(Document document, String title, String content,
                                    Font sectionFont, Font bodyFont, BaseColor barColor) throws DocumentException {
@@ -540,14 +538,7 @@ public class PdfExportUtil {
         String joined = joinIfJsonArray(rawValue);
         if (joined == null || joined.trim().isEmpty()) return;
 
-        // 只按分隔符切，不按空白切：按 \s+ 切会把「Spring Boot」「Machine Learning」
-        // 这类含空格的技术名拆成两个标签
-        String[] parts = joined.split("[,，、;；\\n\\r]+");
-        java.util.List<String> chips = new ArrayList<>();
-        for (String part : parts) {
-            String t = part.trim();
-            if (!t.isEmpty()) chips.add(t);
-        }
+        java.util.List<String> chips = splitChips(joined);
         if (chips.isEmpty()) return;
         if (chips.size() == 1) {
             // 只有一项时做成标签反而突兀，退回普通段落
@@ -556,7 +547,12 @@ public class PdfExportUtil {
         }
 
         addSectionHeader(document, title, sectionFont, barColor);
+        addChips(document, chips, chipFont, chipBg);
+    }
 
+    /** 把已经切好的标签排成若干行。抽出来是为了让左对齐标题的版式也能复用 */
+    private static void addChips(Document document, java.util.List<String> chips,
+                                 Font chipFont, BaseColor chipBg) throws DocumentException {
         // 按文字宽度分配列宽，末尾加一根「填充列」吸收剩余宽度。
         // 不这么做的话 PdfPTable 会把每格拉成等宽，标签连成一条灰带、看着像表格。
         BaseFont bf = chipFont.getBaseFont();
@@ -602,23 +598,7 @@ public class PdfExportUtil {
     /** 小节标题：左侧品牌色竖条 + 标题，正文与之左对齐 */
     private static void addSectionHeader(Document document, String title,
                                          Font sectionFont, BaseColor barColor) throws DocumentException {
-        PdfPTable head = new PdfPTable(new float[]{0.16f, 20f});
-        head.setWidthPercentage(100);
-        head.setSpacingBefore(16f);
-        head.setSpacingAfter(6f);
-
-        PdfPCell bar = new PdfPCell();
-        bar.setBackgroundColor(barColor);
-        bar.setBorder(Rectangle.NO_BORDER);
-        bar.setFixedHeight(13f);
-        head.addCell(bar);
-
-        PdfPCell titleCell = new PdfPCell(new Paragraph(title, sectionFont));
-        titleCell.setBorder(Rectangle.NO_BORDER);
-        titleCell.setPaddingLeft(7f);
-        titleCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
-        head.addCell(titleCell);
-        document.add(head);
+        addLeftSectionHeader(document, title, sectionFont, barColor);
     }
 
     /**
@@ -630,20 +610,28 @@ public class PdfExportUtil {
     private static class FooterPageEvent extends com.itextpdf.text.pdf.PdfPageEventHelper {
         @Override
         public void onEndPage(PdfWriter writer, Document document) {
+            // 首页的上边距是给弧形页眉与头像留的，第二页起收回正常值。
+            // setMargins 对「下一页」生效，所以放在第一页结束时调。
+            if (writer.getPageNumber() == 1) {
+                document.setMargins(48, 48, 44, 52);
+            }
             try {
                 Font f = getFont(8, Font.NORMAL, new BaseColor(150, 158, 170));
                 com.itextpdf.text.pdf.PdfContentByte cb = writer.getDirectContent();
                 float y = document.bottom() - 18f;
 
+                // 加一点内缩：双栏版式左右边距为 0，直接用 left()/right() 会贴到纸边
+                float inset = 28f;
                 com.itextpdf.text.pdf.ColumnText.showTextAligned(
                         cb, Element.ALIGN_LEFT,
                         new Phrase("博远信息技术社 · boyuan.club", f),
-                        document.left(), y, 0);
+                        document.left() + (document.left() < 20f ? inset : 0f), y, 0);
 
+                float rightEdge = document.getPageSize().getWidth() - document.rightMargin();
                 com.itextpdf.text.pdf.ColumnText.showTextAligned(
                         cb, Element.ALIGN_RIGHT,
                         new Phrase("第 " + writer.getPageNumber() + " 页", f),
-                        document.right(), y, 0);
+                        rightEdge - (document.rightMargin() < 20f ? inset : 0f), y, 0);
             } catch (Exception ignored) {
                 // 页脚画失败不应让整份导出失败——正文才是主体
             }
@@ -677,19 +665,37 @@ public class PdfExportUtil {
             if (!super.isSplitCharacter(start, current, end, cc, ck)) {
                 return false;
             }
+            /*
+             * ck 里可能有 null：段落被放进表格单元格（addElement）时，iText 组装
+             * chunk 数组的路径和直接 document.add 不一样，会留空位。
+             * getCurrentCharacter 对它直接解引用，于是整份导出以 NPE 收场
+             * （双栏版式的样张第一次渲染就是这么崩的）。
+             *
+             * 拿不到字符就退回默认断行：禁则是锦上添花，不值得为它把渲染搞崩。
+             */
+            if (!resolvable(current, cc, ck)) {
+                return true;
+            }
             char c = getCurrentCharacter(current, cc, ck);
             if (NO_LINE_END.indexOf(c) >= 0) {
                 return false;   // 开引号/开括号不该留在行末
             }
             // cc.length 这道保护不能省：越界读会被 iText 吞掉，
             // 表现是正文后半段整段消失（实测自我介绍、项目经验的第二行）
-            if (current + 1 <= end && current + 1 < cc.length) {
+            if (current + 1 <= end && current + 1 < cc.length && resolvable(current + 1, cc, ck)) {
                 char next = getCurrentCharacter(current + 1, cc, ck);
                 if (NO_LINE_START.indexOf(next) >= 0) {
                     return false;   // 在这断行会让收尾标点落到下一行开头
                 }
             }
             return true;
+        }
+
+        /** 这个位置能不能换算回 Unicode——不能就别调 getCurrentCharacter */
+        private boolean resolvable(int idx, char[] cc, PdfChunk[] ck) {
+            return cc != null && idx >= 0 && idx < cc.length
+                    && ck != null && ck.length > 0
+                    && ck[Math.min(idx, ck.length - 1)] != null;
         }
     };
 
@@ -756,6 +762,29 @@ public class PdfExportUtil {
      * 获取支持中文的BaseFont
      * @return BaseFont对象，如果无法创建则返回null
      */
+    /**
+     * 当前环境有没有可用的中文字体。为 false 时导出的中文会是空白。
+     */
+    public static boolean isChineseFontAvailable() {
+        return getChineseBaseFont() != null;
+    }
+
+    /**
+     * 中文字体是不是**嵌进** PDF 的。
+     *
+     * 两条路都能正确显示中文，但产物大小差两个量级：
+     * 容器里找得到 fonts-noto-cjk，走嵌入，字体子集本身就上百 KB；
+     * CI runner 上没有字体文件，退到 iText 内置的 STSong-Light——
+     * 它不嵌入、只记字体名，整份 PDF 不到 3 KB，中文照样正常。
+     *
+     * 测试要拿它分档：拿文件大小当「导出对不对」的判据，在后一种环境下
+     * 会把好的导出判成坏的（CI 上就这么红过一次）。
+     */
+    public static boolean isChineseFontEmbedded() {
+        BaseFont bf = getChineseBaseFont();
+        return bf != null && bf.isEmbedded();
+    }
+
     private static BaseFont getChineseBaseFont() {
         // 用单独的标志位而不是「CHINESE_BASE_FONT != null」判断是否解析过：
         // 解析失败时结果本来就是 null，拿 null 当「还没解析」会导致每取一次字号
