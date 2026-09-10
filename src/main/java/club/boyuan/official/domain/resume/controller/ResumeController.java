@@ -535,6 +535,21 @@ public class ResumeController {
     }
 
     /**
+     * 表单里不渲染的字段。
+     *
+     * 与前端 resumeFieldRegistry 的 inForm=false 加 DEPRECATED_RESUME_FIELD_KEYS
+     * 同一份清单——那张规范表在前端，Java 侧只能手抄，改那边时记得成对改这里。
+     * 只影响空白模板：已填简历的导出照常展示历史数据。
+     */
+    private static final java.util.Set<String> NON_FORM_FIELD_KEYS = java.util.Set.of(
+            // 由第一/第二志愿合成，不单独成栏
+            "expected_departments",
+            // 与「自我介绍」重复，2026-09 已从表单撤下
+            "introduction",
+            // 方案A（自助抢时段）遗留：时间窗现在由投递页的「面试意向」卡管
+            "expected_interview_time", "second_interview_time", "can_attend_offline_interview");
+
+    /**
      * 导出本周期的空白报名表模板（PDF）。
      *
      * 周期还没开始时表单不可填，但个人简介、项目经验这类题现场憋很吃亏。
@@ -552,6 +567,11 @@ public class ResumeController {
             List<PdfExportUtil.TemplateField> fields = defs.stream()
                     // 停用的字段学生根本看不到，模板里也不该出现
                     .filter(d -> !Boolean.FALSE.equals(d.getIsActive()))
+                    // 表单里不渲染的字段也不该出现在模板上：第一版漏了这层过滤，
+                    // 「期望部门」（由第一/第二志愿合成）和「第一/第二面试时间」
+                    // （方案A 遗留，时间窗现在归面试意向卡管）都印了出来，
+                    // 看着像要填三遍志愿
+                    .filter(d -> !NON_FORM_FIELD_KEYS.contains(d.getFieldKey()))
                     .sorted(java.util.Comparator.comparing(
                             d -> d.getSortOrder() == null ? Integer.MAX_VALUE : d.getSortOrder()))
                     .map(d -> new PdfExportUtil.TemplateField(
