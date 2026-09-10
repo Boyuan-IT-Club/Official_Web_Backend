@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -61,7 +62,7 @@ class PdfTemplateSmokeTest {
         dto.setSimpleFields(fields);
 
         byte[] pdf = PdfExportUtil.exportResumeToPdf(dto);
-        assertTrue(pdf.length > 3000, "PDF 明显过小，可能只画出了空白页：" + pdf.length);
+        assertUsable(pdf, "简历");
 
         Path out = Path.of(System.getProperty("pdf.out", "target/resume-sample.pdf"));
         Files.createDirectories(out.getParent());
@@ -71,6 +72,7 @@ class PdfTemplateSmokeTest {
         // 带照片再走一遍：圆形头像是裁剪路径画的，只有渲染出来才看得出
         // 有没有被拉变形、有没有盖住姓名
         byte[] withPhoto = PdfExportUtil.exportResumeToPdf(dto, portraitJpeg());
+        assertUsable(withPhoto, "带头像的简历");
         assertTrue(withPhoto.length > pdf.length, "带照片的 PDF 反而更小，照片多半没画进去");
         Path out2 = Path.of(System.getProperty("pdf.photo.out", "target/resume-sample-photo.pdf"));
         Files.write(out2, withPhoto);
@@ -90,11 +92,41 @@ class PdfTemplateSmokeTest {
                 new PdfExportUtil.TemplateField("项目经验", "textarea", false, List.of(), null));
 
         byte[] pdf = PdfExportUtil.exportBlankTemplateToPdf("2026 秋季招新", fields);
-        assertTrue(pdf.length > 3000, "模板 PDF 明显过小：" + pdf.length);
+        assertUsable(pdf, "空白模板");
         Path out = Path.of(System.getProperty("tpl.out", "target/resume-template-sample.pdf"));
         Files.createDirectories(out.getParent());
         Files.write(out, pdf);
         System.out.println("模板 PDF 已生成：" + out.toAbsolutePath() + "  " + pdf.length + " bytes");
+    }
+
+    /**
+     * PDF 能不能用。
+     *
+     * 原来只断言「字节数 > 3000」，看着像在测内容，其实测的是「有没有嵌进图片」——
+     * 早先版式在页眉放了社徽，靠那张 PNG 就过线了；换成不带图片的版式后
+     * 同一份 PDF 只有 2893 字节，CI 立刻红了，而导出本身是好的。
+     *
+     * 真正要分清的是两件事：文件结构对不对（任何环境都该成立），
+     * 以及中文字体有没有嵌进去（只有装了 CJK 字体的环境才谈得上——
+     * 容器里装了 fonts-noto-cjk，CI runner 上没有）。
+     */
+    private static void assertUsable(byte[] pdf, String what) {
+        assertTrue(pdf.length > 800, what + " PDF 过小，可能是空文档：" + pdf.length);
+        assertEquals("%PDF", new String(pdf, 0, 4, java.nio.charset.StandardCharsets.US_ASCII),
+                what + " 输出的不是 PDF");
+        assertTrue(PdfExportUtil.isChineseFontAvailable(),
+                what + " 找不到任何中文字体，导出的中文会是空白");
+        if (PdfExportUtil.isChineseFontEmbedded()) {
+            // 走嵌入这条路时，光字体子集就有上百 KB；明显小于这个量级
+            // 说明子集没写进去
+            assertTrue(pdf.length > 20_000,
+                    what + " 用的是嵌入式字体，产物却这么小，字体多半没写进去：" + pdf.length);
+        } else {
+            // 内置 STSong-Light：不嵌入，整份 PDF 不到 3 KB，中文照样正常显示。
+            // CI runner 走的就是这条路——第一版断言拿大小当判据，把好的导出判成了坏的
+            System.out.println("【注意】" + what + " 用的是内置非嵌入字体（本机没有字体文件），"
+                    + "产物偏小属正常；生产镜像装了 fonts-noto-cjk，走嵌入");
+        }
     }
 
     /** 造一张竖构图的假证件照：验证圆形裁剪是「铺满后裁」而不是把人脸压扁 */

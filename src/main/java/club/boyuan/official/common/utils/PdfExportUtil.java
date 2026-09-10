@@ -762,6 +762,29 @@ public class PdfExportUtil {
      * 获取支持中文的BaseFont
      * @return BaseFont对象，如果无法创建则返回null
      */
+    /**
+     * 当前环境有没有可用的中文字体。为 false 时导出的中文会是空白。
+     */
+    public static boolean isChineseFontAvailable() {
+        return getChineseBaseFont() != null;
+    }
+
+    /**
+     * 中文字体是不是**嵌进** PDF 的。
+     *
+     * 两条路都能正确显示中文，但产物大小差两个量级：
+     * 容器里找得到 fonts-noto-cjk，走嵌入，字体子集本身就上百 KB；
+     * CI runner 上没有字体文件，退到 iText 内置的 STSong-Light——
+     * 它不嵌入、只记字体名，整份 PDF 不到 3 KB，中文照样正常。
+     *
+     * 测试要拿它分档：拿文件大小当「导出对不对」的判据，在后一种环境下
+     * 会把好的导出判成坏的（CI 上就这么红过一次）。
+     */
+    public static boolean isChineseFontEmbedded() {
+        BaseFont bf = getChineseBaseFont();
+        return bf != null && bf.isEmbedded();
+    }
+
     private static BaseFont getChineseBaseFont() {
         // 用单独的标志位而不是「CHINESE_BASE_FONT != null」判断是否解析过：
         // 解析失败时结果本来就是 null，拿 null 当「还没解析」会导致每取一次字号
