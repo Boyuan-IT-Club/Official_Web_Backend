@@ -1,4 +1,7 @@
 spring:
+  # 本地运行时自动读取项目根目录 .env；无需手动 source，避免邮件/JWT 等变量遗漏。
+  config:
+    import: optional:file:.env[.properties]
   application:
     name: Official
   flyway:

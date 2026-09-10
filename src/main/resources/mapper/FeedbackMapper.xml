@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="club.boyuan.official.persistence.mapper.FeedbackMapper">
+    <select id="selectAdminPage" resultType="club.boyuan.official.domain.feedback.dto.FeedbackAdminView">
+        SELECT f.feedback_id AS feedbackId,
+               f.user_id AS userId,
+               u.username AS username,
+               u.name AS userName,
+               f.content AS content,
+               f.created_at AS createdAt,
+               f.updated_at AS updatedAt
+        FROM feedback f
+        LEFT JOIN user u ON u.user_id = f.user_id
+        WHERE f.is_deleted = 0
+        ORDER BY f.created_at DESC, f.feedback_id DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countAdmin" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM feedback WHERE is_deleted = 0
+    </select>
+</mapper>
