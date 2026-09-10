@@ -334,9 +334,10 @@ public class ResumeController {
         logger.info("管理员{}更新简历{}状态为{}", SecurityUtil.getCurrentUsername(), resumeId, status);
 
         // 状态三态化：1草稿 2已提交（3=已截止由系统按周期截止派生，不允许手工设置）
-        if (status == null || (status != 1 && status != 2)) {
+        // 6=AI初筛中（瞬态，仅 agent 初筛 job 运行期间设置，结束后回落 2）
+        if (status == null || (status != 1 && status != 2 && status != 6)) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD,
-                    "简历状态仅支持 1(草稿)/2(已提交)，评审结论请使用面试结果模块");
+                    "简历状态仅支持 1(草稿)/2(已提交)/6(AI初筛中,系统设置)，评审结论请使用面试结果模块");
         }
         Resume resume = resumeService.getResumeById(resumeId);
         if (resume == null) {

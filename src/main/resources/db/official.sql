@@ -390,7 +390,7 @@ INSERT INTO `resume_field_definition` (`field_id`, `cycle_id`, `field_key`, `fie
 VALUES (12, 2, 'tech_stack', '技术栈', 'textarea', '请列出您掌握的技术栈', 1, 9, 1, '2025-08-15 18:00:00', '2025-08-15 18:00:00');
 INSERT INTO `resume_field_definition` (`field_id`, `cycle_id`, `field_key`, `field_label`, `field_type`, `placeholder`, `is_required`, `sort_order`,
                                        `is_active`, `created_at`, `updated_at`)
-VALUES (13, 2, 'project_experience', '项目经验', 'textarea', '请描述您的项目经验', 1, 10, 1, '2025-08-15 18:00:00', '2025-08-15 18:00:00');
+VALUES (13, 2, 'project_experience', '项目经验', 'textarea', '请填写项目经验，如有 GitHub 仓库请完整填写仓库地址。示例：参与社团官网的后端开发：https://github.com/Boyuan-IT-Club/Official_Web_Backend，主要负责后端接口与数据库设计。', 1, 10, 1, '2025-08-15 18:00:00', '2025-08-15 18:00:00');
 INSERT INTO `resume_field_definition` (`field_id`, `cycle_id`, `field_key`, `field_label`, `field_type`, `placeholder`, `is_required`, `sort_order`,
                                        `is_active`, `created_at`, `updated_at`)
 VALUES (14, 2, 'expected_interview_time', '期望的面试时间', 'text', '请输入期望的面试时间', 0, 11, 1, '2025-08-15 18:00:00', '2025-08-15 18:00:00');
