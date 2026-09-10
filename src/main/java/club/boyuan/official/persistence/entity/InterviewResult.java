@@ -100,6 +100,10 @@ public class InterviewResult implements Serializable {
     @TableField(value = "user_name", exist = false)
     private String userName;
 
+    /** 生效面试安排的时间（联表回退取得）；无安排为 null */
+    @TableField(value = "interview_time", exist = false)
+    private java.time.LocalDateTime interviewTime;
+
     /** 简历平均分；未打过分为 null（列默认 0 不代表打过 0 分），联表展示字段 */
     @TableField(value = "resume_score", exist = false)
     private Integer resumeScore;

@@ -341,7 +341,7 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
                 type, name, null, null, cfg.academicYear(), null, List.of(),
                 cfg.contactInfo(), message.getCustomBody()).html();
 
-        sendAndLog(type, null, null, email, subject, body, html, null, requestId);
+        sendAndLog(type, null, null, resumeId, email, subject, body, html, null, requestId);
     }
 
     /** 邮件要用到的周期级配置。周期取不到时全部为空，模板会自动省略对应段落 */
@@ -418,9 +418,23 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
         return dept != null ? dept.getDeptName() : null;
     }
 
+    /** 挂在面试安排或录取结果上的通知走这个重载；简历维度留空。 */
     private void sendAndLog(InterviewNotificationType type,
                             Integer scheduleId,
                             Integer resultId,
+                            String email,
+                            String subject,
+                            String body,
+                            String html,
+                            InterviewSchedule schedule,
+                            String requestId) {
+        sendAndLog(type, scheduleId, resultId, null, email, subject, body, html, schedule, requestId);
+    }
+
+    private void sendAndLog(InterviewNotificationType type,
+                            Integer scheduleId,
+                            Integer resultId,
+                            Integer resumeId,
                             String email,
                             String subject,
                             String body,
@@ -448,6 +462,7 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
                     .setNotificationType(type.name())
                     .setScheduleId(scheduleId)
                     .setResultId(resultId)
+                    .setResumeId(resumeId)
                     .setRequestId(requestId)
                     .setRecipientEmail(email)
                     .setSentAt(LocalDateTime.now());

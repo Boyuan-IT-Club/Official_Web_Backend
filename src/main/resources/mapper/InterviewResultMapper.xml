@@ -5,7 +5,13 @@
     <select id="selectResultPage" resultType="club.boyuan.official.persistence.entity.InterviewResult">
         SELECT
         ir.result_id,
-        ir.schedule_id,
+        /*
+         * 面试安排实时回退：结果行是「从面试安排生成名单」建的，
+         * 若当时还没排面试则 ir.schedule_id 为空，之后再分配也不会回填——
+         * 界面会一直显示「无面试」，连带面试分与结论都取不到（它们经 schedule 联表）。
+         * 这里按简历+周期反查生效安排补上，排完面试立刻就能看到，不必重新生成名单。
+         */
+        COALESCE(ir.schedule_id, live.schedule_id) AS schedule_id,
         ir.user_id,
         ir.decision,
         ir.assigned_dept_id,
@@ -24,6 +30,7 @@
         -- 面试评价加权总分与结论、志愿部门
         CASE WHEN rs.scored_by IS NULL AND rs.scored_at IS NULL THEN NULL
              ELSE rs.resume_score END AS resume_score,
+        live.interview_time AS interview_time,
         ev.total_score AS eval_total_score,
         ev.recommendation AS eval_recommendation,
         d1.dept_name AS first_dept_name,
@@ -33,7 +40,13 @@
         LEFT JOIN user u ON ir.user_id = u.user_id
         LEFT JOIN department d ON ir.assigned_dept_id = d.dept_id
         LEFT JOIN resume rs ON rs.resume_id = COALESCE(ir.resume_id, isc.resume_id)
-        LEFT JOIN interview_evaluation ev ON ev.schedule_id = ir.schedule_id
+        -- 该简历在本周期的生效面试安排（status=1）；一份简历一届只排一次（uk_resume_cycle）
+        LEFT JOIN interview_schedule live
+               ON live.resume_id = COALESCE(ir.resume_id, isc.resume_id)
+              AND live.cycle_id = COALESCE(ir.cycle_id, isc.cycle_id)
+              AND live.status = 1
+        -- 评价也走回退后的安排 id，否则后排的面试评价永远关联不上
+        LEFT JOIN interview_evaluation ev ON ev.schedule_id = COALESCE(ir.schedule_id, live.schedule_id)
         LEFT JOIN interview_preference ip ON ip.resume_id = COALESCE(ir.resume_id, isc.resume_id)
         LEFT JOIN department d1 ON ip.first_dept_id = d1.dept_id
         LEFT JOIN department d2 ON ip.second_dept_id = d2.dept_id
