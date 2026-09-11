@@ -167,7 +167,11 @@ paths:
     post:
       summary: 社团官网-注册
       deprecated: false
-      description: 注册社团官网账号。校验用户名/邮箱唯一性及验证码，成功后创建普通用户账号。
+      description: '注册社团官网账号。校验用户名/邮箱唯一性及验证码，成功后创建普通用户账号。
+
+        限流为两个维度：同一 IP 每小时最多 10 次，同一邮箱每小时最多 5 次；任一维度超限返回 HTTP 429（业务码 4291）并带 `Retry-After`。
+
+        '
       tags:
       - 登录注册页
       requestBody:
@@ -245,6 +249,36 @@ paths:
                 - message
                 - data
           headers: {}
+        '429':
+          description: 触发限流。响应头 `Retry-After` 给出建议的重试间隔（秒），客户端应据此停止重试并提示用户。
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: 业务状态码（4291 表示请求过于频繁）
+                  message:
+                    type: string
+                    description: 提示信息
+                  data:
+                    nullable: true
+                    description: 固定为 null
+                required:
+                - code
+                - message
+                - data
+              example:
+                code: 4291
+                message: 请求过于频繁，请稍后再试
+                data: null
+          headers:
+            Retry-After:
+              description: 建议的重试间隔（秒），等于该规则的限流窗口长度
+              schema:
+                type: integer
+              example: 3600
       security: []
   /api/auth/login:
     post:
@@ -434,7 +468,7 @@ paths:
     post:
       summary: 发送邮箱验证码
       deprecated: false
-      description: '生成验证码写入 Redis 后投递 RabbitMQ 异步发信，HTTP 立即返回。限流：同一 IP 60 秒内最多 5 次（超限 HTTP 429，业务码 4291）。
+      description: '生成验证码写入 Redis 后投递 RabbitMQ 异步发信，HTTP 立即返回。限流为两个维度：同一 IP 60 秒内最多 20 次，同一邮箱 300 秒内最多 3 次；任一维度超限返回 HTTP 429（业务码 4291）并带 `Retry-After`。
 
         邮箱须为 `@stu.ecnu.edu.cn` 后缀。
 
@@ -478,6 +512,36 @@ paths:
                 - message
                 - data
           headers: {}
+        '429':
+          description: 触发限流。响应头 `Retry-After` 给出建议的重试间隔（秒），客户端应据此停止重试并提示用户。
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: 业务状态码（4291 表示请求过于频繁）
+                  message:
+                    type: string
+                    description: 提示信息
+                  data:
+                    nullable: true
+                    description: 固定为 null
+                required:
+                - code
+                - message
+                - data
+              example:
+                code: 4291
+                message: 请求过于频繁，请稍后再试
+                data: null
+          headers:
+            Retry-After:
+              description: 建议的重试间隔（秒），等于该规则的限流窗口长度
+              schema:
+                type: integer
+              example: 300
       security: []
   /api/auth/send-sms-code:
     post:

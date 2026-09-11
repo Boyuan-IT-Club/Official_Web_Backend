@@ -167,6 +167,10 @@ public class SecurityConfig {
         // 允许的请求方法
         configuration.addAllowedMethod("*");
 
+        // 跨域下浏览器默认只让 JS 读到几个基础响应头，Retry-After 不在其中。
+        // 不暴露的话，前端限流后拿不到「隔多久再试」，只能盲目重试。
+        configuration.addExposedHeader("Retry-After");
+
         // 允许携带凭证
         configuration.setAllowCredentials(true);
 

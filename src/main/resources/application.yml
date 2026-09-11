@@ -81,6 +81,17 @@ booking:
 # 应用层网关限流（Redis 滑动窗口），在请求进入 Controller 前拦截
 rate-limit:
   enabled: true
+  # 按邮箱限流，与下面按 IP 的 rules 构成两个维度：
+  # IP 维度放宽到「一个出口打不垮站」即可，邮箱维度收紧到「一个人刷不动」。
+  # 这类规则拿不到路径（拦截器跑在读请求体之前），由 Controller 主动调用。
+  identity-rules:
+    auth-register-email:
+      limit: 5
+      window-seconds: 3600
+    auth-send-email-address:
+      # 验证码本身 300 秒过期，同一个邮箱在一个有效期内要 3 封以上就不正常了
+      limit: 3
+      window-seconds: 300
   rules:
     # 反馈是登录用户就能写的接口，不限流等于给灌库开门。
     # 按用户维度而不是 IP：同一间宿舍/同一个校园 NAT 出口共用 IP，
@@ -97,10 +108,11 @@ rate-limit:
       limit: 20
       window-seconds: 600
       key-type: USER
+    # 同理：原为 5 次/分钟，同一出口 5 个同学同时点就互相挤掉。
     - name: auth-send-email
       pattern: /api/auth/send-email-code
       method: POST
-      limit: 5
+      limit: 20
       window-seconds: 60
       key-type: IP
     - name: auth-send-sms
@@ -115,10 +127,13 @@ rate-limit:
       limit: 20
       window-seconds: 60
       key-type: IP
+    # 2026-09-11：原为 3 次/小时，校园 NAT 下一栋楼共用出口 IP，
+    # 一个同学试错两次就把名额用光，室友直接注册不了（线上实际打出 211 次 429）。
+    # 放宽到 10 次/小时，真正防刷交给下面的 auth-register-email。
     - name: auth-register
       pattern: /api/auth/register
       method: POST
-      limit: 3
+      limit: 10
       window-seconds: 3600
       key-type: IP
     - name: booking-seckill

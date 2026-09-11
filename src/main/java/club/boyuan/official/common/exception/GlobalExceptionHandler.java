@@ -22,6 +22,22 @@ public class GlobalExceptionHandler {
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     /**
+     * 处理限流异常——比 BusinessException 更具体，Spring 会优先匹配到这里。
+     * 除了统一响应体，额外写出 Retry-After，告诉客户端隔多久再来。
+     * 没有这个头，前端只能盲目重试（线上出现过 11 分钟 211 次的重试风暴）。
+     * @param ex 限流异常
+     * @return 统一响应格式 + Retry-After
+     */
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ResponseMessage<?>> handleRateLimitExceeded(RateLimitExceededException ex) {
+        logger.warn("触发限流: code={}, retryAfter={}s", ex.getCode(), ex.getRetryAfterSeconds());
+        ResponseMessage<?> response = new ResponseMessage<>(ex.getCode(), ex.getMessage(), null);
+        return ResponseEntity.status(ex.getHttpStatus())
+                .header("Retry-After", String.valueOf(ex.getRetryAfterSeconds()))
+                .body(response);
+    }
+
+    /**
      * 处理业务异常
      * @param ex 业务异常
      * @return 统一响应格式

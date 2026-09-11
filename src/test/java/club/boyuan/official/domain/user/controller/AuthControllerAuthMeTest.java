@@ -38,8 +38,10 @@ class AuthControllerAuthMeTest {
     private final IUserService userService = mock(IUserService.class);
     private final MessageUtils messageUtils = mock(MessageUtils.class);
     private final EmailVerificationProducer emailVerificationProducer = mock(EmailVerificationProducer.class);
+    private final club.boyuan.official.infra.ratelimit.RateLimitService rateLimitService =
+            mock(club.boyuan.official.infra.ratelimit.RateLimitService.class);
     private final AuthController controller = new AuthController(
-            loginService, userService, jwtTokenUtil, messageUtils, emailVerificationProducer);
+            loginService, userService, jwtTokenUtil, messageUtils, emailVerificationProducer, rateLimitService);
 
     @Test
     void authMe_returnsMinimalIdentity() {
