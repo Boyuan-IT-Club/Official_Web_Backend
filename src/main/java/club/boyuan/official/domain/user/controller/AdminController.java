@@ -196,6 +196,37 @@ public class AdminController {
     }
 
     /**
+     * 解冻用户。
+     *
+     * 与 /freeze 分开是为了对齐前端已有的两个语义化入口（此前前端一直在调
+     * 这个地址，后端却没有它，解冻必然 404——这是「无法解冻」的直接原因）。
+     * 内部复用同一个状态机，不重复实现。
+     */
+    @PutMapping("/users/{userId}/unfreeze")
+    @PreAuthorize("hasAnyAuthority('user:manage', 'admin:manage')")
+    public ResponseEntity<ResponseMessage<?>> unfreezeUser(@PathVariable Integer userId) {
+        User updatedUser = userService.updateUserStatus(userId, "active");
+        logger.info("管理员成功解冻用户，用户ID: {}", userId);
+        return ResponseEntity.ok(ResponseMessage.success(updatedUser));
+    }
+
+    /**
+     * 删除用户（软删除）。
+     *
+     * 后端此前没有这个路由，前端的删除按钮一直打在空气上。
+     * 采用软删：简历、面试安排、评价、结果都挂着 user_id，
+     * 物理删除会留下孤儿行且历史不可追溯；软删同时冻结账号，
+     * 否则被「删掉」的人照样能登录。
+     */
+    @DeleteMapping("/users/{userId}")
+    @PreAuthorize("hasAnyAuthority('user:manage', 'admin:manage')")
+    public ResponseEntity<ResponseMessage<?>> deleteUser(@PathVariable Integer userId) {
+        userService.softDeleteUser(userId);
+        logger.info("管理员成功删除用户，用户ID: {}", userId);
+        return ResponseEntity.ok(ResponseMessage.success("用户已删除"));
+    }
+
+    /**
      * 修改用户会员状态接口（录取/取消录取）
      */
     @PutMapping("/users/{userId}/membership")

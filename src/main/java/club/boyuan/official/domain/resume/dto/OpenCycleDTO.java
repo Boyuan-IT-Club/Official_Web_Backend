@@ -29,6 +29,12 @@ public class OpenCycleDTO {
      * 但不能提交、修改或新建简历——后端 requireCycleOpen 同样会拒绝。
      */
     private boolean intakeOpen;
+    /**
+     * 本届负责人联系方式。投递阶段学生要找人问（材料要求、时间冲突、
+     * 线上面试怎么申请），此前这个值只有未录取邮件在用，用户端拿不到，
+     * 导致填写提示里的联系方式一直是空的。
+     */
+    private String contactInfo;
 
     public OpenCycleDTO() {
     }
@@ -42,6 +48,7 @@ public class OpenCycleDTO {
         this.endDate = cycle.getEndDate();
         this.fieldCount = fieldCount;
         this.intakeOpen = Integer.valueOf(1).equals(cycle.getIsActive());
+        this.contactInfo = cycle.getContactInfo();
     }
 
     public Integer getCycleId() {
@@ -98,6 +105,14 @@ public class OpenCycleDTO {
 
     public void setFieldCount(int fieldCount) {
         this.fieldCount = fieldCount;
+    }
+
+    public String getContactInfo() {
+        return contactInfo;
+    }
+
+    public void setContactInfo(String contactInfo) {
+        this.contactInfo = contactInfo;
     }
 
     public boolean isIntakeOpen() {
