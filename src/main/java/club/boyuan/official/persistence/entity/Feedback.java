@@ -11,7 +11,7 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import java.time.LocalDateTime;
 
 /** 用户问题反馈。反馈本身只支持提交和查看，不包含处理状态或回复。 */
-@TableName("feedback")
+@TableName(value = "feedback", autoResultMap = true)
 public class Feedback {
 
     @TableId(value = "feedback_id", type = IdType.AUTO)
@@ -20,8 +20,22 @@ public class Feedback {
     @TableField("user_id")
     private Integer userId;
 
+    /** 分类：bug / suggestion / other。管理端据此归类与筛选 */
+    @TableField("category")
+    private String category;
+
     @TableField("content")
     private String content;
+
+    /**
+     * 截图的 COS objectKey 列表（最多 3 张）。
+     *
+     * 只存引用不存图：与简历照片/附件同一套存储。注意 @TableName 上必须带
+     * autoResultMap = true，否则 BaseMapper 的查询不会走 typeHandler，
+     * 读出来是原始 JSON 字符串（ResumeFieldDefinition.options 踩过同样的坑）。
+     */
+    @TableField(value = "image_keys", typeHandler = com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler.class)
+    private java.util.List<String> imageKeys;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @TableField(value = "created_at", fill = FieldFill.INSERT)
@@ -39,8 +53,12 @@ public class Feedback {
     public void setFeedbackId(Long feedbackId) { this.feedbackId = feedbackId; }
     public Integer getUserId() { return userId; }
     public void setUserId(Integer userId) { this.userId = userId; }
+    public String getCategory() { return category; }
+    public void setCategory(String category) { this.category = category; }
     public String getContent() { return content; }
     public void setContent(String content) { this.content = content; }
+    public java.util.List<String> getImageKeys() { return imageKeys; }
+    public void setImageKeys(java.util.List<String> imageKeys) { this.imageKeys = imageKeys; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

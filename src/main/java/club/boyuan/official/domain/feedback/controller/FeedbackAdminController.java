@@ -22,10 +22,12 @@ public class FeedbackAdminController {
     @GetMapping
     @PreAuthorize("hasAuthority('feedback:view')")
     public ResponseEntity<ResponseMessage<PageResultDTO<FeedbackAdminView>>> all(
+            @RequestParam(required = false) String category,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), 100);
-        return ResponseEntity.ok(ResponseMessage.success(feedbackService.pageAll(safePage, safeSize)));
+        return ResponseEntity.ok(ResponseMessage.success(
+                feedbackService.pageAll(category, safePage, safeSize)));
     }
 }

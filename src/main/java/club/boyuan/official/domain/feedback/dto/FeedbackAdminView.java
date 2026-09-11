@@ -10,7 +10,10 @@ public class FeedbackAdminView {
     private Integer userId;
     private String username;
     private String userName;
+    private String category;
     private String content;
+    /** 截图数量。列表不回 objectKey，要看图再按序号单取，避免列表接口泄露存储路径 */
+    private Integer imageCount;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createdAt;
@@ -22,6 +25,10 @@ public class FeedbackAdminView {
     public void setFeedbackId(Long feedbackId) { this.feedbackId = feedbackId; }
     public Integer getUserId() { return userId; }
     public void setUserId(Integer userId) { this.userId = userId; }
+    public String getCategory() { return category; }
+    public void setCategory(String category) { this.category = category; }
+    public Integer getImageCount() { return imageCount; }
+    public void setImageCount(Integer imageCount) { this.imageCount = imageCount; }
     public String getUsername() { return username; }
     public void setUsername(String username) { this.username = username; }
     public String getUserName() { return userName; }

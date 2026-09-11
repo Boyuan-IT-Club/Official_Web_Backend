@@ -6,17 +6,34 @@
                f.user_id AS userId,
                u.username AS username,
                u.name AS userName,
+               f.category AS category,
                f.content AS content,
                f.created_at AS createdAt,
-               f.updated_at AS updatedAt
+               f.updated_at AS updatedAt,
+               <!-- 只回张数，不回 objectKey：列表接口不该把存储路径撒出去，
+                    要看图再按序号单取，那一步才做鉴权 -->
+               CASE WHEN f.image_keys IS NULL OR f.image_keys = '' OR f.image_keys = '[]'
+                    THEN 0
+                    ELSE JSON_LENGTH(f.image_keys) END AS imageCount
         FROM feedback f
         LEFT JOIN user u ON u.user_id = f.user_id
-        WHERE f.is_deleted = 0
+        <where>
+            f.is_deleted = 0
+            <if test="category != null and category != ''">
+                AND f.category = #{category}
+            </if>
+        </where>
         ORDER BY f.created_at DESC, f.feedback_id DESC
         LIMIT #{offset}, #{limit}
     </select>
 
     <select id="countAdmin" resultType="java.lang.Long">
-        SELECT COUNT(*) FROM feedback WHERE is_deleted = 0
+        SELECT COUNT(*) FROM feedback
+        <where>
+            is_deleted = 0
+            <if test="category != null and category != ''">
+                AND category = #{category}
+            </if>
+        </where>
     </select>
 </mapper>

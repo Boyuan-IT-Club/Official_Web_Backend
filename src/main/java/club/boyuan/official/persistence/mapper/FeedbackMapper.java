@@ -10,6 +10,9 @@ import java.util.List;
 
 @Mapper
 public interface FeedbackMapper extends BaseMapper<Feedback> {
-    List<FeedbackAdminView> selectAdminPage(@Param("offset") int offset, @Param("limit") int limit);
-    long countAdmin();
+    List<FeedbackAdminView> selectAdminPage(@Param("category") String category,
+                                            @Param("offset") int offset,
+                                            @Param("limit") int limit);
+
+    long countAdmin(@Param("category") String category);
 }
