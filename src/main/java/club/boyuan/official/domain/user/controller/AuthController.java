@@ -9,6 +9,7 @@ import club.boyuan.official.domain.user.service.impl.LoginServiceImpl.TokenVO;
 import club.boyuan.official.common.utils.JwtTokenUtil;
 import club.boyuan.official.messaging.EmailVerificationProducer;
 import club.boyuan.official.common.utils.MessageUtils;
+import club.boyuan.official.infra.ratelimit.RateLimitService;
 import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 import club.boyuan.official.common.exception.BusinessException;
 import club.boyuan.official.common.exception.BusinessExceptionEnum;
+import club.boyuan.official.common.exception.RateLimitExceededException;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -45,6 +47,8 @@ public class AuthController {
 
     private final EmailVerificationProducer emailVerificationProducer;
 
+    private final RateLimitService rateLimitService;
+
     /**
      * 用户注册接口
      *
@@ -53,6 +57,9 @@ public class AuthController {
      */
     @PostMapping("/register")
     public ResponseEntity<ResponseMessage<?>> register(@Valid @RequestBody RegisterDTO registerDTO) {
+        // 邮箱维度限流。刻意放在 try 之外：下面的 catch 会把 BusinessException 一律压成 400，
+        // 限流必须以 429 + Retry-After 出去，前端才分得清「输错了」和「太频繁」。
+        rateLimitService.acquireIdentityOrThrow("auth-register-email", "email:" + registerDTO.getEmail());
         try {
             // 验证密码和确认密码是否一致
             if (!registerDTO.getPassword().equals(registerDTO.getConfirmPassword())) {
@@ -136,12 +143,19 @@ public class AuthController {
             if (!email.endsWith("@stu.ecnu.edu.cn")) {
                 throw new BusinessException(BusinessExceptionEnum.INVALID_EMAIL_FORMAT);
             }
+            // 邮箱维度限流：校园 NAT 下一栋楼共用出口 IP，IP 维度只能放宽，
+            // 真正防「同一个人狂点发送」的是这一道。
+            rateLimitService.acquireIdentityOrThrow("auth-send-email-address", "email:" + email);
             // 生成验证码并写入 Redis（校验仍以 Redis 为准）
             String code = loginService.generateVerificationCode("email");
             loginService.saveVerificationCode(email, code, 300);
             // 投递到 RabbitMQ，由消费者异步发信，避免 SMTP 阻塞 HTTP 请求
             emailVerificationProducer.publish(email, code);
             return ResponseEntity.ok(new ResponseMessage<>(200, "验证码已发送，请查收邮箱", null));
+        } catch (RateLimitExceededException e) {
+            // 必须排在 BusinessException 之前：它是子类，被下面那条接住就会变成 400，
+            // 前端就分不清「频率超了」和「参数错了」，也拿不到 Retry-After。
+            throw e;
         } catch (BusinessException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(ResponseMessage.error(e.getCode(), e.getMessage()));

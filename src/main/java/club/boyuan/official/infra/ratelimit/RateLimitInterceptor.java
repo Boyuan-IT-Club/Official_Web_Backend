@@ -1,8 +1,7 @@
 package club.boyuan.official.infra.ratelimit;
 
 import club.boyuan.official.infra.config.RateLimitProperties;
-import club.boyuan.official.common.exception.BusinessException;
-import club.boyuan.official.common.exception.BusinessExceptionEnum;
+import club.boyuan.official.common.exception.RateLimitExceededException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -50,8 +49,8 @@ public class RateLimitInterceptor implements HandlerInterceptor {
                     rule.getLimit(),
                     rule.getWindowSeconds());
             if (!allowed) {
-                response.setHeader("Retry-After", String.valueOf(rule.getWindowSeconds()));
-                throw new BusinessException(BusinessExceptionEnum.TOO_MANY_REQUESTS);
+                // Retry-After 由 GlobalExceptionHandler 统一写出，这里只负责带上窗口长度
+                throw new RateLimitExceededException(rule.getWindowSeconds());
             }
             break;
         }
