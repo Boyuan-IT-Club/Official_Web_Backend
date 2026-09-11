@@ -37,6 +37,17 @@ public class Feedback {
     @TableField(value = "image_keys", typeHandler = com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler.class)
     private java.util.List<String> imageKeys;
 
+    /** 0 未处理 / 1 已处理。只标不回：回复提交人是另一回事 */
+    @TableField("handled")
+    private Integer handled;
+
+    @TableField("handled_by")
+    private Integer handledBy;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField("handled_at")
+    private LocalDateTime handledAt;
+
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @TableField(value = "created_at", fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
@@ -59,6 +70,12 @@ public class Feedback {
     public void setContent(String content) { this.content = content; }
     public java.util.List<String> getImageKeys() { return imageKeys; }
     public void setImageKeys(java.util.List<String> imageKeys) { this.imageKeys = imageKeys; }
+    public Integer getHandled() { return handled; }
+    public void setHandled(Integer handled) { this.handled = handled; }
+    public Integer getHandledBy() { return handledBy; }
+    public void setHandledBy(Integer handledBy) { this.handledBy = handledBy; }
+    public LocalDateTime getHandledAt() { return handledAt; }
+    public void setHandledAt(LocalDateTime handledAt) { this.handledAt = handledAt; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

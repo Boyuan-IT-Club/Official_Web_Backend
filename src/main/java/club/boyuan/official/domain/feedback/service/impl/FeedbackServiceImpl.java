@@ -34,6 +34,7 @@ public class FeedbackServiceImpl implements IFeedbackService {
         feedback.setImageKeys(imageKeys == null || imageKeys.isEmpty()
                 ? null : imageKeys.stream().limit(MAX_IMAGES).toList());
         feedback.setIsDeleted(0);
+        feedback.setHandled(0);
         // createdAt / updatedAt 交给 MyBatis-Plus 的自动填充，不再手写：
         // 手写会和 FieldFill 打架，两处时间源以后必然对不上
         feedbackMapper.insert(feedback);
@@ -51,10 +52,41 @@ public class FeedbackServiceImpl implements IFeedbackService {
     }
 
     @Override
-    public PageResultDTO<FeedbackAdminView> pageAll(String category, int page, int size) {
+    public PageResultDTO<FeedbackAdminView> pageAll(String category, Integer handled, int page, int size) {
         int offset = page * size;
-        long total = feedbackMapper.countAdmin(category);
-        return pageResult(feedbackMapper.selectAdminPage(category, offset, size), total, page, size);
+        long total = feedbackMapper.countAdmin(category, handled);
+        return pageResult(feedbackMapper.selectAdminPage(category, handled, offset, size),
+                total, page, size);
+    }
+
+    @Override
+    public long countUnhandled() {
+        return feedbackMapper.countAdmin(null, 0);
+    }
+
+    @Override
+    public void markHandled(Long feedbackId, boolean handled, Integer operatorId) {
+        Feedback existing = feedbackMapper.selectById(feedbackId);
+        if (existing == null) {
+            throw new BusinessException(BusinessExceptionEnum.FEEDBACK_NOT_FOUND);
+        }
+        Feedback update = new Feedback();
+        update.setFeedbackId(feedbackId);
+        update.setHandled(handled ? 1 : 0);
+        // 取消处理时把标记人与时间一并清掉，不留下「已取消但还写着某某处理过」的残影。
+        // updateById 会跳过 null 字段，所以走 UpdateWrapper 显式置空
+        if (handled) {
+            update.setHandledBy(operatorId);
+            update.setHandledAt(java.time.LocalDateTime.now());
+            feedbackMapper.updateById(update);
+        } else {
+            feedbackMapper.update(null,
+                    new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<Feedback>()
+                            .eq(Feedback::getFeedbackId, feedbackId)
+                            .set(Feedback::getHandled, 0)
+                            .set(Feedback::getHandledBy, null)
+                            .set(Feedback::getHandledAt, null));
+        }
     }
 
     @Override

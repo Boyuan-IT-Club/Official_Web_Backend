@@ -14,6 +14,13 @@ public class FeedbackAdminView {
     private String content;
     /** 截图数量。列表不回 objectKey，要看图再按序号单取，避免列表接口泄露存储路径 */
     private Integer imageCount;
+    /** 0 未处理 / 1 已处理 */
+    private Integer handled;
+    /** 标记人姓名；几个人一起看反馈时能省掉一轮「这条谁处理的」 */
+    private String handledByName;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private java.time.LocalDateTime handledAt;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createdAt;
@@ -29,6 +36,12 @@ public class FeedbackAdminView {
     public void setCategory(String category) { this.category = category; }
     public Integer getImageCount() { return imageCount; }
     public void setImageCount(Integer imageCount) { this.imageCount = imageCount; }
+    public Integer getHandled() { return handled; }
+    public void setHandled(Integer handled) { this.handled = handled; }
+    public String getHandledByName() { return handledByName; }
+    public void setHandledByName(String handledByName) { this.handledByName = handledByName; }
+    public java.time.LocalDateTime getHandledAt() { return handledAt; }
+    public void setHandledAt(java.time.LocalDateTime handledAt) { this.handledAt = handledAt; }
     public String getUsername() { return username; }
     public void setUsername(String username) { this.username = username; }
     public String getUserName() { return userName; }

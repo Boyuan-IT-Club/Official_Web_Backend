@@ -4,6 +4,9 @@ import club.boyuan.official.common.exception.BusinessException;
 import club.boyuan.official.domain.feedback.service.impl.FeedbackServiceImpl;
 import club.boyuan.official.persistence.entity.Feedback;
 import club.boyuan.official.persistence.mapper.FeedbackMapper;
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -12,6 +15,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 
 /**
@@ -26,6 +30,12 @@ class FeedbackServiceTest {
 
     @BeforeEach
     void setUp() {
+        // LambdaUpdateWrapper 要查表信息缓存，纯单测里没有 Spring 容器帮忙初始化，
+        // 不初始化会报 "can not find lambda cache for this entity"
+        MapperBuilderAssistant assistant =
+                new MapperBuilderAssistant(new MybatisConfiguration(), "");
+        TableInfoHelper.initTableInfo(assistant, Feedback.class);
+
         mapper = mock(FeedbackMapper.class);
         service = new FeedbackServiceImpl(mapper);
     }
@@ -75,6 +85,31 @@ class FeedbackServiceTest {
     void missingFeedback() {
         when(mapper.selectById(9L)).thenReturn(null);
         assertThrows(BusinessException.class, () -> service.imageKeyFor(9L, 0, 7, true));
+    }
+
+    @Test
+    @DisplayName("标为已处理记下标记人与时间；取消时一并清空，不留残影")
+    void markHandledRecordsAndClears() {
+        when(mapper.selectById(1L)).thenReturn(feedbackOf(7, null));
+
+        service.markHandled(1L, true, 42);
+        org.mockito.ArgumentCaptor<Feedback> captor =
+                org.mockito.ArgumentCaptor.forClass(Feedback.class);
+        verify(mapper).updateById(captor.capture());
+        assertEquals(1, captor.getValue().getHandled());
+        assertEquals(42, captor.getValue().getHandledBy());
+        assertNotNull(captor.getValue().getHandledAt());
+
+        // 取消要走 UpdateWrapper：updateById 跳过 null，标记人会留在库里
+        service.markHandled(1L, false, 42);
+        verify(mapper).update(isNull(), any());
+    }
+
+    @Test
+    @DisplayName("标记不存在的反馈抛业务异常")
+    void markMissingFeedback() {
+        when(mapper.selectById(8L)).thenReturn(null);
+        assertThrows(BusinessException.class, () -> service.markHandled(8L, true, 1));
     }
 
     @Test

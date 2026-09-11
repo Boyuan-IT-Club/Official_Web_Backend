@@ -1743,6 +1743,13 @@ paths:
         description: bug / suggestion / other；不传为全部
         schema:
           type: string
+      - name: handled
+        in: query
+        required: false
+        description: 0 只看未处理 / 1 只看已处理；不传为全部
+        schema:
+          type: integer
+          enum: [0, 1]
       - name: page
         in: query
         required: false
@@ -1762,6 +1769,67 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FeedbackAdminPageResponse'
+          headers: {}
+  /api/admin/feedback/unhandled-count:
+    get:
+      summary: 未处理反馈条数
+      deprecated: false
+      description: 供管理端顶栏角标使用。需要 feedback:view 权限。
+      tags:
+      - 问题反馈模块
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: 操作成功
+                  data:
+                    type: object
+                    properties:
+                      count:
+                        type: integer
+                        format: int64
+                required:
+                - code
+                - message
+                - data
+          headers: {}
+  /api/admin/feedback/{feedbackId}/handled:
+    post:
+      summary: 标记反馈处理状态
+      deprecated: false
+      description: >-
+        只标不回：管理员需要的是「这条我看过、处理完了」，好让列表默认只剩待办；
+        回复提交人是另一回事。取消处理会把标记人与时间一并清空。
+        需要 feedback:view 权限。
+      tags:
+      - 问题反馈模块
+      parameters:
+      - name: feedbackId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: handled
+        in: query
+        required: false
+        description: true 标为已处理，false 恢复为未处理
+        schema:
+          type: boolean
+          default: true
+      responses:
+        '200':
+          description: 标记成功
+          content: {}
           headers: {}
   /api/resumes/search:
     get:
@@ -12675,6 +12743,15 @@ components:
         imageCount:
           type: integer
           description: 截图张数；取图走 /api/feedback/{id}/images/{index}
+        handled:
+          type: integer
+          description: 0 未处理 / 1 已处理
+        handledByName:
+          type: string
+          nullable: true
+        handledAt:
+          type: string
+          nullable: true
         createdAt:
           type: string
         updatedAt:
