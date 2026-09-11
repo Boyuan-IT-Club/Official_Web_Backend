@@ -73,6 +73,7 @@ public enum BusinessExceptionEnum {
     RESUME_QUERY_FAILED(3009, "简历查询失败", HttpStatus.BAD_REQUEST),
     RESUME_ATTACHMENT_NOT_FOUND(3011, "附件不存在", HttpStatus.NOT_FOUND),
     RESUME_PHOTO_NOT_FOUND(3012, "简历照片不存在", HttpStatus.NOT_FOUND),
+    RESUME_MEMBER_NO_APPLY(3013, "您已是社员，无需投递简历", HttpStatus.FORBIDDEN),
 
     // 简历字段定义相关异常 (3100-3199)
     RESUME_FIELD_DEFINITION_CREATE_FAILED(3101, "简历字段定义创建失败", HttpStatus.BAD_REQUEST),

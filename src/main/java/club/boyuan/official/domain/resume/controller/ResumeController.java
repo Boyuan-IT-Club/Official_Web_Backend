@@ -193,6 +193,18 @@ public class ResumeController {
         if (resumeDTO == null && !Boolean.TRUE.equals(autoCreate)) {
             return ResponseEntity.ok(ResponseMessage.success(null));
         }
+        /*
+          社员不参与招新，永远不给他建草稿。
+
+          前端虽然对社员传了 autoCreate=false，但 userInfo 是异步到的：首轮
+          initData 跑的时候 isMember 还是 false，草稿在那一轮就已经建掉了，
+          而 initedCidRef 又保证第二轮直接 return，于是再也不会纠正。线上
+          因此攒了 24 条社员空草稿（10 个周期）。闸口必须在服务端，
+          前端那层只是省一次请求。
+        */
+        if (resumeDTO == null && isMember(currentUser)) {
+            return ResponseEntity.ok(ResponseMessage.success(null));
+        }
         if (resumeDTO != null) {
             resumeDTO.setStatus(effectiveStatus(resumeDTO.getStatus(), cycleId));
         }
@@ -240,6 +252,7 @@ public class ResumeController {
         // 周期关闭后编辑一并拒绝：内容改了也投不进去，留着入口只会造成
         // "填写完成却查无此人"的困惑（管理端只看已提交）
         resumeService.assertCycleOpen(cycleId);
+        assertNotMember(currentUser);
 
         Resume resume = resumeService.getResumeByUserIdAndCycleId(currentUser.getUserId(), cycleId);
         if (resume == null) {
@@ -286,6 +299,8 @@ public class ResumeController {
     public ResponseEntity<ResponseMessage<?>> submitResume(@PathVariable Integer cycleId) {
         User currentUser = currentUser();
         logger.info("用户{}提交招募周期ID为{}的简历", currentUser.getUsername(), cycleId);
+
+        assertNotMember(currentUser);
 
         Resume resume = resumeService.getResumeByUserIdAndCycleId(currentUser.getUserId(), cycleId);
         if (resume == null) {
@@ -441,6 +456,7 @@ public class ResumeController {
 
         // 与字段值保存同一道闸：周期关闭后不再接受任何学生侧修改
         resumeService.assertCycleOpen(cycleId);
+        assertNotMember(currentUser);
 
         Resume resume = resumeService.getResumeByUserIdAndCycleId(currentUser.getUserId(), cycleId);
         if (resume == null) {
@@ -638,5 +654,19 @@ public class ResumeController {
      */
     private User currentUser() {
         return userService.getUserByUsername(SecurityUtil.getCurrentUsername());
+    }
+
+    private static boolean isMember(User user) {
+        return user != null && Boolean.TRUE.equals(user.getIsMember());
+    }
+
+    /**
+     * 社员侧写入闸口。社员已经在社里，不再参与招新流程，
+     * 任何建草稿 / 存字段 / 提交的动作都在这里拒掉。
+     */
+    private static void assertNotMember(User user) {
+        if (isMember(user)) {
+            throw new BusinessException(BusinessExceptionEnum.RESUME_MEMBER_NO_APPLY);
+        }
     }
 }
