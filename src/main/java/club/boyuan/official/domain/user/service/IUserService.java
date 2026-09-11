@@ -14,6 +14,13 @@ public interface IUserService extends IService<User> {
     /*增加用户*/
     User add(UserDTO user);
     User getUserById(Integer userId);
+
+    /**
+     * 软删除用户（置 is_deleted=1）。
+     * 不做物理删除：简历、面试安排、评价、结果都挂着 user_id，
+     * 真删会留下一地孤儿行，历史数据也就此不可追溯。
+     */
+    void softDeleteUser(Integer userId);
     User edit(UserDTO user);
     void deleteUserById(Integer userId);
     List<User> getAllUsers(User currentUser);

@@ -296,6 +296,27 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
     }
 
     @Override
+    public void softDeleteUser(Integer userId) {
+        if (userId == null) {
+            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
+        }
+        User user = getUserById(userId);
+        if (user == null) {
+            throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND);
+        }
+        // 与冻结同样的红线：管理员账号不允许被其他管理员删掉，
+        // 否则互删会把系统锁死（线上没有超级恢复入口）
+        if (PermissionUtils.hasAdminRole(user)) {
+            throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
+        }
+        user.setIsDeleted(1);
+        // 同时冻结：软删只是列表不再展示，若不冻结该账号仍能登录
+        user.setStatus(0);
+        userMapper.updateById(user);
+        logger.info("软删除用户成功，用户ID: {}", userId);
+    }
+
+    @Override
     public User updateUserStatus(Integer userId, String status) {
         if (userId == null || status == null) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);

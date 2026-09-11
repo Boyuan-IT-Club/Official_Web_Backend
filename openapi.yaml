@@ -3241,6 +3241,85 @@ paths:
         '403':
           description: ''
           headers: {}
+  /api/admin/users/{userId}/unfreeze:
+    put:
+      summary: 管理员解冻账号
+      deprecated: false
+      description: >-
+        解冻指定账号，恢复登录。内部复用与 /freeze 相同的状态机（等价于 status=active）。
+        前端一直在调这个地址，此前后端没有该路由，解冻必然 404。
+        权限：user:manage 或 admin:manage。管理员账号不可被解冻/冻结。
+      tags:
+      - 管理员特殊功能
+      parameters:
+      - name: userId
+        in: path
+        description: 用户ID
+        required: true
+        example: 2
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    description: 更新后的用户
+                required:
+                - code
+                - message
+                - data
+          headers: {}
+
+  /api/admin/users/{userId}:
+    delete:
+      summary: 管理员删除用户（软删除）
+      deprecated: false
+      description: >-
+        软删除：置 is_deleted=1 并同时冻结账号（否则被删的人仍能登录）。
+        不做物理删除——简历、面试安排、评价、结果都挂着 user_id，
+        真删会留下孤儿行且历史不可追溯。
+        权限：user:manage 或 admin:manage。管理员账号不可删除（互删会把系统锁死）。
+      tags:
+      - 管理员特殊功能
+      parameters:
+      - name: userId
+        in: path
+        description: 用户ID
+        required: true
+        example: 2
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    type: string
+                    description: 「用户已删除」
+                required:
+                - code
+                - message
+                - data
+          headers: {}
+
   /api/admin/users/{userId}/membership:
     put:
       summary: 录取/开除成员
@@ -4997,6 +5076,11 @@ paths:
                           description: >-
                             是否仍接收投递（is_active = 1）。false 表示管理员已「停止投递」：
                             周期在时间内仍可见，但不能提交、修改或新建简历。
+
+                        contactInfo:
+                          type: string
+                          nullable: true
+                          description: 本届负责人联系方式（周期配置）；用户端「填写提示」里展示，未配置为 null
                       required:
                       - cycleId
                       - cycleName

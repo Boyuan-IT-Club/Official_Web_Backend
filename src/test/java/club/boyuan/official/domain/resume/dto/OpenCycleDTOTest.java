@@ -6,7 +6,9 @@ import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -23,6 +25,20 @@ class OpenCycleDTOTest {
         assertTrue(new OpenCycleDTO(cycle(1), 3).isIntakeOpen());
         assertFalse(new OpenCycleDTO(cycle(0), 3).isIntakeOpen(), "停止投递的周期不能标成可投");
         assertFalse(new OpenCycleDTO(cycle(null), 3).isIntakeOpen(), "is_active 为空按不可投处理，宁可只读");
+    }
+
+    /**
+     * 联系方式此前没进 DTO：前端类型声明成可选，编译期无警告，
+     * 运行时永远是 undefined——填写提示里的「本届负责人」一直不显示。
+     * 这条断言把「配置字段确实送到用户端」锁住。
+     */
+    @Test
+    @DisplayName("周期配了负责人联系方式就要带给用户端")
+    void carriesContactInfo() {
+        RecruitmentCycle c = cycle(1);
+        c.setContactInfo("oyty@boyuan.club");
+        assertEquals("oyty@boyuan.club", new OpenCycleDTO(c, 3).getContactInfo());
+        assertNull(new OpenCycleDTO(cycle(1), 3).getContactInfo(), "没配就是 null，不要造一个空串");
     }
 
     private static RecruitmentCycle cycle(Integer isActive) {
