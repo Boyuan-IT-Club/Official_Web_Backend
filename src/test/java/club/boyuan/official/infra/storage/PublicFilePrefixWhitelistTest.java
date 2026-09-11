@@ -41,8 +41,13 @@ class PublicFilePrefixWhitelistTest {
      * ResumeAttachmentController 的 /api/resumes/attachments/{id}/content，
      * 逐次鉴权 + 强制 nosniff + 只有安全类型才内联。放进公开白名单等于
      * 任何人拿到对象键就能下载别人的申请材料。
+     *
+     * feedback：问题反馈的截图。取图走 FeedbackController 的
+     * /api/feedback/{id}/images/{index} —— 按序号取、不暴露 objectKey，
+     * 且逐次判定「本人或持 feedback:view」。反馈截图里常有个人信息
+     * （聊天记录、带姓名的页面），公开读等于谁都能翻。
      */
-    private static final Set<String> INTENTIONALLY_PRIVATE = Set.of("attachments");
+    private static final Set<String> INTENTIONALLY_PRIVATE = Set.of("attachments", "feedback");
 
     @Test
     @DisplayName("每个上传前缀都在 /api/files 白名单里")
