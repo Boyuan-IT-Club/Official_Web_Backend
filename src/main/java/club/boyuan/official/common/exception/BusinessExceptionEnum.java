@@ -51,6 +51,7 @@ public enum BusinessExceptionEnum {
 
     // 奖项经验相关异常 (2300-2399)
     AWARD_EXPERIENCE_NOT_FOUND(2301, "奖项经验不存在", HttpStatus.BAD_REQUEST),
+    FEEDBACK_NOT_FOUND(2306, "反馈不存在", HttpStatus.NOT_FOUND),
     AWARD_EXPERIENCE_CREATE_FAILED(2302, "奖项经验创建失败", HttpStatus.BAD_REQUEST),
     AWARD_EXPERIENCE_UPDATE_FAILED(2303, "奖项经验更新失败", HttpStatus.BAD_REQUEST),
     AWARD_EXPERIENCE_DELETE_FAILED(2304, "奖项经验删除失败", HttpStatus.BAD_REQUEST),

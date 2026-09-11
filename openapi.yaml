@@ -1584,6 +1584,253 @@ paths:
                 - message
                 - data
           headers: {}
+  /api/feedback:
+    post:
+      summary: 提交问题反馈
+      deprecated: false
+      description: >-
+        登录用户提交问题反馈。截图需先调 /api/feedback/images 上传拿到 imageKey，
+        再随反馈一起提交，最多 3 张。按用户维度限流：10 分钟 10 条。
+      tags:
+      - 问题反馈模块
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                category:
+                  type: string
+                  enum: [bug, suggestion, other]
+                  description: 分类；不传按 other
+                content:
+                  type: string
+                  maxLength: 5000
+                imageKeys:
+                  type: array
+                  maxItems: 3
+                  items:
+                    type: string
+                  description: 截图的 objectKey（来自上传接口）
+              required:
+              - content
+      responses:
+        '200':
+          description: 提交成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedbackResponse'
+          headers: {}
+  /api/feedback/images:
+    post:
+      summary: 上传反馈截图
+      deprecated: false
+      description: >-
+        先传图拿 objectKey，再随反馈提交——用户往往先截图再慢慢描述问题，
+        一次性提交意味着写到一半刷新就全丢。单张不超过 5MB，仅收图片。
+        按用户维度限流：10 分钟 20 张。
+      tags:
+      - 问题反馈模块
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required:
+              - file
+      responses:
+        '200':
+          description: 上传成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: 操作成功
+                  data:
+                    type: object
+                    properties:
+                      imageKey:
+                        type: string
+                required:
+                - code
+                - message
+                - data
+          headers: {}
+  /api/feedback/{feedbackId}/images/{index}:
+    get:
+      summary: 读取反馈截图
+      deprecated: false
+      description: >-
+        按序号取截图二进制。不暴露 objectKey，逐次鉴权——本人或持
+        feedback:view 的管理员才能看，反馈截图常带个人信息。
+      tags:
+      - 问题反馈模块
+      parameters:
+      - name: feedbackId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: index
+        in: path
+        required: true
+        description: 截图序号，从 0 开始
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: 图片二进制
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+          headers: {}
+        '403':
+          description: 无权查看这条反馈的截图
+          content: {}
+          headers: {}
+  /api/feedback/me:
+    get:
+      summary: 我的反馈记录
+      deprecated: false
+      tags:
+      - 问题反馈模块
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 10
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedbackPageResponse'
+          headers: {}
+  /api/admin/feedback:
+    get:
+      summary: 全部反馈（管理端）
+      deprecated: false
+      description: 需要 feedback:view 权限。可按 category 筛选。
+      tags:
+      - 问题反馈模块
+      parameters:
+      - name: category
+        in: query
+        required: false
+        description: bug / suggestion / other；不传为全部
+        schema:
+          type: string
+      - name: handled
+        in: query
+        required: false
+        description: 0 只看未处理 / 1 只看已处理；不传为全部
+        schema:
+          type: integer
+          enum: [0, 1]
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 10
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedbackAdminPageResponse'
+          headers: {}
+  /api/admin/feedback/unhandled-count:
+    get:
+      summary: 未处理反馈条数
+      deprecated: false
+      description: 供管理端顶栏角标使用。需要 feedback:view 权限。
+      tags:
+      - 问题反馈模块
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: 操作成功
+                  data:
+                    type: object
+                    properties:
+                      count:
+                        type: integer
+                        format: int64
+                required:
+                - code
+                - message
+                - data
+          headers: {}
+  /api/admin/feedback/{feedbackId}/handled:
+    post:
+      summary: 标记反馈处理状态
+      deprecated: false
+      description: >-
+        只标不回：管理员需要的是「这条我看过、处理完了」，好让列表默认只剩待办；
+        回复提交人是另一回事。取消处理会把标记人与时间一并清空。
+        需要 feedback:view 权限。
+      tags:
+      - 问题反馈模块
+      parameters:
+      - name: feedbackId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: handled
+        in: query
+        required: false
+        description: true 标为已处理，false 恢复为未处理
+        schema:
+          type: boolean
+          default: true
+      responses:
+        '200':
+          description: 标记成功
+          content: {}
+          headers: {}
   /api/resumes/search:
     get:
       summary: 条件查询
@@ -12450,6 +12697,146 @@ components:
           format: date-time
           nullable: true
           description: 最近一次初筛未通过通知的发送时间；null 表示还没通知
+    FeedbackItem:
+      type: object
+      properties:
+        feedbackId:
+          type: integer
+          format: int64
+        userId:
+          type: integer
+        category:
+          type: string
+          enum: [bug, suggestion, other]
+        content:
+          type: string
+        imageKeys:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: 仅「我的反馈」返回；管理端列表只回 imageCount
+        createdAt:
+          type: string
+          example: '2026-09-11 10:00:00'
+        updatedAt:
+          type: string
+          example: '2026-09-11 10:00:00'
+    FeedbackAdminItem:
+      type: object
+      properties:
+        feedbackId:
+          type: integer
+          format: int64
+        userId:
+          type: integer
+        username:
+          type: string
+          nullable: true
+        userName:
+          type: string
+          nullable: true
+        category:
+          type: string
+        content:
+          type: string
+        imageCount:
+          type: integer
+          description: 截图张数；取图走 /api/feedback/{id}/images/{index}
+        handled:
+          type: integer
+          description: 0 未处理 / 1 已处理
+        handledByName:
+          type: string
+          nullable: true
+        handledAt:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+    FeedbackResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: 操作成功
+        data:
+          $ref: '#/components/schemas/FeedbackItem'
+      required:
+      - code
+      - message
+      - data
+    FeedbackPageResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: 操作成功
+        data:
+          type: object
+          properties:
+            content:
+              type: array
+              items:
+                $ref: '#/components/schemas/FeedbackItem'
+            totalElements:
+              type: integer
+              format: int64
+            totalPages:
+              type: integer
+            currentPage:
+              type: integer
+            pageSize:
+              type: integer
+            first:
+              type: boolean
+            last:
+              type: boolean
+      required:
+      - code
+      - message
+      - data
+    FeedbackAdminPageResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: 操作成功
+        data:
+          type: object
+          properties:
+            content:
+              type: array
+              items:
+                $ref: '#/components/schemas/FeedbackAdminItem'
+            totalElements:
+              type: integer
+              format: int64
+            totalPages:
+              type: integer
+            currentPage:
+              type: integer
+            pageSize:
+              type: integer
+            first:
+              type: boolean
+            last:
+              type: boolean
+      required:
+      - code
+      - message
+      - data
     RecruitFlowProgressResponse:
       type: object
       properties:

@@ -1,4 +1,7 @@
 spring:
+  # 本地运行时自动读取项目根目录 .env；无需手动 source，避免邮件/JWT 等变量遗漏。
+  config:
+    import: optional:file:.env[.properties]
   application:
     name: Official
   flyway:
@@ -79,6 +82,21 @@ booking:
 rate-limit:
   enabled: true
   rules:
+    # 反馈是登录用户就能写的接口，不限流等于给灌库开门。
+    # 按用户维度而不是 IP：同一间宿舍/同一个校园 NAT 出口共用 IP，
+    # 按 IP 限会误伤一片人
+    - name: feedback-create
+      pattern: /api/feedback
+      method: POST
+      limit: 10
+      window-seconds: 600
+      key-type: USER
+    - name: feedback-image
+      pattern: /api/feedback/images
+      method: POST
+      limit: 20
+      window-seconds: 600
+      key-type: USER
     - name: auth-send-email
       pattern: /api/auth/send-email-code
       method: POST

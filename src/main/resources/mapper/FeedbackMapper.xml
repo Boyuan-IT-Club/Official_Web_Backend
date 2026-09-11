@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="club.boyuan.official.persistence.mapper.FeedbackMapper">
+    <select id="selectAdminPage" resultType="club.boyuan.official.domain.feedback.dto.FeedbackAdminView">
+        SELECT f.feedback_id AS feedbackId,
+               f.user_id AS userId,
+               u.username AS username,
+               u.name AS userName,
+               f.category AS category,
+               f.content AS content,
+               f.created_at AS createdAt,
+               f.updated_at AS updatedAt,
+               f.handled AS handled,
+               f.handled_at AS handledAt,
+               h.name AS handledByName,
+               <!-- 只回张数，不回 objectKey：列表接口不该把存储路径撒出去，
+                    要看图再按序号单取，那一步才做鉴权 -->
+               CASE WHEN f.image_keys IS NULL OR f.image_keys = '' OR f.image_keys = '[]'
+                    THEN 0
+                    ELSE JSON_LENGTH(f.image_keys) END AS imageCount
+        FROM feedback f
+        LEFT JOIN user u ON u.user_id = f.user_id
+        LEFT JOIN user h ON h.user_id = f.handled_by
+        <where>
+            f.is_deleted = 0
+            <if test="category != null and category != ''">
+                AND f.category = #{category}
+            </if>
+            <if test="handled != null">
+                AND f.handled = #{handled}
+            </if>
+        </where>
+        ORDER BY f.created_at DESC, f.feedback_id DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countAdmin" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM feedback
+        <where>
+            is_deleted = 0
+            <if test="category != null and category != ''">
+                AND category = #{category}
+            </if>
+            <if test="handled != null">
+                AND handled = #{handled}
+            </if>
+        </where>
+    </select>
+</mapper>
