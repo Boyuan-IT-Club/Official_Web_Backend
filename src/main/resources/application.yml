@@ -78,9 +78,17 @@ booking:
     user-lock-ttl-seconds: 600
     request-status-ttl-hours: 24
 
-# 应用层网关限流（Redis 滑动窗口），在请求进入 Controller 前拦截
+# 应用层网关限流（Redis 滑动窗口），在请求进入 Controller 前拦截。
+#
+# 2026-09-13 起默认关闭：招新期间校园 NAT 下一栋楼共用出口 IP，IP 维度反复误伤
+# （线上打出过 211 次 429），放宽阈值与加邮箱维度之后仍有同学被挡在注册/验证码外。
+# 下面的规则全部保留，只是总开关关着——恢复时不用改代码，给容器加
+# RATE_LIMIT_ENABLED=true 重启即可（Spring 松散绑定到 rate-limit.enabled）。
+#
+# 关掉后 /api/auth/register、send-email-code、/api/feedback 等写接口失去应用层节流，
+# 防刷只剩验证码有效期与业务唯一约束；若遇到灌库或验证码轰炸，先把开关打开。
 rate-limit:
-  enabled: true
+  enabled: ${RATE_LIMIT_ENABLED:false}
   # 按邮箱限流，与下面按 IP 的 rules 构成两个维度：
   # IP 维度放宽到「一个出口打不垮站」即可，邮箱维度收紧到「一个人刷不动」。
   # 这类规则拿不到路径（拦截器跑在读请求体之前），由 Controller 主动调用。
