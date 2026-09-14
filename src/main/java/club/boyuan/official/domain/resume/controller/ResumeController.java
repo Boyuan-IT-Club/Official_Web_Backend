@@ -13,6 +13,7 @@ import club.boyuan.official.common.exception.BusinessException;
 import club.boyuan.official.common.exception.BusinessExceptionEnum;
 import club.boyuan.official.domain.resume.service.IResumeFieldDefinitionService;
 import club.boyuan.official.domain.resume.service.IResumeService;
+import club.boyuan.official.domain.resume.service.impl.ResumeServiceImpl;
 import club.boyuan.official.domain.user.service.IUserService;
 import club.boyuan.official.common.utils.PdfExportUtil;
 import club.boyuan.official.common.utils.PermissionUtils;
@@ -23,6 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -238,6 +240,23 @@ public class ResumeController {
     }
 
     /**
+     * 按简历 ID 取简历（含权威 userId/cycleId），供初筛执行（Agent）取数用。
+     * <p>初筛只认 resume_id 一个事实源，归属关系由本端点派生——调用方传入
+     * 的 user_id 不作数，避免「改一个参数就把 A 的初筛结果写到 B 名下」。
+     */
+    @GetMapping("/admin/by-resume/{resumeId}")
+    @PreAuthorize("hasAnyAuthority('resume:view', 'resume:audit')")
+    public ResponseEntity<ResponseMessage<?>> getResumeByResumeId(
+            @PathVariable Integer resumeId) {
+        logger.info("管理员{}按简历ID{}查询权威归属", SecurityUtil.getCurrentUsername(), resumeId);
+        ResumeDTO resumeDTO = resumeService.getResumeWithFieldValuesById(resumeId);
+        if (resumeDTO == null) {
+            throw new BusinessException(BusinessExceptionEnum.RESUME_NOT_FOUND);
+        }
+        return ResponseEntity.ok(ResponseMessage.success(resumeDTO));
+    }
+
+    /**
      * 保存字段值（不存在简历则自动创建草稿）
      */
     @PostMapping("/cycle/{cycleId}/field-values")
@@ -426,11 +445,23 @@ public class ResumeController {
             @PathVariable Integer resumeId, @PathVariable Integer status) {
         logger.info("管理员{}更新简历{}状态为{}", SecurityUtil.getCurrentUsername(), resumeId, status);
 
-        // 1草稿 2已提交 4通过初筛 5未通过初筛；
-        // 3 是「草稿且周期已截止」的派生态，不允许手工设置
-        if (status == null || (status != 1 && status != 2 && status != 4 && status != 5)) {
+        // 1草稿 2已提交 4通过初筛 5未通过初筛 —— resume:audit 可写；
+        // 3 是「草稿且周期已截止」的派生态，不允许手工设置。
+        // 6(AI初筛中) 是瞬态系统状态，写它另需 evaluation:run —— 普通审核员
+        // 误设 6 会让简历卡在"初筛中"，且掩盖 agent 是否真的在跑。
+        boolean isScreeningStatus = status != null && status == ResumeServiceImpl.STATUS_AI_SCREENING;
+        if (isScreeningStatus && !hasAuthority("evaluation:run")) {
+            throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED,
+                    "状态 6(AI初筛中)仅 agent 初筛执行(权限 evaluation:run)可设置，请勿手工修改");
+        }
+        if (status == null
+                || (status != ResumeServiceImpl.STATUS_DRAFT
+                && status != ResumeServiceImpl.STATUS_SUBMITTED
+                && status != ResumeServiceImpl.STATUS_SCREEN_PASSED
+                && status != ResumeServiceImpl.STATUS_SCREEN_REJECTED
+                && status != ResumeServiceImpl.STATUS_AI_SCREENING)) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD,
-                    "简历状态仅支持 1(草稿)/2(已提交)/4(通过初筛)/5(未通过初筛)，"
+                    "简历状态仅支持 1(草稿)/2(已提交)/4(通过初筛)/5(未通过初筛)/6(AI初筛中,系统设置)，"
                             + "录取结论请使用面试结果模块");
         }
         Resume resume = resumeService.getResumeById(resumeId);
@@ -668,5 +699,12 @@ public class ResumeController {
         if (isMember(user)) {
             throw new BusinessException(BusinessExceptionEnum.RESUME_MEMBER_NO_APPLY);
         }
+    }
+
+    /** 当前登录人是否持有某权限码(方法级鉴权之外的细粒度判断用)。 */
+    private static boolean hasAuthority(String code) {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getAuthorities() != null
+                && auth.getAuthorities().stream().anyMatch(a -> code.equals(a.getAuthority()));
     }
 }
