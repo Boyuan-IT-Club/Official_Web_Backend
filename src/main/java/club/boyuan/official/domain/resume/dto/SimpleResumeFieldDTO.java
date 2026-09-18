@@ -13,7 +13,13 @@ public class SimpleResumeFieldDTO {
      * 此前各有一套写死的顺序，同一份简历在三个地方长得都不一样。
      */
     private Integer sortOrder;
-    
+    /**
+     * 该字段在本周期是否必填（resume_field_definition.is_required）。
+     * 带出来是因为**空值必须以必填性区分对待**：必填留空是候选人没写，
+     * 可选留空只是这项他没有，两者不该同等看待。
+     */
+    private Boolean isRequired;
+
     public SimpleResumeFieldDTO() {
     }
     
@@ -25,9 +31,10 @@ public class SimpleResumeFieldDTO {
 
     public SimpleResumeFieldDTO(Integer fieldId, String fieldKey, String fieldLabel,
                                 String fieldType, String placeholder, String fieldValue,
-                                Integer sortOrder) {
+                                Integer sortOrder, Boolean isRequired) {
         this(fieldId, fieldKey, fieldLabel, fieldType, placeholder, fieldValue);
         this.sortOrder = sortOrder;
+        this.isRequired = isRequired;
     }
 
     public SimpleResumeFieldDTO(Integer fieldId, String fieldKey, String fieldLabel,
@@ -95,5 +102,13 @@ public class SimpleResumeFieldDTO {
 
     public void setSortOrder(Integer sortOrder) {
         this.sortOrder = sortOrder;
+    }
+
+    public Boolean getIsRequired() {
+        return isRequired;
+    }
+
+    public void setIsRequired(Boolean isRequired) {
+        this.isRequired = isRequired;
     }
 }
