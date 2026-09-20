@@ -66,11 +66,14 @@ public class AuthController {
                 throw new BusinessException(BusinessExceptionEnum.PASSWORD_NOT_MATCH);
             }
 
-            // 使用工具类验证邮箱和手机号格式
-            messageUtils.validateEmail(registerDTO.getEmail());
-            if (!registerDTO.getEmail().endsWith("@stu.ecnu.edu.cn")) {
-                throw new BusinessException(BusinessExceptionEnum.INVALID_EMAIL_FORMAT);
-            }
+            // 注册必须是「11 位学号 + @stu.ecnu.edu.cn」。原来只查后缀，
+            // 于是 cr@stu.ecnu.edu.cn 这种能一路走到建用户那步，再因为用户名
+            // 取自邮箱前缀、只有 2 个字符而撞上 4-20 的长度限制，报出一句
+            // 文不对题的「用户名长度必须在4-20个字符之间」。
+            //
+            // 只卡注册：登录和找回密码不能用这条，库里有 admin、dinghuaye
+            // 这类早期非学号账号，收紧会把他们锁在门外。
+            messageUtils.validateStudentEmail(registerDTO.getEmail());
             messageUtils.validatePhone(registerDTO.getPhone());
 
             // 检查用户名是否已存在
