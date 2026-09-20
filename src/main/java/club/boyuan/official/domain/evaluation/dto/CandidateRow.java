@@ -13,7 +13,8 @@ public class CandidateRow {
     private String githubUsername;
     private Integer userId;
     private String userName;
-    private String deptName;
+    /** 是否正式社员(user.is_member);未认领(user_id NULL)时为 null,身份未知。 */
+    private Boolean member;
     private Integer latestTotalScore;
     private Integer maxTotalScore;
     private Integer submissionCount;
