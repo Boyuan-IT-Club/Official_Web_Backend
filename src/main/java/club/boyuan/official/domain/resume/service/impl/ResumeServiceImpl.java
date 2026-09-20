@@ -27,7 +27,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -156,6 +158,7 @@ public class ResumeServiceImpl implements IResumeService {
         Resume guarded = resumeMapper.findById(resumeId);
         if (guarded != null) {
             requireCycleOpen(guarded.getCycleId());
+            requireAllRequiredFieldsFilled(guarded);
         }
         try {
             Resume resume = resumeMapper.findById(resumeId);
@@ -173,6 +176,66 @@ public class ResumeServiceImpl implements IResumeService {
         }
     }
     
+    /**
+     * 本届配成必填的字段必须都填了才让提交。
+     *
+     * 原来这里一项都不校验，全靠前端。而前端恰恰在两个地方漏了：
+     * 个人照片的 required 只声明了 prop 从没用过（红星都没画），意向部门是
+     * inForm:false 的自定义控件、压根不在 antd Form 里，且提交时「没选就静默
+     * 跳过」。线上因此出现没照片、没部门的已提交简历。
+     * 何况前端藏入口只是看不见，直接调接口照样能投 —— 闸口必须在这里。
+     */
+    private void requireAllRequiredFieldsFilled(Resume resume) {
+        List<ResumeFieldDefinition> definitions =
+                fieldDefinitionService.getFieldDefinitionsByCycleId(resume.getCycleId());
+        if (definitions == null || definitions.isEmpty()) {
+            return;
+        }
+
+        Map<Integer, String> valueByFieldId = new HashMap<>();
+        List<ResumeFieldValue> values = resumeFieldValueMapper.findByResumeId(resume.getResumeId());
+        if (values != null) {
+            for (ResumeFieldValue v : values) {
+                valueByFieldId.put(v.getFieldId(), v.getFieldValue());
+            }
+        }
+
+        List<String> missing = new ArrayList<>();
+        for (ResumeFieldDefinition def : definitions) {
+            if (!Boolean.TRUE.equals(def.getIsRequired())) continue;
+            if (SUBMIT_CHECK_EXEMPT_KEYS.contains(def.getFieldKey())) continue;
+            if (isBlankFieldValue(valueByFieldId.get(def.getFieldId()))) {
+                missing.add(def.getFieldLabel() == null ? def.getFieldKey() : def.getFieldLabel());
+            }
+        }
+
+        if (!missing.isEmpty()) {
+            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD,
+                    "还有必填项没填：" + String.join("、", missing));
+        }
+    }
+
+    /**
+     * 配成必填、但值并不落在 resume_field_value 上的字段，校验时必须放过，
+     * 否则本届 57 份简历一份都提交不了：
+     * - 面试意向三项存在 interview_preference 表（前端也已把它们列为废弃字段）
+     * - 第一/第二志愿的值合并进 expected_departments 存，自己那两列始终为空
+     */
+    static final java.util.Set<String> SUBMIT_CHECK_EXEMPT_KEYS = java.util.Set.of(
+            "expected_interview_time",
+            "second_interview_time",
+            "can_attend_offline_interview",
+            "introduction",
+            "first_choice",
+            "second_choice");
+
+    /** 空字符串、空白、以及空数组 "[]" 都算没填 —— 多选字段清空后存的就是 "[]" */
+    static boolean isBlankFieldValue(String value) {
+        if (value == null) return true;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() || "[]".equals(trimmed) || "null".equals(trimmed);
+    }
+
     @Override
     @Transactional
     public void saveFieldValues(List<ResumeFieldValue> fieldValues) {
