@@ -52,7 +52,7 @@ public class AuthController {
     /**
      * 用户注册接口
      *
-     * @param registerDTO 注册信息DTO，包含用户名、密码、邮箱、手机号等
+     * @param registerDTO 注册信息DTO。用户名不在其中——它由邮箱推导，见下方注释
      * @return 注册结果，包含用户ID和用户名
      */
     @PostMapping("/register")
@@ -66,18 +66,21 @@ public class AuthController {
                 throw new BusinessException(BusinessExceptionEnum.PASSWORD_NOT_MATCH);
             }
 
-            // 注册必须是「11 位学号 + @stu.ecnu.edu.cn」。原来只查后缀，
-            // 于是 cr@stu.ecnu.edu.cn 这种能一路走到建用户那步，再因为用户名
-            // 取自邮箱前缀、只有 2 个字符而撞上 4-20 的长度限制，报出一句
-            // 文不对题的「用户名长度必须在4-20个字符之间」。
+            // 注册必须是「11 位学号 + @stu.ecnu.edu.cn」，用户名就是那 11 位学号，
+            // 由后端在这里推导——不再接受客户端传值。
+            //
+            // 原先是前端 email.split('@')[0] 算好传过来，后端再对它独立做 4-20 的
+            // 长度校验，同一个值两处各管一段。结果 cr@stu.ecnu.edu.cn 这种邮箱
+            // 报出的是「用户名长度必须在4-20个字符之间」，指向一个注册表单里
+            // 根本不存在的输入框。推导权收回来之后，这类错位没有发生的余地。
             //
             // 只卡注册：登录和找回密码不能用这条，库里有 admin、dinghuaye
             // 这类早期非学号账号，收紧会把他们锁在门外。
-            messageUtils.validateStudentEmail(registerDTO.getEmail());
+            String username = messageUtils.usernameFromStudentEmail(registerDTO.getEmail());
             messageUtils.validatePhone(registerDTO.getPhone());
 
             // 检查用户名是否已存在
-            User existingUser = userService.getUserByUsername(registerDTO.getUsername());
+            User existingUser = userService.getUserByUsername(username);
             if (existingUser != null) {
                 throw new BusinessException(BusinessExceptionEnum.USERNAME_ALREADY_EXISTS);
             }
@@ -101,7 +104,7 @@ public class AuthController {
 
             // 转换RegisterDTO为UserDTO
             UserDTO userDTO = new UserDTO();
-            userDTO.setUsername(registerDTO.getUsername());
+            userDTO.setUsername(username);
             userDTO.setPassword(registerDTO.getPassword());
             userDTO.setEmail(registerDTO.getEmail());
             userDTO.setPhone(registerDTO.getPhone());

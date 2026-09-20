@@ -14,13 +14,18 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 学号约束必须落在 DTO 上，不能只放在 Controller 方法体里。
+ * 注册请求体的字段约束。
  * <p>
- * 起因：@Valid 的字段校验跑在方法体之前，而 username 取自邮箱前缀
- * （前端 email.split('@')[0]，注册表单里没有用户名输入框）。前缀短于 4 个
- * 字符时 username 的 @Size 先炸，用户看到「用户名长度必须在4-20个字符之间」
- * ——指向一个他根本没填过的字段，真正的原因说不出口。线上实测过：
- * cr@stu.ecnu.edu.cn 返回的就是这句，Controller 里的 2022 根本没机会执行。
+ * 这组断言记录了一段两次才修对的历史：
+ * <ol>
+ *   <li>最初后端只查邮箱后缀，cr@stu.ecnu.edu.cn 能一路走到建用户；</li>
+ *   <li>补了 Controller 里的校验，但 @Valid 跑在方法体之前，username 的
+ *       @Size 先炸，用户看到的仍是「用户名长度必须在4-20个字符之间」
+ *       ——指向一个注册表单里根本不存在的输入框；</li>
+ *   <li>约束下沉到 DTO，报错里终于点得到邮箱；</li>
+ *   <li>最后把 username 整个从请求体里拿掉，由后端从邮箱推导。
+ *       错位的根源是「同一个值由前端算、后端独立校验」，去掉它才算修完。</li>
+ * </ol>
  */
 class RegisterDTOEmailTest {
 
@@ -32,11 +37,13 @@ class RegisterDTOEmailTest {
     }
 
     @Test
-    @DisplayName("前缀短于 4 字符时，报错里必须点名邮箱，而不是只怪用户名")
-    void shortPrefixStillBlamesEmail() {
-        List<String> msgs = messages(validate("cr@stu.ecnu.edu.cn", "cr"));
+    @DisplayName("邮箱不合规时只说邮箱，不再冒出用户名相关的提示")
+    void badEmailOnlyBlamesEmail() {
+        List<String> msgs = messages(validate("cr@stu.ecnu.edu.cn"));
         assertTrue(msgs.contains("邮箱须为 11 位学号的学生邮箱（学号@stu.ecnu.edu.cn）"),
-                "用户名长度先炸时，邮箱这条原因也要一并给出，否则用户被指向一个没填过的字段；实际: " + msgs);
+                "应当点名邮箱；实际: " + msgs);
+        assertFalse(msgs.stream().anyMatch(m -> m.contains("用户名")),
+                "username 已不在请求体里，不该再有它的报错；实际: " + msgs);
     }
 
     @Test
@@ -45,25 +52,24 @@ class RegisterDTOEmailTest {
         for (String bad : new String[]{
                 "1024510@stu.ecnu.edu.cn", "102451014171@stu.ecnu.edu.cn",
                 "10245101417@qq.com", "abcdefghijk@stu.ecnu.edu.cn"}) {
-            assertTrue(messages(validate(bad, "10245101417")).stream().anyMatch(m -> m.contains("11 位学号")),
+            assertTrue(messages(validate(bad)).stream().anyMatch(m -> m.contains("11 位学号")),
                     "应当拒绝: " + bad);
         }
     }
 
     @Test
-    @DisplayName("合法学号邮箱不触发任何邮箱相关约束")
+    @DisplayName("合法学号邮箱不触发任何约束")
     void acceptsStudentEmail() {
-        List<String> msgs = messages(validate("10245101417@stu.ecnu.edu.cn", "10245101417"));
-        assertFalse(msgs.stream().anyMatch(m -> m.contains("邮箱")), "合法邮箱不该报错: " + msgs);
+        List<String> msgs = messages(validate("10245101417@stu.ecnu.edu.cn"));
+        assertTrue(msgs.isEmpty(), "合法载荷不该有任何违规: " + msgs);
     }
 
     private static List<String> messages(Set<ConstraintViolation<RegisterDTO>> v) {
         return v.stream().map(ConstraintViolation::getMessage).toList();
     }
 
-    private static Set<ConstraintViolation<RegisterDTO>> validate(String email, String username) {
+    private static Set<ConstraintViolation<RegisterDTO>> validate(String email) {
         RegisterDTO dto = new RegisterDTO();
-        dto.setUsername(username);
         dto.setPassword("Aa1!aaaa");
         dto.setConfirmPassword("Aa1!aaaa");
         dto.setName("测试");
