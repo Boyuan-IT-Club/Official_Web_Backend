@@ -6,13 +6,14 @@
          认领语义:user 关联走 s.user_id(认领接口写入的键),不再走 github 字符串匹配——
          否则手工认领 github 与目标用户不匹配的提交后,管理端视图与用户端 /me 不一致(S1)。
          未认领(user_id NULL)时 userName 回退 github_username。
-         部门:COALESCE(用户当前部门, 该周期第一志愿部门);GROUP BY 不含 deptName,
-         用 MAX() 取其一,避免同候选人跨部门偏好被拆成多行(S2)。 -->
+         身份:直接带 u.is_member,前端展示「正式社员/候选人」——
+         此前这列展示「当前部门,兜底第一志愿部门」,候选人会顶着志愿部门名,看着像已录取。
+         department 两个 join 保留:按部门筛选仍要同时命中当前部门与该周期第一志愿部门。 -->
     <sql id="candidateGrouped">
         SELECT s.github_username AS githubUsername,
                u.user_id         AS userId,
                COALESCE(u.name, s.github_username) AS userName,
-               MAX(COALESCE(d.dept_name, vd.dept_name)) AS deptName,
+               MAX(u.is_member)  AS member,
                MAX(s.total_score) AS maxTotalScore,
                MAX(s.evaluated_at) AS lastEvaluatedAt,
                COUNT(*)          AS submissionCount,
