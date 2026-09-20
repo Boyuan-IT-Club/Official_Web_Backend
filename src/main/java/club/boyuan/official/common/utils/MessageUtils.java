@@ -27,6 +27,14 @@ public class MessageUtils {
 
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
     private static final Pattern PHONE_PATTERN = Pattern.compile("^\\d{11}$");
+    /**
+     * ECNU 学生邮箱：11 位纯数字学号 + 固定后缀。
+     * 注册时用户名直接取 @ 前面那段，所以这里不只是格式洁癖——
+     * 前缀不是 11 位学号，建出来的用户名就会短到撞上 4-20 的长度限制，
+     * 用户看到的报错还是文不对题的「用户名长度必须在4-20个字符之间」。
+     */
+    private static final Pattern STUDENT_EMAIL_PATTERN =
+            Pattern.compile("^\\d{11}@stu\\.ecnu\\.edu\\.cn$");
 
     @Autowired
     private JavaMailSender mailSender;
@@ -45,6 +53,21 @@ public class MessageUtils {
     public void validateEmail(String email) {
         if (email == null || email.isEmpty() || !EMAIL_PATTERN.matcher(email).matches()) {
             throw new BusinessException(BusinessExceptionEnum.INVALID_EMAIL_FORMAT);
+        }
+    }
+
+    /**
+     * 验证是不是 ECNU 学生邮箱（11 位学号 + @stu.ecnu.edu.cn）。
+     * <p>
+     * 只给注册用。登录、找回密码不能走这条：库里有 admin、dinghuaye 这类
+     * 早期非学号账号，拿这条规则去卡会把他们锁在门外。
+     *
+     * @param email 邮箱
+     * @throws BusinessException 不是合法学生邮箱时抛出
+     */
+    public void validateStudentEmail(String email) {
+        if (email == null || !STUDENT_EMAIL_PATTERN.matcher(email.trim()).matches()) {
+            throw new BusinessException(BusinessExceptionEnum.INVALID_STUDENT_EMAIL);
         }
     }
 
