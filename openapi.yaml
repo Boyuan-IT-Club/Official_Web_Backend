@@ -167,7 +167,7 @@ paths:
     post:
       summary: 社团官网-注册
       deprecated: false
-      description: '注册社团官网账号。邮箱必须是「11 位学号 + @stu.ecnu.edu.cn」（不合规返回业务码 2022）；用户名取自邮箱 @ 前的学号，不由客户端指定。校验用户名/邮箱唯一性及验证码，成功后创建普通用户账号。
+      description: '注册社团官网账号。邮箱必须是「11 位学号 + @stu.ecnu.edu.cn」（不合规返回业务码 2022）。\n\n        用户名由后端从邮箱推导（= 那 11 位学号），请求体不再需要 username；旧客户端仍传该字段会被忽略，不报错。\n\n        校验用户名/邮箱唯一性及验证码，成功后创建普通用户账号。
 
         限流为两个维度：同一 IP 每小时最多 10 次，同一邮箱每小时最多 5 次；任一维度超限返回 HTTP 429（业务码 4291）并带 `Retry-After`。
 
@@ -180,9 +180,6 @@ paths:
             schema:
               type: object
               properties:
-                username:
-                  type: string
-                  description: 用户名
                 password:
                   type: string
                   description: 密码
@@ -202,7 +199,6 @@ paths:
                   type: string
                   description: 邮箱验证码
               required:
-              - username
               - password
               - confirmPassword
               - name
@@ -210,7 +206,6 @@ paths:
               - phone
               - emailCode
             example:
-              username: Student100
               password: PASSWORD666!
               confirmPassword: PASSWORD666!
               name: 张三
@@ -4168,7 +4163,7 @@ paths:
       description: >-
         把选中的简历标为通过初筛(status=4)或未通过初筛(status=5)。草稿不受影响。
         与「面试结果」是两件事：初筛决定谁能进面试，结果决定谁被录取。
-        未通过初筛的简历不再参与自动分配、也不能再提交面试意向（返回 3408）。
+        未通过初筛的简历不再参与自动分配、也不能再提交面试意向（返回 3411）。
         本接口只改状态不发邮件，通知走 /api/resumes/screening/notify。
         另：打分平均分为 0 时会自动置为未通过；分数改回非 0 时自动收回该结论。
         权限 resume:audit。

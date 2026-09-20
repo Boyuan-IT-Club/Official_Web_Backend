@@ -33,8 +33,10 @@ public class MessageUtils {
      * 前缀不是 11 位学号，建出来的用户名就会短到撞上 4-20 的长度限制，
      * 用户看到的报错还是文不对题的「用户名长度必须在4-20个字符之间」。
      */
+    /** ECNU 学号位数。注册用户名直接取这段，位数错了后面全错 */
+    public static final int STUDENT_ID_LENGTH = 11;
     private static final Pattern STUDENT_EMAIL_PATTERN =
-            Pattern.compile("^\\d{11}@stu\\.ecnu\\.edu\\.cn$");
+            Pattern.compile("^\\d{" + STUDENT_ID_LENGTH + "}@stu\\.ecnu\\.edu\\.cn$");
 
     @Autowired
     private JavaMailSender mailSender;
@@ -69,6 +71,23 @@ public class MessageUtils {
         if (email == null || !STUDENT_EMAIL_PATTERN.matcher(email.trim()).matches()) {
             throw new BusinessException(BusinessExceptionEnum.INVALID_STUDENT_EMAIL);
         }
+    }
+
+    /**
+     * 从学生邮箱推导用户名——就是学号本身。
+     * <p>
+     * 注册的用户名不再由客户端决定。原先是前端 email.split('@')[0] 算好了传过来，
+     * 后端再对它独立做 4-20 的长度校验：同一个值两处各管一段，一旦邮箱前缀不合规，
+     * 用户看到的是「用户名长度必须在4-20个字符之间」——指向一个注册表单里根本
+     * 不存在的输入框。让后端自己推导，这类错位就没有发生的余地。
+     *
+     * @param email 学生邮箱
+     * @return 11 位学号
+     * @throws BusinessException 不是合法学生邮箱时抛出
+     */
+    public String usernameFromStudentEmail(String email) {
+        validateStudentEmail(email);
+        return email.trim().substring(0, STUDENT_ID_LENGTH);
     }
 
     /**

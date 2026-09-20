@@ -10,9 +10,8 @@ import lombok.Setter;
 @Getter
 @Setter
 public class RegisterDTO {
-    @NotBlank(message = "用户名不能为空")
-    @Size(min = 4, max = 20, message = "用户名长度必须在4-20个字符之间")
-    private String username;
+    // 这里刻意没有 username：它由后端从邮箱推导（= 11 位学号），不接受客户端传值。
+    // 旧客户端仍会在请求体里带上这个字段，Jackson 默认忽略未知属性，不会报错。
 
     @NotBlank(message = "密码不能为空")
     @Size(min = 8, max = 20, message = "密码长度必须在8-20个字符之间")

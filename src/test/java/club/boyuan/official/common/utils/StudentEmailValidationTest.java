@@ -62,6 +62,22 @@ class StudentEmailValidationTest {
         assertDoesNotThrow(() -> messageUtils.validateStudentEmail("  10245101417@stu.ecnu.edu.cn  "));
     }
 
+    @Test
+    @DisplayName("用户名由邮箱推导，就是那 11 位学号")
+    void derivesUsernameFromEmail() {
+        assertEquals("10245101417", messageUtils.usernameFromStudentEmail("10245101417@stu.ecnu.edu.cn"));
+        assertEquals("10245101417", messageUtils.usernameFromStudentEmail("  10245101417@stu.ecnu.edu.cn  "),
+                "两侧空格要先去掉，否则切出来的学号会带空格");
+    }
+
+    @Test
+    @DisplayName("推导前先校验：邮箱不合规就抛，不会切出个畸形用户名")
+    void derivationRejectsBadEmail() {
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> messageUtils.usernameFromStudentEmail("cr@stu.ecnu.edu.cn"));
+        assertEquals(BusinessExceptionEnum.INVALID_STUDENT_EMAIL.getCode(), ex.getCode());
+    }
+
     private void assertCode(String email) {
         BusinessException ex = assertThrows(BusinessException.class,
                 () -> messageUtils.validateStudentEmail(email), "应当拒绝: " + email);

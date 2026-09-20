@@ -34,7 +34,10 @@ public enum BusinessExceptionEnum {
     ROLE_NOT_FOUND(2014, "角色不存在", HttpStatus.BAD_REQUEST),
     PERMISSION_NOT_FOUND(2015, "权限不存在", HttpStatus.BAD_REQUEST),
     DEPARTMENT_NOT_FOUND(2016, "部门不存在", HttpStatus.BAD_REQUEST),
-    MEMBER_CLAIM_NOT_FOUND(2017, "认领申请不存在", HttpStatus.BAD_REQUEST),
+    // 2023 而不是 2017：这条 2026-09-10 加进来时撞上了 2026-08-11 就存在的
+    // GITHUB_ALREADY_BOUND，两个语义完全无关的错误共用一个码，客户端没法靠码区分。
+    // 移动的是后来者，先到的那个不动，免得影响已经在用 2017 的调用方。
+    MEMBER_CLAIM_NOT_FOUND(2023, "认领申请不存在", HttpStatus.BAD_REQUEST),
     GITHUB_ALREADY_BOUND(2017, "该 GitHub 账号已被其他用户绑定", HttpStatus.BAD_REQUEST),
     INVALID_REPORT(2018, "报告单无效", HttpStatus.BAD_REQUEST),
     EVALUATION_SUBMISSION_NOT_FOUND(2019, "评测提交不存在", HttpStatus.NOT_FOUND),
@@ -121,7 +124,10 @@ public enum BusinessExceptionEnum {
     INTERVIEW_BOOKING_NOT_FOUND(3405, "面试预约不存在", HttpStatus.BAD_REQUEST),
     INTERVIEW_BOOKING_FORBIDDEN(3406, "无权操作该面试预约", HttpStatus.FORBIDDEN),
     RESUME_NOT_SUBMITTED_FOR_BOOKING(3407, "请先提交简历后再预约面试", HttpStatus.BAD_REQUEST),
-    RESUME_SCREENED_OUT(3408, "简历未通过初筛，无法参与后续面试流程", HttpStatus.BAD_REQUEST),
+    // 3411 而不是 3408：这条 2026-09-10 加进来时撞上了 2026-07-23 就存在的
+    // INTERVIEW_BOOKING_PROCESSING，一个码同时表示「简历没过初筛」和「已有预约在处理」，
+    // openapi 里两处也各按各的含义写着 3408。同样是移动后来者。
+    RESUME_SCREENED_OUT(3411, "简历未通过初筛，无法参与后续面试流程", HttpStatus.BAD_REQUEST),
     INTERVIEW_BOOKING_PROCESSING(3408, "您在本周期已有预约正在处理中，请稍后再试", HttpStatus.BAD_REQUEST),
     INTERVIEW_BOOKING_REQUEST_NOT_FOUND(3409, "预约请求不存在或已过期", HttpStatus.BAD_REQUEST),
     INTERVIEW_SECKILL_DISABLED(3410, "秒杀预约模式未开启", HttpStatus.BAD_REQUEST),
