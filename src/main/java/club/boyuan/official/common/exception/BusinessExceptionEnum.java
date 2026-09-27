@@ -101,6 +101,8 @@ public enum BusinessExceptionEnum {
     // 数据库相关异常 (4000-4099)
     DATABASE_OPERATION_FAILED(4001, "数据库操作失败", HttpStatus.INTERNAL_SERVER_ERROR),
     FILE_UPLOAD_FAILED(4007, "文件上传失败", HttpStatus.INTERNAL_SERVER_ERROR),
+    // 上限值须与 spring.servlet.multipart.max-file-size 一致（改一处必须改另一处）
+    FILE_TOO_LARGE(4009, "文件过大，单个文件上限 20MB", HttpStatus.PAYLOAD_TOO_LARGE),
     EMAIL_SEND_FAILED(4008, "邮件发送失败", HttpStatus.INTERNAL_SERVER_ERROR),
     DATABASE_CONNECTION_FAILED(4002, "数据库连接失败", HttpStatus.INTERNAL_SERVER_ERROR),
     DATABASE_QUERY_FAILED(4003, "数据库查询失败", HttpStatus.INTERNAL_SERVER_ERROR),

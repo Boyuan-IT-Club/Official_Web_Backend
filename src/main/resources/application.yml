@@ -26,8 +26,11 @@ spring:
       connection-timeout: 30000
   servlet:
     multipart:
-      max-file-size: 10MB
-      max-request-size: 10MB
+      # 单文件 20MB（与 ResumeAttachmentServiceImpl.MAX_BYTES 一致）。
+      # 整包放到 25MB：multipart 的 boundary 与各段头部也算在请求体里，
+      # 两个值取相同数值时，正好 20MB 的文件会因这点开销被拒。
+      max-file-size: 20MB
+      max-request-size: 25MB
   data:
     redis:
       host: localhost
