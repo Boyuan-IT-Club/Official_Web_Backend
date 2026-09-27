@@ -11,6 +11,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 /**
  * 全局异常处理器
@@ -79,6 +80,26 @@ public class GlobalExceptionHandler {
                 BusinessExceptionEnum.PERMISSION_DENIED.getMessage(), 
                 null);
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+    }
+
+    /**
+     * 处理上传体积超过 multipart 上限——返回 413。
+     * <p>
+     * 这个异常由 DispatcherServlet 解析 multipart 时抛出，早于 Controller，
+     * 与认证、授权一样属于框架层异常，只能在这里翻成统一响应格式；
+     * 不接住会落到下面的兜底 Exception：用户只看到「系统异常」，
+     * 不知道自己只是文件太大（前端也会误报成接口挂了）。
+     * @param ex 体积超限异常
+     * @return 统一响应格式
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ResponseMessage<?>> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException ex) {
+        logger.warn("上传文件过大: {}", ex.getMessage());
+        ResponseMessage<?> response = new ResponseMessage<>(
+                BusinessExceptionEnum.FILE_TOO_LARGE.getCode(),
+                BusinessExceptionEnum.FILE_TOO_LARGE.getMessage(),
+                null);
+        return ResponseEntity.status(BusinessExceptionEnum.FILE_TOO_LARGE.getHttpStatus()).body(response);
     }
 
     /**

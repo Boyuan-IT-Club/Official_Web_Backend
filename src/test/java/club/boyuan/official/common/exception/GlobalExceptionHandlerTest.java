@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -48,6 +49,20 @@ class GlobalExceptionHandlerTest {
 
         String msg = resp.getBody().getMessage();
         assertTrue(msg.contains("面试地点不能为空") && msg.contains("容量至少为1"), msg);
+    }
+
+    /**
+     * 回归：上传体积超过 multipart 上限时，DispatcherServlet 抛的异常曾落进兜底 Exception 分支，
+     * 用户只看到 500「系统异常」。现在应是 413 并说明上限。
+     */
+    @Test
+    void uploadTooLarge_returns413WithLimitMessage_notSystemError() {
+        ResponseEntity<ResponseMessage<?>> resp =
+                handler.handleMaxUploadSizeExceeded(new MaxUploadSizeExceededException(20L * 1024 * 1024));
+
+        assertEquals(HttpStatus.PAYLOAD_TOO_LARGE, resp.getStatusCode());
+        assertEquals(BusinessExceptionEnum.FILE_TOO_LARGE.getCode(), resp.getBody().getCode());
+        assertEquals(BusinessExceptionEnum.FILE_TOO_LARGE.getMessage(), resp.getBody().getMessage());
     }
 
     @SuppressWarnings("unused")
