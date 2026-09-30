@@ -289,7 +289,7 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
             String dbSortBy = convertFieldNameToColumnName(sortBy);
             
             int offset = page * size;
-            List<RecruitmentCycle> cycles = recruitmentCycleMapper.findAllWithPaginationAndSorting(offset, size, dbSortBy, sortOrder);
+            List<RecruitmentCycle> cycles = recruitmentCycleMapper.findAllWithPaginationAndSorting(offset, size, dbSortBy, normalizeSortOrder(sortOrder));
             long totalElements = recruitmentCycleMapper.countByConditions(null, null, null, null);
             int totalPages = (int) Math.ceil((double) totalElements / size);
             
@@ -311,7 +311,7 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
             String dbSortBy = convertFieldNameToColumnName(sortBy);
             
             int offset = page * size;
-            List<RecruitmentCycle> cycles = recruitmentCycleMapper.findByConditions(cycleName, academicYear, status, isActive, offset, size, dbSortBy, sortOrder);
+            List<RecruitmentCycle> cycles = recruitmentCycleMapper.findByConditions(cycleName, academicYear, status, isActive, offset, size, dbSortBy, normalizeSortOrder(sortOrder));
             long totalElements = recruitmentCycleMapper.countByConditions(cycleName, academicYear, status, isActive);
             int totalPages = (int) Math.ceil((double) totalElements / size);
             
@@ -351,7 +351,18 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
             case "updatedAt":
                 return "updated_at";
             default:
-                return fieldName;
+                /*
+                 * 不认识的一律落回默认列，绝不原样放行。
+                 * 返回值会被 mapper 里的 ${sortBy} 直接拼进 ORDER BY；以前这里
+                 * return fieldName，而接口只要求登录 —— 任何一个学生都能借
+                 * /api/cycles/page?sortBy=... 往 SQL 里注入。
+                 */
+                return "created_at";
         }
+    }
+
+    /** 排序方向只认 ASC / DESC；它同样会被 ${sortOrder} 原样拼进 SQL，以前完全没校验 */
+    static String normalizeSortOrder(String sortOrder) {
+        return "ASC".equalsIgnoreCase(sortOrder == null ? "" : sortOrder.trim()) ? "ASC" : "DESC";
     }
 }

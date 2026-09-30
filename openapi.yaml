@@ -2011,11 +2011,12 @@ paths:
           enum: [first, second]
       - name: sortBy
         in: query
-        description: ''
         required: false
-        example: DESC
-        schema:
-          type: string
+        description: >-
+          排序字段，只认白名单：submitted_at / created_at / name / resume_score，
+          其余一律按默认（created_at DESC）。按 resume_score 排时，未打分的无论升降序都排在最后。
+          末尾恒带 resume_id 作平局裁决，保证翻页不重复不遗漏。
+        schema: { type: string, enum: [submitted_at, created_at, name, resume_score] }
       - name: sortOrder
         in: query
         description: ''
@@ -4571,6 +4572,42 @@ paths:
                 - data
           headers: {}
 
+    delete:
+      summary: 撤销我给这份简历打的分
+      description: >-
+        误触打分时用。只删当前登录人那一票，别人的分不动；平均分、最近打分人与初筛结论随之重算。
+        一个分都不剩时回到「未打分」（resumeScore 为 null）。
+        0 分即未通过是打分推出来的结论：撤掉的是 0 分时收回「未通过」；
+        手动标记的「未通过」不会因为撤销一个非 0 的分而被收回。
+        没打过分时返回业务错误「你还没有给这份简历打过分」。
+      tags: [简历相关接口]
+      parameters:
+      - name: resumeId
+        in: path
+        required: true
+        schema: { type: integer }
+      responses:
+        '200':
+          description: 撤销后的分数概况（与打分接口同形）
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: integer, example: 200 }
+                  message: { type: string, example: 已撤销你的打分 }
+                  data:
+                    type: object
+                    properties:
+                      resumeId: { type: integer }
+                      status: { type: integer }
+                      resumeScore:
+                        type: integer
+                        nullable: true
+                        description: 剩余打分的平均分；无人打分时为 null
+                      scoreEntries:
+                        type: array
+                        items: { type: object }
   /api/resumes/cycle/{cycleId}/submit:
     post:
       summary: 提交简历

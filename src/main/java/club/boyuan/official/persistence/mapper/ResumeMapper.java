@@ -70,7 +70,8 @@ public interface ResumeMapper extends BaseMapper<Resume> {
                                            @Param("choiceRank") String choiceRank,
                                            @Param("cycleId") Integer cycleId, @Param("status") String status, 
                                            @Param("offset") int offset, @Param("limit") int limit,
-                                           @Param("sortBy") String sortBy, @Param("sortOrder") String sortOrder);
+                                           // 必须是 ResumeSortOrder.orderBy(...) 的产物：会被 ${} 原样拼进 SQL
+                                           @Param("orderBy") String orderBy);
     
     /**
      * 统计多条件查询简历数量
