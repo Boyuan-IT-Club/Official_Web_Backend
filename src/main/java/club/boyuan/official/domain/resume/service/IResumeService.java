@@ -130,6 +130,12 @@ public interface IResumeService {
      * @return 分页结果DTO
      */
     PageResultDTO<ResumeDTO> queryResumesWithPagination(String name, String major, String expectedDepartment, String choiceRank, Integer cycleId, String status, int page, int size, String sortBy, String sortOrder);
+
+    /**
+     * 同上，按分数排序时采用盲评视角（见 ResumeSortOrder#orderBy 的 blindScorerId）。
+     * blindScorerId 为 null 时与上面完全一致。
+     */
+    PageResultDTO<ResumeDTO> queryResumesWithPagination(String name, String major, String expectedDepartment, String choiceRank, Integer cycleId, String status, int page, int size, String sortBy, String sortOrder, Integer blindScorerId);
     
     /**
      * 根据cycleId获取所有简历

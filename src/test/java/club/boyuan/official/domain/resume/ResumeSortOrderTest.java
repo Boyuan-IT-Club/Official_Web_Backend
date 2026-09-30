@@ -71,4 +71,21 @@ class ResumeSortOrderTest {
         assertEquals("r.created_at DESC, r.resume_id DESC", ResumeSortOrder.orderBy(null, null));
         assertEquals("r.created_at DESC, r.resume_id DESC", ResumeSortOrder.orderBy("", ""));
     }
+
+    @Test
+    @DisplayName("盲评视角：我打过的在前并按分排，我没打过的垫底且组内不按分数排")
+    void blindScoreSortHidesOthersRanking() {
+        String desc = ResumeSortOrder.orderBy("resume_score", "DESC", 7);
+        String mine = "EXISTS (SELECT 1 FROM resume_score_entry e WHERE e.resume_id = r.resume_id AND e.scorer_id = 7)";
+        assertEquals("(CASE WHEN " + mine + " THEN 0 ELSE 1 END) ASC, (CASE WHEN " + mine
+                + " THEN r.resume_score END) DESC, r.resume_id DESC", desc);
+        assertTrue(ResumeSortOrder.orderBy("resume_score", "ASC", 7).contains("THEN r.resume_score END) ASC"));
+    }
+
+    @Test
+    @DisplayName("盲评参数只影响按分数排序；为 null 时与原逻辑一致")
+    void blindScorerOnlyAffectsScoreSort() {
+        assertEquals(ResumeSortOrder.orderBy("name", "ASC"), ResumeSortOrder.orderBy("name", "ASC", 7));
+        assertEquals(ResumeSortOrder.orderBy("resume_score", "DESC"), ResumeSortOrder.orderBy("resume_score", "DESC", null));
+    }
 }

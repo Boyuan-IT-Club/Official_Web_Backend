@@ -684,8 +684,12 @@ public class ResumeController {
             logger.info("管理员{}执行条件查询简历，结果数量: {}", username, result.size());
             return ResponseEntity.ok(ResponseMessage.success(result));
         }
+        // 盲评：能打分的人按分数排序时，自己没打过的垫底且不按分数排，
+        // 免得前端藏了分数、却能从顺序看出别人打的高低。只读不打分的人看全量顺序。
+        Integer blindScorerId = "resume_score".equalsIgnoreCase(sortBy == null ? "" : sortBy.trim())
+                && hasAuthority("resume:audit") ? currentUser().getUserId() : null;
         PageResultDTO<ResumeDTO> result = resumeService.queryResumesWithPagination(
-                name, major, expectedDepartment, choiceRank, cycleId, status, page, size, sortBy, sortOrder);
+                name, major, expectedDepartment, choiceRank, cycleId, status, page, size, sortBy, sortOrder, blindScorerId);
         logger.info("管理员{}执行分页条件查询简历，结果数量: {}，总记录数: {}",
                 username, result.getContent().size(), result.getTotalElements());
         return ResponseEntity.ok(ResponseMessage.success(result));
