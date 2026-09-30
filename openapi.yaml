@@ -2015,6 +2015,8 @@ paths:
         description: >-
           排序字段，只认白名单：submitted_at / created_at / name / resume_score，
           其余一律按默认（created_at DESC）。按 resume_score 排时，未打分的无论升降序都排在最后。
+          盲评：调用者持 resume:audit（能打分）时，按 resume_score 排只对「调用者自己打过分的」按分排，
+          其余排在最后且组内按 resume_id 倒序（不按分数），避免从顺序推测他人打分。
           末尾恒带 resume_id 作平局裁决，保证翻页不重复不遗漏。
         schema: { type: string, enum: [submitted_at, created_at, name, resume_score] }
       - name: sortOrder

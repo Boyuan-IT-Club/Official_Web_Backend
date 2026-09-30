@@ -32,12 +32,29 @@ public final class ResumeSortOrder {
     }
 
     public static String orderBy(String sortBy, String sortOrder) {
+        return orderBy(sortBy, sortOrder, null);
+    }
+
+    /**
+     * @param blindScorerId 盲评视角：非空时按分数排序只对「这个人打过分的」按分排，
+     *                      他没打过的一律垫底、且组内不按分数排（按 resume_id），
+     *                      否则前端虽然藏了分数，看顺序也能猜出别人打的高低。
+     *                      只拼整数字面量（Integer#toString），不会引入注入面。
+     */
+    public static String orderBy(String sortBy, String sortOrder, Integer blindScorerId) {
         String column = sortBy == null ? null : COLUMNS.get(sortBy.trim().toLowerCase(Locale.ROOT));
         if (column == null) {
             return DEFAULT + TIE_BREAKER;
         }
         String direction = "ASC".equalsIgnoreCase(sortOrder == null ? "" : sortOrder.trim()) ? "ASC" : "DESC";
 
+        if ("r.resume_score".equals(column) && blindScorerId != null) {
+            String mine = "EXISTS (SELECT 1 FROM resume_score_entry e WHERE e.resume_id = r.resume_id AND e.scorer_id = "
+                    + Integer.toString(blindScorerId) + ")";
+            // 我没打过的那组 CASE 取 NULL，组内全部相等，交给 resume_id 裁决
+            return "(CASE WHEN " + mine + " THEN 0 ELSE 1 END) ASC, "
+                    + "(CASE WHEN " + mine + " THEN r.resume_score END) " + direction + TIE_BREAKER;
+        }
         if ("r.resume_score".equals(column)) {
             /*
              * 按分数排时，未打分的一律垫底 —— 不论升序降序。
