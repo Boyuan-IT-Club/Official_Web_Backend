@@ -26,4 +26,12 @@ public interface IResumeAttachmentService {
 
     /** 该类型能否安全地内联预览。 */
     boolean previewable(String contentType, String fileName);
+
+    /**
+     * 签发附件的限时直链（浏览器直接从 COS 下载）。
+     * 只有服务端认定安全的类型才以 inline 下发，其余一律 attachment。
+     *
+     * @return 链接；COS 未启用时返回 null，调用方退回 /content 流式接口
+     */
+    String presignedUrl(ResumeAttachment attachment, boolean inline);
 }

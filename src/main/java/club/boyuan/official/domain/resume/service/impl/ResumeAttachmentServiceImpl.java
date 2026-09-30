@@ -150,6 +150,25 @@ public class ResumeAttachmentServiceImpl implements IResumeAttachmentService {
         return cosStorageService.open(attachment.getObjectKey());
     }
 
+    /** 直链有效期：够读完一份 PDF（阅读器翻页时会继续发分段请求），又不至于长期可转发 */
+    static final java.time.Duration PRESIGN_TTL = java.time.Duration.ofMinutes(15);
+
+    @Override
+    public String presignedUrl(ResumeAttachment attachment, boolean inline) {
+        if (!cosStorageService.isEnabled()) {
+            return null;
+        }
+        boolean canInline = inline && previewable(attachment.getContentType(), attachment.getFileName());
+        String disposition = (canInline ? "inline" : "attachment") + "; filename*=UTF-8''"
+                + java.net.URLEncoder.encode(attachment.getFileName(), java.nio.charset.StandardCharsets.UTF_8)
+                        .replace("+", "%20");
+        // 内联时把类型钉死成白名单里的那个：不信任对象上传时带的元数据
+        String type = canInline
+                ? attachment.getContentType().split(";")[0].trim().toLowerCase(Locale.ROOT)
+                : attachment.getContentType();
+        return cosStorageService.presignGet(attachment.getObjectKey(), PRESIGN_TTL, type, disposition);
+    }
+
     @Override
     public boolean previewable(String contentType, String fileName) {
         if (!StringUtils.hasText(contentType)) {
