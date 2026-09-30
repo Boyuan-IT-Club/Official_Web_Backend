@@ -2,10 +2,15 @@ package club.boyuan.official.domain.resume.controller;
 
 import club.boyuan.official.common.dto.ResponseMessage;
 import club.boyuan.official.domain.resume.dto.ResumeAttachmentDTO;
+import club.boyuan.official.common.exception.BusinessException;
+import club.boyuan.official.common.exception.BusinessExceptionEnum;
+import club.boyuan.official.domain.resume.service.AttachmentAccess;
 import club.boyuan.official.domain.resume.service.IResumeAttachmentService;
+import club.boyuan.official.domain.resume.service.IResumeService;
 import club.boyuan.official.domain.user.service.IUserService;
 import club.boyuan.official.infra.storage.CosFile;
 import club.boyuan.official.common.utils.SecurityUtil;
+import club.boyuan.official.persistence.entity.Resume;
 import club.boyuan.official.persistence.entity.ResumeAttachment;
 import club.boyuan.official.persistence.entity.User;
 import jakarta.servlet.http.HttpServletResponse;
@@ -13,6 +18,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -21,7 +29,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 简历附件：学生上传任意格式资料，面试官在管理端预览或下载。
@@ -38,6 +48,7 @@ public class ResumeAttachmentController {
 
     private final IResumeAttachmentService attachmentService;
     private final IUserService userService;
+    private final IResumeService resumeService;
 
     /** 学生上传附件到自己的简历。 */
     @PostMapping("/{resumeId}/attachments")
@@ -51,16 +62,19 @@ public class ResumeAttachmentController {
     }
 
     /**
-     * 列出某份简历的附件。
+     * 列出某份简历的附件。本人，或持有看候选人材料的权限（见 AttachmentAccess）。
      *
-     * 学生看自己的、面试官/管理员看候选人的，都走这一个接口。
-     * 学生看不到别人的简历 id，而管理端本来就能看到候选人简历，
-     * 所以这里只要求登录；真正的闸门在上传与删除（只能动自己的）。
+     * 以前这里只要求登录，理由是「学生看不到别人的简历 id」—— 但简历 id 是连续整数，
+     * 随手就能猜到，文件名与大小照样泄露。
      */
     @GetMapping("/{resumeId}/attachments")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<List<ResumeAttachmentDTO>>> list(
             @PathVariable Integer resumeId) {
+        Resume resume = resumeService.getResumeById(resumeId);
+        // 简历不存在时 owner 为 null：只有持权限的人能拿到一个空列表，
+        // 学生则一律拒绝 —— 否则「存在 / 不存在」本身就成了可以枚举的信号
+        requireCanView(resume == null ? null : resume.getUserId());
         return ResponseEntity.ok(ResponseMessage.success(attachmentService.listByResume(resumeId)));
     }
 
@@ -87,6 +101,7 @@ public class ResumeAttachmentController {
                         @RequestParam(name = "inline", defaultValue = "false") boolean inline,
                         HttpServletResponse response) throws IOException {
         ResumeAttachment a = attachmentService.getOrThrow(id);
+        requireCanView(a.getUserId());
         boolean canInline = inline && attachmentService.previewable(a.getContentType(), a.getFileName());
 
         CosFile file = attachmentService.open(a);
@@ -109,6 +124,44 @@ public class ResumeAttachmentController {
         try (InputStream in = file.inputStream(); OutputStream out = response.getOutputStream()) {
             in.transferTo(out);
         }
+    }
+
+    /**
+     * 取附件的限时直链，浏览器拿去直接从 COS 下载 / 预览，不再经过本服务转发。
+     *
+     * 服务器公网出口只有 5~8Mbps、全员共享：附件走 /content 转发时，一份大 PDF
+     * 就能把管道占满，同时发出的列表请求排队超时，页面报「获取简历列表失败」。
+     * 鉴权与 /content 完全一致；直链 15 分钟过期。
+     *
+     * url 为 null 表示 COS 未启用，前端退回 /content。
+     */
+    @GetMapping("/attachments/{id}/url")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ResponseMessage<Map<String, Object>>> url(
+            @PathVariable Integer id,
+            @RequestParam(name = "inline", defaultValue = "false") boolean inline) {
+        ResumeAttachment a = attachmentService.getOrThrow(id);
+        requireCanView(a.getUserId());
+        String url = attachmentService.presignedUrl(a, inline);
+        Map<String, Object> body = new java.util.HashMap<>();
+        body.put("url", url);
+        return ResponseEntity.ok(ResponseMessage.success(body));
+    }
+
+    /** 本人或持看候选人材料权限的人才能看，否则 403（规则见 AttachmentAccess） */
+    private void requireCanView(Integer ownerUserId) {
+        User me = currentUser();
+        if (!AttachmentAccess.canView(ownerUserId, me == null ? null : me.getUserId(), currentAuthorities())) {
+            throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
+        }
+    }
+
+    private static Collection<String> currentAuthorities() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || auth.getAuthorities() == null) {
+            return List.of();
+        }
+        return auth.getAuthorities().stream().map(GrantedAuthority::getAuthority).toList();
     }
 
     private User currentUser() {

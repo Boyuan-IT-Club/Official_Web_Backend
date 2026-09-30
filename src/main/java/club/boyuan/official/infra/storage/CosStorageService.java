@@ -2,7 +2,10 @@ package club.boyuan.official.infra.storage;
 
 import club.boyuan.official.infra.config.CosProperties;
 import com.qcloud.cos.COSClient;
+import com.qcloud.cos.http.HttpMethodName;
 import com.qcloud.cos.model.COSObject;
+import com.qcloud.cos.model.GeneratePresignedUrlRequest;
+import com.qcloud.cos.model.ResponseHeaderOverrides;
 import com.qcloud.cos.model.GetObjectRequest;
 import com.qcloud.cos.model.ObjectMetadata;
 import com.qcloud.cos.model.PutObjectRequest;
@@ -13,6 +16,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.Duration;
+import java.util.Date;
 import java.util.UUID;
 
 /**
@@ -98,6 +103,36 @@ public class CosStorageService {
         String contentType = metadata != null ? metadata.getContentType() : null;
         long contentLength = metadata != null ? metadata.getContentLength() : -1;
         return new CosFile(cosObject.getObjectContent(), contentType, contentLength);
+    }
+
+    /**
+     * 签发一个限时的 GET 链接，浏览器直接从 COS 下载，不经过本服务。
+     *
+     * 为什么要绕开本服务：服务器公网出口只有 5~8Mbps、所有人共享。
+     * 附件原来是 COS → 服务器 → 浏览器转一道，一份 4MB 的 PDF 就能把管道占满好几秒，
+     * 同时发出的小请求（周期列表、简历列表）排队超过前端 10 秒超时，页面报错。
+     * 同一台机器实测：COS 临时链接 14~32MB/s，走服务器 0.4~1.1MB/s。
+     *
+     * 链接自带签名，过期即失效；桶保持私有（直接访问是 403），不需要放开读权限。
+     * 协议是 https：SDK 的 ClientConfig 默认 HttpProtocol.https，签出来的链接跟着走，
+     * 不会在 https 页面里被当成混合内容拦掉。
+     *
+     * @param contentType        覆盖响应的 Content-Type（null 则沿用对象元数据）
+     * @param contentDisposition 覆盖响应的 Content-Disposition（inline / attachment + 文件名）
+     */
+    public String presignGet(String objectKey, Duration ttl, String contentType, String contentDisposition) {
+        GeneratePresignedUrlRequest request =
+                new GeneratePresignedUrlRequest(cosProperties.getBucket(), objectKey, HttpMethodName.GET);
+        request.setExpiration(new Date(System.currentTimeMillis() + ttl.toMillis()));
+        ResponseHeaderOverrides overrides = new ResponseHeaderOverrides();
+        if (StringUtils.hasText(contentType)) {
+            overrides.setContentType(contentType);
+        }
+        if (StringUtils.hasText(contentDisposition)) {
+            overrides.setContentDisposition(contentDisposition);
+        }
+        request.setResponseHeaders(overrides);
+        return cosClient.generatePresignedUrl(request).toString();
     }
 
     /**

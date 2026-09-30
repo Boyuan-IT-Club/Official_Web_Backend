@@ -5279,7 +5279,10 @@ paths:
   /api/resumes/{resumeId}/attachments:
     get:
       summary: 列出简历附件
-      description: 学生看自己的、面试官看候选人的，同一个接口。仅需登录。
+      description: >-
+        学生看自己的、审核人看候选人的，同一个接口。
+        仅限本人，或持 resume:view / resume:audit / interview:result /
+        interview:board:manage 之一，否则 403（此前只要求登录，简历 id 又是连续整数，可被枚举）。
       tags: [简历相关接口]
       parameters:
       - name: resumeId
@@ -5380,6 +5383,13 @@ paths:
 
         前端不能把本地址直接塞进 img/iframe 的 src —— 那样发出的请求不带
         Authorization 头，一律 401。应先取回 blob 再用 blob: URL 渲染。
+
+        仅限本人，或持 resume:view / resume:audit / interview:result /
+        interview:board:manage 之一，否则 403。
+
+        优先用 /api/resumes/attachments/{id}/url 取直链：本接口经服务器转发，
+        而服务器公网出口只有 5~8Mbps、全员共享，大文件会把管道占满。
+        本接口保留作 COS 未启用时的退路。
       tags: [简历相关接口]
       parameters:
       - name: id
@@ -5396,6 +5406,51 @@ paths:
           content:
             application/octet-stream:
               schema: { type: string, format: binary }
+  /api/resumes/attachments/{id}/url:
+    get:
+      summary: 取简历附件的限时直链（浏览器直接从 COS 下载 / 预览）
+      description: >-
+        返回一个 15 分钟有效的 COS 签名链接，浏览器拿去直接下载，不经过本服务转发。
+        鉴权与 /content 完全一致：仅限本人，或持 resume:view / resume:audit /
+        interview:result / interview:board:manage 之一，否则 403。
+
+        inline=true 时是否真的内联仍由服务端决定（与 /content 同一份白名单）：
+        不在白名单里的类型（含 text/html、image/svg+xml）一律以 attachment 签发。
+        内联时 Content-Type 固定为白名单里的值，不采信对象上传时带的元数据。
+
+        链接可以直接放进 img / object / video / iframe 的 src（签名就是凭据，
+        不需要 Authorization 头），浏览器会边下边渲染。
+
+        url 为 null 表示 COS 未启用，调用方应退回 /content。
+      tags: [简历相关接口]
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer }
+      - name: inline
+        in: query
+        required: false
+        schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: 直链
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: integer, example: 200 }
+                  message: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      url:
+                        type: string
+                        nullable: true
+                        description: COS 签名链接；COS 未启用时为 null
+        '403':
+          description: 既不是本人，也没有看候选人材料的权限
   /api/resumes/{resumeId}/photo:
     post:
       summary: 上传简历个人照片
