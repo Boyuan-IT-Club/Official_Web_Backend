@@ -172,23 +172,12 @@
                 </foreach>
             </if>
         </where>
-        ORDER BY
-        <choose>
-            <when test="sortBy != null and sortBy != ''">
-                ${sortBy}
-            </when>
-            <otherwise>
-                r.created_at
-            </otherwise>
-        </choose>
-        <choose>
-            <when test="sortOrder != null and sortOrder != ''">
-                ${sortOrder}
-            </when>
-            <otherwise>
-                DESC
-            </otherwise>
-        </choose>
+        <!--
+            orderBy 由 ResumeSortOrder 按白名单拼好，每个字符都来自服务端常量。
+            以前这里是 ${sortBy} ${sortOrder} 直接拼请求参数 —— SQL 注入。
+            ${} 仍然不转义，所以千万别再让请求参数直接流进来。
+        -->
+        ORDER BY ${orderBy}
         LIMIT #{offset}, #{limit}
     </select>
 

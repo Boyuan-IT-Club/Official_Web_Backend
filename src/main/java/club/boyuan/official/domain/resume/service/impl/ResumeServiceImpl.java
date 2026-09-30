@@ -412,7 +412,8 @@ public class ResumeServiceImpl implements IResumeService {
             int totalElements = resumeMapper.countResumes(name, major, expectedDepartment, choiceRank, cycleId, status);
             
             // 查询数据
-            List<Resume> resumes = resumeMapper.queryResumesWithPagination(name, major, expectedDepartment, choiceRank, cycleId, status, offset, size, sortBy, sortOrder);
+            List<Resume> resumes = resumeMapper.queryResumesWithPagination(name, major, expectedDepartment, choiceRank, cycleId, status, offset, size,
+                    club.boyuan.official.domain.resume.service.ResumeSortOrder.orderBy(sortBy, sortOrder));
             
             // 转换为DTO
             List<ResumeDTO> result = new ArrayList<>();
@@ -527,6 +528,104 @@ public class ResumeServiceImpl implements IResumeService {
         }
     }
     
+    @Override
+    @Transactional
+    public ResumeDTO withdrawResumeScore(Integer resumeId, Integer scorerUserId) {
+        if (resumeId == null || scorerUserId == null) {
+            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
+        }
+        Resume resume = resumeMapper.selectById(resumeId);
+        if (resume == null) {
+            throw new BusinessException(BusinessExceptionEnum.RESUME_NOT_FOUND);
+        }
+        ResumeScoreEntry mine = resumeScoreEntryMapper.selectOne(new LambdaQueryWrapper<ResumeScoreEntry>()
+                .eq(ResumeScoreEntry::getResumeId, resumeId)
+                .eq(ResumeScoreEntry::getScorerId, scorerUserId));
+        if (mine == null) {
+            throw new BusinessException(BusinessExceptionEnum.PARAMETER_VALIDATION_FAILED, "你还没有给这份简历打过分");
+        }
+        resumeScoreEntryMapper.deleteById(mine.getId());
+
+        List<ResumeScoreEntry> remaining = resumeScoreEntryMapper.selectList(
+                new LambdaQueryWrapper<ResumeScoreEntry>()
+                        .eq(ResumeScoreEntry::getResumeId, resumeId)
+                        .orderByAsc(ResumeScoreEntry::getCreatedAt));
+
+        Integer average;
+        if (remaining.isEmpty()) {
+            // 一个分都不剩：回到「未打分」。有没有打过分看署名与时间（见 displayScore），
+            // 所以两者都要清空；分数列 NOT NULL，只能归 0
+            average = null;
+            resumeMapper.update(null, new LambdaUpdateWrapper<Resume>()
+                    .eq(Resume::getResumeId, resumeId)
+                    .set(Resume::getResumeScore, 0)
+                    .set(Resume::getScoredBy, null)
+                    .set(Resume::getScoredAt, null));
+            resume.setResumeScore(0);
+            resume.setScoredBy(null);
+            resume.setScoredAt(null);
+        } else {
+            average = (int) Math.round(remaining.stream().mapToInt(ResumeScoreEntry::getScore).average().orElse(0));
+            // 「最近一次打分」的署名换成剩下的人里最近打的那一位
+            ResumeScoreEntry latest = remaining.stream()
+                    .max(java.util.Comparator.comparing(e -> e.getUpdatedAt() == null ? e.getCreatedAt() : e.getUpdatedAt()))
+                    .orElse(remaining.get(remaining.size() - 1));
+            LocalDateTime latestAt = latest.getUpdatedAt() == null ? latest.getCreatedAt() : latest.getUpdatedAt();
+            resumeMapper.update(null, new LambdaUpdateWrapper<Resume>()
+                    .eq(Resume::getResumeId, resumeId)
+                    .set(Resume::getResumeScore, average)
+                    .set(Resume::getScoredBy, latest.getScorerId())
+                    .set(Resume::getScoredAt, latestAt));
+            resume.setResumeScore(average);
+            resume.setScoredBy(latest.getScorerId());
+            resume.setScoredAt(latestAt);
+        }
+
+        Integer derived = statusAfterWithdraw(average, resume.getStatus(), Integer.valueOf(0).equals(mine.getScore()));
+        if (derived != null && !derived.equals(resume.getStatus())) {
+            resumeMapper.update(null, new LambdaUpdateWrapper<Resume>()
+                    .eq(Resume::getResumeId, resumeId)
+                    .set(Resume::getStatus, derived));
+            resume.setStatus(derived);
+            logger.info("简历初筛结论随撤销打分变更，简历ID: {}，平均分: {}，状态: {}", resumeId, average, derived);
+        }
+
+        logger.info("撤销简历评分，简历ID: {}，撤销人: {}，撤掉的分: {}，剩余 {} 人，平均分: {}",
+                resumeId, scorerUserId, mine.getScore(), remaining.size(), average);
+
+        ResumeDTO dto = new ResumeDTO();
+        dto.setResumeId(resume.getResumeId());
+        dto.setUserId(resume.getUserId());
+        dto.setCycleId(resume.getCycleId());
+        dto.setStatus(resume.getStatus());
+        dto.setResumeScore(average);
+        fillScorer(dto, resume, resolveScorerNames(List.of(resume)));
+        dto.setScoreEntries(toEntryDTOs(remaining));
+        return dto;
+    }
+
+    /**
+     * 撤销打分后初筛结论该变成什么；返回 null 表示不动。
+     *
+     * 0 分即未通过是打分推出来的结论，分数变了结论就该跟着变——与改分时同一条规则：
+     * - 还有人打分：平均 0 → 未通过；原来未通过而现在非 0 → 收回成已提交
+     * - 一个分都不剩：只有撤掉的那一票是 0 分时才收回「未通过」。
+     *   否则那个「未通过」多半是管理员手动标的，撤销一个 80 分不该把人放出来
+     *
+     * @param average      撤销后的平均分；null 表示已没有任何打分
+     * @param withdrawnZero 撤掉的这一票是不是 0 分
+     */
+    static Integer statusAfterWithdraw(Integer average, Integer currentStatus, boolean withdrawnZero) {
+        boolean rejected = Integer.valueOf(STATUS_SCREEN_REJECTED).equals(currentStatus);
+        if (average == null) {
+            return rejected && withdrawnZero ? STATUS_SUBMITTED : null;
+        }
+        if (average == 0) {
+            return STATUS_SCREEN_REJECTED;
+        }
+        return rejected ? STATUS_SUBMITTED : null;
+    }
+
     @Override
     @Transactional
     public ResumeDTO updateResumeScore(Integer resumeId, Integer score, Integer scorerUserId) {

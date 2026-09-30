@@ -363,6 +363,17 @@ public class ResumeController {
     }
 
     /**
+     * 撤销我给这份简历打的分（误触时用）。只删当前登录人那一票，别人的分不动；
+     * 平均分与初筛结论随之重算，返回体与打分接口同形（resumeScore 为 null 表示已无人打分）。
+     */
+    @DeleteMapping("/{resumeId}/score")
+    @PreAuthorize("hasAuthority('resume:audit')")
+    public ResponseEntity<ResponseMessage<ResumeDTO>> withdrawResumeScore(@PathVariable Integer resumeId) {
+        ResumeDTO dto = resumeService.withdrawResumeScore(resumeId, currentUser().getUserId());
+        return ResponseEntity.ok(new ResponseMessage<>(200, "已撤销你的打分", dto));
+    }
+
+    /**
      * 批量初筛：把选中的简历标为通过(4)/未通过(5)。
      *
      * 与「面试结果」是两回事：初筛决定谁能进面试，结果决定谁被录取。

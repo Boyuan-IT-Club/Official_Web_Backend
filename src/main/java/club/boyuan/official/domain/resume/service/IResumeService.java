@@ -145,6 +145,12 @@ public interface IResumeService {
     ResumeDTO updateResumeScore(Integer resumeId, Integer score, Integer scorerUserId);
 
     /**
+     * 撤销「当前登录人」给这份简历打的分（误触时用）。只删自己那一票，别人的分不动；
+     * 平均分与初筛结论随之重算。返回的 resumeScore 为 null 表示已没有任何人打分。
+     */
+    ResumeDTO withdrawResumeScore(Integer resumeId, Integer scorerUserId);
+
+    /**
      * 批量初筛：把简历标为通过(4)/未通过(5)。草稿不受影响。
      *
      * @return 实际更新的份数
