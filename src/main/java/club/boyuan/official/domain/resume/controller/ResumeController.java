@@ -5,6 +5,7 @@ import club.boyuan.official.common.dto.PageResultDTO;
 import club.boyuan.official.common.dto.ResponseMessage;
 import club.boyuan.official.domain.resume.dto.ResumeDTO;
 import club.boyuan.official.domain.resume.dto.ResumeFieldValueDTO;
+import club.boyuan.official.domain.resume.dto.ResumeScoreRequest;
 import club.boyuan.official.persistence.entity.Resume;
 import club.boyuan.official.persistence.entity.ResumeFieldDefinition;
 import club.boyuan.official.persistence.entity.ResumeFieldValue;
@@ -353,12 +354,13 @@ public class ResumeController {
     @PreAuthorize("hasAuthority('resume:audit')")
     public ResponseEntity<ResponseMessage<ResumeDTO>> updateResumeScore(
             @PathVariable Integer resumeId,
-            @RequestBody Map<String, Integer> body) {
-        Integer score = body == null ? null : body.get("score");
-        logger.info("更新简历评分，简历ID: {}，分数: {}", resumeId, score);
-        // 语义：写入或更新「当前登录人」的那一票；返回的 resumeScore 是全部票的平均分，
-        // scoreEntries 是逐人明细
-        ResumeDTO dto = resumeService.updateResumeScore(resumeId, score, currentUser().getUserId());
+            @RequestBody ResumeScoreRequest body) {
+        Integer score = body == null ? null : body.getScore();
+        String comment = body == null ? null : body.getComment();
+        logger.info("更新简历评分，简历ID: {}，分数: {}，带评语: {}", resumeId, score, comment != null);
+        // 语义：写入或更新「当前登录人」的那一票（含评语）；返回的 resumeScore 是全部票的平均分，
+        // scoreEntries 是逐人明细。comment 不传 = 不改原评语，传空串 = 清空
+        ResumeDTO dto = resumeService.updateResumeScore(resumeId, score, comment, currentUser().getUserId());
         return ResponseEntity.ok(new ResponseMessage<>(200, "简历评分已更新", dto));
     }
 
