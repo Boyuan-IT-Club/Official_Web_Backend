@@ -675,7 +675,8 @@ public class ResumeController {
             @RequestParam(required = false, defaultValue = "0") Integer page,
             @RequestParam(required = false, defaultValue = "10") Integer size,
             @RequestParam(required = false) String sortBy,
-            @RequestParam(required = false) String sortOrder) {
+            @RequestParam(required = false) String sortOrder,
+            @RequestParam(required = false, defaultValue = "false") boolean revealScores) {
         String username = SecurityUtil.getCurrentUsername();
 
         // 若 page/size 均为默认且未指定排序，使用非分页查询（保持向后兼容）
@@ -686,7 +687,9 @@ public class ResumeController {
         }
         // 盲评：能打分的人按分数排序时，自己没打过的垫底且不按分数排，
         // 免得前端藏了分数、却能从顺序看出别人打的高低。只读不打分的人看全量顺序。
-        Integer blindScorerId = "resume_score".equalsIgnoreCase(sortBy == null ? "" : sortBy.trim())
+        // revealScores=true 是前端「显示全部打分」开关：用户主动要看，就给真实顺序。
+        Integer blindScorerId = !revealScores
+                && "resume_score".equalsIgnoreCase(sortBy == null ? "" : sortBy.trim())
                 && hasAuthority("resume:audit") ? currentUser().getUserId() : null;
         PageResultDTO<ResumeDTO> result = resumeService.queryResumesWithPagination(
                 name, major, expectedDepartment, choiceRank, cycleId, status, page, size, sortBy, sortOrder, blindScorerId);
