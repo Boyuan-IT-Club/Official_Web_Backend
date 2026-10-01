@@ -5,7 +5,7 @@ import lombok.experimental.Accessors;
 
 import java.time.LocalDateTime;
 
-/** 简历打分明细的展示视图：谁、几分、什么时候 */
+/** 简历打分明细的展示视图：谁、几分、什么时候、写了什么评语 */
 @Data
 @Accessors(chain = true)
 public class ResumeScoreEntryDTO {
@@ -13,5 +13,7 @@ public class ResumeScoreEntryDTO {
     /** 打分人姓名；账号已注销时为 null，前端显示「已注销」 */
     private String scorerName;
     private Integer score;
+    /** 打分评语；没写为 null */
+    private String comment;
     private LocalDateTime scoredAt;
 }

@@ -1,5 +1,6 @@
 package club.boyuan.official.persistence.entity;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -30,6 +31,13 @@ public class ResumeScoreEntry implements Serializable {
 
     @TableField("score")
     private Integer score;
+
+    /**
+     * 打分评语（可选）。updateStrategy=ALWAYS：updateById 总是写这一列，
+     * 这样「清空评语」写 null 也能落库；只改分时 service 会带着原评语写回，不会被抹掉。
+     */
+    @TableField(value = "comment", updateStrategy = FieldStrategy.ALWAYS)
+    private String comment;
 
     @TableField("created_at")
     private LocalDateTime createdAt;

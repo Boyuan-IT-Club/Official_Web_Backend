@@ -151,6 +151,12 @@ public interface IResumeService {
     ResumeDTO updateResumeScore(Integer resumeId, Integer score, Integer scorerUserId);
 
     /**
+     * 打分并附评语。comment 语义：null = 不改动原评语（只改分的调用方用）；
+     * 空白串 = 清空；其余去首尾空白后保存（≤ 500 字）。
+     */
+    ResumeDTO updateResumeScore(Integer resumeId, Integer score, String comment, Integer scorerUserId);
+
+    /**
      * 撤销「当前登录人」给这份简历打的分（误触时用）。只删自己那一票，别人的分不动；
      * 平均分与初筛结论随之重算。返回的 resumeScore 为 null 表示已没有任何人打分。
      */

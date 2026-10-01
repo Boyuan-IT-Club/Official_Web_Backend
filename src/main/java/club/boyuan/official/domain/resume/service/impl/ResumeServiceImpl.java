@@ -631,9 +631,34 @@ public class ResumeServiceImpl implements IResumeService {
         return rejected ? STATUS_SUBMITTED : null;
     }
 
+    /** 评语上限，与 V50 的列宽一致 */
+    static final int COMMENT_MAX = 500;
+
+    /**
+     * 规范化评语：null 表示「不改动」原样返回 null 由调用方区分；
+     * 这里只处理已提供的值——空白视为清空（返回 ""），超长报错。
+     */
+    static String normalizeComment(String comment) {
+        if (comment == null) {
+            return null;
+        }
+        String trimmed = comment.strip();
+        if (trimmed.length() > COMMENT_MAX) {
+            throw new BusinessException(BusinessExceptionEnum.PARAMETER_VALIDATION_FAILED,
+                    "评语最多 " + COMMENT_MAX + " 字，当前 " + trimmed.length() + " 字");
+        }
+        return trimmed;
+    }
+
     @Override
     @Transactional
     public ResumeDTO updateResumeScore(Integer resumeId, Integer score, Integer scorerUserId) {
+        return updateResumeScore(resumeId, score, null, scorerUserId);
+    }
+
+    @Override
+    @Transactional
+    public ResumeDTO updateResumeScore(Integer resumeId, Integer score, String comment, Integer scorerUserId) {
         if (resumeId == null || score == null || scorerUserId == null) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
         }
@@ -646,6 +671,9 @@ public class ResumeServiceImpl implements IResumeService {
             throw new BusinessException(BusinessExceptionEnum.RESUME_NOT_FOUND);
         }
 
+        // 评语：null = 不改动；"" = 清空（落库为 NULL）
+        String normalized = normalizeComment(comment);
+
         // 写入或更新「我这一票」：一人一份简历一条（uk_resume_scorer）
         LocalDateTime now = LocalDateTime.now();
         ResumeScoreEntry mine = resumeScoreEntryMapper.selectOne(new LambdaQueryWrapper<ResumeScoreEntry>()
@@ -654,9 +682,16 @@ public class ResumeServiceImpl implements IResumeService {
         if (mine == null) {
             resumeScoreEntryMapper.insert(new ResumeScoreEntry()
                     .setResumeId(resumeId).setScorerId(scorerUserId)
-                    .setScore(score).setCreatedAt(now).setUpdatedAt(now));
+                    .setScore(score)
+                    .setComment(normalized == null || normalized.isEmpty() ? null : normalized)
+                    .setCreatedAt(now).setUpdatedAt(now));
         } else {
-            resumeScoreEntryMapper.updateById(mine.setScore(score).setUpdatedAt(now));
+            mine.setScore(score).setUpdatedAt(now);
+            if (normalized != null) {
+                mine.setComment(normalized.isEmpty() ? null : normalized);
+            }
+            // comment 列是 ALWAYS 策略：没提供评语时这里写回的是原值，不会被抹掉
+            resumeScoreEntryMapper.updateById(mine);
         }
 
         // 重算平均分写回聚合列。四舍五入取整，和列类型（int）一致；
@@ -747,12 +782,16 @@ public class ResumeServiceImpl implements IResumeService {
                         club.boyuan.official.persistence.entity.User::getUserId,
                         u -> u.getName() == null ? "" : u.getName(),
                         (a, b) -> a));
-        return entries.stream().map(e -> new ResumeScoreEntryDTO()
+        return entries.stream().map(e -> toEntryDTO(e, names)).collect(Collectors.toList());
+    }
+
+    private static ResumeScoreEntryDTO toEntryDTO(ResumeScoreEntry e, java.util.Map<Integer, String> names) {
+        return new ResumeScoreEntryDTO()
                 .setScorerId(e.getScorerId())
                 .setScorerName(names.get(e.getScorerId()))
                 .setScore(e.getScore())
-                .setScoredAt(e.getUpdatedAt() != null ? e.getUpdatedAt() : e.getCreatedAt()))
-                .collect(Collectors.toList());
+                .setComment(e.getComment())
+                .setScoredAt(e.getUpdatedAt() != null ? e.getUpdatedAt() : e.getCreatedAt());
     }
 
     /**
@@ -785,11 +824,7 @@ public class ResumeServiceImpl implements IResumeService {
                             u -> u.getName() == null ? "" : u.getName(),
                             (a, b) -> a));
             byResume.forEach((rid, list) -> dtoByResume.put(rid, list.stream()
-                    .map(e -> new ResumeScoreEntryDTO()
-                            .setScorerId(e.getScorerId())
-                            .setScorerName(names.get(e.getScorerId()))
-                            .setScore(e.getScore())
-                            .setScoredAt(e.getUpdatedAt() != null ? e.getUpdatedAt() : e.getCreatedAt()))
+                    .map(e -> toEntryDTO(e, names))
                     .collect(Collectors.toList())));
         }
         for (ResumeDTO dto : dtos) {
