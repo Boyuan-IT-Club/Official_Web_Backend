@@ -139,12 +139,13 @@ public final class RecruitmentMails {
         MailTemplate.Builder b = MailTemplate.builder("Application Result", "感谢你投递博远信息技术社")
                 .paragraph(nz(name, "同学") + "，你好：\n感谢你投递博远信息技术社招新简历，"
                         + "也感谢你愿意花时间了解我们。")
-                .paragraph("经过简历评审，很遗憾，本次你的简历未能进入面试环节，"
-                        + "本届招新流程到此结束。")
-                .paragraph("这并不代表对你能力的否定——名额与方向的匹配往往比能力本身更受限。"
-                        + "社团的技术分享、学习小组与寒假 OwnerPro 活动都对所有同学开放，"
-                        + "欢迎继续参与，我们也会在活动中留意积极的同学。")
-                .paragraph("期待下一届与你相遇。");
+                .paragraph("很遗憾，经过简历评审，本次你的简历未能进入面试环节。"
+                        +"但是，但是！这并不代表对你能力的否定--名额与方向的匹配往往比能力本身更受限。"
+                        +"博远的大门始终为每一个对技术有热情的同学敞开！"
+                        +"社团的技术分享、学习小组与寒假OwnerPro活动都对所有同学开放，欢迎继续参与，"
+                        +"我们也会在活动中留意积极参与活动的同学并在第二学期招新批次中予以优先考虑！"
+                        )
+                .paragraph("期待下一次招新与你相遇！");
 
         if (StringUtils.hasText(contactInfo)) {
             b.divider().paragraph("本届负责人联系方式\n" + contactInfo);
