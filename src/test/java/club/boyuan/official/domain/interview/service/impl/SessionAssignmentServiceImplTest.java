@@ -600,7 +600,6 @@ class SessionAssignmentServiceImplTest {
         when(interviewScheduleService.getById(1)).thenReturn(scheduleRow(1, 1, 101, 1000, 1));
         when(interviewSessionService.getById(1000)).thenReturn(session(1000, 1, 10, 1, "教书院205", 5));
         when(interviewSessionService.getById(2000)).thenReturn(session(2000, 1, 10, 1, "教书院306", 5));
-        when(interviewSessionMapper.occupyOneIfAvailable(2000)).thenReturn(1);
         when(interviewTimeSlotService.getById(10)).thenReturn(timeSlot(10, 1));
         when(interviewScheduleService.count(any())).thenReturn(0L);
         when(interviewScheduleService.updateById(any(InterviewSchedule.class))).thenReturn(true);
@@ -611,7 +610,7 @@ class SessionAssignmentServiceImplTest {
         assertEquals(Integer.valueOf(2000), resp.getSessionId());
         assertEquals("教书院306", resp.getLocation(), "返回新场次的地点，前端就地回显");
         // 名额：占新场次、还旧场次
-        verify(interviewSessionMapper).occupyOneIfAvailable(2000);
+        verify(interviewSessionMapper).occupyOneIgnoringCapacity(2000);
         verify(interviewSessionMapper).releaseOne(1000);
 
         ArgumentCaptor<InterviewSchedule> captor = ArgumentCaptor.forClass(InterviewSchedule.class);
@@ -634,7 +633,7 @@ class SessionAssignmentServiceImplTest {
 
         assertEquals(Integer.valueOf(1000), resp.getSessionId());
         assertEquals("教书院205", resp.getLocation());
-        verify(interviewSessionMapper, never()).occupyOneIfAvailable(any());
+        verify(interviewSessionMapper, never()).occupyOneIgnoringCapacity(any());
         verify(interviewSessionMapper, never()).releaseOne(any());
         ArgumentCaptor<InterviewSchedule> captor = ArgumentCaptor.forClass(InterviewSchedule.class);
         verify(interviewScheduleService).updateById(captor.capture());
@@ -652,22 +651,33 @@ class SessionAssignmentServiceImplTest {
 
         service.updateInterviewTime(1, LocalDateTime.of(2026, 3, 1, 9, 30), 1000);
 
-        verify(interviewSessionMapper, never()).occupyOneIfAvailable(any());
+        verify(interviewSessionMapper, never()).occupyOneIgnoringCapacity(any());
         verify(interviewSessionMapper, never()).releaseOne(any());
     }
 
-    /** 目标场次已满：拒绝，且不改安排 */
+    /**
+     * 目标场次已满也照调：手动调整是管理员说了算（临时加座），只给超额告警。
+     * 自动分配与人工调剂仍按容量拦，不受影响。
+     */
     @Test
-    void updateInterviewTime_targetSessionFull_throws() {
+    void updateInterviewTime_targetSessionFull_stillMovesWithWarning() {
         when(interviewScheduleService.getById(1)).thenReturn(scheduleRow(1, 1, 101, 1000, 1));
-        when(interviewSessionService.getById(2000)).thenReturn(session(2000, 1, 10, 1, "教书院306", 5));
-        when(interviewSessionMapper.occupyOneIfAvailable(2000)).thenReturn(0);
+        InterviewSession full = session(2000, 1, 10, 1, "教书院306", 5).setCurrentOccupied(5);
+        when(interviewSessionService.getById(2000)).thenReturn(full);
+        when(interviewSessionService.getById(1000)).thenReturn(session(1000, 1, 10, 1, "教书院205", 5));
+        when(interviewTimeSlotService.getById(10)).thenReturn(timeSlot(10, 1));
+        when(interviewScheduleService.count(any())).thenReturn(0L);
+        when(interviewScheduleService.updateById(any(InterviewSchedule.class))).thenReturn(true);
 
-        BusinessException ex = assertThrows(BusinessException.class,
-                () -> service.updateInterviewTime(1, LocalDateTime.of(2026, 3, 1, 9, 30), 2000));
-        assertEquals(BusinessExceptionEnum.INTERVIEW_SESSION_FULL.getCode(), ex.getCode());
-        verify(interviewSessionMapper, never()).releaseOne(any());
-        verify(interviewScheduleService, never()).updateById(any(InterviewSchedule.class));
+        UpdateInterviewTimeResponseDTO resp =
+                service.updateInterviewTime(1, LocalDateTime.of(2026, 3, 1, 9, 30), 2000);
+
+        assertEquals(Integer.valueOf(2000), resp.getSessionId());
+        assertTrue(resp.getWarning() != null && resp.getWarning().contains("已满"),
+                "超额安排要给告警，实际：" + resp.getWarning());
+        verify(interviewSessionMapper).occupyOneIgnoringCapacity(2000);
+        verify(interviewSessionMapper, never()).occupyOneIfAvailable(any());
+        verify(interviewSessionMapper).releaseOne(1000);
     }
 
     /** 目标场次属于别的周期：拒绝（名额已占则不应落库，事务回滚兜底） */

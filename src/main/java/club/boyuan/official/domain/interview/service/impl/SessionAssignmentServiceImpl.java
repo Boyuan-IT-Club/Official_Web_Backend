@@ -330,9 +330,18 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
             if (!Objects.equals(schedule.getCycleId(), target.getCycleId())) {
                 throw new BusinessException(BusinessExceptionEnum.INTERVIEW_SESSION_CYCLE_MISMATCH);
             }
-            if (interviewSessionMapper.occupyOneIfAvailable(targetSessionId) != 1) {
-                throw new BusinessException(BusinessExceptionEnum.INTERVIEW_SESSION_FULL);
+            /*
+             * 手动换场不按容量拦：管理员是明确要把这个人放进这一场（临时加座、
+             * 背靠背面试），容量满了就拒绝反而挡了正事。超额只给可读告警。
+             * 一键分配与人工调剂仍走 occupyOneIfAvailable，不受此影响。
+             */
+            int occupied = target.getCurrentOccupied() == null ? 0 : target.getCurrentOccupied();
+            Integer capacity = target.getCapacity();
+            if (capacity != null && occupied >= capacity) {
+                warnings.add("场次 #" + targetSessionId + " 已满（" + occupied + "/" + capacity
+                        + "），本次为超额安排");
             }
+            interviewSessionMapper.occupyOneIgnoringCapacity(targetSessionId);
             if (originalSessionId != null) {
                 interviewSessionMapper.releaseOne(originalSessionId);
             }

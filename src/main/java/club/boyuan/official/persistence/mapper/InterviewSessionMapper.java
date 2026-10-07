@@ -22,6 +22,17 @@ public interface InterviewSessionMapper extends BaseMapper<InterviewSession> {
     int occupyOneIfAvailable(@Param("sessionId") Integer sessionId);
 
     /**
+     * 无视容量占用 1 个名额，用于管理员手动换场。
+     *
+     * 一键分配与人工调剂走 {@link #occupyOneIfAvailable}，满了就不塞；而手动调整
+     * 是管理员明确要把某个人放进这一场（临时加座、两人背靠背），按容量拦下来反而
+     * 挡了正事。超额后 current_occupied 可能大于 capacity，调用方应给出告警。
+     */
+    @Update("UPDATE interview_session SET current_occupied = current_occupied + 1 "
+            + "WHERE session_id = #{sessionId}")
+    int occupyOneIgnoringCapacity(@Param("sessionId") Integer sessionId);
+
+    /**
      * 释放 1 个名额（不低于 0）。
      */
     @Update("UPDATE interview_session SET current_occupied = GREATEST(current_occupied - 1, 0) " +
