@@ -63,6 +63,9 @@ public class SessionAssignmentController {
         com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<club.boyuan.official.persistence.entity.InterviewSchedule> qw =
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<club.boyuan.official.persistence.entity.InterviewSchedule>()
                         .eq(club.boyuan.official.persistence.entity.InterviewSchedule::getCycleId, cycleId)
+                        // 只列有效安排：已取消的行不删（uk_resume_cycle 要复用它），
+                        // 不滤掉的话取消之后名单上看着人还在
+                        .eq(club.boyuan.official.persistence.entity.InterviewSchedule::getStatus, 1)
                         .orderByAsc(club.boyuan.official.persistence.entity.InterviewSchedule::getInterviewTime);
         if (sessionId != null) {
             qw.eq(club.boyuan.official.persistence.entity.InterviewSchedule::getSessionId, sessionId);
@@ -256,8 +259,15 @@ public class SessionAssignmentController {
             if (sc.getSessionId() != null) {
                 freedPerSession.merge(sc.getSessionId(), 1L, Long::sum);
             }
-            sc.setStatus(2).setInterviewTime(null).setSyncStatus(0).setNotifStatus(0);
-            interviewScheduleMapper.updateById(sc);
+            // 必须用 UpdateWrapper 显式 set：updateById 默认跳过 null 字段，
+            // 写成 setInterviewTime(null) 时面试时间根本不会被清掉
+            interviewScheduleMapper.update(null,
+                    new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<club.boyuan.official.persistence.entity.InterviewSchedule>()
+                            .set(club.boyuan.official.persistence.entity.InterviewSchedule::getStatus, 2)
+                            .set(club.boyuan.official.persistence.entity.InterviewSchedule::getInterviewTime, null)
+                            .set(club.boyuan.official.persistence.entity.InterviewSchedule::getSyncStatus, 0)
+                            .set(club.boyuan.official.persistence.entity.InterviewSchedule::getNotifStatus, 0)
+                            .eq(club.boyuan.official.persistence.entity.InterviewSchedule::getScheduleId, sc.getScheduleId()));
         }
         for (java.util.Map.Entry<Integer, Long> e : freedPerSession.entrySet()) {
             club.boyuan.official.persistence.entity.InterviewSession sess =
