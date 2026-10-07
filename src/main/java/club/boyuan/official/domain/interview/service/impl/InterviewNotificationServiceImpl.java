@@ -12,10 +12,12 @@ import club.boyuan.official.persistence.entity.InterviewNotificationLog;
 import club.boyuan.official.persistence.entity.InterviewResult;
 import club.boyuan.official.persistence.entity.InterviewSchedule;
 import club.boyuan.official.persistence.entity.InterviewSlot;
+import club.boyuan.official.persistence.entity.InterviewSession;
 import club.boyuan.official.persistence.entity.Resume;
 import club.boyuan.official.persistence.entity.User;
 import club.boyuan.official.persistence.mapper.InterviewNotificationLogMapper;
 import club.boyuan.official.persistence.mapper.InterviewResultMapper;
+import club.boyuan.official.persistence.mapper.InterviewSessionMapper;
 import club.boyuan.official.messaging.InterviewNotificationMessage;
 import club.boyuan.official.messaging.InterviewNotificationProducer;
 import club.boyuan.official.infra.notification.InterviewNotificationEmailBuilder;
@@ -62,6 +64,7 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
     private final MessageUtils messageUtils;
     private final RecruitmentCycleMapper recruitmentCycleMapper;
     private final IRecruitmentQrCodeService qrCodeService;
+    private final InterviewSessionMapper interviewSessionMapper;
 
     @Override
     public void enqueueBookingSuccess(Integer scheduleId, String requestId) {
@@ -183,8 +186,7 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
             return;
         }
 
-        InterviewSlot slot = interviewSlotService.getById(schedule.getSlotId());
-        InterviewBookingDTO booking = InterviewBookingDTO.from(schedule, slot);
+        InterviewBookingDTO booking = bookingOf(schedule);
 
         String subject = InterviewNotificationEmailBuilder.subject(type);
         String body = InterviewNotificationEmailBuilder.body(type, name, booking, null);
@@ -193,6 +195,26 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
                 type, name, booking, null, reminderCfg.academicYear(),
                 reminderCfg.waitingRoom(), List.of(), reminderCfg.contactInfo()).html();
         sendAndLog(type, scheduleId, null, email, subject, body, html, schedule, message.getRequestId());
+    }
+
+    /**
+     * 邮件里的面试时间 / 房间。
+     *
+     * InterviewBookingDTO.from 只会从 interview_slot（方案A 秒杀的时段表）取地点，
+     * 而现行方案B 的安排挂在场次上：slot_id 为空、session_id 指向 interview_session，
+     * 房间存在场次的 location 里。原来只查 slot，于是方案B 的每一封「面试安排通知 /
+     * 前一天提醒」房间都是「待通知」（2026 届 #14 周期 97 封全中）。
+     */
+    InterviewBookingDTO bookingOf(InterviewSchedule schedule) {
+        InterviewSlot slot = schedule.getSlotId() == null ? null : interviewSlotService.getById(schedule.getSlotId());
+        InterviewBookingDTO booking = InterviewBookingDTO.from(schedule, slot);
+        if (!StringUtils.hasText(booking.getLocation()) && schedule.getSessionId() != null) {
+            InterviewSession session = interviewSessionMapper.selectById(schedule.getSessionId());
+            if (session != null) {
+                booking.setLocation(session.getLocation());
+            }
+        }
+        return booking;
     }
 
     private void deliverResult(InterviewNotificationType type, InterviewNotificationMessage message) {
@@ -265,7 +287,7 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
 
         String departmentName = resolveDepartmentName(result.getAssignedDeptId());
         InterviewBookingDTO booking = schedule != null
-                ? InterviewBookingDTO.from(schedule, interviewSlotService.getById(schedule.getSlotId()))
+                ? bookingOf(schedule)
                 : null;
 
         InterviewNotificationType effectiveType = type != null ? type : InterviewNotificationType.REJECTION;
