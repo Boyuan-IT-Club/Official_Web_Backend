@@ -14,6 +14,12 @@ public class UpdateInterviewTimeResponseDTO {
     private Integer scheduleId;
     private LocalDateTime interviewTime;
 
+    /** 调整后所在场次；未换场时即原场次 */
+    private Integer sessionId;
+
+    /** 调整后的面试地点（取自场次），便于前端就地回显 */
+    private String location;
+
     /** 是否人工指定（本次调整后恒为 1） */
     private Integer timeOverridden;
 

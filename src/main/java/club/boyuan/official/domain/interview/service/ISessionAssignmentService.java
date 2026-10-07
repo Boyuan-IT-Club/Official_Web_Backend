@@ -34,4 +34,13 @@ public interface ISessionAssignmentService {
      * 指定时间超出场次时间窗、或同场次他人已占该时刻时只告警不拒绝。</p>
      */
     UpdateInterviewTimeResponseDTO updateInterviewTime(Integer scheduleId, LocalDateTime interviewTime);
+
+    /**
+     * 手动调整面试时间，并可同时换场次。
+     *
+     * @param targetSessionId 目标场次；为空表示不换场。方案B 的面试地点属于场次，
+     *                        改地点即换场次，故与改时间同一入口。目标场次已满则拒绝。
+     */
+    UpdateInterviewTimeResponseDTO updateInterviewTime(
+            Integer scheduleId, LocalDateTime interviewTime, Integer targetSessionId);
 }
