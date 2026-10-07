@@ -332,7 +332,11 @@ public class SessionAssignmentController {
     }
 
     /**
-     * 手动把某条面试安排的 interview_time 调整到精确的几点几分。
+     * 手动把某条面试安排的 interview_time 调整到精确的几点几分，并可一并换场次。
+     *
+     * <p>方案B 的面试地点属于场次（interview_session.location），安排本身不存地点，
+     * 所以「改地点」= 换场次，和改时间放在同一个入口里。换场按原子占用/归还走名额，
+     * 目标场次已满直接拒绝。</p>
      * <p>标记该条时间为「人工指定」，并把 sync_status / notif_status 重置为 0
      * 以触发飞书重新同步与后续提醒。越界或同场次时间冲突只告警不拒绝。</p>
      */
@@ -340,9 +344,10 @@ public class SessionAssignmentController {
     public ResponseEntity<ResponseMessage<UpdateInterviewTimeResponseDTO>> updateInterviewTime(
             @PathVariable Integer scheduleId,
             @Valid @RequestBody UpdateInterviewTimeRequestDTO request) {
-        log.info("管理员手动调整面试时间 scheduleId={}, interviewTime={}", scheduleId, request.getInterviewTime());
-        UpdateInterviewTimeResponseDTO result =
-                sessionAssignmentService.updateInterviewTime(scheduleId, request.getInterviewTime());
+        log.info("管理员手动调整面试时间 scheduleId={}, interviewTime={}, sessionId={}",
+                scheduleId, request.getInterviewTime(), request.getSessionId());
+        UpdateInterviewTimeResponseDTO result = sessionAssignmentService.updateInterviewTime(
+                scheduleId, request.getInterviewTime(), request.getSessionId());
         return ResponseEntity.ok(ResponseMessage.success(result));
     }
 

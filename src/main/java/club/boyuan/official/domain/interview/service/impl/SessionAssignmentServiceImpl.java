@@ -289,6 +289,13 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
     @Override
     @Transactional
     public UpdateInterviewTimeResponseDTO updateInterviewTime(Integer scheduleId, LocalDateTime interviewTime) {
+        return updateInterviewTime(scheduleId, interviewTime, null);
+    }
+
+    @Override
+    @Transactional
+    public UpdateInterviewTimeResponseDTO updateInterviewTime(
+            Integer scheduleId, LocalDateTime interviewTime, Integer targetSessionId) {
         if (scheduleId == null) {
             throw new BusinessException(BusinessExceptionEnum.INTERVIEW_SCHEDULE_NOT_FOUND);
         }
@@ -305,6 +312,32 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
         }
 
         List<String> warnings = new ArrayList<>();
+
+        /*
+         * 换场（可选）。方案B 下面试房间属于场次，安排本身不存地点——管理员要改地点
+         * 就是把人挪到另一个场次，所以和改时间放在同一个入口里一起做。
+         *
+         * 名额按原子占用/归还走，与人工调剂一致；目标场次满了直接拒绝，
+         * 免得把一个场次塞爆。目标场次就是原场次时什么都不做。
+         */
+        Integer originalSessionId = schedule.getSessionId();
+        boolean movedSession = targetSessionId != null && !targetSessionId.equals(originalSessionId);
+        if (movedSession) {
+            InterviewSession target = interviewSessionService.getById(targetSessionId);
+            if (target == null) {
+                throw new BusinessException(BusinessExceptionEnum.INTERVIEW_SESSION_NOT_FOUND);
+            }
+            if (!Objects.equals(schedule.getCycleId(), target.getCycleId())) {
+                throw new BusinessException(BusinessExceptionEnum.INTERVIEW_SESSION_CYCLE_MISMATCH);
+            }
+            if (interviewSessionMapper.occupyOneIfAvailable(targetSessionId) != 1) {
+                throw new BusinessException(BusinessExceptionEnum.INTERVIEW_SESSION_FULL);
+            }
+            if (originalSessionId != null) {
+                interviewSessionMapper.releaseOne(originalSessionId);
+            }
+            schedule.setSessionId(targetSessionId);
+        }
 
         // 场次 / 时间窗存在性与跨周期一致性：被删或错配 → 明确业务异常
         InterviewTimeSlot timeSlot = null;
@@ -358,11 +391,19 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
                 .setTimeOverridden(1)
                 .setSyncStatus(0)
                 .setNotifStatus(0);
+        if (movedSession) {
+            update.setSessionId(targetSessionId);
+        }
         interviewScheduleService.updateById(update);
 
         UpdateInterviewTimeResponseDTO response = new UpdateInterviewTimeResponseDTO();
         response.setScheduleId(scheduleId);
         response.setInterviewTime(interviewTime);
+        response.setSessionId(schedule.getSessionId());
+        if (schedule.getSessionId() != null) {
+            InterviewSession current = interviewSessionService.getById(schedule.getSessionId());
+            response.setLocation(current == null ? null : current.getLocation());
+        }
         response.setTimeOverridden(1);
         response.setSyncStatus(0);
         response.setNotifStatus(0);
@@ -371,7 +412,8 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
             log.warn("手动调整面试时间 scheduleId={}, interviewTime={}, warnings={}",
                     scheduleId, interviewTime, warnings);
         } else {
-            log.info("手动调整面试时间 scheduleId={}, interviewTime={}", scheduleId, interviewTime);
+            log.info("手动调整面试时间 scheduleId={}, interviewTime={}, sessionId={}->{}",
+                    scheduleId, interviewTime, originalSessionId, schedule.getSessionId());
         }
         return response;
     }

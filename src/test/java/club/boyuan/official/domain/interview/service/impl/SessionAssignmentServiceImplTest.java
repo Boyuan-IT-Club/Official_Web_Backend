@@ -592,6 +592,96 @@ class SessionAssignmentServiceImplTest {
         assertNull(saved.getStatus());
     }
 
+    // ── 调整时同时换场次（改地点）────────────────────────────
+
+    /** 方案B 的地点属于场次：换场次就是改地点，名额按原子占用/归还走 */
+    @Test
+    void updateInterviewTime_movesSessionAndReturnsNewLocation() {
+        when(interviewScheduleService.getById(1)).thenReturn(scheduleRow(1, 1, 101, 1000, 1));
+        when(interviewSessionService.getById(1000)).thenReturn(session(1000, 1, 10, 1, "教书院205", 5));
+        when(interviewSessionService.getById(2000)).thenReturn(session(2000, 1, 10, 1, "教书院306", 5));
+        when(interviewSessionMapper.occupyOneIfAvailable(2000)).thenReturn(1);
+        when(interviewTimeSlotService.getById(10)).thenReturn(timeSlot(10, 1));
+        when(interviewScheduleService.count(any())).thenReturn(0L);
+        when(interviewScheduleService.updateById(any(InterviewSchedule.class))).thenReturn(true);
+
+        LocalDateTime newTime = LocalDateTime.of(2026, 3, 1, 10, 30);
+        UpdateInterviewTimeResponseDTO resp = service.updateInterviewTime(1, newTime, 2000);
+
+        assertEquals(Integer.valueOf(2000), resp.getSessionId());
+        assertEquals("教书院306", resp.getLocation(), "返回新场次的地点，前端就地回显");
+        // 名额：占新场次、还旧场次
+        verify(interviewSessionMapper).occupyOneIfAvailable(2000);
+        verify(interviewSessionMapper).releaseOne(1000);
+
+        ArgumentCaptor<InterviewSchedule> captor = ArgumentCaptor.forClass(InterviewSchedule.class);
+        verify(interviewScheduleService).updateById(captor.capture());
+        assertEquals(Integer.valueOf(2000), captor.getValue().getSessionId());
+        assertEquals(newTime, captor.getValue().getInterviewTime());
+    }
+
+    /** 不传场次 = 只改时间：不碰名额，也不动 session_id */
+    @Test
+    void updateInterviewTime_withoutTargetSessionKeepsSession() {
+        when(interviewScheduleService.getById(1)).thenReturn(scheduleRow(1, 1, 101, 1000, 1));
+        when(interviewSessionService.getById(1000)).thenReturn(session(1000, 1, 10, 1, "教书院205", 5));
+        when(interviewTimeSlotService.getById(10)).thenReturn(timeSlot(10, 1));
+        when(interviewScheduleService.count(any())).thenReturn(0L);
+        when(interviewScheduleService.updateById(any(InterviewSchedule.class))).thenReturn(true);
+
+        UpdateInterviewTimeResponseDTO resp =
+                service.updateInterviewTime(1, LocalDateTime.of(2026, 3, 1, 9, 30), null);
+
+        assertEquals(Integer.valueOf(1000), resp.getSessionId());
+        assertEquals("教书院205", resp.getLocation());
+        verify(interviewSessionMapper, never()).occupyOneIfAvailable(any());
+        verify(interviewSessionMapper, never()).releaseOne(any());
+        ArgumentCaptor<InterviewSchedule> captor = ArgumentCaptor.forClass(InterviewSchedule.class);
+        verify(interviewScheduleService).updateById(captor.capture());
+        assertNull(captor.getValue().getSessionId(), "没换场就不该写 session_id");
+    }
+
+    /** 目标场次就是原场次：视为没换场，不做占用/归还（否则名额凭空少一个） */
+    @Test
+    void updateInterviewTime_sameSessionIsNotAMove() {
+        when(interviewScheduleService.getById(1)).thenReturn(scheduleRow(1, 1, 101, 1000, 1));
+        when(interviewSessionService.getById(1000)).thenReturn(session(1000, 1, 10, 1, "教书院205", 5));
+        when(interviewTimeSlotService.getById(10)).thenReturn(timeSlot(10, 1));
+        when(interviewScheduleService.count(any())).thenReturn(0L);
+        when(interviewScheduleService.updateById(any(InterviewSchedule.class))).thenReturn(true);
+
+        service.updateInterviewTime(1, LocalDateTime.of(2026, 3, 1, 9, 30), 1000);
+
+        verify(interviewSessionMapper, never()).occupyOneIfAvailable(any());
+        verify(interviewSessionMapper, never()).releaseOne(any());
+    }
+
+    /** 目标场次已满：拒绝，且不改安排 */
+    @Test
+    void updateInterviewTime_targetSessionFull_throws() {
+        when(interviewScheduleService.getById(1)).thenReturn(scheduleRow(1, 1, 101, 1000, 1));
+        when(interviewSessionService.getById(2000)).thenReturn(session(2000, 1, 10, 1, "教书院306", 5));
+        when(interviewSessionMapper.occupyOneIfAvailable(2000)).thenReturn(0);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.updateInterviewTime(1, LocalDateTime.of(2026, 3, 1, 9, 30), 2000));
+        assertEquals(BusinessExceptionEnum.INTERVIEW_SESSION_FULL.getCode(), ex.getCode());
+        verify(interviewSessionMapper, never()).releaseOne(any());
+        verify(interviewScheduleService, never()).updateById(any(InterviewSchedule.class));
+    }
+
+    /** 目标场次属于别的周期：拒绝（名额已占则不应落库，事务回滚兜底） */
+    @Test
+    void updateInterviewTime_targetSessionOtherCycle_throws() {
+        when(interviewScheduleService.getById(1)).thenReturn(scheduleRow(1, 1, 101, 1000, 1));
+        when(interviewSessionService.getById(2000)).thenReturn(session(2000, 99, 10, 1, "别届场次", 5));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.updateInterviewTime(1, LocalDateTime.of(2026, 3, 1, 9, 30), 2000));
+        assertEquals(BusinessExceptionEnum.INTERVIEW_SESSION_CYCLE_MISMATCH.getCode(), ex.getCode());
+        verify(interviewScheduleService, never()).updateById(any(InterviewSchedule.class));
+    }
+
     @Test
     void updateInterviewTime_warnsOnOutOfWindowAndConflict() {
         when(interviewScheduleService.getById(1)).thenReturn(scheduleRow(1, 1, 101, 1000, 1));
