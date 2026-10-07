@@ -12,7 +12,9 @@ import club.boyuan.official.domain.interview.service.ISessionAssignmentService;
 import club.boyuan.official.domain.resume.service.IRecruitmentCycleService;
 import club.boyuan.official.domain.resume.service.IResumeService;
 import club.boyuan.official.domain.resume.service.ResumeDataService;
+import club.boyuan.official.infra.notification.InterviewNotificationType;
 import club.boyuan.official.persistence.entity.Department;
+import club.boyuan.official.persistence.entity.InterviewNotificationLog;
 import club.boyuan.official.persistence.entity.InterviewSessionDept;
 import club.boyuan.official.persistence.entity.InterviewPreference;
 import club.boyuan.official.persistence.entity.InterviewPreferenceTime;
@@ -22,9 +24,11 @@ import club.boyuan.official.persistence.entity.InterviewTimeSlot;
 import club.boyuan.official.persistence.entity.RecruitmentCycle;
 import club.boyuan.official.persistence.entity.Resume;
 import club.boyuan.official.persistence.mapper.DepartmentMapper;
+import club.boyuan.official.persistence.mapper.InterviewNotificationLogMapper;
 import club.boyuan.official.persistence.mapper.InterviewPreferenceTimeMapper;
 import club.boyuan.official.persistence.mapper.InterviewSessionMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -75,6 +79,7 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
     private final IResumeService resumeService;
     private final ResumeDataService resumeDataService;
     private final DepartmentMapper departmentMapper;
+    private final InterviewNotificationLogMapper notificationLogMapper;
 
     @Override
     @Transactional
@@ -83,7 +88,12 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
         log.info("开始为周期 {} 执行场次分配", cycleId);
 
         Map<Integer, Resume> resumeById = loadSubmittedResumes(cycleId);
-        Set<Integer> alreadyScheduled = loadActivelyScheduledResumeIds(cycleId);
+        List<InterviewSchedule> cycleRows = loadCycleScheduleRows(cycleId);
+        Set<Integer> alreadyScheduled = activeResumeIds(cycleRows);
+        // 被取消过的人：重排时复用他那一行，见 persistSchedule
+        Map<Integer, InterviewSchedule> inactiveRows = cycleRows.stream()
+                .filter(s -> !Integer.valueOf(SCHEDULE_STATUS_ACTIVE).equals(s.getStatus()))
+                .collect(Collectors.toMap(InterviewSchedule::getResumeId, s -> s, (a, b) -> a));
 
         List<InterviewPreference> preferences = interviewPreferenceService.list(
                 new LambdaQueryWrapper<InterviewPreference>().eq(InterviewPreference::getCycleId, cycleId));
@@ -145,7 +155,8 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
             if (!touchedStates.contains(chosen)) {
                 touchedStates.add(chosen);
             }
-            InterviewSchedule schedule = persistSchedule(resume, chosen, index, matchedChoice, matchedDeptId);
+            InterviewSchedule schedule = persistSchedule(resume, chosen, index, matchedChoice, matchedDeptId,
+                    inactiveRows.get(resume.getResumeId()));
             result.getAssigned().add(buildAssigned(schedule, resume, chosen, matchedChoice, deptNames));
         }
 
@@ -162,7 +173,7 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
     public List<SessionAssignmentResultDTO.UnassignedItem> listUnassigned(Integer cycleId) {
         validateCycleExists(cycleId);
         Map<Integer, Resume> resumeById = loadSubmittedResumes(cycleId);
-        Set<Integer> alreadyScheduled = loadActivelyScheduledResumeIds(cycleId);
+        Set<Integer> alreadyScheduled = activeResumeIds(loadCycleScheduleRows(cycleId));
         Map<Integer, String> deptNames = loadAllDeptNames();
 
         List<InterviewPreference> pending = interviewPreferenceService.list(
@@ -220,14 +231,17 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
             throw new BusinessException(BusinessExceptionEnum.INTERVIEW_SESSION_FULL);
         }
 
-        // 已有有效安排则释放原场次
+        // 按任意状态找这人本届的那一行（uk_resume_cycle：一人一届只有一行）。
+        // 只找有效的会漏掉「已取消」的行，接着 insert 就撞唯一键。
         InterviewSchedule schedule = interviewScheduleService.getOne(
                 new LambdaQueryWrapper<InterviewSchedule>()
                         .eq(InterviewSchedule::getResumeId, resumeId)
                         .eq(InterviewSchedule::getCycleId, target.getCycleId())
-                        .eq(InterviewSchedule::getStatus, SCHEDULE_STATUS_ACTIVE)
                         .last("LIMIT 1"), false);
-        if (schedule != null && schedule.getSessionId() != null
+        boolean wasActive = schedule != null
+                && Integer.valueOf(SCHEDULE_STATUS_ACTIVE).equals(schedule.getStatus());
+        // 有效安排换场要归还原场次；已取消的那行在取消时已经还过名额了
+        if (wasActive && schedule.getSessionId() != null
                 && !schedule.getSessionId().equals(targetSessionId)) {
             interviewSessionMapper.releaseOne(schedule.getSessionId());
         }
@@ -259,6 +273,9 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
             interviewScheduleService.save(schedule);
         } else {
             interviewScheduleService.updateById(schedule);
+            if (!wasActive) {
+                detachScheduleNotices(schedule.getScheduleId());
+            }
         }
 
         SessionState state = new SessionState(target, timeSlot);
@@ -388,24 +405,60 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
      * 多部门场次下不能再写 session.getDeptId()：一场同时面三个部门时，
      * 那个值只是「主部门」，照抄会把技术部的同学记成媒体部的面试，
      * 后续录取部门、通知邮件全跟着错。要记的是他因为哪个志愿被排进来的。
+     *
+     * @param reusable 这人本届被取消过的那一行；没有则为 null。
+     *                 (resume_id, cycle_id) 上有唯一键 uk_resume_cycle，而取消只把行
+     *                 置为已取消、不删除——重排时再 insert 一行就撞唯一键，整次一键分配
+     *                 跟着回滚。所以有旧行就原地复用。
      */
     private InterviewSchedule persistSchedule(Resume resume, SessionState state, int index,
-                                              int matchedChoice, Integer matchedDeptId) {
+                                              int matchedChoice, Integer matchedDeptId,
+                                              InterviewSchedule reusable) {
         LocalDateTime start = computeStart(state.timeSlot, index, durationOf(state.session));
-        InterviewSchedule schedule = new InterviewSchedule()
-                .setResumeId(resume.getResumeId())
+        InterviewSchedule schedule = reusable != null ? reusable : new InterviewSchedule();
+        schedule.setResumeId(resume.getResumeId())
                 .setUserId(resume.getUserId())
                 .setCycleId(state.session.getCycleId())
                 .setSlotId(null)
                 .setSessionId(state.session.getSessionId())
                 .setDeptId(matchedDeptId != null ? matchedDeptId : state.session.getDeptId())
                 .setInterviewTime(start)
+                // 旧行上可能留着取消前的「手调」标记；新安排的时间是公式生成的
+                .setTimeOverridden(0)
                 .setStatus(SCHEDULE_STATUS_ACTIVE)
                 .setNotes("自动分配 - 第" + (matchedChoice == 0 ? "" : matchedChoice) + "志愿 - " + state.session.getLocation())
                 .setSyncStatus(0)
                 .setNotifStatus(0);
-        interviewScheduleService.save(schedule);
+        if (reusable == null) {
+            interviewScheduleService.save(schedule);
+        } else {
+            interviewScheduleService.updateById(schedule);
+            detachScheduleNotices(schedule.getScheduleId());
+        }
         return schedule;
+    }
+
+    /**
+     * 已取消的安排被重新启用，等于一份新安排——时间、地点大概率都变了。
+     *
+     * 但场次类通知按 (notification_type, schedule_id) 去重（uk_type_schedule），
+     * 旧安排发过的「面试安排通知 / 前一天 / 当天提醒」会让新安排的同类通知被当成
+     * 已发而跳过：学生手里拿着旧时间，系统却以为通知过了。
+     *
+     * 把这些记录从这条安排上摘下（schedule_id 置空）。发送历史（收件人、时间）
+     * 原样保留，只是不再占新安排的去重名额。
+     */
+    private void detachScheduleNotices(Integer scheduleId) {
+        if (scheduleId == null) {
+            return;
+        }
+        notificationLogMapper.update(null, new LambdaUpdateWrapper<InterviewNotificationLog>()
+                .set(InterviewNotificationLog::getScheduleId, null)
+                .eq(InterviewNotificationLog::getScheduleId, scheduleId)
+                .in(InterviewNotificationLog::getNotificationType, List.of(
+                        InterviewNotificationType.BOOKING_SUCCESS.name(),
+                        InterviewNotificationType.EVE_REMINDER.name(),
+                        InterviewNotificationType.DAY_REMINDER.name())));
     }
 
     private void persistOccupancy(List<SessionState> touchedStates) {
@@ -442,11 +495,17 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
                 .collect(Collectors.toMap(Resume::getResumeId, r -> r, (a, b) -> a));
     }
 
-    private Set<Integer> loadActivelyScheduledResumeIds(Integer cycleId) {
+    /** 本届所有安排行，任意状态（含已取消）。uk_resume_cycle 保证一人一行 */
+    private List<InterviewSchedule> loadCycleScheduleRows(Integer cycleId) {
         return interviewScheduleService.list(new LambdaQueryWrapper<InterviewSchedule>()
-                        .eq(InterviewSchedule::getCycleId, cycleId)
-                        .eq(InterviewSchedule::getStatus, SCHEDULE_STATUS_ACTIVE))
-                .stream().map(InterviewSchedule::getResumeId).collect(Collectors.toSet());
+                .eq(InterviewSchedule::getCycleId, cycleId));
+    }
+
+    private static Set<Integer> activeResumeIds(List<InterviewSchedule> rows) {
+        return rows.stream()
+                .filter(s -> Integer.valueOf(SCHEDULE_STATUS_ACTIVE).equals(s.getStatus()))
+                .map(InterviewSchedule::getResumeId)
+                .collect(Collectors.toSet());
     }
 
     private Map<Integer, List<Integer>> loadAcceptedTimeSlotIds(List<Integer> resumeIds) {

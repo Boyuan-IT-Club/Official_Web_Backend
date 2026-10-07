@@ -12,6 +12,12 @@ import club.boyuan.official.domain.resume.service.IRecruitmentCycleService;
 import club.boyuan.official.domain.resume.service.IResumeService;
 import club.boyuan.official.domain.resume.service.ResumeDataService;
 import club.boyuan.official.persistence.entity.Department;
+import club.boyuan.official.persistence.entity.InterviewNotificationLog;
+import club.boyuan.official.persistence.mapper.InterviewNotificationLogMapper;
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
+import org.junit.jupiter.api.BeforeEach;
 import club.boyuan.official.persistence.entity.InterviewPreference;
 import club.boyuan.official.persistence.entity.InterviewPreferenceTime;
 import club.boyuan.official.persistence.entity.InterviewSchedule;
@@ -45,6 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -63,9 +70,17 @@ class SessionAssignmentServiceImplTest {
     @Mock private ResumeDataService resumeDataService;
     @Mock private DepartmentMapper departmentMapper;
     @Mock private club.boyuan.official.persistence.mapper.InterviewSessionDeptMapper interviewSessionDeptMapper;
+    @Mock private InterviewNotificationLogMapper notificationLogMapper;
 
     @InjectMocks
     private SessionAssignmentServiceImpl service;
+
+    @BeforeEach
+    void registerTableInfo() {
+        // 纯单测没有 Spring，LambdaUpdateWrapper.set 要立即解析列名，手动注册实体
+        TableInfoHelper.initTableInfo(
+                new MapperBuilderAssistant(new MybatisConfiguration(), ""), InterviewNotificationLog.class);
+    }
 
     /**
      * 场景：3 名候选人都填 [第一志愿=技术部(1), 第二志愿=综合部(2)]，都勾选同一个时间窗。
@@ -383,6 +398,123 @@ class SessionAssignmentServiceImplTest {
         d.setDeptId(id);
         d.setDeptName(name);
         return d;
+    }
+
+    // ── 取消后重排（uk_resume_cycle：一人一届只有一行）──────────────
+
+    /** 一个技术部场次 + 一名报技术部的候选人，供重排用例共用 */
+    private void stubSingleCandidateCycle(Integer cycleId, List<InterviewSchedule> existingRows) {
+        when(recruitmentCycleService.getRecruitmentCycleById(cycleId)).thenReturn(new RecruitmentCycle());
+        when(resumeService.getAllResumesByCycleId(cycleId)).thenReturn(List.of(resume(101, 1)));
+        when(resumeDataService.getResumeName(any(Resume.class))).thenReturn("学生");
+        when(interviewScheduleService.list(any(Wrapper.class))).thenReturn(existingRows);
+        when(interviewPreferenceService.list(any(Wrapper.class))).thenReturn(List.of(pref(101, cycleId, 1, null)));
+        when(preferenceTimeMapper.selectList(any())).thenReturn(List.of(prefTime(101, 10)));
+        when(interviewTimeSlotService.listByIds(any())).thenReturn(List.of(new InterviewTimeSlot()
+                .setTimeSlotId(10).setCycleId(cycleId).setSlotName("周六上午")
+                .setInterviewDate(LocalDate.of(2026, 3, 1))
+                .setStartTime(LocalTime.of(9, 0)).setEndTime(LocalTime.of(12, 0)).setStatus(1)));
+        when(interviewSessionService.list(any(Wrapper.class)))
+                .thenReturn(List.of(session(1000, cycleId, 10, 1, "301", 5)));
+        when(departmentMapper.selectList(nullable(Wrapper.class))).thenReturn(List.of(dept(1, "技术部")));
+    }
+
+    private static InterviewSchedule cancelledRow(int scheduleId, int resumeId, int cycleId) {
+        return new InterviewSchedule().setScheduleId(scheduleId).setResumeId(resumeId).setCycleId(cycleId)
+                .setSessionId(999).setStatus(2).setTimeOverridden(1)
+                .setInterviewTime(LocalDateTime.of(2026, 2, 1, 14, 0));
+    }
+
+    /**
+     * 线上事故复现：管理员取消了安排（行置为已取消、不删），再点一键分配。
+     * 原实现只认有效安排，于是给同一人再 insert 一行 → 撞 uk_resume_cycle → 整次分配回滚。
+     * 期望：原地复用那一行，不 insert。
+     */
+    @Test
+    void assign_reusesCancelledRowInsteadOfInserting() {
+        Integer cycleId = 1;
+        InterviewSchedule old = cancelledRow(555, 101, cycleId);
+        stubSingleCandidateCycle(cycleId, List.of(old));
+        when(interviewScheduleService.updateById(any(InterviewSchedule.class))).thenReturn(true);
+
+        SessionAssignmentResultDTO result = service.assign(cycleId);
+
+        assertEquals(1, result.getAssignedCount(), "被取消的人应参与重排");
+        verify(interviewScheduleService, never()).save(any(InterviewSchedule.class));
+        ArgumentCaptor<InterviewSchedule> updated = ArgumentCaptor.forClass(InterviewSchedule.class);
+        verify(interviewScheduleService).updateById(updated.capture());
+        InterviewSchedule s = updated.getValue();
+        assertEquals(555, s.getScheduleId(), "复用的是原来那一行");
+        assertEquals(1, s.getStatus());
+        assertEquals(1000, s.getSessionId());
+        assertEquals(LocalDateTime.of(2026, 3, 1, 9, 0), s.getInterviewTime());
+        assertEquals(0, s.getTimeOverridden(), "取消前的「手调」标记不能带进新安排");
+        // 旧安排的场次通知要摘下，否则新安排的面试安排通知会被当成已发而跳过
+        verify(notificationLogMapper).update(nullable(InterviewNotificationLog.class), any(Wrapper.class));
+    }
+
+    /** 有效安排仍按原语义跳过：重跑一键分配不动已排好的人 */
+    @Test
+    void assign_skipsCandidatesWithActiveRow() {
+        Integer cycleId = 1;
+        stubSingleCandidateCycle(cycleId, List.of(new InterviewSchedule()
+                .setScheduleId(556).setResumeId(101).setCycleId(cycleId).setSessionId(1000).setStatus(1)));
+
+        SessionAssignmentResultDTO result = service.assign(cycleId);
+
+        assertEquals(0, result.getAssignedCount());
+        assertEquals(0, result.getUnassignedCount());
+        verify(interviewScheduleService, never()).save(any(InterviewSchedule.class));
+        verify(interviewScheduleService, never()).updateById(any(InterviewSchedule.class));
+    }
+
+    /**
+     * 人工调剂一名已取消的同学：同样不能 insert；
+     * 取消时已经归还过原场次名额，这里不能再 release 一次。
+     */
+    @Test
+    void manualAssign_reactivatesCancelledRowWithoutDoubleRelease() {
+        InterviewSession target = session(1000, 1, 10, 1, "301", 5).setCurrentOccupied(1);
+        when(interviewSessionService.getById(1000)).thenReturn(target);
+        when(resumeService.getResumeById(101)).thenReturn(resume(101, 1));
+        when(interviewSessionMapper.occupyOneIfAvailable(1000)).thenReturn(1);
+        when(interviewScheduleService.getOne(any(Wrapper.class), org.mockito.ArgumentMatchers.eq(false)))
+                .thenReturn(cancelledRow(555, 101, 1));
+        when(interviewTimeSlotService.getById(10)).thenReturn(new InterviewTimeSlot()
+                .setTimeSlotId(10).setInterviewDate(LocalDate.of(2026, 3, 1)).setStartTime(LocalTime.of(9, 0)));
+        when(departmentMapper.selectList(nullable(Wrapper.class))).thenReturn(List.of(dept(1, "技术部")));
+        when(interviewScheduleService.updateById(any(InterviewSchedule.class))).thenReturn(true);
+
+        service.manualAssign(101, 1000);
+
+        verify(interviewScheduleService, never()).save(any(InterviewSchedule.class));
+        verify(interviewSessionMapper, never()).releaseOne(any());
+        ArgumentCaptor<InterviewSchedule> updated = ArgumentCaptor.forClass(InterviewSchedule.class);
+        verify(interviewScheduleService).updateById(updated.capture());
+        assertEquals(555, updated.getValue().getScheduleId());
+        assertEquals(1, updated.getValue().getStatus());
+        verify(notificationLogMapper).update(nullable(InterviewNotificationLog.class), any(Wrapper.class));
+    }
+
+    /** 有效安排换场：照旧归还原场次，且不摘通知（不是重新启用） */
+    @Test
+    void manualAssign_movingActiveRowReleasesOldSession() {
+        InterviewSession target = session(1000, 1, 10, 1, "301", 5).setCurrentOccupied(1);
+        when(interviewSessionService.getById(1000)).thenReturn(target);
+        when(resumeService.getResumeById(101)).thenReturn(resume(101, 1));
+        when(interviewSessionMapper.occupyOneIfAvailable(1000)).thenReturn(1);
+        when(interviewScheduleService.getOne(any(Wrapper.class), org.mockito.ArgumentMatchers.eq(false)))
+                .thenReturn(new InterviewSchedule().setScheduleId(556).setResumeId(101).setCycleId(1)
+                        .setSessionId(999).setStatus(1));
+        when(interviewTimeSlotService.getById(10)).thenReturn(new InterviewTimeSlot()
+                .setTimeSlotId(10).setInterviewDate(LocalDate.of(2026, 3, 1)).setStartTime(LocalTime.of(9, 0)));
+        when(departmentMapper.selectList(nullable(Wrapper.class))).thenReturn(List.of(dept(1, "技术部")));
+        when(interviewScheduleService.updateById(any(InterviewSchedule.class))).thenReturn(true);
+
+        service.manualAssign(101, 1000);
+
+        verify(interviewSessionMapper).releaseOne(999);
+        verify(notificationLogMapper, never()).update(any(), any(Wrapper.class));
     }
 
     // ── 手动调整面试时间（updateInterviewTime）────────────────────
