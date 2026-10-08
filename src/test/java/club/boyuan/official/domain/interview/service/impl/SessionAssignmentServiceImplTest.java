@@ -50,6 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -496,9 +497,17 @@ class SessionAssignmentServiceImplTest {
         verify(notificationLogMapper).update(nullable(InterviewNotificationLog.class), any(Wrapper.class));
     }
 
-    /** 有效安排换场：照旧归还原场次，且不摘通知（不是重新启用） */
+    /**
+     * 有效安排换场：归还原场次名额，并且同样要摘掉旧通知、重置 notif_status。
+     *
+     * 这条原本断言的是「不摘通知（不是重新启用）」。那个判断是错的：换场把时间
+     * 和地点都改了，上一封通知描述的安排已经不存在，凭什么还占着去重名额、
+     * 还让这个人算作「已通知」？2026-10-07 线上五位改期重排的同学正是这样
+     * 失联的——邮箱里拿着旧时间，通知中心却显示已通知，没有任何人发现。
+     * 「是否重新启用」与「内容是否变了」是两回事，该看的是后者。
+     */
     @Test
-    void manualAssign_movingActiveRowReleasesOldSession() {
+    void manualAssign_movingActiveRowReleasesOldSessionAndDetachesNotices() {
         InterviewSession target = session(1000, 1, 10, 1, "301", 5).setCurrentOccupied(1);
         when(interviewSessionService.getById(1000)).thenReturn(target);
         when(resumeService.getResumeById(101)).thenReturn(resume(101, 1));
@@ -514,7 +523,12 @@ class SessionAssignmentServiceImplTest {
         service.manualAssign(101, 1000);
 
         verify(interviewSessionMapper).releaseOne(999);
-        verify(notificationLogMapper, never()).update(any(), any(Wrapper.class));
+        verify(notificationLogMapper).update(nullable(InterviewNotificationLog.class), any(Wrapper.class));
+
+        ArgumentCaptor<InterviewSchedule> saved = ArgumentCaptor.forClass(InterviewSchedule.class);
+        verify(interviewScheduleService).updateById(saved.capture());
+        assertEquals(Integer.valueOf(0), saved.getValue().getNotifStatus(),
+                "换过场的人要重新算作未通知，否则通知中心把他归进「已发」，管理员看不到这个待办");
     }
 
     // ── 手动调整面试时间（updateInterviewTime）────────────────────
@@ -590,6 +604,27 @@ class SessionAssignmentServiceImplTest {
         // 不碰 feishu_record_id / status / notes，避免覆盖掉飞书同步用的已有行
         assertNull(saved.getFeishuRecordId());
         assertNull(saved.getStatus());
+    }
+
+    /**
+     * 改完时间必须把旧通知从这条安排上摘下来。
+     *
+     * updateInterviewTime 本来就把 notif_status 置 0（界面显示「待发」），
+     * 但旧的 BOOKING_SUCCESS 还挂在这条 schedule 上，补发会被
+     * sendScheduleNotices 的 alreadySent 静默滤掉 —— 管理员看到「待发 1」，
+     * 点发送却返回 skipped，什么都没发出去。两个口径必须一起动。
+     */
+    @Test
+    void updateInterviewTime_detachesOldNoticesSoResendActuallyWorks() {
+        when(interviewScheduleService.getById(1)).thenReturn(scheduleRow(1, 1, 101, 1000, 1));
+        when(interviewSessionService.getById(1000)).thenReturn(session(1000, 1, 10, 1, "301", 5));
+        when(interviewTimeSlotService.getById(10)).thenReturn(timeSlot(10, 1));
+        when(interviewScheduleService.count(any())).thenReturn(0L);
+        when(interviewScheduleService.updateById(any(InterviewSchedule.class))).thenReturn(true);
+
+        service.updateInterviewTime(1, LocalDateTime.of(2026, 3, 1, 9, 30));
+
+        verify(notificationLogMapper).update(isNull(), any());
     }
 
     // ── 调整时同时换场次（改地点）────────────────────────────
