@@ -268,14 +268,20 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
                 // 换场已经改变了时间窗/日期，旧的人工指定时间语义错误，故重置回公式生成
                 .setTimeOverridden(0)
                 .setStatus(SCHEDULE_STATUS_ACTIVE)
+                // 时间和场次都变了，之前那封通知描述的是一个不存在的安排 ——
+                // 这个人重新算作「未通知」，否则通知中心按 notif_status 统计时
+                // 会把他归进「已发」，管理员在界面上根本看不到这个待办。
+                // 2026-10-07 线上五位改期重排的同学就是这样：邮箱里拿着旧时间，
+                // 通知中心却显示已通知，没人发现。
+                .setNotifStatus(0)
                 .setNotes("人工调剂 - " + target.getLocation());
         if (isNew) {
             interviewScheduleService.save(schedule);
         } else {
             interviewScheduleService.updateById(schedule);
-            if (!wasActive) {
-                detachScheduleNotices(schedule.getScheduleId());
-            }
+            // 不再只在「从已取消复活」时摘：只要安排内容变了，旧通知就不该
+            // 再占去重名额，否则补发会被 alreadySent 静默跳过
+            detachScheduleNotices(schedule.getScheduleId());
         }
 
         SessionState state = new SessionState(target, timeSlot);
@@ -404,6 +410,13 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
             update.setSessionId(targetSessionId);
         }
         interviewScheduleService.updateById(update);
+        /*
+         * 上面已经把 notif_status 置 0（界面显示「待发」），但旧通知还挂在这条
+         * 安排上，补发时会被 sendScheduleNotices 的 alreadySent 滤掉 ——
+         * 管理员看到「待发 1」，点了发送却返回 skipped，什么都没发出去。
+         * 两个口径必须一起动。
+         */
+        detachScheduleNotices(scheduleId);
 
         UpdateInterviewTimeResponseDTO response = new UpdateInterviewTimeResponseDTO();
         response.setScheduleId(scheduleId);
