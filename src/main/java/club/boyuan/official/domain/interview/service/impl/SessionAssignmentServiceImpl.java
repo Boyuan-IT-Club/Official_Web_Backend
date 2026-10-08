@@ -215,6 +215,80 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    public SessionAssignmentResultDTO.AssignedItem assignOnline(Integer resumeId, LocalDateTime interviewTime) {
+        Resume resume = resumeService.getResumeById(resumeId);
+        if (resume == null) {
+            throw new BusinessException(BusinessExceptionEnum.RESUME_NOT_FOUND);
+        }
+
+        // 和 manualAssign 一样按任意状态找本届那一行：只找有效的会漏掉「已取消」，
+        // 接着 insert 就撞 uk_resume_cycle
+        InterviewSchedule schedule = interviewScheduleService.getOne(
+                new LambdaQueryWrapper<InterviewSchedule>()
+                        .eq(InterviewSchedule::getResumeId, resumeId)
+                        .eq(InterviewSchedule::getCycleId, resume.getCycleId())
+                        .last("LIMIT 1"), false);
+
+        /*
+         * 时间：调用方给了就用给的，没给就沿用这条安排上已有的。
+         * 两者都没有说明这人从没被排过、管理员也没指定——这种情况不能瞎编一个
+         * 时间发出去，直接要求补齐。
+         */
+        LocalDateTime finalTime = interviewTime != null
+                ? interviewTime
+                : (schedule == null ? null : schedule.getInterviewTime());
+        if (finalTime == null) {
+            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD,
+                    "请指定线上面试时间");
+        }
+
+        boolean isNew = schedule == null;
+        if (isNew) {
+            schedule = new InterviewSchedule()
+                    .setResumeId(resumeId)
+                    .setUserId(resume.getUserId())
+                    .setCycleId(resume.getCycleId())
+                    .setSyncStatus(0);
+        } else if (Integer.valueOf(SCHEDULE_STATUS_ACTIVE).equals(schedule.getStatus())
+                && schedule.getSessionId() != null) {
+            // 本来在某个教室里，转线上就该把那个座位让出来——否则线下场次白占一格。
+            // 已取消的那行在取消时已经还过名额了，不能再还一次
+            interviewSessionMapper.releaseOne(schedule.getSessionId());
+        }
+
+        Integer releasedFrom = schedule.getSessionId();
+        schedule.setSlotId(null)
+                .setSessionId(null)          // 线上不占场次，地点是周期级的会议链接
+                .setInterviewMode(1)
+                .setInterviewTime(finalTime)
+                .setTimeOverridden(1)        // 时间是人工指定的，不该被公式重算覆盖
+                .setStatus(SCHEDULE_STATUS_ACTIVE)
+                .setSyncStatus(0)
+                .setNotifStatus(0)           // 进待补发：学生得知道自己改成线上了
+                .setNotes("线上面试 - 管理员安排");
+        if (isNew) {
+            interviewScheduleService.save(schedule);
+        } else {
+            interviewScheduleService.updateById(schedule);
+        }
+        // 时间和参加方式都变了，旧通知不该再占去重名额
+        detachScheduleNotices(schedule.getScheduleId());
+
+        log.info("已安排线上面试，resumeId={}, scheduleId={}, time={}, 释放场次={}",
+                resumeId, schedule.getScheduleId(), finalTime, releasedFrom);
+
+        SessionAssignmentResultDTO.AssignedItem item = new SessionAssignmentResultDTO.AssignedItem();
+        item.setResumeId(resumeId);
+        item.setScheduleId(schedule.getScheduleId());
+        item.setUserId(resume.getUserId());
+        item.setName(resumeDataService.getResumeName(resume));
+        item.setInterviewStartTime(finalTime);
+        item.setLocation("线上面试");
+        return item;
+    }
+
+    @Override
     @Transactional
     public SessionAssignmentResultDTO.AssignedItem manualAssign(Integer resumeId, Integer targetSessionId) {
         InterviewSession target = interviewSessionService.getById(targetSessionId);
@@ -268,6 +342,9 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
                 // 换场已经改变了时间窗/日期，旧的人工指定时间语义错误，故重置回公式生成
                 .setTimeOverridden(0)
                 .setStatus(SCHEDULE_STATUS_ACTIVE)
+                // 排进实体场次 = 回到线下。不清这个标记的话，一个转过线上的人
+                // 再被调剂回教室，学生端还会继续显示会议链接
+                .setInterviewMode(0)
                 // 时间和场次都变了，之前那封通知描述的是一个不存在的安排 ——
                 // 这个人重新算作「未通知」，否则通知中心按 notif_status 统计时
                 // 会把他归进「已发」，管理员在界面上根本看不到这个待办。
@@ -489,6 +566,8 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
                 .setInterviewTime(start)
                 // 旧行上可能留着取消前的「手调」标记；新安排的时间是公式生成的
                 .setTimeOverridden(0)
+                // 一键分配排的都是实体场次，顺带把线上标记清掉
+                .setInterviewMode(0)
                 .setStatus(SCHEDULE_STATUS_ACTIVE)
                 .setNotes("自动分配 - 第" + (matchedChoice == 0 ? "" : matchedChoice) + "志愿 - " + state.session.getLocation())
                 .setSyncStatus(0)

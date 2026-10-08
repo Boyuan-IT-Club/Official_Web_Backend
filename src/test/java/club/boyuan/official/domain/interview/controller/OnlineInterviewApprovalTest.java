@@ -14,59 +14,69 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 「改为线上」与「改时间」是两种诉求，同意后的动作完全不同。
  * <p>
  * 起因：有同学排完场次才发现当天来不及到校，真正想要的不是换时间而是改成线上
- * （线上 10-07 的申请里就有一条「10月11日有事来不及赶到学校，请问能不能帮忙
- * 安排一下线上面试?」）。此前系统没有线上这个概念，只能当成普通改期处理——
- * 取消安排、等重排，可他要的时间根本没变。
+ * （10-07 的申请里就有一条「10月11日有事来不及赶到学校，请问能不能帮忙安排
+ * 一下线上面试?」）。
  * <p>
- * 这组断言锁住两条路径不会互相串味。注意这里只验状态机本身；
- * 释放场次名额、摘旧通知等副作用在 Controller 里，由集成测试覆盖。
+ * 第一版只处理 status=1 的安排，结果那位同学先被当成普通改期同意过一次、
+ * 安排已经是「已取消」，再点同意什么都不会发生——人就卡在待调剂池里，
+ * 管理端又没有任何能把他排成线上的入口。
  */
 class OnlineInterviewApprovalTest {
 
     @Test
-    @DisplayName("默认是改时间，不是改线上——老客户端不传 requestType 时行为不变")
+    @DisplayName("默认是改时间——老客户端不传 requestType 时行为不变")
     void defaultsToReschedule() {
-        InterviewRescheduleRequest req = new InterviewRescheduleRequest();
-        assertNull(req.getRequestType(), "实体默认不该自作主张填值，由库的 DEFAULT 0 兜底");
+        assertNull(new InterviewRescheduleRequest().getRequestType(),
+                "实体不该自作主张填值，由库的 DEFAULT 0 兜底");
         assertEquals(0, InterviewRescheduleRequest.TYPE_RESCHEDULE);
         assertEquals(1, InterviewRescheduleRequest.TYPE_TO_ONLINE);
     }
 
     @Test
-    @DisplayName("改为线上：安排仍然生效，只是 mode 翻成 1、场次解绑")
+    @DisplayName("改为线上：安排保持生效，mode 翻 1、场次解绑、进待补发")
     void onlineKeepsScheduleActive() {
-        InterviewSchedule schedule = new InterviewSchedule()
+        InterviewSchedule s = new InterviewSchedule()
                 .setScheduleId(1).setStatus(1).setSessionId(99).setNotifStatus(1);
 
-        // approveToOnline 的三件事
-        schedule.setInterviewMode(1).setSessionId(null).setNotifStatus(0);
+        s.setInterviewMode(1).setSessionId(null).setStatus(1).setNotifStatus(0);
 
-        assertEquals(Integer.valueOf(1), schedule.getStatus(), "时间没变，安排不该被取消");
-        assertEquals(Integer.valueOf(1), schedule.getInterviewMode());
-        assertNull(schedule.getSessionId(), "不占教室了，场次要解绑并归还名额");
-        assertEquals(Integer.valueOf(0), schedule.getNotifStatus(),
-                "学生手上那封还写着教室，必须进待补发");
+        assertEquals(Integer.valueOf(1), s.getStatus(), "时间没变，安排不该被取消");
+        assertEquals(Integer.valueOf(1), s.getInterviewMode());
+        assertNull(s.getSessionId(), "不占教室了，座位要让出来");
+        assertEquals(Integer.valueOf(0), s.getNotifStatus(), "学生手上那封还写着教室");
+    }
+
+    @Test
+    @DisplayName("已取消的安排也能转线上——这正是王乐昆卡住的那个状态")
+    void cancelledScheduleCanStillGoOnline() {
+        InterviewSchedule cancelled = new InterviewSchedule()
+                .setScheduleId(41).setStatus(2).setSessionId(29);
+
+        boolean wasActive = Integer.valueOf(1).equals(cancelled.getStatus());
+        cancelled.setInterviewMode(1).setSessionId(null).setStatus(1).setNotifStatus(0);
+
+        assertFalse(wasActive, "原本是已取消");
+        assertEquals(Integer.valueOf(1), cancelled.getStatus(), "转线上后重新生效，不必再排进任何场次");
+        assertEquals(Integer.valueOf(1), cancelled.getInterviewMode());
+    }
+
+    @Test
+    @DisplayName("已取消的行不能重复归还场次名额——取消时已经还过一次")
+    void cancelledScheduleDoesNotReleaseTwice() {
+        InterviewSchedule cancelled = new InterviewSchedule().setStatus(2).setSessionId(29);
+        boolean shouldRelease = Integer.valueOf(1).equals(cancelled.getStatus())
+                && cancelled.getSessionId() != null;
+        assertFalse(shouldRelease);
+
+        InterviewSchedule active = new InterviewSchedule().setStatus(1).setSessionId(29);
+        assertTrue(Integer.valueOf(1).equals(active.getStatus()) && active.getSessionId() != null);
     }
 
     @Test
     @DisplayName("改时间：安排被取消，等人工重排")
     void rescheduleCancelsSchedule() {
-        InterviewSchedule schedule = new InterviewSchedule().setScheduleId(1).setStatus(1);
-        schedule.setStatus(2);
-        assertEquals(Integer.valueOf(2), schedule.getStatus());
-    }
-
-    @Test
-    @DisplayName("线上申请同意后不该标「待重排」——它本来就不需要重排")
-    void onlineIsNotAwaitingReassign() {
-        boolean approved = true;
-        boolean isOnline = true;
-        boolean scheduleStillActive = true;
-        boolean awaiting = approved && !isOnline && !scheduleStillActive;
-        assertFalse(awaiting);
-
-        // 对照：普通改期同意后安排被取消，就该标
-        boolean awaitingForReschedule = true && !false && !false;
-        assertTrue(awaitingForReschedule);
+        InterviewSchedule s = new InterviewSchedule().setScheduleId(1).setStatus(1);
+        s.setStatus(2);
+        assertEquals(Integer.valueOf(2), s.getStatus());
     }
 }

@@ -20,7 +20,7 @@ import club.boyuan.official.persistence.mapper.InterviewSessionMapper;
 import club.boyuan.official.persistence.mapper.InterviewNotificationLogMapper;
 import club.boyuan.official.persistence.mapper.RecruitmentCycleMapper;
 import club.boyuan.official.persistence.mapper.UserMapper;
-import org.springframework.util.StringUtils;
+
 import club.boyuan.official.persistence.mapper.InterviewTimeSlotMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -115,13 +115,17 @@ public class InterviewRescheduleController {
             return ResponseEntity.badRequest().body(ResponseMessage.error(400, "已有待处理的改期申请，请耐心等待"));
         }
 
-        // 本届没配会议链接就不该放「改为线上」的申请进来——同意了也没地方让人进
         if (requestType == InterviewRescheduleRequest.TYPE_TO_ONLINE) {
-            RecruitmentCycle cycle = recruitmentCycleMapper.findById(cycleId);
-            if (cycle == null || !StringUtils.hasText(cycle.getOnlineMeetingLink())) {
-                return ResponseEntity.badRequest()
-                        .body(ResponseMessage.error(400, "本届暂不支持线上面试，请改为申请调整时间"));
-            }
+            /*
+             * 不再因为「本届还没配会议链接」就拒绝申请。
+             *
+             * 原先是硬拦：没配链接就不让提交。但这两件事的时间顺序本来就不固定——
+             * 管理员多半是先看到有人申请线上，才去开会议室拿链接。拦住的结果是
+             * 学生根本提不了，管理员也就永远不知道有这个需求。
+             *
+             * 链接是展示期才需要的东西：进度页和邮件都在渲染那一刻从周期上读，
+             * 后补一样生效，没补就显示「会议链接稍后通知，请留意邮件」。
+             */
             // 改为线上不需要期望时间窗：时间不变，只是换个参加方式
             preferredSlots = null;
         }
@@ -190,11 +194,14 @@ public class InterviewRescheduleController {
      */
     private void approveToOnline(Integer requestId, InterviewSchedule schedule) {
         Integer oldSessionId = schedule.getSessionId();
+        boolean wasActive = Integer.valueOf(1).equals(schedule.getStatus());
         schedule.setInterviewMode(1)
                 .setSessionId(null)
+                .setStatus(1)        // 已取消的行在这里重新生效：转线上不需要再排进任何场次
                 .setNotifStatus(0);
         interviewScheduleMapper.updateById(schedule);
-        if (oldSessionId != null) {
+        // 只有原本还占着座位的才归还；已取消的那行在取消时已经还过了
+        if (wasActive && oldSessionId != null) {
             interviewSessionMapper.releaseOne(oldSessionId);
         }
         // 旧通知写的是线下教室，不摘掉会让补发被 alreadySent 静默跳过
@@ -363,10 +370,18 @@ public class InterviewRescheduleController {
 
         if (status == InterviewRescheduleRequest.STATUS_APPROVED && req.getScheduleId() != null) {
             InterviewSchedule schedule = interviewScheduleMapper.selectById(req.getScheduleId());
-            if (schedule != null && Integer.valueOf(1).equals(schedule.getStatus())) {
-                if (Integer.valueOf(InterviewRescheduleRequest.TYPE_TO_ONLINE).equals(req.getRequestType())) {
-                    approveToOnline(requestId, schedule);
-                } else {
+            boolean toOnline = Integer.valueOf(InterviewRescheduleRequest.TYPE_TO_ONLINE)
+                    .equals(req.getRequestType());
+            /*
+             * 转线上对「已取消」的安排也要生效。
+             *
+             * 这类人多半已经被同意过一次普通改期（安排因此置为已取消、进了待调剂池），
+             * 之后才发现他要的是线上。如果这里仍然只认 status=1，同意按钮按下去
+             * 什么都不会发生，管理员也看不出为什么——王乐昆就卡在这个状态里。
+             */
+            if (schedule != null && toOnline) {
+                approveToOnline(requestId, schedule);
+            } else if (schedule != null && Integer.valueOf(1).equals(schedule.getStatus())) {
                     // 同意改期 = 取消原场次安排（status=2），候选人进入「分配与调剂」的待调剂池。
                     // 原先只改申请状态、旧安排照常生效：学生端仍显示原时间、面试官仍按旧安排等人，
                     // 看起来像"系统直接定了"——同意后必须由管理员在新场次上人工重排。
@@ -374,7 +389,6 @@ public class InterviewRescheduleController {
                     schedule.setStatus(2); // 已取消，等待人工重排
                     interviewScheduleMapper.updateById(schedule);
                     log.info("改期申请{}已同意，原面试安排{}已取消待重排", requestId, schedule.getScheduleId());
-                }
             }
         }
 
