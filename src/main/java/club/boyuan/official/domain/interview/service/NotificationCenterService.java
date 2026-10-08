@@ -52,9 +52,15 @@ public class NotificationCenterService {
         long rejectedSent = screenedOut.stream().filter(i -> i.getNotifiedAt() != null).count();
 
         // 面试通知：生效安排都该收到；notif_status=1 表示「安排通知」已送达
+        /*
+         * 线上面试不参与邮件通知（时间由管理员私下约），所以也不该出现在这些
+         * 统计和名单里——否则「待发 N」里永远挂着几个发不出去的人。
+         * 他们在「分配与调剂 → 待约线上面试」那张表里。
+         */
         List<InterviewSchedule> schedules = scheduleMapper.selectList(new LambdaQueryWrapper<InterviewSchedule>()
                 .eq(InterviewSchedule::getCycleId, cycleId)
-                .eq(InterviewSchedule::getStatus, 1));
+                .eq(InterviewSchedule::getStatus, 1)
+                .ne(InterviewSchedule::getInterviewMode, 1));
         Set<Integer> scheduleIds = schedules.stream()
                 .map(InterviewSchedule::getScheduleId).collect(Collectors.toSet());
         long arrangedSent = schedules.stream()
