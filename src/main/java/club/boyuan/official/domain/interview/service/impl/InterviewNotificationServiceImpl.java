@@ -523,6 +523,9 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
                     .setResumeId(resumeId)
                     .setRequestId(requestId)
                     .setRecipientEmail(email)
+                    // 记下这封信告诉了他几点。之后安排一改，直接比对就知道他手上
+                    // 那封是不是作废的——不用再从 updated_at 之类的间接信号去猜
+                    .setNotifiedInterviewTime(schedule == null ? null : schedule.getInterviewTime())
                     .setSentAt(LocalDateTime.now());
             notificationLogMapper.insert(logEntry);
 

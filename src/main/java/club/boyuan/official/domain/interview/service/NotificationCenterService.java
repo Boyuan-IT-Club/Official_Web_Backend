@@ -132,20 +132,28 @@ public class NotificationCenterService {
     }
 
     /**
-     * 「他收到的是旧安排」——发过通知，但那封发出去之后安排又被改过。
+     * 「他收到的是旧安排」——发出去的那封信里写的时间，和现在的安排不一样了。
      * <p>
-     * 不看 notif_status，直接比时间戳。2026-10-07 线上五位改期重排的同学就是
-     * notif_status 仍为 1（界面显示「已发」）、实际手里拿着十小时前的旧时间；
-     * 靠标记位判断的任何口径都会漏掉他们，时间戳不会。
+     * 第一版拿「通知发送时间 < 安排 updated_at」判，线上一跑把 97 个人全标成
+     * 需补发：updated_at 是「这行被写过」，不是「学生该知道的信息变了」。
+     * 任何一次写入（同步标记、批量重算、甚至重发通知本身）都会把它顶上去。
+     * 误报的代价是群发一百封重复邮件，比漏报严重得多。
      * <p>
-     * 留 60 秒容差：发通知本身会更新 notif_status 从而带动 updated_at，
-     * 不留余量的话每个人发完都会立刻被判成「过期」。
+     * 现在直接比事实：发信时把正文里的面试时间记进日志（V52），之后和当前值
+     * 对一下。变了就是真变了，不需要推断。
+     * <p>
+     * notifiedAt 为 NULL 的是 V52 之前的历史数据，一律不判过期——
+     * 宁可漏报让管理员手工处理几个，也不能误报群发。
      */
-    static boolean isNoticeStale(LocalDateTime sentAt, LocalDateTime scheduleUpdatedAt) {
-        if (sentAt == null || scheduleUpdatedAt == null) {
+    static boolean isNoticeStale(LocalDateTime notifiedInterviewTime, LocalDateTime currentInterviewTime) {
+        if (notifiedInterviewTime == null || currentInterviewTime == null) {
             return false;
         }
-        return sentAt.plusSeconds(60).isBefore(scheduleUpdatedAt);
+        return !notifiedInterviewTime.equals(currentInterviewTime);
+    }
+
+    private static LastArrangedNotice noticeOf(Map<Integer, LastArrangedNotice> m, InterviewSchedule sc) {
+        return sc.getResumeId() == null ? null : m.get(sc.getResumeId());
     }
 
     private NotificationCenterDTO.Bucket bucket(long total, long sent) {
@@ -197,7 +205,7 @@ public class NotificationCenterService {
                                 InterviewSession::getSessionId, InterviewSession::getLocation, (a, b) -> a));
         Map<Integer, String> names = fieldValues(cycleId, resumeIds, List.of("姓名"));
         Map<Integer, String> studentIds = fieldValues(cycleId, resumeIds, STUDENT_ID_LABELS);
-        Map<Integer, LocalDateTime> arrangedSentAt = latestArrangedSentByResume(resumeIds);
+        Map<Integer, LastArrangedNotice> lastNotice = latestArrangedSentByResume(resumeIds);
 
         List<NotificationCenterDTO.ScheduleNoticeItem> out = new ArrayList<>();
         for (InterviewSchedule sc : schedules) {
@@ -212,9 +220,12 @@ public class NotificationCenterService {
                     .deptName(sc.getDeptId() == null ? null : deptNames.get(sc.getDeptId()))
                     .location(sc.getSessionId() == null ? null : locations.get(sc.getSessionId()))
                     .arranged(Integer.valueOf(1).equals(sc.getNotifStatus()))
-                    .noticeSentAt(arrangedSentAt.get(sc.getResumeId()))
-                    .scheduleUpdatedAt(sc.getUpdatedAt())
-                    .noticeStale(isNoticeStale(arrangedSentAt.get(sc.getResumeId()), sc.getUpdatedAt()))
+                    .noticeSentAt(noticeOf(lastNotice, sc) == null ? null : noticeOf(lastNotice, sc).sentAt())
+                    .notifiedInterviewTime(noticeOf(lastNotice, sc) == null
+                            ? null : noticeOf(lastNotice, sc).notifiedInterviewTime())
+                    .noticeStale(noticeOf(lastNotice, sc) != null
+                            && isNoticeStale(noticeOf(lastNotice, sc).notifiedInterviewTime(),
+                                             sc.getInterviewTime()))
                     .eve(eveSent.contains(sc.getScheduleId()))
                     .day(daySent.contains(sc.getScheduleId()))
                     .build());
@@ -255,19 +266,24 @@ public class NotificationCenterService {
      * 日志行的 schedule_id 置空，按 scheduleId 查会一条都查不到，正好把「发过旧的」
      * 这个事实抹掉。resume_id 不会被摘，它才是「这个人到底收到过没有」的锚。
      */
-    private Map<Integer, LocalDateTime> latestArrangedSentByResume(List<Integer> resumeIds) {
+    /** 最后一封安排通知：什么时候发的、当时告诉了他几点 */
+    record LastArrangedNotice(LocalDateTime sentAt, LocalDateTime notifiedInterviewTime) { }
+
+    private Map<Integer, LastArrangedNotice> latestArrangedSentByResume(List<Integer> resumeIds) {
         if (resumeIds.isEmpty()) {
             return Map.of();
         }
-        Map<Integer, LocalDateTime> latest = new HashMap<>();
+        Map<Integer, LastArrangedNotice> latest = new HashMap<>();
         for (InterviewNotificationLog logRow : notificationLogMapper.selectList(
                 new LambdaQueryWrapper<InterviewNotificationLog>()
                         .eq(InterviewNotificationLog::getNotificationType,
                                 InterviewNotificationType.BOOKING_SUCCESS.name())
                         .in(InterviewNotificationLog::getResumeId, resumeIds))) {
-            LocalDateTime prev = latest.get(logRow.getResumeId());
-            if (prev == null || (logRow.getSentAt() != null && logRow.getSentAt().isAfter(prev))) {
-                latest.put(logRow.getResumeId(), logRow.getSentAt());
+            LastArrangedNotice prev = latest.get(logRow.getResumeId());
+            if (prev == null || (logRow.getSentAt() != null
+                    && (prev.sentAt() == null || logRow.getSentAt().isAfter(prev.sentAt())))) {
+                latest.put(logRow.getResumeId(),
+                        new LastArrangedNotice(logRow.getSentAt(), logRow.getNotifiedInterviewTime()));
             }
         }
         return latest;

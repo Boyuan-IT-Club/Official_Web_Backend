@@ -90,8 +90,8 @@ public class NotificationCenterDTO {
         /** 最后一封安排通知的发送时间，为空表示从没发过 */
         private java.time.LocalDateTime noticeSentAt;
 
-        /** 安排最后被改动的时间 */
-        private java.time.LocalDateTime scheduleUpdatedAt;
+        /** 那封通知里写的面试时间；和当前 interviewTime 不同即为过期 */
+        private java.time.LocalDateTime notifiedInterviewTime;
         /** 前一天提醒是否已发 */
         private boolean eve;
         /** 当天提醒是否已发 */

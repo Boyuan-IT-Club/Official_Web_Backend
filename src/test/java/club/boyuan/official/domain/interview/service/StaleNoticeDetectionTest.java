@@ -11,50 +11,52 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * 「他收到的是旧安排」的判定。
  * <p>
- * 2026-10-07 线上：五位同学改期重排后，通知发在 12:25、安排改在 22:49，
- * 而 notif_status 仍是 1——通知中心显示「已发」，待办里看不到他们，
- * 五个人一直拿着十小时前的旧时间，面试就在两天后。
- * <p>
- * 教训是：任何基于标记位的口径都会漏。标记位会被别的流程改、会忘了重置、
- * 会因为历史数据停在错的值上。时间戳不会——「通知发出去之后安排又变了」
- * 这件事本身就是事实，不需要谁去维护一个标记。
+ * 这个判据改过一次，两次的教训都值得留着：
+ * <ol>
+ *   <li>2026-10-07：五位同学改期重排后，notif_status 仍是 1，通知中心显示
+ *       「已发 97/97、未发 0」，待办里一个都看不到，人一直拿着十小时前的旧时间。
+ *       结论是任何基于标记位的口径都会漏。</li>
+ *   <li>于是第一版改用「通知发送时间 &lt; 安排 updated_at」。线上一跑把
+ *       <b>97 个人全标成需补发</b>——updated_at 是「这行被写过」，不是「学生
+ *       该知道的信息变了」。误报的代价是群发一百封重复邮件，比漏报严重得多。</li>
+ * </ol>
+ * 现在比的是事实本身：发信时把正文里的面试时间记下来（V52），之后直接对比。
  */
 class StaleNoticeDetectionTest {
 
-    private static final LocalDateTime T = LocalDateTime.of(2026, 10, 7, 12, 25);
+    private static final LocalDateTime NINE = LocalDateTime.of(2026, 10, 11, 9, 0);
+    private static final LocalDateTime EIGHT_PM = LocalDateTime.of(2026, 10, 11, 20, 0);
 
     @Test
-    @DisplayName("发完之后安排又被改过 → 过期，必须补发")
-    void changedAfterNoticeIsStale() {
-        assertTrue(NotificationCenterService.isNoticeStale(T, T.plusHours(10)),
-                "线上那五位正是这种：通知 12:25，安排 22:49");
+    @DisplayName("通知里写的时间 ≠ 现在的时间 → 过期，必须补发")
+    void changedTimeIsStale() {
+        assertTrue(NotificationCenterService.isNoticeStale(NINE, EIGHT_PM),
+                "告诉他 9 点，现在排在 20 点——他手上那封是废的");
     }
 
     @Test
-    @DisplayName("通知发在安排改动之后 → 不过期，他拿的就是最新的")
-    void noticeAfterChangeIsFresh() {
-        assertFalse(NotificationCenterService.isNoticeStale(T.plusHours(1), T));
+    @DisplayName("时间没变 → 不过期，哪怕这行被写过很多次")
+    void unchangedTimeIsNotStale() {
+        assertFalse(NotificationCenterService.isNoticeStale(NINE, NINE),
+                "这正是第一版栽的地方：批量重算把 97 行的 updated_at 全顶上去，"
+                        + "但没有一个人的面试时间变了");
     }
 
     @Test
-    @DisplayName("从没发过 → 不算过期，那是「未发」，归另一个桶")
-    void neverSentIsNotStale() {
-        assertFalse(NotificationCenterService.isNoticeStale(null, T));
+    @DisplayName("历史数据（V52 之前没记）一律不判过期——宁可漏报也不能群发")
+    void legacyRowsAreNeverStale() {
+        assertFalse(NotificationCenterService.isNoticeStale(null, NINE));
     }
 
     @Test
-    @DisplayName("安排没有改动时间 → 不下结论")
-    void missingUpdatedAtIsNotStale() {
-        assertFalse(NotificationCenterService.isNoticeStale(T, null));
+    @DisplayName("安排时间为空时不下结论")
+    void missingCurrentTimeIsNotStale() {
+        assertFalse(NotificationCenterService.isNoticeStale(NINE, null));
     }
 
     @Test
-    @DisplayName("60 秒容差：发通知本身会带动 updated_at，不能让每个人发完就被判过期")
-    void toleratesTheWriteCausedBySendingItself() {
-        assertFalse(NotificationCenterService.isNoticeStale(T, T.plusSeconds(3)),
-                "发送流程把 notif_status 置 1，updated_at 随之略晚于 sent_at，这不是改动");
-        assertFalse(NotificationCenterService.isNoticeStale(T, T.plusSeconds(59)));
-        assertTrue(NotificationCenterService.isNoticeStale(T, T.plusSeconds(61)),
-                "超过容差就是真的改过了");
+    @DisplayName("差一分钟也算变了——不设容差，因为比的是事实不是时序")
+    void anyDifferenceCounts() {
+        assertTrue(NotificationCenterService.isNoticeStale(NINE, NINE.plusMinutes(1)));
     }
 }
