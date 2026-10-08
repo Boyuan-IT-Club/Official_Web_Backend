@@ -1,6 +1,7 @@
 package club.boyuan.official.domain.interview.controller;
 
 import club.boyuan.official.common.dto.ResponseMessage;
+import club.boyuan.official.domain.interview.dto.AssignOnlineRequestDTO;
 import club.boyuan.official.domain.interview.dto.InterviewSessionDTO;
 import club.boyuan.official.domain.interview.dto.ReassignScheduleRequestDTO;
 import club.boyuan.official.domain.interview.dto.SessionAssignmentResultDTO;
@@ -15,6 +16,8 @@ import club.boyuan.official.persistence.entity.User;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import java.time.LocalDateTime;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -340,6 +343,23 @@ public class SessionAssignmentController {
      * <p>标记该条时间为「人工指定」，并把 sync_status / notif_status 重置为 0
      * 以触发飞书重新同步与后续提醒。越界或同场次时间冲突只告警不拒绝。</p>
      */
+    /**
+     * 安排线上面试 / 把已排好的人转成线上。
+     * <p>
+     * 和人工调剂并列的另一条出口。此前管理端只能把人排进实体场次：
+     * 同意改期后进了待调剂池、但他要的本来就是线上的那种人无处安放，
+     * 管理员只能把他塞回某个教室，或者在系统外私下约。
+     */
+    @PostMapping("/resumes/{resumeId}/online")
+    public ResponseEntity<ResponseMessage<SessionAssignmentResultDTO.AssignedItem>> assignOnline(
+            @PathVariable Integer resumeId,
+            @RequestBody(required = false) AssignOnlineRequestDTO request) {
+        LocalDateTime time = request == null ? null : request.getInterviewTime();
+        log.info("安排线上面试，resumeId={}, interviewTime={}", resumeId, time);
+        return ResponseEntity.ok(ResponseMessage.success(
+                sessionAssignmentService.assignOnline(resumeId, time)));
+    }
+
     @PutMapping("/schedules/{scheduleId}/interview-time")
     public ResponseEntity<ResponseMessage<UpdateInterviewTimeResponseDTO>> updateInterviewTime(
             @PathVariable Integer scheduleId,
