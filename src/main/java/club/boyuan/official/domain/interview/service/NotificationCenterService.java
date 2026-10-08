@@ -68,6 +68,8 @@ public class NotificationCenterService {
 
         Set<Integer> eveSent = sentScheduleIds(InterviewNotificationType.EVE_REMINDER, scheduleIds);
         Set<Integer> daySent = sentScheduleIds(InterviewNotificationType.DAY_REMINDER, scheduleIds);
+        List<NotificationCenterDTO.ScheduleNoticeItem> scheduleNotices =
+                buildScheduleNotices(cycleId, schedules, eveSent, daySent);
 
         return NotificationCenterDTO.builder()
                 .resumeRejected(bucket(screenedOut.size(), rejectedSent))
@@ -76,7 +78,9 @@ public class NotificationCenterService {
                 .dayReminder(bucket(schedules.size(), daySent.size()))
                 .result(bucket(results.size(), resultSent))
                 .screenedOut(screenedOut)
-                .schedules(buildScheduleNotices(cycleId, schedules, eveSent, daySent))
+                .schedules(scheduleNotices)
+                .staleNoticeCount(scheduleNotices.stream()
+                        .filter(NotificationCenterDTO.ScheduleNoticeItem::isNoticeStale).count())
                 .build();
     }
 
@@ -125,6 +129,23 @@ public class NotificationCenterService {
             queued.add(id);
         }
         return Map.of("queued", queued.size(), "skipped", skipped);
+    }
+
+    /**
+     * 「他收到的是旧安排」——发过通知，但那封发出去之后安排又被改过。
+     * <p>
+     * 不看 notif_status，直接比时间戳。2026-10-07 线上五位改期重排的同学就是
+     * notif_status 仍为 1（界面显示「已发」）、实际手里拿着十小时前的旧时间；
+     * 靠标记位判断的任何口径都会漏掉他们，时间戳不会。
+     * <p>
+     * 留 60 秒容差：发通知本身会更新 notif_status 从而带动 updated_at，
+     * 不留余量的话每个人发完都会立刻被判成「过期」。
+     */
+    static boolean isNoticeStale(LocalDateTime sentAt, LocalDateTime scheduleUpdatedAt) {
+        if (sentAt == null || scheduleUpdatedAt == null) {
+            return false;
+        }
+        return sentAt.plusSeconds(60).isBefore(scheduleUpdatedAt);
     }
 
     private NotificationCenterDTO.Bucket bucket(long total, long sent) {
@@ -176,6 +197,7 @@ public class NotificationCenterService {
                                 InterviewSession::getSessionId, InterviewSession::getLocation, (a, b) -> a));
         Map<Integer, String> names = fieldValues(cycleId, resumeIds, List.of("姓名"));
         Map<Integer, String> studentIds = fieldValues(cycleId, resumeIds, STUDENT_ID_LABELS);
+        Map<Integer, LocalDateTime> arrangedSentAt = latestArrangedSentByResume(resumeIds);
 
         List<NotificationCenterDTO.ScheduleNoticeItem> out = new ArrayList<>();
         for (InterviewSchedule sc : schedules) {
@@ -190,6 +212,9 @@ public class NotificationCenterService {
                     .deptName(sc.getDeptId() == null ? null : deptNames.get(sc.getDeptId()))
                     .location(sc.getSessionId() == null ? null : locations.get(sc.getSessionId()))
                     .arranged(Integer.valueOf(1).equals(sc.getNotifStatus()))
+                    .noticeSentAt(arrangedSentAt.get(sc.getResumeId()))
+                    .scheduleUpdatedAt(sc.getUpdatedAt())
+                    .noticeStale(isNoticeStale(arrangedSentAt.get(sc.getResumeId()), sc.getUpdatedAt()))
                     .eve(eveSent.contains(sc.getScheduleId()))
                     .day(daySent.contains(sc.getScheduleId()))
                     .build());
@@ -223,6 +248,31 @@ public class NotificationCenterService {
     }
 
     /** 每份简历最近一次「初筛未通过」通知的时间。重发会留多条日志，取最新的 */
+    /**
+     * 每位候选人最后一封「面试安排通知」的发送时间，按 resumeId 索引。
+     * <p>
+     * 刻意按 resumeId 而不是 scheduleId：安排被改动时 detachScheduleNotices 会把
+     * 日志行的 schedule_id 置空，按 scheduleId 查会一条都查不到，正好把「发过旧的」
+     * 这个事实抹掉。resume_id 不会被摘，它才是「这个人到底收到过没有」的锚。
+     */
+    private Map<Integer, LocalDateTime> latestArrangedSentByResume(List<Integer> resumeIds) {
+        if (resumeIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Integer, LocalDateTime> latest = new HashMap<>();
+        for (InterviewNotificationLog logRow : notificationLogMapper.selectList(
+                new LambdaQueryWrapper<InterviewNotificationLog>()
+                        .eq(InterviewNotificationLog::getNotificationType,
+                                InterviewNotificationType.BOOKING_SUCCESS.name())
+                        .in(InterviewNotificationLog::getResumeId, resumeIds))) {
+            LocalDateTime prev = latest.get(logRow.getResumeId());
+            if (prev == null || (logRow.getSentAt() != null && logRow.getSentAt().isAfter(prev))) {
+                latest.put(logRow.getResumeId(), logRow.getSentAt());
+            }
+        }
+        return latest;
+    }
+
     private Map<Integer, LocalDateTime> latestSentByResume(List<Integer> resumeIds) {
         if (resumeIds.isEmpty()) {
             return Map.of();
