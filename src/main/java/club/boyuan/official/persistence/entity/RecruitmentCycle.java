@@ -64,6 +64,10 @@ public class RecruitmentCycle {
     @TableField("waiting_room")
     private String waitingRoom;
 
+    /** 线上面试会议链接，全周期共用；留空表示本届不支持线上 */
+    @TableField("online_meeting_link")
+    private String onlineMeetingLink;
+
     /** 本届负责人联系方式，未录取通知邮件末尾附上（V33） */
     @TableField("contact_info")
     private String contactInfo;
@@ -207,6 +211,14 @@ public class RecruitmentCycle {
 
     public void setWaitingRoom(String waitingRoom) {
         this.waitingRoom = waitingRoom;
+    }
+
+    public String getOnlineMeetingLink() {
+        return onlineMeetingLink;
+    }
+
+    public void setOnlineMeetingLink(String onlineMeetingLink) {
+        this.onlineMeetingLink = onlineMeetingLink;
     }
 
     public String getContactInfo() {

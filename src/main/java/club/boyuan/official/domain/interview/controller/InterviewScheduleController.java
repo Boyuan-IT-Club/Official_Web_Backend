@@ -164,7 +164,18 @@ public class InterviewScheduleController {
          */
         club.boyuan.official.persistence.entity.RecruitmentCycle cycle =
                 recruitmentCycleMapper.findById(schedule.getCycleId());
-        if (cycle != null && org.springframework.util.StringUtils.hasText(cycle.getWaitingRoom())) {
+        /*
+         * 线上面试：地点不是教室而是会议链接（周期级统一配置）。
+         * 同意「改为线上」时会把 session 解绑，所以上面的 location 本来就是空的，
+         * 这里补上链接，前端据 interviewMode 决定渲染教室还是链接。
+         */
+        boolean online = Integer.valueOf(1).equals(schedule.getInterviewMode());
+        result.put("interviewMode", online ? 1 : 0);
+        if (online && cycle != null && org.springframework.util.StringUtils.hasText(cycle.getOnlineMeetingLink())) {
+            result.put("onlineMeetingLink", cycle.getOnlineMeetingLink().trim());
+        }
+        // 候场教室只对线下有意义——线上没有「先到某个教室等」这回事
+        if (!online && cycle != null && org.springframework.util.StringUtils.hasText(cycle.getWaitingRoom())) {
             result.put("waitingRoom", cycle.getWaitingRoom().trim());
         }
         return ResponseEntity.ok(ResponseMessage.success(result));

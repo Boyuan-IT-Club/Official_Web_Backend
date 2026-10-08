@@ -26,6 +26,9 @@ public class RescheduleRequestAdminDTO {
     /** 学号（= 用户名） */
     private String studentId;
 
+    /** 0=改时间 1=改为线上。两种诉求处理方式不同，列表里要一眼分得出 */
+    private Integer requestType;
+
     /** 申请理由，学生原话 */
     private String reason;
 

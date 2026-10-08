@@ -53,6 +53,13 @@ public class InterviewRescheduleRequest implements Serializable {
     @TableField("preferred_time_slot_ids")
     private String preferredTimeSlotIds;
 
+    /** 0=改时间（默认） 1=改为线上 */
+    public static final int TYPE_RESCHEDULE = 0;
+    public static final int TYPE_TO_ONLINE = 1;
+
+    @TableField("request_type")
+    private Integer requestType;
+
     @TableField("status")
     private Integer status;
 
