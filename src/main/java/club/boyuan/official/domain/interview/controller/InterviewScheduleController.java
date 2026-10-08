@@ -54,6 +54,8 @@ public class InterviewScheduleController {
 
     private final club.boyuan.official.persistence.mapper.InterviewResultMapper interviewResultMapper;
 
+    private final club.boyuan.official.persistence.mapper.RecruitmentCycleMapper recruitmentCycleMapper;
+
     /**
      * 学生查询本人在指定周期的面试结果（录取/未录取）。
      * 结果未出（或管理员尚未录入 decision）时 data 为 null。
@@ -153,6 +155,17 @@ public class InterviewScheduleController {
             if (session != null) {
                 result.put("location", session.getLocation());
             }
+        }
+        /*
+         * 候场教室按周期配置（recruitment_cycle.waiting_room），和面试教室不是一回事：
+         * 面试教室属于场次，候场教室全周期共用。此前只有邮件里有这一行，
+         * 进度页拿不到，学生只能从邮件里找——改期之后邮件还是旧的，更找不着。
+         * 没配就不返回这个字段，前端据此决定要不要渲染那一行。
+         */
+        club.boyuan.official.persistence.entity.RecruitmentCycle cycle =
+                recruitmentCycleMapper.findById(schedule.getCycleId());
+        if (cycle != null && org.springframework.util.StringUtils.hasText(cycle.getWaitingRoom())) {
+            result.put("waitingRoom", cycle.getWaitingRoom().trim());
         }
         return ResponseEntity.ok(ResponseMessage.success(result));
     }
