@@ -196,10 +196,18 @@ public class InterviewRescheduleController {
         Integer oldSessionId = schedule.getSessionId();
         boolean wasActive = Integer.valueOf(1).equals(schedule.getStatus());
         schedule.setInterviewMode(1)
-                .setSessionId(null)
-                .setStatus(1)        // 已取消的行在这里重新生效：转线上不需要再排进任何场次
-                .setNotifStatus(0);
+                .setStatus(1);       // 已取消的行在这里重新生效：转线上不需要再排进任何场次
         interviewScheduleMapper.updateById(schedule);
+        /*
+         * 解绑场次必须用 UpdateWrapper：MyBatis-Plus 默认跳过 null 字段，
+         * setSessionId(null) 走 updateById 根本写不进去（线上已经踩过——
+         * 人转了线上、座位也还了，那行却还指着原场次）。
+         */
+        interviewScheduleMapper.update(null,
+                new LambdaUpdateWrapper<InterviewSchedule>()
+                        .set(InterviewSchedule::getSessionId, null)
+                        .eq(InterviewSchedule::getScheduleId, schedule.getScheduleId()));
+        schedule.setSessionId(null);
         // 只有原本还占着座位的才归还；已取消的那行在取消时已经还过了
         if (wasActive && oldSessionId != null) {
             interviewSessionMapper.releaseOne(oldSessionId);
