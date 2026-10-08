@@ -9,7 +9,13 @@ import club.boyuan.official.persistence.entity.InterviewSchedule;
 import club.boyuan.official.persistence.entity.Resume;
 import club.boyuan.official.persistence.entity.User;
 import club.boyuan.official.persistence.mapper.InterviewRescheduleRequestMapper;
+import club.boyuan.official.domain.interview.dto.RescheduleRequestAdminDTO;
+import club.boyuan.official.persistence.entity.InterviewSession;
+import club.boyuan.official.persistence.entity.InterviewTimeSlot;
 import club.boyuan.official.persistence.mapper.InterviewScheduleMapper;
+import club.boyuan.official.persistence.mapper.InterviewSessionMapper;
+import club.boyuan.official.persistence.mapper.UserMapper;
+import club.boyuan.official.persistence.mapper.InterviewTimeSlotMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,8 +24,14 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * 面试改期申请：
@@ -39,6 +51,12 @@ public class InterviewRescheduleController {
     private final InterviewRescheduleRequestMapper rescheduleMapper;
 
     private final InterviewScheduleMapper interviewScheduleMapper;
+
+    private final InterviewTimeSlotMapper interviewTimeSlotMapper;
+
+    private final InterviewSessionMapper interviewSessionMapper;
+
+    private final UserMapper userMapper;
 
     /**
      * 学生提交改期申请。要求本周期已有面试排期；同一排期存在待处理申请时不可重复提交。
@@ -114,7 +132,7 @@ public class InterviewRescheduleController {
      */
     @GetMapping("/admin/list")
     @PreAuthorize("hasAnyAuthority('interview:schedule', 'resume:audit')")
-    public ResponseEntity<ResponseMessage<List<InterviewRescheduleRequest>>> adminList(
+    public ResponseEntity<ResponseMessage<List<RescheduleRequestAdminDTO>>> adminList(
             @RequestParam Integer cycleId,
             @RequestParam(required = false) Integer status) {
         LambdaQueryWrapper<InterviewRescheduleRequest> qw = new LambdaQueryWrapper<InterviewRescheduleRequest>()
@@ -124,7 +142,127 @@ public class InterviewRescheduleController {
         if (status != null) {
             qw.eq(InterviewRescheduleRequest::getStatus, status);
         }
-        return ResponseEntity.ok(ResponseMessage.success(rescheduleMapper.selectList(qw)));
+        return ResponseEntity.ok(ResponseMessage.success(toAdminView(rescheduleMapper.selectList(qw))));
+    }
+
+    private static final DateTimeFormatter SLOT_DATE = DateTimeFormatter.ofPattern("MM-dd");
+    private static final DateTimeFormatter SLOT_TIME = DateTimeFormatter.ofPattern("HH:mm");
+
+    /**
+     * 把实体翻译成管理员看得懂的东西。
+     * 批量取人、取时间窗、取安排，避免一行一查。
+     */
+    private List<RescheduleRequestAdminDTO> toAdminView(List<InterviewRescheduleRequest> rows) {
+        if (rows.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Integer, User> users = batchUsers(rows);
+        Map<Integer, InterviewSchedule> schedules = batchSchedules(rows);
+        Map<Integer, InterviewTimeSlot> slots = batchSlots(rows);
+        Map<Integer, String> locations = batchLocations(schedules.values());
+
+        List<RescheduleRequestAdminDTO> out = new ArrayList<>(rows.size());
+        for (InterviewRescheduleRequest r : rows) {
+            User u = r.getUserId() == null ? null : users.get(r.getUserId());
+            InterviewSchedule sc = r.getScheduleId() == null ? null : schedules.get(r.getScheduleId());
+            out.add(RescheduleRequestAdminDTO.builder()
+                    .requestId(r.getRequestId())
+                    .name(u == null ? null : u.getName())
+                    .studentId(u == null ? null : u.getUsername())
+                    .reason(r.getReason())
+                    .currentInterviewTime(sc == null ? null : sc.getInterviewTime())
+                    .currentLocation(sc == null || sc.getSessionId() == null
+                            ? null : locations.get(sc.getSessionId()))
+                    .preferredSlots(resolveSlots(r.getPreferredTimeSlotIds(), slots))
+                    .submittedAt(r.getCreatedAt())
+                    .status(r.getStatus())
+                    .adminNote(r.getAdminNote())
+                    .handledAt(r.getHandledAt())
+                    // 同意了、但那条安排还停在「已取消」上，就是还没重排
+                    .awaitingReassign(Integer.valueOf(InterviewRescheduleRequest.STATUS_APPROVED).equals(r.getStatus())
+                            && sc != null && !Integer.valueOf(1).equals(sc.getStatus()))
+                    .build());
+        }
+        return out;
+    }
+
+    /** "11,12,13" → 三个「10-11 周六上午 09:00-11:00」 */
+    private List<RescheduleRequestAdminDTO.PreferredSlot> resolveSlots(
+            String raw, Map<Integer, InterviewTimeSlot> slots) {
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        List<RescheduleRequestAdminDTO.PreferredSlot> out = new ArrayList<>();
+        for (String part : raw.split(",")) {
+            Integer id = parseId(part);
+            if (id == null) {
+                continue;
+            }
+            InterviewTimeSlot ts = slots.get(id);
+            out.add(RescheduleRequestAdminDTO.PreferredSlot.builder()
+                    .timeSlotId(id)
+                    // 时间窗被删掉时退回显示 ID，总好过凭空消失一行
+                    .label(ts == null ? "时间窗 #" + id : labelOf(ts))
+                    .build());
+        }
+        return out;
+    }
+
+    private static String labelOf(InterviewTimeSlot ts) {
+        StringBuilder sb = new StringBuilder();
+        if (ts.getInterviewDate() != null) {
+            sb.append(ts.getInterviewDate().format(SLOT_DATE)).append(' ');
+        }
+        if (ts.getSlotName() != null && !ts.getSlotName().isBlank()) {
+            sb.append(ts.getSlotName()).append(' ');
+        }
+        if (ts.getStartTime() != null && ts.getEndTime() != null) {
+            sb.append(ts.getStartTime().format(SLOT_TIME)).append('-').append(ts.getEndTime().format(SLOT_TIME));
+        }
+        String s = sb.toString().trim();
+        return s.isEmpty() ? ("时间窗 #" + ts.getTimeSlotId()) : s;
+    }
+
+    private static Integer parseId(String part) {
+        try {
+            return Integer.valueOf(part.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private Map<Integer, User> batchUsers(List<InterviewRescheduleRequest> rows) {
+        List<Integer> ids = rows.stream().map(InterviewRescheduleRequest::getUserId)
+                .filter(Objects::nonNull).distinct().toList();
+        return ids.isEmpty() ? Map.of() : userMapper.selectBatchIds(ids).stream()
+                .collect(Collectors.toMap(User::getUserId, Function.identity(), (a, b) -> a));
+    }
+
+    private Map<Integer, InterviewSchedule> batchSchedules(List<InterviewRescheduleRequest> rows) {
+        List<Integer> ids = rows.stream().map(InterviewRescheduleRequest::getScheduleId)
+                .filter(Objects::nonNull).distinct().toList();
+        return ids.isEmpty() ? Map.of() : interviewScheduleMapper.selectBatchIds(ids).stream()
+                .collect(Collectors.toMap(InterviewSchedule::getScheduleId, Function.identity(), (a, b) -> a));
+    }
+
+    private Map<Integer, InterviewTimeSlot> batchSlots(List<InterviewRescheduleRequest> rows) {
+        List<Integer> ids = rows.stream()
+                .map(InterviewRescheduleRequest::getPreferredTimeSlotIds)
+                .filter(v -> v != null && !v.isBlank())
+                .flatMap(v -> Arrays.stream(v.split(",")))
+                .map(InterviewRescheduleController::parseId)
+                .filter(Objects::nonNull).distinct().toList();
+        return ids.isEmpty() ? Map.of() : interviewTimeSlotMapper.selectBatchIds(ids).stream()
+                .collect(Collectors.toMap(InterviewTimeSlot::getTimeSlotId, Function.identity(), (a, b) -> a));
+    }
+
+    private Map<Integer, String> batchLocations(java.util.Collection<InterviewSchedule> schedules) {
+        List<Integer> ids = schedules.stream().map(InterviewSchedule::getSessionId)
+                .filter(Objects::nonNull).distinct().toList();
+        return ids.isEmpty() ? Map.of() : interviewSessionMapper.selectBatchIds(ids).stream()
+                .collect(Collectors.toMap(InterviewSession::getSessionId,
+                        s -> s.getLocation() == null ? "" : s.getLocation(), (a, b) -> a));
     }
 
     /**
