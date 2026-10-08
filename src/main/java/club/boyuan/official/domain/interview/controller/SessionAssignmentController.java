@@ -9,6 +9,7 @@ import club.boyuan.official.domain.interview.dto.UpdateInterviewTimeRequestDTO;
 import club.boyuan.official.domain.interview.dto.UpdateInterviewTimeResponseDTO;
 import club.boyuan.official.domain.interview.service.IInterviewSessionService;
 import club.boyuan.official.domain.interview.service.ISessionAssignmentService;
+import club.boyuan.official.persistence.entity.InterviewSchedule;
 import club.boyuan.official.persistence.entity.Resume;
 import club.boyuan.official.persistence.entity.ResumeFieldDefinition;
 import club.boyuan.official.persistence.entity.ResumeFieldValue;
@@ -25,7 +26,10 @@ import org.springframework.web.bind.annotation.*;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.Set;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * 管理员：一键场次分配、待调剂名单、人工调剂（一键再分配到其它有空的场次）。
@@ -448,9 +452,72 @@ public class SessionAssignmentController {
             item.put("phone", u != null ? u.getPhone() : null);
             item.put("note", note);          // 学生填的说明，可能为空
             item.put("resumeStatus", resume.getStatus());
+            item.put("source", "declared");  // 学生自己在简历里声明不能线下
             out.add(item);
         }
+
+        mergeAdminMarkedOnline(cycleId, sidDef, out);
         return ResponseEntity.ok(ResponseMessage.success(out));
+    }
+
+    /**
+     * 把「管理员标成线上」的人也并进这张名单。
+     * <p>
+     * 这张表原先只认简历里声明的「不能参加线下面试」。但管理员在分配页把人
+     * 转成线上之后，那个人就从所有名单里消失了——不在待调剂（已有生效安排）、
+     * 不在通知名单（线上不发通知）、也不在这里。等于标完就丢了，没有任何地方
+     * 提醒还欠他一个时间。
+     * <p>
+     * 两类人要做的事完全一样：私下联系、约个时间。所以并到一张表里，
+     * 用 source 区分来源，用 interviewTime 区分「还没约」和「已约好」。
+     */
+    private void mergeAdminMarkedOnline(Integer cycleId, ResumeFieldDefinition sidDef,
+                                        List<Map<String, Object>> out) {
+        List<InterviewSchedule> online = interviewScheduleMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<InterviewSchedule>()
+                        .eq(InterviewSchedule::getCycleId, cycleId)
+                        .eq(InterviewSchedule::getStatus, 1)
+                        .eq(InterviewSchedule::getInterviewMode, 1));
+        if (online.isEmpty()) {
+            return;
+        }
+        Set<Integer> already = out.stream()
+                .map(m -> (Integer) m.get("resumeId")).filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        for (InterviewSchedule sc : online) {
+            Resume resume = sc.getResumeId() == null ? null : resumeMapper.selectById(sc.getResumeId());
+            if (resume == null) {
+                continue;
+            }
+            // 两边都命中的人（自己声明过、管理员又标了）只出现一次，但要补上时间
+            if (already.contains(resume.getResumeId())) {
+                out.stream()
+                        .filter(m -> resume.getResumeId().equals(m.get("resumeId")))
+                        .findFirst()
+                        .ifPresent(m -> {
+                            m.put("scheduleId", sc.getScheduleId());
+                            m.put("interviewTime", sc.getInterviewTime());
+                            m.put("source", "both");
+                        });
+                continue;
+            }
+            User u = resume.getUserId() == null ? null : userMapper.selectById(resume.getUserId());
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("userId", resume.getUserId());
+            item.put("resumeId", resume.getResumeId());
+            item.put("scheduleId", sc.getScheduleId());
+            item.put("name", u != null ? u.getName() : null);
+            item.put("username", u != null ? u.getUsername() : null);
+            item.put("studentId", studentIdOf(resume.getResumeId(), sidDef));
+            item.put("email", u != null ? u.getEmail() : null);
+            item.put("phone", u != null ? u.getPhone() : null);
+            item.put("note", "");
+            item.put("resumeStatus", resume.getStatus());
+            item.put("interviewTime", sc.getInterviewTime());   // 为空 = 还没约
+            item.put("source", "assigned");                     // 管理员标的
+            out.add(item);
+        }
     }
 
     /** 取某份简历里填的学号；没填或没有该字段时返回 null（由前端回落到登录名）。 */

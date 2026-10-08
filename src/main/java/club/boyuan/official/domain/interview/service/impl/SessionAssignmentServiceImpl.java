@@ -231,17 +231,19 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
                         .last("LIMIT 1"), false);
 
         /*
-         * 时间：调用方给了就用给的，没给就沿用这条安排上已有的。
-         * 两者都没有说明这人从没被排过、管理员也没指定——这种情况不能瞎编一个
-         * 时间发出去，直接要求补齐。
+         * 时间可以先不定。
+         *
+         * 线上面试的实际流程是「先标记成线上，再私下和学生约个双方都行的时间」——
+         * 逼管理员在标记那一刻就填一个准确时间，等于让他编一个还没谈好的值。
+         * 所以这里允许为空：没时间的进「待约线上面试」名单等着约，约好了再调一次
+         * 本接口把时间补上。
+         *
+         * 调用方给了就用给的，没给则沿用这条安排上已有的（「原地转线上」不该把
+         * 已经约好的时间抹掉）。
          */
         LocalDateTime finalTime = interviewTime != null
                 ? interviewTime
                 : (schedule == null ? null : schedule.getInterviewTime());
-        if (finalTime == null) {
-            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD,
-                    "请指定线上面试时间");
-        }
 
         boolean isNew = schedule == null;
         if (isNew) {
@@ -262,11 +264,17 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
                 .setSessionId(null)          // 线上不占场次，地点是周期级的会议链接
                 .setInterviewMode(1)
                 .setInterviewTime(finalTime)
-                .setTimeOverridden(1)        // 时间是人工指定的，不该被公式重算覆盖
+                .setTimeOverridden(finalTime != null ? 1 : 0)
                 .setStatus(SCHEDULE_STATUS_ACTIVE)
                 .setSyncStatus(0)
-                .setNotifStatus(0)           // 进待补发：学生得知道自己改成线上了
-                .setNotes("线上面试 - 管理员安排");
+                .setNotes(finalTime != null ? "线上面试 - 管理员安排" : "线上面试 - 待约时间");
+        /*
+         * 不进通知队列。线上面试的时间是管理员私下和本人约的，和「简历里就选
+         * 只能线上」的同学同一套处理：系统不发模板信，人留在「待约线上面试」
+         * 名单里由管理员联系。notif_status 置 1 是为了不让他出现在「待发」
+         * 里让人以为漏了谁。
+         */
+        schedule.setNotifStatus(1);
         if (isNew) {
             interviewScheduleService.save(schedule);
         } else {
@@ -276,7 +284,8 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
         detachScheduleNotices(schedule.getScheduleId());
 
         log.info("已安排线上面试，resumeId={}, scheduleId={}, time={}, 释放场次={}",
-                resumeId, schedule.getScheduleId(), finalTime, releasedFrom);
+                resumeId, schedule.getScheduleId(),
+                finalTime != null ? finalTime : "待约", releasedFrom);
 
         SessionAssignmentResultDTO.AssignedItem item = new SessionAssignmentResultDTO.AssignedItem();
         item.setResumeId(resumeId);
@@ -284,7 +293,7 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
         item.setUserId(resume.getUserId());
         item.setName(resumeDataService.getResumeName(resume));
         item.setInterviewStartTime(finalTime);
-        item.setLocation("线上面试");
+        item.setLocation(finalTime != null ? "线上面试" : "线上面试（待约时间）");
         return item;
     }
 

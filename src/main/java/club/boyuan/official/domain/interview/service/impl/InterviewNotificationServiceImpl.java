@@ -160,6 +160,15 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
             log.info("预约不存在或已取消，跳过通知 scheduleId={}", scheduleId);
             return;
         }
+        /*
+         * 线上面试不走邮件通知，和「简历里就选只能线上」的同学同一套处理：
+         * 时间是管理员私下和本人约的，系统这边既没有权威时间也没有教室可写，
+         * 发一封模板信只会和私聊里说好的对不上。他们待在「待约线上面试」名单里。
+         */
+        if (Integer.valueOf(1).equals(schedule.getInterviewMode())) {
+            log.info("线上面试不发通知，跳过 type={}, scheduleId={}", type, scheduleId);
+            return;
+        }
 
         Resume resume = resumeService.getResumeById(schedule.getResumeId());
         /*
@@ -197,7 +206,14 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
         String html = InterviewNotificationEmailBuilder.html(
                 type, name, booking, null, reminderCfg.academicYear(),
                 waitingRoom, List.of(), reminderCfg.contactInfo()).html();
-        sendAndLog(type, scheduleId, null, email, subject, body, html, schedule, message.getRequestId());
+        /*
+         * resumeId 必须带上。日志行按它回溯「这个人最后一封安排通知说了什么」——
+         * 安排改动时 detachScheduleNotices 会把 schedule_id 置空，只剩 resume_id
+         * 还能把这封信和人对上。此前这条路径一直传 null，库里 101 条
+         * BOOKING_SUCCESS 的 resume_id 是空的，过期检测对它们一条都认不出来。
+         */
+        sendAndLog(type, scheduleId, null, schedule == null ? null : schedule.getResumeId(),
+                email, subject, body, html, schedule, message.getRequestId());
     }
 
     /**
