@@ -81,6 +81,10 @@ public class InterviewSchedule implements Serializable {
     @TableField("time_overridden")
     private Integer timeOverridden;
 
+    /** 0=线下（默认） 1=线上。线上时不占教室，地点由周期级会议链接给出 */
+    @TableField("interview_mode")
+    private Integer interviewMode;
+
     /**
      * 状态：0（未安排），1(已安排), 2(已取消)
      */

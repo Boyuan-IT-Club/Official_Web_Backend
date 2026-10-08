@@ -8575,7 +8575,13 @@ paths:
     post:
       summary: 学生提交面试改期申请
       deprecated: false
-      description: 需本周期已分配面试；同一排期存在待处理申请时不可重复提交。管理员同意后在「分配与调剂」中人工重排。
+      description: '需本周期已分配面试；同一排期存在待处理申请时不可重复提交。
+
+        requestType=0（改时间）：管理员同意后原安排被取消，需在「分配与调剂」中人工重排。
+
+        requestType=1（改为线上）：时间不变，管理员同意后安排仍生效，只是 interview_mode 置 1、释放原场次名额；本届未配置 online_meeting_link 时拒绝提交。
+
+        '
       tags:
       - 面试预约（学生）
       requestBody:
@@ -8597,7 +8603,12 @@ paths:
                 preferredTimeSlotIds:
                   type: string
                   nullable: true
-                  description: 期望时间窗ID列表（逗号分隔，可空）
+                  description: 期望时间窗ID列表（逗号分隔，可空）；requestType=1 时忽略
+                requestType:
+                  type: integer
+                  enum: [0, 1]
+                  default: 0
+                  description: 0=改时间（默认，不传时等同于 0） 1=改为线上面试
         required: true
       responses:
         '200':

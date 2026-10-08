@@ -191,9 +191,12 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
         String subject = InterviewNotificationEmailBuilder.subject(type);
         String body = InterviewNotificationEmailBuilder.body(type, name, booking, null);
         NoticeConfig reminderCfg = noticeConfig(booking == null ? null : booking.getCycleId());
+        // 线上没有「先到某个教室等」这回事，候场教室那一行不该出现
+        String waitingRoom = Integer.valueOf(1).equals(schedule.getInterviewMode())
+                ? null : reminderCfg.waitingRoom();
         String html = InterviewNotificationEmailBuilder.html(
                 type, name, booking, null, reminderCfg.academicYear(),
-                reminderCfg.waitingRoom(), List.of(), reminderCfg.contactInfo()).html();
+                waitingRoom, List.of(), reminderCfg.contactInfo()).html();
         sendAndLog(type, scheduleId, null, email, subject, body, html, schedule, message.getRequestId());
     }
 
@@ -208,6 +211,20 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
     InterviewBookingDTO bookingOf(InterviewSchedule schedule) {
         InterviewSlot slot = schedule.getSlotId() == null ? null : interviewSlotService.getById(schedule.getSlotId());
         InterviewBookingDTO booking = InterviewBookingDTO.from(schedule, slot);
+        /*
+         * 线上面试没有教室，地点就是会议链接（周期级统一配置）。
+         * 同意「改为线上」时会解绑 session，所以下面那段按场次取房间的逻辑
+         * 本来也取不到东西；这里直接给链接，邮件模板的 locationOf 会优先用
+         * location、为空时退回 meetingLink。
+         */
+        if (Integer.valueOf(1).equals(schedule.getInterviewMode())) {
+            RecruitmentCycle cycle = schedule.getCycleId() == null
+                    ? null : recruitmentCycleMapper.selectById(schedule.getCycleId());
+            if (cycle != null && StringUtils.hasText(cycle.getOnlineMeetingLink())) {
+                booking.setMeetingLink(cycle.getOnlineMeetingLink().trim());
+            }
+            return booking;
+        }
         if (!StringUtils.hasText(booking.getLocation()) && schedule.getSessionId() != null) {
             InterviewSession session = interviewSessionMapper.selectById(schedule.getSessionId());
             if (session != null) {

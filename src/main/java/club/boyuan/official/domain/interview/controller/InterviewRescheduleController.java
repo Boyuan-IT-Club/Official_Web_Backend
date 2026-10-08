@@ -11,12 +11,19 @@ import club.boyuan.official.persistence.entity.User;
 import club.boyuan.official.persistence.mapper.InterviewRescheduleRequestMapper;
 import club.boyuan.official.domain.interview.dto.RescheduleRequestAdminDTO;
 import club.boyuan.official.persistence.entity.InterviewSession;
+import club.boyuan.official.infra.notification.InterviewNotificationType;
+import club.boyuan.official.persistence.entity.InterviewNotificationLog;
+import club.boyuan.official.persistence.entity.RecruitmentCycle;
 import club.boyuan.official.persistence.entity.InterviewTimeSlot;
 import club.boyuan.official.persistence.mapper.InterviewScheduleMapper;
 import club.boyuan.official.persistence.mapper.InterviewSessionMapper;
+import club.boyuan.official.persistence.mapper.InterviewNotificationLogMapper;
+import club.boyuan.official.persistence.mapper.RecruitmentCycleMapper;
 import club.boyuan.official.persistence.mapper.UserMapper;
+import org.springframework.util.StringUtils;
 import club.boyuan.official.persistence.mapper.InterviewTimeSlotMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -58,6 +65,10 @@ public class InterviewRescheduleController {
 
     private final UserMapper userMapper;
 
+    private final RecruitmentCycleMapper recruitmentCycleMapper;
+
+    private final InterviewNotificationLogMapper notificationLogMapper;
+
     /**
      * 学生提交改期申请。要求本周期已有面试排期；同一排期存在待处理申请时不可重复提交。
      */
@@ -69,6 +80,13 @@ public class InterviewRescheduleController {
         String reason = body.get("reason") == null ? null : String.valueOf(body.get("reason")).trim();
         String preferredSlots = body.get("preferredTimeSlotIds") == null
                 ? null : String.valueOf(body.get("preferredTimeSlotIds"));
+        int requestType = body.get("requestType") == null
+                ? InterviewRescheduleRequest.TYPE_RESCHEDULE
+                : Integer.parseInt(String.valueOf(body.get("requestType")));
+        if (requestType != InterviewRescheduleRequest.TYPE_RESCHEDULE
+                && requestType != InterviewRescheduleRequest.TYPE_TO_ONLINE) {
+            return ResponseEntity.badRequest().body(ResponseMessage.error(400, "requestType 仅支持 0(改时间)/1(改为线上)"));
+        }
         if (cycleId == null || reason == null || reason.isEmpty()) {
             return ResponseEntity.badRequest().body(ResponseMessage.error(400, "cycleId 与 reason 不能为空"));
         }
@@ -97,6 +115,17 @@ public class InterviewRescheduleController {
             return ResponseEntity.badRequest().body(ResponseMessage.error(400, "已有待处理的改期申请，请耐心等待"));
         }
 
+        // 本届没配会议链接就不该放「改为线上」的申请进来——同意了也没地方让人进
+        if (requestType == InterviewRescheduleRequest.TYPE_TO_ONLINE) {
+            RecruitmentCycle cycle = recruitmentCycleMapper.findById(cycleId);
+            if (cycle == null || !StringUtils.hasText(cycle.getOnlineMeetingLink())) {
+                return ResponseEntity.badRequest()
+                        .body(ResponseMessage.error(400, "本届暂不支持线上面试，请改为申请调整时间"));
+            }
+            // 改为线上不需要期望时间窗：时间不变，只是换个参加方式
+            preferredSlots = null;
+        }
+
         InterviewRescheduleRequest req = new InterviewRescheduleRequest()
                 .setScheduleId(schedule.getScheduleId())
                 .setResumeId(resume.getResumeId())
@@ -104,10 +133,11 @@ public class InterviewRescheduleController {
                 .setCycleId(cycleId)
                 .setReason(reason)
                 .setPreferredTimeSlotIds(preferredSlots)
+                .setRequestType(requestType)
                 .setStatus(InterviewRescheduleRequest.STATUS_PENDING);
         rescheduleMapper.insert(req);
-        log.info("用户{}提交改期申请，scheduleId={}, requestId={}",
-                currentUser.getUsername(), schedule.getScheduleId(), req.getRequestId());
+        log.info("用户{}提交改期申请，type={}, scheduleId={}, requestId={}",
+                currentUser.getUsername(), requestType, schedule.getScheduleId(), req.getRequestId());
         return ResponseEntity.ok(ResponseMessage.success(req));
     }
 
@@ -145,6 +175,40 @@ public class InterviewRescheduleController {
         return ResponseEntity.ok(ResponseMessage.success(toAdminView(rescheduleMapper.selectList(qw))));
     }
 
+    /**
+     * 同意「改为线上」：时间不变，只把参加方式翻过去。
+     * <p>
+     * 和同意改时间刻意走两条路——改时间要取消安排、等管理员重排；改线上则
+     * 保留这条安排（时间、面试官都不动），只做三件事：
+     * <ol>
+     *   <li>interview_mode 置 1，学生端和邮件据此改为显示会议链接而不是教室；</li>
+     *   <li>释放原场次名额并解绑 session——人不到场了，这个座位要让给别人，
+     *       否则线下场次白占一格；</li>
+     *   <li>notif_status 置 0 并摘掉旧通知，让它进「待补发」——学生手上那封
+     *       还写着教书院某某室，必须重发一封。</li>
+     * </ol>
+     */
+    private void approveToOnline(Integer requestId, InterviewSchedule schedule) {
+        Integer oldSessionId = schedule.getSessionId();
+        schedule.setInterviewMode(1)
+                .setSessionId(null)
+                .setNotifStatus(0);
+        interviewScheduleMapper.updateById(schedule);
+        if (oldSessionId != null) {
+            interviewSessionMapper.releaseOne(oldSessionId);
+        }
+        // 旧通知写的是线下教室，不摘掉会让补发被 alreadySent 静默跳过
+        notificationLogMapper.update(null, new LambdaUpdateWrapper<InterviewNotificationLog>()
+                .set(InterviewNotificationLog::getScheduleId, null)
+                .eq(InterviewNotificationLog::getScheduleId, schedule.getScheduleId())
+                .in(InterviewNotificationLog::getNotificationType, List.of(
+                        InterviewNotificationType.BOOKING_SUCCESS.name(),
+                        InterviewNotificationType.EVE_REMINDER.name(),
+                        InterviewNotificationType.DAY_REMINDER.name())));
+        log.info("改期申请{}已同意为线上面试，安排{}已转线上并释放场次{}",
+                requestId, schedule.getScheduleId(), oldSessionId);
+    }
+
     private static final DateTimeFormatter SLOT_DATE = DateTimeFormatter.ofPattern("MM-dd");
     private static final DateTimeFormatter SLOT_TIME = DateTimeFormatter.ofPattern("HH:mm");
 
@@ -170,6 +234,7 @@ public class InterviewRescheduleController {
                     .requestId(r.getRequestId())
                     .name(u == null ? null : u.getName())
                     .studentId(u == null ? null : u.getUsername())
+                    .requestType(r.getRequestType())
                     .reason(r.getReason())
                     .currentInterviewTime(sc == null ? null : sc.getInterviewTime())
                     .currentLocation(sc == null || sc.getSessionId() == null
@@ -180,7 +245,9 @@ public class InterviewRescheduleController {
                     .adminNote(r.getAdminNote())
                     .handledAt(r.getHandledAt())
                     // 同意了、但那条安排还停在「已取消」上，就是还没重排
+                    // 「改为线上」同意后安排仍然生效（只翻了 mode），不需要重排
                     .awaitingReassign(Integer.valueOf(InterviewRescheduleRequest.STATUS_APPROVED).equals(r.getStatus())
+                            && !Integer.valueOf(InterviewRescheduleRequest.TYPE_TO_ONLINE).equals(r.getRequestType())
                             && sc != null && !Integer.valueOf(1).equals(sc.getStatus()))
                     .build());
         }
@@ -294,16 +361,20 @@ public class InterviewRescheduleController {
                 .setHandledAt(LocalDateTime.now());
         rescheduleMapper.updateById(req);
 
-        // 同意改期 = 取消原场次安排（status=2），候选人进入「分配与调剂」的待调剂池。
-        // 原先只改申请状态、旧安排照常生效：学生端仍显示原时间、面试官仍按旧安排等人，
-        // 看起来像"系统直接定了"——同意后必须由管理员在新场次上人工重排。
-        // 取消同时也解开意向锁（已取消的安排不再锁志愿，见 IntentLock 集成测试）。
         if (status == InterviewRescheduleRequest.STATUS_APPROVED && req.getScheduleId() != null) {
             InterviewSchedule schedule = interviewScheduleMapper.selectById(req.getScheduleId());
             if (schedule != null && Integer.valueOf(1).equals(schedule.getStatus())) {
-                schedule.setStatus(2); // 已取消，等待人工重排
-                interviewScheduleMapper.updateById(schedule);
-                log.info("改期申请{}已同意，原面试安排{}已取消待重排", requestId, schedule.getScheduleId());
+                if (Integer.valueOf(InterviewRescheduleRequest.TYPE_TO_ONLINE).equals(req.getRequestType())) {
+                    approveToOnline(requestId, schedule);
+                } else {
+                    // 同意改期 = 取消原场次安排（status=2），候选人进入「分配与调剂」的待调剂池。
+                    // 原先只改申请状态、旧安排照常生效：学生端仍显示原时间、面试官仍按旧安排等人，
+                    // 看起来像"系统直接定了"——同意后必须由管理员在新场次上人工重排。
+                    // 取消同时也解开意向锁（已取消的安排不再锁志愿，见 IntentLock 集成测试）。
+                    schedule.setStatus(2); // 已取消，等待人工重排
+                    interviewScheduleMapper.updateById(schedule);
+                    log.info("改期申请{}已同意，原面试安排{}已取消待重排", requestId, schedule.getScheduleId());
+                }
             }
         }
 
