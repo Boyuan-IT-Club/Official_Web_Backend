@@ -80,6 +80,18 @@ public class NotificationCenterDTO {
         private String location;
         /** 面试安排通知是否已发 */
         private boolean arranged;
+
+        /**
+         * 收到过安排通知，但那封发出去之后安排又被改过——他手上拿的是旧时间。
+         * 这种人最危险：notif_status 可能还是 1，界面显示「已发」，没人会去管。
+         */
+        private boolean noticeStale;
+
+        /** 最后一封安排通知的发送时间，为空表示从没发过 */
+        private java.time.LocalDateTime noticeSentAt;
+
+        /** 安排最后被改动的时间 */
+        private java.time.LocalDateTime scheduleUpdatedAt;
         /** 前一天提醒是否已发 */
         private boolean eve;
         /** 当天提醒是否已发 */
@@ -87,4 +99,11 @@ public class NotificationCenterDTO {
     }
 
     private List<ScheduleNoticeItem> schedules;
+
+    /**
+     * 收到过旧安排、需要补发的人数。
+     * 和 interviewArranged.pending 是两回事：pending 是「从没发过」，
+     * 这个是「发过但发的是作废的那一版」——后者没人提醒就会一直漏。
+     */
+    private long staleNoticeCount;
 }
