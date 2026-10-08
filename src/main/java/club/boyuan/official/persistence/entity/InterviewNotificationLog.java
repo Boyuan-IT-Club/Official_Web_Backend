@@ -50,6 +50,13 @@ public class InterviewNotificationLog implements Serializable {
     @TableField("recipient_email")
     private String recipientEmail;
 
+    /**
+     * 这封通知正文里写的面试时间。
+     * NULL = 历史数据，不参与「他收到的是旧安排」的判断。
+     */
+    @TableField("notified_interview_time")
+    private java.time.LocalDateTime notifiedInterviewTime;
+
     @TableField("sent_at")
     private LocalDateTime sentAt;
 }
