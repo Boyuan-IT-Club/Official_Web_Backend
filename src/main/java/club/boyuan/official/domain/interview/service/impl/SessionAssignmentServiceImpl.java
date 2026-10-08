@@ -246,13 +246,16 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
                 : (schedule == null ? null : schedule.getInterviewTime());
 
         boolean isNew = schedule == null;
+        // 已经是线上的人再调一次（典型是回来补时间），座位早就还过了，不能再还
+        boolean alreadyOnline = !isNew && Integer.valueOf(1).equals(schedule.getInterviewMode());
         if (isNew) {
             schedule = new InterviewSchedule()
                     .setResumeId(resumeId)
                     .setUserId(resume.getUserId())
                     .setCycleId(resume.getCycleId())
                     .setSyncStatus(0);
-        } else if (Integer.valueOf(SCHEDULE_STATUS_ACTIVE).equals(schedule.getStatus())
+        } else if (!alreadyOnline
+                && Integer.valueOf(SCHEDULE_STATUS_ACTIVE).equals(schedule.getStatus())
                 && schedule.getSessionId() != null) {
             // 本来在某个教室里，转线上就该把那个座位让出来——否则线下场次白占一格。
             // 已取消的那行在取消时已经还过名额了，不能再还一次
@@ -260,9 +263,7 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
         }
 
         Integer releasedFrom = schedule.getSessionId();
-        schedule.setSlotId(null)
-                .setSessionId(null)          // 线上不占场次，地点是周期级的会议链接
-                .setInterviewMode(1)
+        schedule.setInterviewMode(1)
                 .setInterviewTime(finalTime)
                 .setTimeOverridden(finalTime != null ? 1 : 0)
                 .setStatus(SCHEDULE_STATUS_ACTIVE)
@@ -280,6 +281,22 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
         } else {
             interviewScheduleService.updateById(schedule);
         }
+        /*
+         * 解绑场次要单独走 UpdateWrapper。
+         *
+         * MyBatis-Plus 默认 FieldStrategy.NOT_NULL：updateById 会把值为 null 的
+         * 字段整个跳过，所以 setSessionId(null) 根本不会落库。线上因此出现过
+         * 「人已转线上、座位也还了，但那行还指着原场次」——场次 29 的
+         * current_occupied=10，实际挂在它名下的生效安排却有 11 条。
+         * 必须显式 set(字段, null) 才写得进去。
+         */
+        interviewScheduleService.update(null,
+                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<InterviewSchedule>()
+                        .set(InterviewSchedule::getSessionId, null)
+                        .set(InterviewSchedule::getSlotId, null)
+                        .eq(InterviewSchedule::getScheduleId, schedule.getScheduleId()));
+        schedule.setSessionId(null);
+
         // 时间和参加方式都变了，旧通知不该再占去重名额
         detachScheduleNotices(schedule.getScheduleId());
 

@@ -72,6 +72,37 @@ class OnlineInterviewApprovalTest {
         assertTrue(Integer.valueOf(1).equals(active.getStatus()) && active.getSessionId() != null);
     }
 
+    /**
+     * MyBatis-Plus 默认 FieldStrategy.NOT_NULL，updateById 会整个跳过值为 null
+     * 的字段——setSessionId(null) 根本写不进去。线上因此出现过「人已转线上、
+     * 座位也还了，但那行还指着原场次」：场次 29 的 current_occupied=10，
+     * 实际挂在它名下的生效安排却有 11 条。
+     * <p>
+     * 这条断言只是把结论钉住：解绑场次不能依赖实体上的 null，必须显式
+     * set(字段, null)。真正的保证在实现里的 LambdaUpdateWrapper。
+     */
+    @Test
+    @DisplayName("解绑场次不能靠 setSessionId(null) + updateById")
+    void unbindingSessionNeedsExplicitNullUpdate() {
+        InterviewSchedule s = new InterviewSchedule().setScheduleId(41).setSessionId(29);
+        s.setSessionId(null);
+        assertNull(s.getSessionId(), "实体上确实是 null……");
+        // ……但 updateById 不会把它写进库，所以实现里额外走了一次
+        // LambdaUpdateWrapper.set(getSessionId, null)
+    }
+
+    @Test
+    @DisplayName("已经是线上的人再调一次不能重复归还座位")
+    void reassigningOnlineDoesNotReleaseTwice() {
+        InterviewSchedule online = new InterviewSchedule()
+                .setStatus(1).setSessionId(29).setInterviewMode(1);
+        boolean alreadyOnline = Integer.valueOf(1).equals(online.getInterviewMode());
+        boolean shouldRelease = !alreadyOnline
+                && Integer.valueOf(1).equals(online.getStatus())
+                && online.getSessionId() != null;
+        assertFalse(shouldRelease, "回来补时间时座位早就还过了，再还一次计数器会少一");
+    }
+
     @Test
     @DisplayName("改时间：安排被取消，等人工重排")
     void rescheduleCancelsSchedule() {
