@@ -5343,6 +5343,11 @@ paths:
         学生看自己的、审核人看候选人的，同一个接口。
         仅限本人，或持 resume:view / resume:audit / interview:result /
         interview:board:manage 之一，否则 403（此前只要求登录，简历 id 又是连续整数，可被枚举）。
+
+        面试官（只有 interview:evaluate，不在上面的名单里）另按场次绑定放行：
+        他能看到的恰好是自己负责的场次里的那几位候选人，与评价表里的简历速览同一条规则。
+        不把 interview:evaluate 并进名单，是因为附件 id 连续可枚举，
+        那等于让任意面试官把全部候选人的材料拖走。
       tags: [简历相关接口]
       parameters:
       - name: resumeId
@@ -5447,6 +5452,11 @@ paths:
         仅限本人，或持 resume:view / resume:audit / interview:result /
         interview:board:manage 之一，否则 403。
 
+        面试官（只有 interview:evaluate，不在上面的名单里）另按场次绑定放行：
+        他能看到的恰好是自己负责的场次里的那几位候选人，与评价表里的简历速览同一条规则。
+        不把 interview:evaluate 并进名单，是因为附件 id 连续可枚举，
+        那等于让任意面试官把全部候选人的材料拖走。
+
         优先用 /api/resumes/attachments/{id}/url 取直链：本接口经服务器转发，
         而服务器公网出口只有 5~8Mbps、全员共享，大文件会把管道占满。
         本接口保留作 COS 未启用时的退路。
@@ -5473,6 +5483,11 @@ paths:
         返回一个 15 分钟有效的 COS 签名链接，浏览器拿去直接下载，不经过本服务转发。
         鉴权与 /content 完全一致：仅限本人，或持 resume:view / resume:audit /
         interview:result / interview:board:manage 之一，否则 403。
+
+        面试官（只有 interview:evaluate，不在上面的名单里）另按场次绑定放行：
+        他能看到的恰好是自己负责的场次里的那几位候选人，与评价表里的简历速览同一条规则。
+        不把 interview:evaluate 并进名单，是因为附件 id 连续可枚举，
+        那等于让任意面试官把全部候选人的材料拖走。
 
         inline=true 时是否真的内联仍由服务端决定（与 /content 同一份白名单）：
         不在白名单里的类型（含 text/html、image/svg+xml）一律以 attachment 签发。

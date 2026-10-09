@@ -4,6 +4,7 @@ import club.boyuan.official.common.exception.BusinessException;
 import club.boyuan.official.common.exception.BusinessExceptionEnum;
 import club.boyuan.official.domain.resume.controller.ResumeAttachmentController;
 import club.boyuan.official.domain.resume.service.AttachmentAccess;
+import club.boyuan.official.domain.resume.service.CandidateMaterialScope;
 import club.boyuan.official.domain.resume.service.IResumeAttachmentService;
 import club.boyuan.official.domain.resume.service.IResumeService;
 import club.boyuan.official.domain.user.service.IUserService;
@@ -46,18 +47,26 @@ class AttachmentAccessTest {
     private IResumeAttachmentService attachmentService;
     private IUserService userService;
     private IResumeService resumeService;
+    private CandidateMaterialScope candidateMaterialScope;
     private ResumeAttachmentController controller;
 
     private static final int OWNER = 10;
     private static final int OTHER_STUDENT = 11;
     private static final int REVIEWER = 2;
+    /** 面试官：排到了 OWNER 这一场 */
+    private static final int INTERVIEWER_OF_OWNER = 3;
+    /** 面试官：这一届也在面，但没排到 OWNER */
+    private static final int INTERVIEWER_ELSEWHERE = 4;
 
     @BeforeEach
     void setUp() {
         attachmentService = mock(IResumeAttachmentService.class);
         userService = mock(IUserService.class);
         resumeService = mock(IResumeService.class);
-        controller = new ResumeAttachmentController(attachmentService, userService, resumeService);
+        candidateMaterialScope = mock(CandidateMaterialScope.class);
+        when(candidateMaterialScope.canSeeCandidateMaterials(INTERVIEWER_OF_OWNER, OWNER)).thenReturn(true);
+        controller = new ResumeAttachmentController(
+                attachmentService, userService, resumeService, candidateMaterialScope);
 
         ResumeAttachment a = new ResumeAttachment();
         a.setId(121);
@@ -116,6 +125,14 @@ class AttachmentAccessTest {
     @DisplayName("只有面试评价权限（interview:evaluate）不算 —— 不能借此翻全库附件")
     void evaluateAloneIsNotEnough() {
         assertFalse(AttachmentAccess.canView(OWNER, REVIEWER, List.of("interview:evaluate")));
+    }
+
+    @Test
+    @DisplayName("面试官要再过一道场次绑定判定，光凭权限码不放行")
+    void evaluateIsScopedNotWhitelisted() {
+        assertTrue(AttachmentAccess.isScopedViewer(List.of("interview:evaluate")));
+        assertFalse(AttachmentAccess.isScopedViewer(List.of("resume:view")));
+        assertFalse(AttachmentAccess.isScopedViewer(List.of()));
     }
 
     @Test
@@ -188,5 +205,33 @@ class AttachmentAccessTest {
         loginAs(OTHER_STUDENT);
         when(resumeService.getResumeById(999)).thenReturn(null);
         assertThrows(BusinessException.class, () -> controller.list(999));
+    }
+
+    // ---------- 面试官：范围由场次绑定给出 ----------
+
+    @Test
+    @DisplayName("面试官看得到自己要面的那位的附件 —— 评价表左栏就靠这条")
+    void interviewerOfCandidateCanView() {
+        loginAs(INTERVIEWER_OF_OWNER, "interview:evaluate");
+        controller.list(158);
+        assertEquals("https://cos.example/signed", controller.url(121, true).getBody().getData().get("url"));
+    }
+
+    @Test
+    @DisplayName("没排到这位候选人的面试官仍然 403 —— 否则等于能顺着 id 翻全库")
+    void interviewerElsewhereStillDenied() {
+        loginAs(INTERVIEWER_ELSEWHERE, "interview:evaluate");
+        assertThrows(BusinessException.class, () -> controller.list(158));
+        BusinessException e = assertThrows(BusinessException.class, () -> controller.url(121, true));
+        assertEquals(BusinessExceptionEnum.PERMISSION_DENIED.getCode(), e.getCode());
+        verify(attachmentService, never()).presignedUrl(any(), anyBoolean());
+    }
+
+    @Test
+    @DisplayName("没有 interview:evaluate 的人不去查绑定，省一次库")
+    void nonInterviewerSkipsScopeLookup() {
+        loginAs(OTHER_STUDENT);
+        assertThrows(BusinessException.class, () -> controller.list(158));
+        verify(candidateMaterialScope, never()).canSeeCandidateMaterials(any(), any());
     }
 }

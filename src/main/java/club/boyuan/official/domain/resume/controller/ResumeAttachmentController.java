@@ -5,6 +5,7 @@ import club.boyuan.official.domain.resume.dto.ResumeAttachmentDTO;
 import club.boyuan.official.common.exception.BusinessException;
 import club.boyuan.official.common.exception.BusinessExceptionEnum;
 import club.boyuan.official.domain.resume.service.AttachmentAccess;
+import club.boyuan.official.domain.resume.service.CandidateMaterialScope;
 import club.boyuan.official.domain.resume.service.IResumeAttachmentService;
 import club.boyuan.official.domain.resume.service.IResumeService;
 import club.boyuan.official.domain.user.service.IUserService;
@@ -49,6 +50,7 @@ public class ResumeAttachmentController {
     private final IResumeAttachmentService attachmentService;
     private final IUserService userService;
     private final IResumeService resumeService;
+    private final CandidateMaterialScope candidateMaterialScope;
 
     /** 学生上传附件到自己的简历。 */
     @PostMapping("/{resumeId}/attachments")
@@ -148,12 +150,24 @@ public class ResumeAttachmentController {
         return ResponseEntity.ok(ResponseMessage.success(body));
     }
 
-    /** 本人或持看候选人材料权限的人才能看，否则 403（规则见 AttachmentAccess） */
+    /**
+     * 本人或持看候选人材料权限的人才能看，否则 403（规则见 AttachmentAccess）。
+     *
+     * 面试官一个权限码都不占，他的可见范围由场次绑定给出：自己要面的那几个人。
+     * 这条 fallback 让面试评价表里的附件对面试官可见，同时不让他能枚举别人的。
+     */
     private void requireCanView(Integer ownerUserId) {
         User me = currentUser();
-        if (!AttachmentAccess.canView(ownerUserId, me == null ? null : me.getUserId(), currentAuthorities())) {
-            throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
+        Integer myId = me == null ? null : me.getUserId();
+        Collection<String> authorities = currentAuthorities();
+        if (AttachmentAccess.canView(ownerUserId, myId, authorities)) {
+            return;
         }
+        if (AttachmentAccess.isScopedViewer(authorities)
+                && candidateMaterialScope.canSeeCandidateMaterials(myId, ownerUserId)) {
+            return;
+        }
+        throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
     }
 
     private static Collection<String> currentAuthorities() {
