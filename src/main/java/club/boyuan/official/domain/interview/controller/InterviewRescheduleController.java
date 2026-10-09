@@ -28,6 +28,7 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -108,6 +109,22 @@ public class InterviewRescheduleController {
         if (schedule == null) {
             return ResponseEntity.badRequest().body(ResponseMessage.error(400, "尚未分配面试，无需改期"));
         }
+        /*
+         * 闸门：排期定死之后管理员会关掉改期申请。
+         *
+         * 放在这里（已确认有简历、有安排之后，写库之前）是因为前面那些校验的
+         * 报错更具体——「尚未分配面试，无需改期」比「已关闭」更能说明问题。
+         * 已经提交的申请不受影响，照常能被同意或拒绝。
+         */
+        RecruitmentCycle cycleCfg = recruitmentCycleMapper.findById(cycleId);
+        if (cycleCfg != null && Integer.valueOf(0).equals(cycleCfg.getRescheduleOpen())) {
+            String contact = cycleCfg.getContactInfo();
+            return ResponseEntity.badRequest().body(ResponseMessage.error(400,
+                    StringUtils.hasText(contact)
+                            ? "本届改期申请已关闭，如有紧急情况请联系：" + contact.trim()
+                            : "本届改期申请已关闭"));
+        }
+
         Long pending = rescheduleMapper.selectCount(new LambdaQueryWrapper<InterviewRescheduleRequest>()
                 .eq(InterviewRescheduleRequest::getScheduleId, schedule.getScheduleId())
                 .eq(InterviewRescheduleRequest::getStatus, InterviewRescheduleRequest.STATUS_PENDING));

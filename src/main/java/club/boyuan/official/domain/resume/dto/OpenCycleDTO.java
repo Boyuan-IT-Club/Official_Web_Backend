@@ -36,6 +36,12 @@ public class OpenCycleDTO {
      */
     private String contactInfo;
 
+    /**
+     * 本届还接不接受改期申请。排期定死之后管理员会关掉它——
+     * 关了还让学生提交，他会以为申请有戏然后一直等，而那边根本不会处理。
+     */
+    private boolean rescheduleOpen;
+
     public OpenCycleDTO() {
     }
 
@@ -49,6 +55,8 @@ public class OpenCycleDTO {
         this.fieldCount = fieldCount;
         this.intakeOpen = Integer.valueOf(1).equals(cycle.getIsActive());
         this.contactInfo = cycle.getContactInfo();
+        // 老数据没有这列时按「开」处理，与迁移的 DEFAULT 1 一致
+        this.rescheduleOpen = !Integer.valueOf(0).equals(cycle.getRescheduleOpen());
     }
 
     public Integer getCycleId() {
@@ -117,6 +125,10 @@ public class OpenCycleDTO {
 
     public boolean isIntakeOpen() {
         return intakeOpen;
+    }
+
+    public boolean isRescheduleOpen() {
+        return rescheduleOpen;
     }
 
     public void setIntakeOpen(boolean intakeOpen) {

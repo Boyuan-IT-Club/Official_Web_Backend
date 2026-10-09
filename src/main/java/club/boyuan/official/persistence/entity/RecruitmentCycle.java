@@ -68,6 +68,10 @@ public class RecruitmentCycle {
     @TableField("online_meeting_link")
     private String onlineMeetingLink;
 
+    /** 是否接受改期申请：1=接受(默认) 0=已关闭。关闭后学生端提交会被拒，已提交的照常处理 */
+    @TableField("reschedule_open")
+    private Integer rescheduleOpen;
+
     /** 本届负责人联系方式，未录取通知邮件末尾附上（V33） */
     @TableField("contact_info")
     private String contactInfo;
@@ -219,6 +223,14 @@ public class RecruitmentCycle {
 
     public void setOnlineMeetingLink(String onlineMeetingLink) {
         this.onlineMeetingLink = onlineMeetingLink;
+    }
+
+    public Integer getRescheduleOpen() {
+        return rescheduleOpen;
+    }
+
+    public void setRescheduleOpen(Integer rescheduleOpen) {
+        this.rescheduleOpen = rescheduleOpen;
     }
 
     public String getContactInfo() {
