@@ -219,60 +219,57 @@ class ResumeScoreWithdrawTest {
         assertTrue(written.isEmpty());
     }
 
+    /**
+     * 初筛结论规则表。标上和收回的判据不同，这是两轮线上事故换来的：
+     * <ol>
+     *   <li>原实现只看「当前是不是未通过」，别人补打一个非 0 分就收回——
+     *       10-08 一天有 21 份手动标记的简历被弹回「待初筛」。</li>
+     *   <li>改成「只有原本均分为 0 才收回」后仍然漏：林玲这类「第一位打 0 分
+     *       触发未通过、第二位补 50 分」的，那一刻旧均分确实是 0，照样被收回。</li>
+     * </ol>
+     * 现在看的是 0 票本身：操作前有、操作后没有，才说明「未通过」只由打分造成
+     * 且那个原因已经消失。
+     */
     @Test
-    @DisplayName("撤销打分后的初筛结论规则表")
+    @DisplayName("初筛结论规则表")
     void statusRules() {
         int rejected = ResumeServiceImpl.STATUS_SCREEN_REJECTED;
         int submitted = ResumeServiceImpl.STATUS_SUBMITTED;
         int passed = ResumeServiceImpl.STATUS_SCREEN_PASSED;
-        // 没人打分了
-        assertEquals(submitted, ResumeServiceImpl.statusAfterWithdraw(null, rejected, true));
-        assertNull(ResumeServiceImpl.statusAfterWithdraw(null, rejected, false));
-        assertNull(ResumeServiceImpl.statusAfterWithdraw(null, passed, true));
-        // 还有人打分
-        assertEquals(rejected, ResumeServiceImpl.statusAfterWithdraw(0, submitted, false));
-        assertEquals(submitted, ResumeServiceImpl.statusAfterWithdraw(75, rejected, true),
-                "撤掉的是 0 分，说明那个未通过是打分推出来的，可以收回");
-        /*
-         * 这条原来断言的是「收回成已提交」。那是错的：撤掉一个 80 分并不能
-         * 说明这个「未通过」是打分推出来的——它多半是管理员手动标的，
-         * 不该因为别人撤了一票就悄悄失效。和打分路径同一个毛病。
-         */
-        assertNull(ResumeServiceImpl.statusAfterWithdraw(75, rejected, false),
-                "撤掉的是非 0 分，不能据此收回手动标记的未通过");
-        assertNull(ResumeServiceImpl.statusAfterWithdraw(75, passed, false));   // 手动「通过」不动
-    }
 
-    /**
-     * 打分后的初筛结论。
-     * <p>
-     * 线上报的 bug：一位同学被手动标为未通过后，另一个面试官又给他打了分，
-     * 状态立刻弹回「待初筛」，他重新出现在待分配名单里。旧实现只看「当前是不是
-     * 未通过」，没看这个结论是怎么来的。
-     */
-    @Test
-    @DisplayName("打分后的初筛结论规则表")
-    void scoreStatusRules() {
-        int rejected = ResumeServiceImpl.STATUS_SCREEN_REJECTED;
-        int submitted = ResumeServiceImpl.STATUS_SUBMITTED;
-        int passed = ResumeServiceImpl.STATUS_SCREEN_PASSED;
+        // 标上：均分为 0。刻意不扩大成「有一票 0 分就否决」——会误伤高兴昊
+        // （均分 83、已明确标为通过初筛，却有一票 0 分）
+        assertEquals(rejected, ResumeServiceImpl.statusAfterScore(0, submitted, true, true));
+        assertEquals(rejected, ResumeServiceImpl.statusAfterScore(0, passed, true, true));
+        assertNull(ResumeServiceImpl.statusAfterScore(0, rejected, true, true), "已是未通过不用重复写");
 
-        // 打到 0 分 → 未通过；已经是未通过就不用再写一次
-        assertEquals(rejected, ResumeServiceImpl.statusAfterScore(null, 0, submitted));
-        assertEquals(rejected, ResumeServiceImpl.statusAfterScore(80, 0, passed));
-        assertNull(ResumeServiceImpl.statusAfterScore(0, 0, rejected));
+        // 收回：操作前有 0 票、操作后没有
+        assertEquals(submitted, ResumeServiceImpl.statusAfterScore(80, rejected, true, false),
+                "误打 0 分后自己改掉/撤掉，是要保留的恢复路径");
 
-        // 0 分改成非 0 → 收回未通过（这个未通过确实是分数推出来的）
-        assertEquals(submitted, ResumeServiceImpl.statusAfterScore(0, 80, rejected));
-
-        // ★ 核心：手动标记的未通过，别人补打分不该把它冲掉
-        assertNull(ResumeServiceImpl.statusAfterScore(null, 80, rejected),
-                "此前没人打过分，这个未通过只能是手动标的");
-        assertNull(ResumeServiceImpl.statusAfterScore(60, 80, rejected),
-                "此前平均分是 60 不是 0，这个未通过不是打分推出来的");
+        // ★ 不收回的三种
+        assertNull(ResumeServiceImpl.statusAfterScore(46, rejected, true, true),
+                "林玲：吴孟轩那票 0 分还在，第二位补 50 分不该把人放出来");
+        assertNull(ResumeServiceImpl.statusAfterScore(80, rejected, false, false),
+                "管理员手动标的：从头到尾没有 0 票，别人补打分冲不掉");
+        assertNull(ResumeServiceImpl.statusAfterScore(null, rejected, false, false),
+                "分全撤光且本来就没有 0 票，同样不自动放人");
 
         // 非未通过状态不受影响
-        assertNull(ResumeServiceImpl.statusAfterScore(70, 80, submitted));
-        assertNull(ResumeServiceImpl.statusAfterScore(70, 80, passed));
+        assertNull(ResumeServiceImpl.statusAfterScore(75, submitted, true, false));
+        assertNull(ResumeServiceImpl.statusAfterScore(75, passed, true, false));
+    }
+
+    @Test
+    @DisplayName("撤销打分走同一条规则")
+    void withdrawUsesSameRule() {
+        int rejected = ResumeServiceImpl.STATUS_SCREEN_REJECTED;
+        int submitted = ResumeServiceImpl.STATUS_SUBMITTED;
+        // 撤掉自己那票 0 分，剩下的没有 0 票 → 收回
+        assertEquals(submitted, ResumeServiceImpl.statusAfterWithdraw(75, rejected, true, false));
+        // 撤掉自己那票 0 分，但别人还有 0 票 → 不收
+        assertNull(ResumeServiceImpl.statusAfterWithdraw(40, rejected, true, true));
+        // 撤掉的是非 0 分 → 不收
+        assertNull(ResumeServiceImpl.statusAfterWithdraw(75, rejected, false, false));
     }
 }

@@ -586,7 +586,9 @@ public class ResumeServiceImpl implements IResumeService {
             resume.setScoredAt(latestAt);
         }
 
-        Integer derived = statusAfterWithdraw(average, resume.getStatus(), Integer.valueOf(0).equals(mine.getScore()));
+        boolean remainingHasZero = remaining.stream().anyMatch(e -> Integer.valueOf(0).equals(e.getScore()));
+        Integer derived = statusAfterWithdraw(average, resume.getStatus(),
+                Integer.valueOf(0).equals(mine.getScore()), remainingHasZero);
         if (derived != null && !derived.equals(resume.getStatus())) {
             resumeMapper.update(null, new LambdaUpdateWrapper<Resume>()
                     .eq(Resume::getResumeId, resumeId)
@@ -620,41 +622,43 @@ public class ResumeServiceImpl implements IResumeService {
      * @param average      撤销后的平均分；null 表示已没有任何打分
      * @param withdrawnZero 撤掉的这一票是不是 0 分
      */
-    static Integer statusAfterWithdraw(Integer average, Integer currentStatus, boolean withdrawnZero) {
-        boolean rejected = Integer.valueOf(STATUS_SCREEN_REJECTED).equals(currentStatus);
-        if (average == null) {
-            return rejected && withdrawnZero ? STATUS_SUBMITTED : null;
-        }
-        if (average == 0) {
-            return STATUS_SCREEN_REJECTED;
-        }
-        // 撤掉的那一票是 0 分，才说明这个「未通过」是打分推出来的，可以收回；
-        // 否则是管理员手动标的，撤销一个 80 分不该把人放出来
-        return rejected && withdrawnZero ? STATUS_SUBMITTED : null;
+    static Integer statusAfterWithdraw(Integer average, Integer currentStatus,
+                                       boolean withdrawnZero, boolean remainingHasZero) {
+        return statusAfterScore(average, currentStatus, withdrawnZero || remainingHasZero, remainingHasZero);
     }
 
     /**
-     * 打分之后初筛结论该变成什么；返回 null 表示不动。
+     * 打分变动后初筛结论该变成什么；返回 null 表示不动。
      *
-     * <p>「0 分即未通过」是打分推出来的结论，分数变了结论就该跟着变。但<b>只有
-     * 原本就是 0 分推出来的那种未通过才能被收回</b>——管理员手动标记的未通过
-     * 不该因为别人补打了一个分就悄悄失效。
+     * <p>标上和收回两件事的判据不同，这是两轮线上事故换来的：
      *
-     * <p>线上踩过：一位同学被手动标为未通过后，另一个面试官又给他打了分，
-     * 状态立刻弹回「待初筛」，他重新出现在待分配名单里。原因是旧实现只看
-     * 「当前是不是未通过」，没看这个结论是怎么来的。
+     * <p><b>标上</b>沿用「均分为 0 即未通过」，不扩大。试过「只要有一票 0 分就
+     * 否决」，会误伤高兴昊——均分 83、已被明确标为通过初筛，却有一票 0 分。
+     * 「几票 0 分算否决」是人的判断，不该由系统猜。
      *
-     * @param previousAverage 这次打分之前的平均分；null 表示此前没人打过
-     * @param newAverage      这次打分之后的平均分
-     * @param currentStatus   简历当前状态
+     * <p><b>收回</b>必须确认「这个未通过确实只由打分造成，而且那个原因已经没了」：
+     * 操作前存在 0 票、操作后不存在任何 0 票，才收回。
+     * <ul>
+     *   <li>误打 0 分后自己撤销：操作前有、操作后没有 → 收回。这是要保留的恢复路径。</li>
+     *   <li>林玲式：吴孟轩打了 0 分触发未通过，第二位补 50 分——吴孟轩那票还在，
+     *       操作后仍有 0 票 → 不收。旧实现（以及第一版修复）都在这里把人放了出去。</li>
+     *   <li>管理员手动标的：从头到尾没有 0 票 → 不收。10-08 有 21 份简历
+     *       因为别人补打分被弹回「待初筛」。</li>
+     * </ul>
+     *
+     * @param newAverage         变动后的平均分；null 表示已经没有任何打分
+     * @param currentStatus      简历当前状态
+     * @param hadZeroVoteBefore  这次变动之前是否存在 0 分票
+     * @param hasZeroVoteNow     这次变动之后是否还存在 0 分票
      */
-    static Integer statusAfterScore(Integer previousAverage, Integer newAverage, Integer currentStatus) {
+    static Integer statusAfterScore(Integer newAverage, Integer currentStatus,
+                                    boolean hadZeroVoteBefore, boolean hasZeroVoteNow) {
         boolean rejected = Integer.valueOf(STATUS_SCREEN_REJECTED).equals(currentStatus);
         if (newAverage != null && newAverage == 0) {
             return rejected ? null : STATUS_SCREEN_REJECTED;
         }
-        boolean rejectionCameFromScore = previousAverage != null && previousAverage == 0;
-        return rejected && rejectionCameFromScore ? STATUS_SUBMITTED : null;
+        boolean rejectionWasOnlyFromScore = hadZeroVoteBefore && !hasZeroVoteNow;
+        return rejected && rejectionWasOnlyFromScore ? STATUS_SUBMITTED : null;
     }
 
     /** 评语上限，与 V50 的列宽一致 */
@@ -696,12 +700,14 @@ public class ResumeServiceImpl implements IResumeService {
         if (resume == null) {
             throw new BusinessException(BusinessExceptionEnum.RESUME_NOT_FOUND);
         }
-        // 下面会把聚合列覆盖成新平均分，先留住旧值——判断「未通过是不是 0 分
-        // 推出来的」只能靠它
-        Integer previousAverage = resume.getResumeScore();
-
         // 评语：null = 不改动；"" = 清空（落库为 NULL）
         String normalized = normalizeComment(comment);
+
+        // 判断「未通过能不能收回」要看变动前后的 0 票情况，先把变动前的记下来
+        boolean hadZeroVoteBefore = resumeScoreEntryMapper.selectCount(
+                new LambdaQueryWrapper<ResumeScoreEntry>()
+                        .eq(ResumeScoreEntry::getResumeId, resumeId)
+                        .eq(ResumeScoreEntry::getScore, 0)) > 0;
 
         // 写入或更新「我这一票」：一人一份简历一条（uk_resume_scorer）
         LocalDateTime now = LocalDateTime.now();
@@ -742,7 +748,8 @@ public class ResumeServiceImpl implements IResumeService {
         resume.setScoredAt(now);
 
         // 规则与理由见 statusAfterScore
-        Integer derived = statusAfterScore(previousAverage, average, resume.getStatus());
+        boolean hasZeroVoteNow = entries.stream().anyMatch(e -> Integer.valueOf(0).equals(e.getScore()));
+        Integer derived = statusAfterScore(average, resume.getStatus(), hadZeroVoteBefore, hasZeroVoteNow);
         if (derived != null && !derived.equals(resume.getStatus())) {
             resumeMapper.update(null, new LambdaUpdateWrapper<Resume>()
                     .eq(Resume::getResumeId, resumeId)
