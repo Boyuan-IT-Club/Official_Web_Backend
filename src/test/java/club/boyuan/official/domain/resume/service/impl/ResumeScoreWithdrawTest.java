@@ -220,7 +220,7 @@ class ResumeScoreWithdrawTest {
     }
 
     @Test
-    @DisplayName("初筛结论规则表")
+    @DisplayName("撤销打分后的初筛结论规则表")
     void statusRules() {
         int rejected = ResumeServiceImpl.STATUS_SCREEN_REJECTED;
         int submitted = ResumeServiceImpl.STATUS_SUBMITTED;
@@ -231,7 +231,48 @@ class ResumeScoreWithdrawTest {
         assertNull(ResumeServiceImpl.statusAfterWithdraw(null, passed, true));
         // 还有人打分
         assertEquals(rejected, ResumeServiceImpl.statusAfterWithdraw(0, submitted, false));
-        assertEquals(submitted, ResumeServiceImpl.statusAfterWithdraw(75, rejected, false));
+        assertEquals(submitted, ResumeServiceImpl.statusAfterWithdraw(75, rejected, true),
+                "撤掉的是 0 分，说明那个未通过是打分推出来的，可以收回");
+        /*
+         * 这条原来断言的是「收回成已提交」。那是错的：撤掉一个 80 分并不能
+         * 说明这个「未通过」是打分推出来的——它多半是管理员手动标的，
+         * 不该因为别人撤了一票就悄悄失效。和打分路径同一个毛病。
+         */
+        assertNull(ResumeServiceImpl.statusAfterWithdraw(75, rejected, false),
+                "撤掉的是非 0 分，不能据此收回手动标记的未通过");
         assertNull(ResumeServiceImpl.statusAfterWithdraw(75, passed, false));   // 手动「通过」不动
+    }
+
+    /**
+     * 打分后的初筛结论。
+     * <p>
+     * 线上报的 bug：一位同学被手动标为未通过后，另一个面试官又给他打了分，
+     * 状态立刻弹回「待初筛」，他重新出现在待分配名单里。旧实现只看「当前是不是
+     * 未通过」，没看这个结论是怎么来的。
+     */
+    @Test
+    @DisplayName("打分后的初筛结论规则表")
+    void scoreStatusRules() {
+        int rejected = ResumeServiceImpl.STATUS_SCREEN_REJECTED;
+        int submitted = ResumeServiceImpl.STATUS_SUBMITTED;
+        int passed = ResumeServiceImpl.STATUS_SCREEN_PASSED;
+
+        // 打到 0 分 → 未通过；已经是未通过就不用再写一次
+        assertEquals(rejected, ResumeServiceImpl.statusAfterScore(null, 0, submitted));
+        assertEquals(rejected, ResumeServiceImpl.statusAfterScore(80, 0, passed));
+        assertNull(ResumeServiceImpl.statusAfterScore(0, 0, rejected));
+
+        // 0 分改成非 0 → 收回未通过（这个未通过确实是分数推出来的）
+        assertEquals(submitted, ResumeServiceImpl.statusAfterScore(0, 80, rejected));
+
+        // ★ 核心：手动标记的未通过，别人补打分不该把它冲掉
+        assertNull(ResumeServiceImpl.statusAfterScore(null, 80, rejected),
+                "此前没人打过分，这个未通过只能是手动标的");
+        assertNull(ResumeServiceImpl.statusAfterScore(60, 80, rejected),
+                "此前平均分是 60 不是 0，这个未通过不是打分推出来的");
+
+        // 非未通过状态不受影响
+        assertNull(ResumeServiceImpl.statusAfterScore(70, 80, submitted));
+        assertNull(ResumeServiceImpl.statusAfterScore(70, 80, passed));
     }
 }
