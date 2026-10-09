@@ -628,7 +628,33 @@ public class ResumeServiceImpl implements IResumeService {
         if (average == 0) {
             return STATUS_SCREEN_REJECTED;
         }
-        return rejected ? STATUS_SUBMITTED : null;
+        // 撤掉的那一票是 0 分，才说明这个「未通过」是打分推出来的，可以收回；
+        // 否则是管理员手动标的，撤销一个 80 分不该把人放出来
+        return rejected && withdrawnZero ? STATUS_SUBMITTED : null;
+    }
+
+    /**
+     * 打分之后初筛结论该变成什么；返回 null 表示不动。
+     *
+     * <p>「0 分即未通过」是打分推出来的结论，分数变了结论就该跟着变。但<b>只有
+     * 原本就是 0 分推出来的那种未通过才能被收回</b>——管理员手动标记的未通过
+     * 不该因为别人补打了一个分就悄悄失效。
+     *
+     * <p>线上踩过：一位同学被手动标为未通过后，另一个面试官又给他打了分，
+     * 状态立刻弹回「待初筛」，他重新出现在待分配名单里。原因是旧实现只看
+     * 「当前是不是未通过」，没看这个结论是怎么来的。
+     *
+     * @param previousAverage 这次打分之前的平均分；null 表示此前没人打过
+     * @param newAverage      这次打分之后的平均分
+     * @param currentStatus   简历当前状态
+     */
+    static Integer statusAfterScore(Integer previousAverage, Integer newAverage, Integer currentStatus) {
+        boolean rejected = Integer.valueOf(STATUS_SCREEN_REJECTED).equals(currentStatus);
+        if (newAverage != null && newAverage == 0) {
+            return rejected ? null : STATUS_SCREEN_REJECTED;
+        }
+        boolean rejectionCameFromScore = previousAverage != null && previousAverage == 0;
+        return rejected && rejectionCameFromScore ? STATUS_SUBMITTED : null;
     }
 
     /** 评语上限，与 V50 的列宽一致 */
@@ -670,6 +696,9 @@ public class ResumeServiceImpl implements IResumeService {
         if (resume == null) {
             throw new BusinessException(BusinessExceptionEnum.RESUME_NOT_FOUND);
         }
+        // 下面会把聚合列覆盖成新平均分，先留住旧值——判断「未通过是不是 0 分
+        // 推出来的」只能靠它
+        Integer previousAverage = resume.getResumeScore();
 
         // 评语：null = 不改动；"" = 清空（落库为 NULL）
         String normalized = normalizeComment(comment);
@@ -712,20 +741,8 @@ public class ResumeServiceImpl implements IResumeService {
         resume.setScoredBy(scorerUserId);
         resume.setScoredAt(now);
 
-        /*
-         * 0 分即未通过初筛：这是社团的评分约定——打 0 分就是「这份简历不用看了」，
-         * 与其让管理员再去勾一遍状态，不如打分时直接落定。
-         *
-         * 反向也要成立：分数从 0 改成非 0 时把「未通过」收回（未通过是分数推出来的，
-         * 分数变了结论就该跟着变），否则改错分的人会被永久挡在流程外。
-         * 手动标记的「通过」不会被这里覆盖，除非分数确实被改成了 0。
-         */
-        Integer derived = null;
-        if (average == 0) {
-            derived = STATUS_SCREEN_REJECTED;
-        } else if (Integer.valueOf(STATUS_SCREEN_REJECTED).equals(resume.getStatus())) {
-            derived = STATUS_SUBMITTED;
-        }
+        // 规则与理由见 statusAfterScore
+        Integer derived = statusAfterScore(previousAverage, average, resume.getStatus());
         if (derived != null && !derived.equals(resume.getStatus())) {
             resumeMapper.update(null, new LambdaUpdateWrapper<Resume>()
                     .eq(Resume::getResumeId, resumeId)
