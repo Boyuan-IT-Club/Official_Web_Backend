@@ -71,6 +71,25 @@ public class SessionInterviewerServiceImpl implements ISessionInterviewerService
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    public List<Integer> joinAsInterviewer(Integer sessionId, Integer userId) {
+        InterviewSession session = interviewSessionMapper.selectById(sessionId);
+        if (session == null) {
+            throw new BusinessException(BusinessExceptionEnum.INTERVIEW_SESSION_NOT_FOUND);
+        }
+        boolean already = sessionInterviewerMapper.exists(new LambdaQueryWrapper<SessionInterviewer>()
+                .eq(SessionInterviewer::getSessionId, sessionId)
+                .eq(SessionInterviewer::getUserId, userId));
+        if (!already) {
+            sessionInterviewerMapper.insert(new SessionInterviewer()
+                    .setSessionId(sessionId)
+                    .setUserId(userId));
+            log.info("用户 {} 自助加入场次 {} 的面试官", userId, sessionId);
+        }
+        return listInterviewerIds(sessionId);
+    }
+
+    @Override
     public List<Integer> listInterviewerIds(Integer sessionId) {
         return sessionInterviewerMapper.selectList(new LambdaQueryWrapper<SessionInterviewer>()
                         .eq(SessionInterviewer::getSessionId, sessionId)

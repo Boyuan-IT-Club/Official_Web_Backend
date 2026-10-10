@@ -10382,6 +10382,43 @@ paths:
                     items:
                       $ref: '#/components/schemas/InterviewSession'
                     description: 响应数据
+  /api/interview/admin/sessions/{sessionId}/interviewers/me:
+    post:
+      summary: 把自己加为该场次的面试官（管理员）
+      deprecated: false
+      description: >-
+        增量加入，不动已有绑定；幂等，重复调用不报错。需权限 `interview:schedule` 或 `resume:audit`。
+
+        面试当天常有临时顶班：原本排在 A 场的人去了 B 场，而评价表的可编辑范围按场次绑定判定 ——
+        不加进来就只能看不能打分。此前只能去场次管理页用覆盖式的
+        `PUT /sessions/{sessionId}/interviewers` 重设整场名单，既绕远，又容易把同场其他人删掉。
+
+        只有管理员能调：纯面试官（仅 `interview:evaluate`）不能自己给自己开口子。
+
+        注意协同文档里的面试官名单是播种进 Y.Doc 的，最长要等一轮对账（默认 5 分钟）才刷新；
+        前端在本地先放开编辑，写入的物化仍按库里的绑定逐条校验。
+      tags:
+      - 面试场次管理（管理员）
+      parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 面试场次 ID
+      responses:
+        '200':
+          description: 加入成功，返回该场次绑定后的全部面试官用户 ID
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: integer }
+                  message: { type: string }
+                  data:
+                    type: array
+                    items: { type: integer }
   /api/interview/admin/sessions/{sessionId}/interviewers:
     put:
       summary: 绑定场次面试官（管理员）
