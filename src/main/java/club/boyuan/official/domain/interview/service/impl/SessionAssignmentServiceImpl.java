@@ -326,13 +326,18 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
             throw new BusinessException(BusinessExceptionEnum.RESUME_NOT_FOUND);
         }
 
-        // 先占用目标场次（原子），失败说明已满
-        if (interviewSessionMapper.occupyOneIfAvailable(targetSessionId) != 1) {
-            throw new BusinessException(BusinessExceptionEnum.INTERVIEW_SESSION_FULL);
-        }
-
-        // 按任意状态找这人本届的那一行（uk_resume_cycle：一人一届只有一行）。
-        // 只找有效的会漏掉「已取消」的行，接着 insert 就撞唯一键。
+        /*
+         * 先查这人本届的那一行，再决定要不要占座 —— 顺序不能反。
+         *
+         * 原先是先无条件 occupy、再判断是否换场，而归还那一步带着
+         * 「原场次 != 目标场次」的条件：把人安排到他已经在的那一场时，
+         * 占座 +1 了、归还却被跳过，current_occupied 每点一次涨 1 而行数不变。
+         * 线上 6 个场次因此漂了（场次 21 多算 3 个，显示 10/12 实际只有 7 人），
+         * 名额看起来比实际紧张，排期时会误判。
+         *
+         * 按任意状态查（uk_resume_cycle：一人一届只有一行）。只找有效的会漏掉
+         * 「已取消」的行，接着 insert 就撞唯一键。
+         */
         InterviewSchedule schedule = interviewScheduleService.getOne(
                 new LambdaQueryWrapper<InterviewSchedule>()
                         .eq(InterviewSchedule::getResumeId, resumeId)
@@ -340,10 +345,17 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
                         .last("LIMIT 1"), false);
         boolean wasActive = schedule != null
                 && Integer.valueOf(SCHEDULE_STATUS_ACTIVE).equals(schedule.getStatus());
-        // 有效安排换场要归还原场次；已取消的那行在取消时已经还过名额了
-        if (wasActive && schedule.getSessionId() != null
-                && !schedule.getSessionId().equals(targetSessionId)) {
-            interviewSessionMapper.releaseOne(schedule.getSessionId());
+        // 已取消的那行在取消时已经还过名额了，不能再算它占着原场次
+        Integer originalSessionId = wasActive ? schedule.getSessionId() : null;
+        boolean alreadyInTarget = targetSessionId.equals(originalSessionId);
+
+        // 占用目标场次（原子），失败说明已满；已经在这一场里就不重复占
+        if (!alreadyInTarget && interviewSessionMapper.occupyOneIfAvailable(targetSessionId) != 1) {
+            throw new BusinessException(BusinessExceptionEnum.INTERVIEW_SESSION_FULL);
+        }
+        // 换场才归还原场次
+        if (originalSessionId != null && !alreadyInTarget) {
+            interviewSessionMapper.releaseOne(originalSessionId);
         }
 
         // 重新读取目标场次占用数，本人索引 = 占用数 - 1
