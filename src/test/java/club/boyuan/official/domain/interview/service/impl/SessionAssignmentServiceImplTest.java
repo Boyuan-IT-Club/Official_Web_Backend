@@ -531,6 +531,74 @@ class SessionAssignmentServiceImplTest {
                 "换过场的人要重新算作未通知，否则通知中心把他归进「已发」，管理员看不到这个待办");
     }
 
+    /**
+     * 安排到他已经在的那一场：不能再占一次座。
+     *
+     * 原先是先无条件 occupy、再判断是否换场，而归还带着「原场次 != 目标场次」的
+     * 条件 —— 同场次时占了却不还，current_occupied 每点一次涨 1 而行数不变。
+     * 线上 6 个场次因此漂了（场次 21 多算 3 个，显示 10/12 实际只有 7 人）。
+     */
+    @Test
+    void manualAssign_sameSessionDoesNotOccupyTwice() {
+        InterviewSession target = session(1000, 1, 10, 1, "301", 5).setCurrentOccupied(3);
+        when(interviewSessionService.getById(1000)).thenReturn(target);
+        when(resumeService.getResumeById(101)).thenReturn(resume(101, 1));
+        when(interviewScheduleService.getOne(any(Wrapper.class), org.mockito.ArgumentMatchers.eq(false)))
+                .thenReturn(new InterviewSchedule().setScheduleId(557).setResumeId(101).setCycleId(1)
+                        .setSessionId(1000).setStatus(1));
+        when(interviewTimeSlotService.getById(10)).thenReturn(new InterviewTimeSlot()
+                .setTimeSlotId(10).setInterviewDate(LocalDate.of(2026, 3, 1)).setStartTime(LocalTime.of(9, 0)));
+        when(departmentMapper.selectList(nullable(Wrapper.class))).thenReturn(List.of(dept(1, "技术部")));
+        when(interviewScheduleService.updateById(any(InterviewSchedule.class))).thenReturn(true);
+
+        service.manualAssign(101, 1000);
+
+        verify(interviewSessionMapper, never()).occupyOneIfAvailable(any());
+        verify(interviewSessionMapper, never()).releaseOne(any());
+    }
+
+    /** 同场次重排不该因为「场次已满」被拒：他本来就占着其中一个座 */
+    @Test
+    void manualAssign_sameSessionWorksEvenWhenFull() {
+        InterviewSession target = session(1000, 1, 10, 1, "301", 5).setCurrentOccupied(5);
+        when(interviewSessionService.getById(1000)).thenReturn(target);
+        when(resumeService.getResumeById(101)).thenReturn(resume(101, 1));
+        when(interviewScheduleService.getOne(any(Wrapper.class), org.mockito.ArgumentMatchers.eq(false)))
+                .thenReturn(new InterviewSchedule().setScheduleId(558).setResumeId(101).setCycleId(1)
+                        .setSessionId(1000).setStatus(1));
+        when(interviewTimeSlotService.getById(10)).thenReturn(new InterviewTimeSlot()
+                .setTimeSlotId(10).setInterviewDate(LocalDate.of(2026, 3, 1)).setStartTime(LocalTime.of(9, 0)));
+        when(departmentMapper.selectList(nullable(Wrapper.class))).thenReturn(List.of(dept(1, "技术部")));
+        when(interviewScheduleService.updateById(any(InterviewSchedule.class))).thenReturn(true);
+
+        // 满员时 occupyOneIfAvailable 会返回 0；走到那一步就说明判断错了
+        when(interviewSessionMapper.occupyOneIfAvailable(1000)).thenReturn(0);
+
+        service.manualAssign(101, 1000);
+
+        verify(interviewSessionMapper, never()).occupyOneIfAvailable(any());
+    }
+
+    /** 已取消的行重新启用到同一场次：那次取消已经还过名额，这里必须重新占 */
+    @Test
+    void manualAssign_cancelledRowInSameSessionStillOccupies() {
+        InterviewSession target = session(1000, 1, 10, 1, "301", 5).setCurrentOccupied(1);
+        when(interviewSessionService.getById(1000)).thenReturn(target);
+        when(resumeService.getResumeById(101)).thenReturn(resume(101, 1));
+        when(interviewSessionMapper.occupyOneIfAvailable(1000)).thenReturn(1);
+        when(interviewScheduleService.getOne(any(Wrapper.class), org.mockito.ArgumentMatchers.eq(false)))
+                .thenReturn(cancelledRow(559, 101, 1).setSessionId(1000));
+        when(interviewTimeSlotService.getById(10)).thenReturn(new InterviewTimeSlot()
+                .setTimeSlotId(10).setInterviewDate(LocalDate.of(2026, 3, 1)).setStartTime(LocalTime.of(9, 0)));
+        when(departmentMapper.selectList(nullable(Wrapper.class))).thenReturn(List.of(dept(1, "技术部")));
+        when(interviewScheduleService.updateById(any(InterviewSchedule.class))).thenReturn(true);
+
+        service.manualAssign(101, 1000);
+
+        verify(interviewSessionMapper).occupyOneIfAvailable(1000);
+        verify(interviewSessionMapper, never()).releaseOne(any());
+    }
+
     // ── 手动调整面试时间（updateInterviewTime）────────────────────
 
     @Test
