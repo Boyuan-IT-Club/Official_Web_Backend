@@ -92,6 +92,88 @@ function buildColumns(seed) {
   return columns;
 }
 
+/** 列定义的字段比对：options 这类对象走 JSON，其余按值比 */
+function sameColumnValue(current, next) {
+  if (current === next) {
+    return true;
+  }
+  if (typeof current === 'object' || typeof next === 'object') {
+    return JSON.stringify(current ?? null) === JSON.stringify(next ?? null);
+  }
+  return false;
+}
+
+/**
+ * 列对账：把管理员改过的评分维度同步进正在进行的评价表。
+ *
+ * 原先只有 seedDoc 写 columns，而 seedDoc 只在「文档还是空的」时跑一次。
+ * 文档一旦落过快照，列就被冻在那一刻——管理员在管理端加维度、改名、调权重、删维度，
+ * 数据库变了、汇总接口变了，唯独面试官眼前的表一动不动（线上报的就是这个）。
+ *
+ * 原地改而不是整列删了重建：重建会让正在看表的人那一列闪一下，
+ * 也会丢掉别人同一时刻对这一列的并发改动。
+ *
+ * 已填的分数不动。维度被删时只撤掉列，行里的 dim:<id> 单元格留着——
+ * 面试官写过的东西不该因为管理员删了一列就凭空消失，
+ * 后端算加权总分时本来就会忽略不在维度表里的分数。
+ */
+export function reconcileColumns(doc, seed) {
+  const desired = buildColumns(seed);
+  const desiredById = new Map(desired.map((column) => [column.id, column]));
+  const columns = doc.getArray('columns');
+
+  let added = 0;
+  let updated = 0;
+  let removed = 0;
+
+  // 先正序扫一遍决定去留，再倒序删：Y.Array 删掉一项后面的下标就前移，
+  // 边遍历边删会漏掉紧随其后的那一项
+  const kept = new Set();
+  const dropIndices = [];
+  for (let i = 0; i < columns.length; i += 1) {
+    const item = columns.get(i);
+    const id = item instanceof Y.Map ? String(item.get('id')) : null;
+    // 丢弃三类：维度已被删除、同一个 id 的重复列（两端并发补列的产物）、非 Y.Map 的脏数据
+    if (id === null || !desiredById.has(id) || kept.has(id)) {
+      dropIndices.push(i);
+      continue;
+    }
+    kept.add(id);
+  }
+  for (let i = dropIndices.length - 1; i >= 0; i -= 1) {
+    columns.delete(dropIndices[i], 1);
+    removed += 1;
+  }
+
+  for (let i = 0; i < columns.length; i += 1) {
+    const item = columns.get(i);
+    const want = desiredById.get(String(item.get('id')));
+    let touched = false;
+    for (const [key, value] of Object.entries(want)) {
+      if (!sameColumnValue(item.get(key), value)) {
+        item.set(key, value);
+        touched = true;
+      }
+    }
+    if (touched) {
+      updated += 1;
+    }
+  }
+
+  // 新增的维度追加到末尾。前端按 order 字段排序，与数组物理顺序无关
+  for (const want of desired) {
+    if (kept.has(want.id)) {
+      continue;
+    }
+    const map = new Y.Map();
+    Object.entries(want).forEach(([key, value]) => map.set(key, value));
+    columns.push([map]);
+    added += 1;
+  }
+
+  return { added, updated, removed };
+}
+
 function writeRowInfo(rowMap, row) {
   const info = new Y.Map();
   info.set('scheduleId', row.scheduleId);
@@ -163,19 +245,24 @@ export function seedDoc(doc, seed) {
 }
 
 /**
- * 名单对账：人工调剂或改期之后，把新增候选人补进文档、把已移除的标灰。
+ * 名单与列的对账：人工调剂或改期之后，把新增候选人补进文档、把已移除的标灰；
+ * 管理员改过评分维度时，把列定义一并追平（见 reconcileColumns）。
  *
  * 移除采用标灰而非删除——面试官可能已经写了评价，硬删会连同已填内容一起丢掉。
  */
 export function reconcileDoc(doc, seed) {
   let added = 0;
   let removed = 0;
+  let columns = { added: 0, updated: 0, removed: 0 };
 
   doc.transact(() => {
     const meta = doc.getMap('meta');
     meta.set('locked', Boolean(seed.locked));
     // 面试官绑定可能被管理员改动，对账时一并刷新姓名对照表
     meta.set('interviewerNames', seed.interviewerNames ?? {});
+
+    // 列先于行对账：新增维度要先有列，后面 ensureSharedCells 再给每行补上它的评语格
+    columns = reconcileColumns(doc, seed);
 
     const dimensionIds = (seed.columns ?? []).map((d) => d.dimensionId);
     const rows = doc.getMap('rows');
@@ -206,7 +293,7 @@ export function reconcileDoc(doc, seed) {
     }
   }, 'reconcile');
 
-  return { added, removed };
+  return { added, removed, columns };
 }
 
 function cellValue(value) {
