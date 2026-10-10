@@ -59,6 +59,17 @@ public class EvaluationBoardServiceImpl implements IEvaluationBoardService {
     /** 面试安排状态：已安排 */
     private static final int SCHEDULE_STATUS_ACTIVE = 1;
 
+    /** 面试形式：线上（不占场次，时间与会议链接私下约定） */
+    private static final int INTERVIEW_MODE_ONLINE = 1;
+
+    /**
+     * 线上面试在评价表里的「地点」。
+     * <p>
+     * 线上面试不占场次，session_id 为空 —— 没有地点就既筛不出来、也归不进任何一组，
+     * 面试当天只能在「全部地点」里翻。给它一个虚拟地点，让它和各个教室并列成一组。
+     */
+    private static final String ONLINE_LOCATION = "线上面试";
+
     private final CollabDocMapper collabDocMapper;
     private final EvaluationDimensionMapper evaluationDimensionMapper;
     private final InterviewScheduleMapper interviewScheduleMapper;
@@ -157,7 +168,7 @@ public class EvaluationBoardServiceImpl implements IEvaluationBoardService {
             throw new BusinessException(BusinessExceptionEnum.INTERVIEW_SCHEDULE_NOT_FOUND);
         }
 
-        if (!admin && !isInterviewerOf(schedule.getSessionId(), viewerUserId)) {
+        if (!admin && !canEvaluate(schedule, viewerUserId)) {
             log.warn("用户 {} 试图查看非本人负责场次的候选人简历，安排 {}", viewerUserId, scheduleId);
             throw new BusinessException(BusinessExceptionEnum.USER_ROLE_NOT_AUTHORIZED);
         }
@@ -186,6 +197,19 @@ public class EvaluationBoardServiceImpl implements IEvaluationBoardService {
         return interviewSessionMapper.exists(new LambdaQueryWrapper<InterviewSession>()
                 .in(InterviewSession::getSessionId, sessionIds)
                 .eq(InterviewSession::getCycleId, cycleId));
+    }
+
+    /**
+     * 该面试官是否有权看这一行的候选人。
+     * <p>
+     * 线下按场次绑定；线上面试不占场次，绑定关系无从谈起，退到「本周期的面试官都算」——
+     * 与评价表里线上面试那一组的可编辑范围保持同一条规则。
+     */
+    private boolean canEvaluate(InterviewSchedule schedule, Integer userId) {
+        if (isOnline(schedule)) {
+            return isInterviewerOfCycle(schedule.getCycleId(), userId);
+        }
+        return isInterviewerOf(schedule.getSessionId(), userId);
     }
 
     private boolean isInterviewerOf(Integer sessionId, Integer userId) {
@@ -238,6 +262,13 @@ public class EvaluationBoardServiceImpl implements IEvaluationBoardService {
 
         Map<Integer, List<Integer>> interviewersBySession = loadInterviewersBySession(roster);
         Map<Integer, String> locationBySession = loadLocationsBySession(roster);
+        // 只有名单里真有线上面试时才去查，免得给每个周期都多一次全量查询
+        List<Integer> cycleInterviewers = roster.stream().anyMatch(EvaluationBoardServiceImpl::isOnline)
+                ? interviewersBySession.values().stream()
+                        .flatMap(List::stream)
+                        .distinct()
+                        .toList()
+                : Collections.emptyList();
 
         List<EvaluationBoardSeedDTO.RowSeed> rows = new ArrayList<>(roster.size());
         for (InterviewSchedule schedule : roster) {
@@ -256,9 +287,7 @@ public class EvaluationBoardServiceImpl implements IEvaluationBoardService {
             row.setDeptId(schedule.getDeptId());
             row.setDeptName(department == null ? null : department.getDeptName());
             row.setSessionId(schedule.getSessionId());
-            row.setLocation(schedule.getSessionId() == null
-                    ? null
-                    : locationBySession.get(schedule.getSessionId()));
+            row.setLocation(locationOf(schedule, locationBySession));
             Resume resume = schedule.getResumeId() == null ? null : resumes.get(schedule.getResumeId());
             if (resume != null) {
                 row.setResumeScore(resume.getResumeScore());
@@ -266,12 +295,46 @@ public class EvaluationBoardServiceImpl implements IEvaluationBoardService {
                 row.setResumeScoredByName(scorer == null ? null : scorer.getName());
             }
             row.setInterviewTime(schedule.getInterviewTime());
-            row.setInterviewerUserIds(schedule.getSessionId() == null
-                    ? Collections.emptyList()
-                    : interviewersBySession.getOrDefault(schedule.getSessionId(), Collections.emptyList()));
+            row.setInterviewerUserIds(interviewersOf(schedule, interviewersBySession, cycleInterviewers));
             rows.add(row);
         }
         return rows;
+    }
+
+    private static boolean isOnline(InterviewSchedule schedule) {
+        return Objects.equals(schedule.getInterviewMode(), INTERVIEW_MODE_ONLINE);
+    }
+
+    /**
+     * 这一行在评价表里归到哪个地点。
+     * <p>
+     * 线上优先于场次，而不是「没有场次才算线上」：改为线上后原场次可能还挂在行上
+     * （取消安排时的残留），按 session 取地点会把他显示进一间他根本不会去的教室。
+     */
+    static String locationOf(InterviewSchedule schedule, Map<Integer, String> locationBySession) {
+        if (isOnline(schedule)) {
+            return ONLINE_LOCATION;
+        }
+        return schedule.getSessionId() == null ? null : locationBySession.get(schedule.getSessionId());
+    }
+
+    /**
+     * 谁能填这一行的评价。
+     * <p>
+     * 线上面试没有场次可绑，名单就无从取 —— 而前端 canEdit 要求本人在名单里，
+     * 空名单等于这一行谁都填不了。退一步：本周期的面试官都能填。线上面试本就是
+     * 私下约时间、谁有空谁面，没有「排在这一场」可言。
+     */
+    static List<Integer> interviewersOf(InterviewSchedule schedule,
+                                        Map<Integer, List<Integer>> interviewersBySession,
+                                        List<Integer> cycleInterviewers) {
+        if (isOnline(schedule)) {
+            return cycleInterviewers;
+        }
+        if (schedule.getSessionId() == null) {
+            return Collections.emptyList();
+        }
+        return interviewersBySession.getOrDefault(schedule.getSessionId(), Collections.emptyList());
     }
 
     private Map<Integer, Integer> resolveMissingUserIds(List<InterviewSchedule> roster) {
