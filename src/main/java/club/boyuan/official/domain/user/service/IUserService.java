@@ -32,7 +32,8 @@ public interface IUserService extends IService<User> {
 
     /**
      * 按条件分页查用户。
-     * roleGroup 为 RBAC 分组：all/admin/member/nonmember（角色来源 user_role 关联，见 ADR-0001）；
+     * roleGroup 为 RBAC 分组：all/admin/member/nonmember/console（角色来源 user_role 关联，见 ADR-0001）；
+     * 其中 console 按权限 console:access 判定「能进管理后台」，不枚举角色码；
      * keyword 匹配姓名/学号/邮箱/手机。
      */
     PageResultDTO<User> getUsersByConditions(String roleGroup, Integer roleId, String dept, String status, String keyword, Pageable pageable, User currentUser);

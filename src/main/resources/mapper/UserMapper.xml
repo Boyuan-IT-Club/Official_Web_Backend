@@ -100,6 +100,17 @@
                     AND EXISTS (SELECT 1 FROM user_role ur JOIN role ro ON ro.role_id = ur.role_id
                                 WHERE ur.user_id = u.user_id AND ro.role_code = 'MEMBER')
                 </when>
+                <!-- 能进管理后台的人：按权限判定，不枚举角色码。
+                     面试官绑定的候选名单用它 —— 没有这张门票的人进不了后台、
+                     也就填不了评价表，绑上去等于白绑。
+                     角色与权限的对应关系会变（见 V23 的拆分），所以这里查权限表，
+                     不写死 SUPER_ADMIN/ADMIN/INTERVIEWER。 -->
+                <when test="roleGroup == 'console'">
+                    AND EXISTS (SELECT 1 FROM user_role ur
+                                JOIN role_permission rp ON rp.role_id = ur.role_id
+                                JOIN permission p ON p.permission_id = rp.permission_id
+                                WHERE ur.user_id = u.user_id AND p.permission_code = 'console:access')
+                </when>
                 <when test="roleGroup == 'nonmember'">
                     AND (EXISTS (SELECT 1 FROM user_role ur JOIN role ro ON ro.role_id = ur.role_id
                                  WHERE ur.user_id = u.user_id AND ro.role_code = 'APPLICANT')

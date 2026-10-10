@@ -2537,23 +2537,38 @@ paths:
       parameters:
       - name: role
         in: query
-        description: ''
+        description: 角色 ID（精确匹配某一个角色）
         required: false
-        example: USER
+        example: '5'
+        schema:
+          type: integer
+      - name: roleGroup
+        in: query
+        description: >-
+          RBAC 分组。admin=超管或管理员；member=社员；nonmember=申请人或无任何角色；
+          console=**能进管理后台的人**，按权限 `console:access` 判定而非枚举角色码
+          （绑定面试官的候选名单用它）。不传表示全部。
+        required: false
+        example: console
         schema:
           type: string
+          enum: [admin, member, nonmember, console]
       - name: page
         in: query
-        description: 页码（从 1 开始）
+        description: >-
+          页码，**0 基**（Spring Pageable，不是 1 基、也不是偏移量）。
+          文档此前写成「从 1 开始」，照着传过的调用方都翻不到第二页。
         required: false
-        example: '1'
+        example: '0'
         schema:
           type: integer
       - name: size
         in: query
-        description: 每页数量
+        description: >-
+          每页数量，默认 10。参数名必须是 `size` —— 写成 `pageSize` 会被
+          Spring 忽略并静默回落到 10 条（绑定面试官的下拉曾因此只列得出 10 个人）。
         required: false
-        example: '5'
+        example: '20'
         schema:
           type: integer
       - name: dept
