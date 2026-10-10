@@ -159,9 +159,10 @@ async function loadDocumentInner(documentName, document) {
     // 快照恢复后与业务库对账一次，补上停机期间的名单变化
     try {
       const seed = await fetchSeed(cycleId);
-      const { added, removed } = reconcileDoc(document, seed);
-      if (added || removed) {
-        console.info(`[collab] ${documentName} 恢复后对账：新增 ${added} 行，标灰 ${removed} 行`);
+      const { added, removed, columns } = reconcileDoc(document, seed);
+      if (added || removed || columns.added || columns.updated || columns.removed) {
+        console.info(`[collab] ${documentName} 恢复后对账：新增 ${added} 行，标灰 ${removed} 行，`
+          + `列 +${columns.added}/~${columns.updated}/-${columns.removed}`);
       }
     } catch (error) {
       // 对账失败不该拦住面试现场开工，已有快照仍然可用
@@ -253,10 +254,11 @@ export function watchRoster(hocuspocus) {
       }
       try {
         const seed = await fetchSeed(state.cycleId);
-        const { added, removed } = reconcileDoc(document, seed);
+        const { added, removed, columns } = reconcileDoc(document, seed);
         state.tracker.discard();
-        if (added || removed) {
-          console.info(`[collab] ${documentName} 名单对账：新增 ${added} 行，标灰 ${removed} 行`);
+        if (added || removed || columns.added || columns.updated || columns.removed) {
+          console.info(`[collab] ${documentName} 名单对账：新增 ${added} 行，标灰 ${removed} 行，`
+            + `列 +${columns.added}/~${columns.updated}/-${columns.removed}`);
         }
       } catch (error) {
         console.warn(`[collab] ${documentName} 名单对账失败：${error.message}`);
