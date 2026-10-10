@@ -11,6 +11,9 @@ import club.boyuan.official.domain.interview.dto.UpdateInterviewTimeSlotRequestD
 import club.boyuan.official.domain.interview.service.IInterviewSessionService;
 import club.boyuan.official.domain.interview.service.IInterviewTimeSlotService;
 import club.boyuan.official.domain.interview.service.ISessionInterviewerService;
+import club.boyuan.official.domain.user.service.IUserService;
+import club.boyuan.official.common.utils.SecurityUtil;
+import club.boyuan.official.persistence.entity.User;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +37,7 @@ public class InterviewSessionAdminController {
     private final IInterviewTimeSlotService interviewTimeSlotService;
     private final IInterviewSessionService interviewSessionService;
     private final ISessionInterviewerService sessionInterviewerService;
+    private final IUserService userService;
 
     // ------------------------------------------------------------- 时间窗
 
@@ -110,6 +114,23 @@ public class InterviewSessionAdminController {
             @Valid @RequestBody SaveSessionInterviewersRequestDTO request) {
         return ResponseEntity.ok(ResponseMessage.success(
                 sessionInterviewerService.bindInterviewers(sessionId, request.getUserIds())));
+    }
+
+    /**
+     * 把自己补进该场次的面试官（增量，不动已有绑定）。
+     * <p>
+     * 面试当天常有临时顶班：原本排在 A 场的人去了 B 场，而评价表的可编辑范围按
+     * 场次绑定判定 —— 不加进来就只能看不能打分。原先只能去场次管理页用覆盖式
+     * 接口重设整场名单，既绕远又容易把别人删掉。
+     * <p>
+     * 权限沿用类上的 {@code interview:schedule / resume:audit}：只有管理员能加，
+     * 纯面试官不能自己给自己开口子。幂等，重复点不报错。
+     */
+    @PostMapping("/sessions/{sessionId}/interviewers/me")
+    public ResponseEntity<ResponseMessage<List<Integer>>> joinAsInterviewer(@PathVariable Integer sessionId) {
+        User me = userService.getUserByUsername(SecurityUtil.getCurrentUsername());
+        return ResponseEntity.ok(ResponseMessage.success(
+                sessionInterviewerService.joinAsInterviewer(sessionId, me.getUserId())));
     }
 
     @GetMapping("/sessions/{sessionId}/interviewers")
