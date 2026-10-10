@@ -11158,8 +11158,14 @@ paths:
               properties:
                 interviewTime:
                   type: string
-                  description: 面试具体时间，格式 yyyy-MM-ddTHH:mm
-                  example: '2026-04-18T15:30'
+                  format: date-time
+                  description: >-
+                    面试具体时间，ISO-8601 本地时间；秒可带可不带
+                    （`2026-04-18T15:30` 与 `2026-04-18T15:30:00` 都收）。
+
+                    此前后端把格式钉死成不含秒，而前端发的一直带 `:00`，
+                    解析失败直接 400、界面只显示「系统异常」—— 这个接口从上线起就没通过。
+                  example: '2026-04-18T15:30:00'
                 sessionId:
                   type: integer
                   nullable: true
