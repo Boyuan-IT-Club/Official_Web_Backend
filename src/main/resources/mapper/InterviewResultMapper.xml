@@ -2,6 +2,26 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="club.boyuan.official.persistence.mapper.InterviewResultMapper">
 
+    <!--
+        「初筛未通过、结果仍待定」的结果行（作用于别名 ir）。
+
+        这些人在简历阶段就被刷掉了：不参与分配、拿不到面试安排，初筛未通过的通知也有单独的入口发。
+        但「生成结果名单」此前按「已提交（status ≥ 2）」取简历，状态 5 也在其中，
+        于是他们出现在「结果与通知」和预录取终审里，一旦被批量婉拒还会再收到一封未录取邮件。
+
+        只排除「待定」：已经做过录取或婉拒决定的行照常显示——宁可多显示一行，
+        也不能把一个真实的录取结果藏起来（比如初筛误判后又被面试、录取的人）。
+
+        结果列表、预录取草稿的列表/人数/转正都引用这一个片段，口径不会各写各的。
+    -->
+    <sql id="screenRejectedPending">
+        (COALESCE(ir.decision, 0) = 0
+         AND EXISTS (SELECT 1 FROM resume sr
+                     WHERE sr.resume_id = COALESCE(ir.resume_id,
+                           (SELECT ss.resume_id FROM interview_schedule ss WHERE ss.schedule_id = ir.schedule_id))
+                       AND sr.status = 5))
+    </sql>
+
     <select id="selectResultPage" resultType="club.boyuan.official.persistence.entity.InterviewResult">
         SELECT
         ir.result_id,
@@ -34,7 +54,28 @@
         ev.total_score AS eval_total_score,
         ev.recommendation AS eval_recommendation,
         d1.dept_name AS first_dept_name,
-        d2.dept_name AS second_dept_name
+        d2.dept_name AS second_dept_name,
+        /*
+         * 是否线上面试，决定排序（线上排最后）。两种来源：
+         *   1) 有生效安排：看安排上的 interview_mode（改期转线上、管理员安排线上都会置 1）；
+         *   2) 没有安排：简历里选了「不能参加线下面试」（expected_interview_time.canAttend = no），
+         *      这批人不进线下排期，由管理员单独约线上。
+         * 没排上场次但能来线下的（人数原因落选）不算线上。
+         * JSON_EXTRACT 遇到非法 JSON 会让整条查询报错，所以先 JSON_VALID 再取——
+         * CASE 保证只在合法时才求值 THEN 分支。
+         */
+        CASE
+            WHEN live.schedule_id IS NOT NULL THEN live.interview_mode = 1
+            ELSE EXISTS (
+                SELECT 1
+                FROM resume_field_value fv
+                JOIN resume_field_definition fd ON fd.field_id = fv.field_id
+                WHERE fv.resume_id = COALESCE(ir.resume_id, isc.resume_id)
+                  AND fd.cycle_id = COALESCE(ir.cycle_id, isc.cycle_id)
+                  AND fd.field_key = 'expected_interview_time'
+                  AND (CASE WHEN JSON_VALID(fv.field_value)
+                            THEN JSON_UNQUOTE(JSON_EXTRACT(fv.field_value, '$.canAttend')) END) = 'no')
+        END AS online_interview
         FROM interview_result ir
         LEFT JOIN interview_schedule isc ON ir.schedule_id = isc.schedule_id
         LEFT JOIN user u ON ir.user_id = u.user_id
@@ -63,8 +104,10 @@
             <if test="department != null and department != ''">
                 AND d.dept_name LIKE CONCAT('%', #{department}, '%')
             </if>
+            AND NOT <include refid="screenRejectedPending"/>
         </where>
-        ORDER BY ir.created_at DESC
+        <!-- 线上面试排在最后：线下是成批按教室面的，线上是零散单独约的，混在一起不好对照 -->
+        ORDER BY online_interview ASC, ir.created_at DESC
     </select>
 
     <!-- 批量录取前的归属校验：只保留确实属于该周期的 result_id，
@@ -78,12 +121,14 @@
         <foreach collection="resultIds" item="id" open="(" separator="," close=")">#{id}</foreach>
     </select>
 
+    <!-- 预录取写入前的校验：只放行本周期、仍待定、且不是初筛未通过的行 -->
     <select id="selectPendingResultIdsInCycle" resultType="java.lang.Integer">
         SELECT ir.result_id
         FROM interview_result ir
         LEFT JOIN interview_schedule isc ON ir.schedule_id = isc.schedule_id
         WHERE COALESCE(ir.cycle_id, isc.cycle_id) = #{cycleId}
           AND ir.decision = 0
+          AND NOT <include refid="screenRejectedPending"/>
           AND ir.result_id IN
         <foreach collection="resultIds" item="id" open="(" separator="," close=")">#{id}</foreach>
     </select>
