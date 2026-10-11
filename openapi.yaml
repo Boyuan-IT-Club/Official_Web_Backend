@@ -9385,6 +9385,9 @@ paths:
         已有结果行的安排一律跳过（幂等）。此前结果行只有飞书拉取会创建 ——
         不接飞书「结果与通知」就是空的；生成后用单行更新/批量录取即可全站内定结果，
         飞书变为可选项。
+
+        初筛未通过（简历 status=5）的不生成：他们在简历阶段就被刷掉了，
+        不参与分配、拿不到面试，未通过通知也有单独入口。
       tags:
       - 面试结果
       parameters:
@@ -9427,6 +9430,9 @@ paths:
       description: >-
         返回仅管理端可见的录取草稿。候选人按拟录取部门排序，并在 departmentStats
         中返回各部门人数；草稿不会改变学生端进度，也不会触发通知或正式名册。
+
+        初筛未通过且结果仍待定的候选人即便以前被加进过草稿，也不出现在名单和人数里
+        （与结果列表同一口径）。
       tags:
       - 面试管理/结果与通知
       parameters:
@@ -9469,7 +9475,8 @@ paths:
       summary: 批量加入或调整预录取名单
       description: >-
         将本周期仍为待定状态的候选人加入预录取名单。已在名单中的候选人会调整到
-        assignedDeptId 指定的部门；已定稿、跨周期或不存在的 resultId 返回在 skipped 中。
+        assignedDeptId 指定的部门；已定稿、跨周期、不存在或初筛未通过的 resultId
+        返回在 skipped 中。
       tags:
       - 面试管理/结果与通知
       requestBody:
@@ -9511,6 +9518,8 @@ paths:
         在一个事务中把本周期整份预录取名单写为正式“通过”决定及录取部门，然后清空草稿。
         若其中任何候选人已被其他入口定稿，整批回滚并提示刷新。接口不会自动发邮件；
         转正成功后继续调用既有 send-notifications 接口显式通知。
+
+        只发布名单里看得到的人：初筛未通过且仍待定的草稿不会被转正（也不计入回滚判断）。
       tags:
       - 面试管理/结果与通知
       requestBody:
@@ -9638,6 +9647,10 @@ paths:
         null，与打 0 分区分）、evalTotalScore / evalRecommendation 面试评价
         加权总分与结论（1 倾向通过 2 待定 3 不倾向，无评价为 null）、
         firstDeptName / secondDeptName 志愿部门。
+
+        不含初筛未通过（简历 status=5）且结果仍待定的行；已做过决定的照常返回。
+
+        排序：线下面试在前、线上面试（onlineInterview=true）在后，组内按创建时间倒序。
       tags:
       - 面试结果模块
       parameters:
@@ -13373,6 +13386,12 @@ components:
             面试时间。按简历+周期反查本届生效的面试安排得到，因此「先生成名单、
             后排面试」的结果行也能显示；未排面试为 null。
           example: '2025-09-16T10:00:00Z'
+        onlineInterview:
+          type: boolean
+          description: >-
+            是否线上面试（列表查询派生）。有生效面试安排时看安排的 interview_mode；
+            没有安排时看简历里是否选了「不能参加线下面试」。列表把线上排在最后。
+          example: false
       required:
       - resultId
       - scheduleId

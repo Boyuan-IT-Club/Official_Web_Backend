@@ -123,6 +123,13 @@ public class InterviewResult implements Serializable {
     @TableField(value = "second_dept_name", exist = false)
     private String secondDeptName;
 
+    /**
+     * 是否线上面试（列表查询派生）：有生效安排看 interview_mode，没有安排看简历里
+     * 是否选了「不能参加线下面试」。列表按它把线上排在最后，前端据此打「线上」标记。
+     */
+    @TableField(value = "online_interview", exist = false)
+    private Boolean onlineInterview;
+
     @TableField(value = "department_name", exist = false)
     private String departmentName;
 }

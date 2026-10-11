@@ -50,6 +50,9 @@ import java.util.Set;
 @Slf4j
 public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMapper, InterviewResult> implements IInterviewResultService {
 
+    /** 简历状态：初筛未通过（与 ResumeServiceImpl.STATUS_SCREEN_REJECTED 一致） */
+    private static final int RESUME_STATUS_SCREEN_REJECTED = 5;
+
     @Autowired
     private IUserService userService;
     @Autowired
@@ -232,10 +235,15 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
         // 本周期所有已提交的简历，而不只是「有面试安排的」——
         // 选了「不能参加线下面试」的同学不进排期，因人数原因没排上的也一样，
         // 只看 schedule 会让他们在「结果与通知」里彻底消失，管理员无从录取或婉拒。
+        //
+        // 但初筛未通过的不算：他们在简历阶段就被刷掉了，不参与分配、拿不到面试，
+        // 未通过通知也有单独入口。生成进来只会让人在录取名单里看到一批没面试过的人，
+        // 一旦被批量婉拒还会再收到一封未录取邮件。
         List<Resume> submitted = resumeMapper.selectList(
                 new LambdaQueryWrapper<Resume>()
                         .eq(Resume::getCycleId, cycleId)
-                        .ge(Resume::getStatus, 2));
+                        .ge(Resume::getStatus, 2)
+                        .ne(Resume::getStatus, RESUME_STATUS_SCREEN_REJECTED));
 
         int created = 0;
         for (Resume resume : submitted) {
