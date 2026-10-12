@@ -208,7 +208,11 @@ outbox:
 interview:
   notification:
     enabled: true
+    # 两台都会起定时任务，没有 leader 选举 —— Node B 用环境变量
+    # INTERVIEW_NOTIFICATION_*_REMINDER_CRON="-"（Spring 的 CRON_DISABLED）关掉，
+    # 环境变量优先于这里，所以这两行只是 Node A 的默认值
     eve-reminder-cron: "0 0 12 * * ?"
+    day-reminder-cron: "0 0 8 * * ?"
 
 server:
   port: 8080
