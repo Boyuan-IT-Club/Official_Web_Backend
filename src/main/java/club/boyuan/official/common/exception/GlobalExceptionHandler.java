@@ -9,6 +9,10 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
@@ -120,6 +124,73 @@ public class GlobalExceptionHandler {
         ResponseMessage<?> response = new ResponseMessage<>(
                 BusinessExceptionEnum.PARAMETER_VALIDATION_FAILED.getCode(), detail, null);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    /**
+     * 请求少了必填的 query 参数 —— 客户端错误，必须是 400。
+     *
+     * 不接住会落进下面的兜底 Exception 返回 500：一个前端传参失误就会把 5xx 告警
+     * 点着，运维看到的是「服务挂了」，实际只是某个页面少带了个 cycleId。
+     * 2026-10-12 的 5xx 告警就是这么来的：学生端首屏 cycleId 还没加载完就发了
+     * /interview/schedule/my 与 /preference/my，每开一次页面产生两个 500。
+     */
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ResponseMessage<?>> handleMissingParameter(MissingServletRequestParameterException ex) {
+        String detail = "缺少必填参数：" + ex.getParameterName();
+        logger.warn("请求缺少必填参数: {}", detail);
+        return badRequest(detail);
+    }
+
+    /**
+     * 参数类型对不上（如 cycleId=abc）—— 同样是客户端错误。
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ResponseMessage<?>> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        String detail = "参数格式不正确：" + ex.getName();
+        logger.warn("请求参数类型不匹配: {} = {}", ex.getName(), ex.getValue());
+        return badRequest(detail);
+    }
+
+    /**
+     * 请求体读不出来：不是合法 JSON，或某个字段反序列化失败。
+     *
+     * 日期格式对不上就落在这里。「调时间/地点」曾经一按就报「系统异常」，正是
+     * 前端发 2026-10-11T19:45:00、而 DTO 的 @JsonFormat 不含秒 —— 那条
+     * InvalidFormatException 被包进本异常后掉进兜底，变成 500 与一句没有信息量的
+     * 「系统异常」，只能翻服务器日志才找得到真因。现在原因直接回给调用方。
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ResponseMessage<?>> handleUnreadableBody(HttpMessageNotReadableException ex) {
+        // 对外只给到「哪个字段」这一层：异常原文里带着包名与解析器细节，不该露给前端。
+        // 沿 cause 链找 InvalidFormatException，而不是用 getMostSpecificCause()——
+        // 后者会一路走到最底层（日期就是 DateTimeParseException），跳过了带字段路径的那一层。
+        String field = fieldPathOf(ex);
+        String detail = field == null ? "请求体格式不正确" : "字段格式不正确：" + field;
+        logger.warn("请求体解析失败: {}", ex.getMostSpecificCause().getMessage());
+        return badRequest(detail);
+    }
+
+    /** 沿 cause 链找出带字段路径的那层异常，取不到就返回 null */
+    private static String fieldPathOf(Throwable t) {
+        for (Throwable c = t; c != null && c != c.getCause(); c = c.getCause()) {
+            if (c instanceof InvalidFormatException ife) {
+                return pathOf(ife);
+            }
+        }
+        return null;
+    }
+
+    private static String pathOf(InvalidFormatException ife) {
+        return ife.getPath().stream()
+                .map(com.fasterxml.jackson.databind.JsonMappingException.Reference::getFieldName)
+                .filter(java.util.Objects::nonNull)
+                .reduce((a, b) -> a + "." + b)
+                .orElse(null);
+    }
+
+    private static ResponseEntity<ResponseMessage<?>> badRequest(String detail) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ResponseMessage<>(
+                BusinessExceptionEnum.PARAMETER_VALIDATION_FAILED.getCode(), detail, null));
     }
 
     private static String describeFieldError(FieldError fe) {
