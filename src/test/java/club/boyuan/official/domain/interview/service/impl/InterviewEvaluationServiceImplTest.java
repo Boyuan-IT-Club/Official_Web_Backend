@@ -13,6 +13,12 @@ import club.boyuan.official.persistence.entity.SessionInterviewer;
 import club.boyuan.official.persistence.mapper.CollabAuditMapper;
 import club.boyuan.official.persistence.mapper.CollabDocMapper;
 import club.boyuan.official.persistence.mapper.DepartmentMapper;
+import club.boyuan.official.domain.interview.dto.EvaluationSummaryDTO;
+import club.boyuan.official.persistence.entity.InterviewSession;
+import club.boyuan.official.persistence.entity.InterviewPreference;
+import club.boyuan.official.persistence.entity.Department;
+import club.boyuan.official.persistence.mapper.InterviewSessionMapper;
+import club.boyuan.official.persistence.mapper.InterviewPreferenceMapper;
 import club.boyuan.official.persistence.mapper.EvaluationDimensionMapper;
 import club.boyuan.official.persistence.mapper.InterviewEvaluationMapper;
 import club.boyuan.official.persistence.mapper.InterviewScheduleMapper;
@@ -21,6 +27,7 @@ import club.boyuan.official.persistence.mapper.SessionInterviewerMapper;
 import club.boyuan.official.persistence.mapper.UserMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -69,6 +76,8 @@ class InterviewEvaluationServiceImplTest {
     @Mock private ResumeMapper resumeMapper;
     @Mock private UserMapper userMapper;
     @Mock private DepartmentMapper departmentMapper;
+    @Mock private InterviewSessionMapper interviewSessionMapper;
+    @Mock private InterviewPreferenceMapper interviewPreferenceMapper;
 
     private InterviewEvaluationServiceImpl service;
 
@@ -77,7 +86,8 @@ class InterviewEvaluationServiceImplTest {
         service = new InterviewEvaluationServiceImpl(
                 interviewEvaluationMapper, interviewScheduleMapper, evaluationDimensionMapper,
                 sessionInterviewerMapper, collabDocMapper, collabAuditMapper,
-                resumeMapper, userMapper, departmentMapper, new ObjectMapper());
+                resumeMapper, userMapper, departmentMapper,
+                interviewSessionMapper, interviewPreferenceMapper, new ObjectMapper());
 
         when(collabDocMapper.selectById(DOC_NAME)).thenReturn(
                 new CollabDoc().setDocName(DOC_NAME).setCycleId(CYCLE_ID).setLocked(0));
@@ -285,5 +295,58 @@ class InterviewEvaluationServiceImplTest {
                 .setMaxScore(10)
                 .setWeight(weight)
                 .setSortOrder(id);
+    }
+
+    /** Department 没开 @Accessors(chain)，手写一个工厂省得一行行 set */
+    private static Department dept(int id, String name) {
+        Department d = new Department();
+        d.setDeptId(id);
+        d.setDeptName(name);
+        return d;
+    }
+
+    /**
+     * 评价汇总要带出地点与志愿 —— 录取决策按这两个维度分组看。
+     *
+     * 志愿部门未必在名单的 deptId 集合里：一个人第一志愿技术部、被调剂去了项目部，
+     * 技术部就不在那组 id 中。原先 loadDepartments 按 id 批量查，这种情况下志愿列是空的。
+     */
+    @Test
+    @DisplayName("汇总带出面试地点与第一/第二志愿，志愿部门不在名单里也能解析")
+    void summaryCarriesLocationAndPreferences() {
+        final int cycleId = 7;
+        final int scheduleId = 501;
+        final int resumeId = 601;
+        final int sessionId = 70;
+
+        when(evaluationDimensionMapper.selectList(any())).thenReturn(List.of());
+
+        InterviewSchedule schedule = new InterviewSchedule()
+                .setScheduleId(scheduleId).setResumeId(resumeId).setUserId(9)
+                .setCycleId(cycleId).setSessionId(sessionId)
+                .setDeptId(2)          // 实际面的是项目部
+                .setStatus(1);
+        when(interviewScheduleMapper.selectList(any())).thenReturn(List.of(schedule));
+        when(interviewEvaluationMapper.selectList(any())).thenReturn(List.of());
+        when(sessionInterviewerMapper.selectList(any())).thenReturn(List.of());
+        when(userMapper.selectUsersByIds(any())).thenReturn(List.of());
+
+        // 部门全量：技术部(1) 只作为志愿出现，不在名单的 deptId 里
+        when(departmentMapper.selectList(null)).thenReturn(List.of(
+                dept(1, "技术部"), dept(2, "项目部"), dept(3, "综合部")));
+
+        when(interviewSessionMapper.selectBatchIds(any())).thenReturn(List.of(
+                new InterviewSession().setSessionId(sessionId).setLocation("普陀校区 教书院205")));
+        when(interviewPreferenceMapper.selectList(any())).thenReturn(List.of(
+                new InterviewPreference().setResumeId(resumeId).setFirstDeptId(1).setSecondDeptId(3)));
+
+        EvaluationSummaryDTO summary = service.summary(cycleId);
+
+        assertEquals(1, summary.getCandidates().size());
+        EvaluationSummaryDTO.CandidateSummary c = summary.getCandidates().get(0);
+        assertEquals("普陀校区 教书院205", c.getLocation());
+        assertEquals("技术部", c.getFirstDeptName(), "第一志愿不在名单 deptId 里，也必须解析得出");
+        assertEquals("综合部", c.getSecondDeptName());
+        assertEquals("项目部", c.getDeptName(), "实际面的部门与志愿是两回事，不能混为一谈");
     }
 }

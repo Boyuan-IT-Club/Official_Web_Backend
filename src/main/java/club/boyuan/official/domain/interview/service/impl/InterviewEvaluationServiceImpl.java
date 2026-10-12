@@ -18,6 +18,10 @@ import club.boyuan.official.persistence.entity.User;
 import club.boyuan.official.persistence.mapper.CollabAuditMapper;
 import club.boyuan.official.persistence.mapper.CollabDocMapper;
 import club.boyuan.official.persistence.mapper.DepartmentMapper;
+import club.boyuan.official.persistence.mapper.InterviewSessionMapper;
+import club.boyuan.official.persistence.mapper.InterviewPreferenceMapper;
+import club.boyuan.official.persistence.entity.InterviewSession;
+import club.boyuan.official.persistence.entity.InterviewPreference;
 import club.boyuan.official.persistence.mapper.EvaluationDimensionMapper;
 import club.boyuan.official.persistence.mapper.InterviewEvaluationMapper;
 import club.boyuan.official.persistence.mapper.InterviewScheduleMapper;
@@ -72,6 +76,8 @@ public class InterviewEvaluationServiceImpl implements IInterviewEvaluationServi
     private final ResumeMapper resumeMapper;
     private final UserMapper userMapper;
     private final DepartmentMapper departmentMapper;
+    private final InterviewSessionMapper interviewSessionMapper;
+    private final InterviewPreferenceMapper interviewPreferenceMapper;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -194,13 +200,18 @@ public class InterviewEvaluationServiceImpl implements IInterviewEvaluationServi
         Map<Integer, User> users = loadUsers(roster, evaluationBySchedule.values());
         Map<Integer, Integer> resumeToUser = resolveMissingUserIds(roster);
         Map<Integer, Department> departments = loadDepartments(roster);
+        // 录取决策要按地点与志愿分组看，两者都不在 interview_schedule 上：
+        // 地点属于场次，志愿在 interview_preference（按简历号）
+        Map<Integer, String> locationBySession = loadLocations(roster);
+        Map<Integer, InterviewPreference> preferenceByResume = loadPreferences(roster);
 
         for (InterviewSchedule schedule : roster) {
             summary.getCandidates().add(buildCandidateSummary(
                     schedule,
                     evaluationBySchedule.get(schedule.getScheduleId()),
                     assignedBySchedule.getOrDefault(schedule.getScheduleId(), 0),
-                    users, resumeToUser, departments));
+                    users, resumeToUser, departments,
+                    locationBySession, preferenceByResume));
         }
         return summary;
     }
@@ -211,7 +222,9 @@ public class InterviewEvaluationServiceImpl implements IInterviewEvaluationServi
             int assignedInterviewerCount,
             Map<Integer, User> users,
             Map<Integer, Integer> resumeToUser,
-            Map<Integer, Department> departments) {
+            Map<Integer, Department> departments,
+            Map<Integer, String> locationBySession,
+            Map<Integer, InterviewPreference> preferenceByResume) {
 
         Integer userId = schedule.getUserId() != null
                 ? schedule.getUserId()
@@ -227,6 +240,14 @@ public class InterviewEvaluationServiceImpl implements IInterviewEvaluationServi
         candidateSummary.setDeptName(department == null ? null : department.getDeptName());
         candidateSummary.setInterviewTime(schedule.getInterviewTime());
         candidateSummary.setAssignedInterviewerCount(assignedInterviewerCount);
+        candidateSummary.setLocation(schedule.getSessionId() == null
+                ? null : locationBySession.get(schedule.getSessionId()));
+        InterviewPreference preference = schedule.getResumeId() == null
+                ? null : preferenceByResume.get(schedule.getResumeId());
+        if (preference != null) {
+            candidateSummary.setFirstDeptName(deptName(departments, preference.getFirstDeptId()));
+            candidateSummary.setSecondDeptName(deptName(departments, preference.getSecondDeptId()));
+        }
 
         if (evaluation == null) {
             return candidateSummary;
@@ -440,15 +461,50 @@ public class InterviewEvaluationServiceImpl implements IInterviewEvaluationServi
     }
 
     private Map<Integer, Department> loadDepartments(List<InterviewSchedule> roster) {
-        Set<Integer> deptIds = roster.stream()
-                .map(InterviewSchedule::getDeptId)
+        /*
+         * 取全部部门而不是只取名单里出现过的 deptId。
+         *
+         * 志愿部门（interview_preference.first/second_dept_id）未必在名单的
+         * deptId 集合里 —— 一个人第一志愿技术部、被调剂去了项目部，技术部就不在那组 id 中，
+         * 按 id 批量查会漏掉它，志愿列显示成空。部门表本来就只有个位数行，全取不值一提。
+         */
+        return departmentMapper.selectList(null).stream()
+                .collect(Collectors.toMap(Department::getDeptId, Function.identity(), (a, b) -> a));
+    }
+
+    /** 场次ID → 面试地点。线上面试没有场次，取不到就是 null */
+    private Map<Integer, String> loadLocations(List<InterviewSchedule> roster) {
+        Set<Integer> sessionIds = roster.stream()
+                .map(InterviewSchedule::getSessionId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
-        if (deptIds.isEmpty()) {
+        if (sessionIds.isEmpty()) {
             return Collections.emptyMap();
         }
-        return departmentMapper.selectBatchIds(deptIds).stream()
-                .collect(Collectors.toMap(Department::getDeptId, Function.identity(), (a, b) -> a));
+        return interviewSessionMapper.selectBatchIds(sessionIds).stream()
+                .filter(session -> session.getLocation() != null)
+                .collect(Collectors.toMap(InterviewSession::getSessionId,
+                        InterviewSession::getLocation, (a, b) -> a));
+    }
+
+    /** 简历号 → 志愿（第一 / 第二部门） */
+    private Map<Integer, InterviewPreference> loadPreferences(List<InterviewSchedule> roster) {
+        Set<Integer> resumeIds = roster.stream()
+                .map(InterviewSchedule::getResumeId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (resumeIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        return interviewPreferenceMapper.selectList(new LambdaQueryWrapper<InterviewPreference>()
+                        .in(InterviewPreference::getResumeId, resumeIds))
+                .stream()
+                .collect(Collectors.toMap(InterviewPreference::getResumeId, Function.identity(), (a, b) -> a));
+    }
+
+    private static String deptName(Map<Integer, Department> departments, Integer deptId) {
+        Department dept = deptId == null ? null : departments.get(deptId);
+        return dept == null ? null : dept.getDeptName();
     }
 
     private List<EvaluationDimension> listDimensions(Integer cycleId) {
