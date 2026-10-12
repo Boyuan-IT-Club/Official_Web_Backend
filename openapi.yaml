@@ -12874,6 +12874,19 @@ components:
           type: string
         deptName:
           type: string
+          description: 这场实际面的部门；调剂之后可能既不是第一也不是第二志愿
+        location:
+          type: string
+          nullable: true
+          description: 面试地点，取自场次；线上面试不占场次，为 null
+        firstDeptName:
+          type: string
+          nullable: true
+          description: 简历里填的第一志愿部门，与 deptName 不是一回事
+        secondDeptName:
+          type: string
+          nullable: true
+          description: 简历里填的第二志愿部门
         interviewTime:
           type: string
         scores:

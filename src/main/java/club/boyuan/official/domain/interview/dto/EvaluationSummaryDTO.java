@@ -38,6 +38,20 @@ public class EvaluationSummaryDTO {
 
         private LocalDateTime interviewTime;
 
+        /** 面试地点（取自场次）；线上面试没有场次，为 null */
+        private String location;
+
+        /**
+         * 简历里填的第一 / 第二志愿部门。
+         *
+         * 与上面的 deptName 不是一回事：deptName 是「这场实际面的部门」，
+         * 调剂之后可能既不是第一也不是第二志愿。录取决策要按志愿分组看，
+         * 所以两者都得给。
+         */
+        private String firstDeptName;
+
+        private String secondDeptName;
+
         /** 各维度得分 {dimensionId: score}，共编模型下一位候选人只有一份，不再是均分 */
         private Map<Integer, BigDecimal> scores = new LinkedHashMap<>();
 
