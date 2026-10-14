@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
  * 招新相关二维码。一张表放三类，靠 qrType 区分：
  *   DEPT       部门群 —— 每部门一张，录取通知按录取部门取对应那张
  *   MAIN_GROUP 社团大群 —— 所有录取者都附
+ *   MAIN_GROUP_2 社团大群（第二个群）—— 大群满员后开的新群，所有录取者都附，排在第一个大群之后
  *   QA_GROUP   招新答疑群 —— 简历填写页展示
  *
  * 按周期存而不是全局：群每一届都会换，挂全局就得每年手动改，
@@ -30,6 +31,13 @@ public class RecruitmentQrCode implements Serializable {
     public static final String TYPE_DEPT = "DEPT";
     /** 社团大群 */
     public static final String TYPE_MAIN_GROUP = "MAIN_GROUP";
+    /** 社团大群 2：一个微信群上限 500 人，大群满了要开第二个，录取者两张都要收到 */
+    public static final String TYPE_MAIN_GROUP_2 = "MAIN_GROUP_2";
+
+    /** 是否社团大群（任意一个） */
+    public static boolean isMainGroup(String qrType) {
+        return TYPE_MAIN_GROUP.equals(qrType) || TYPE_MAIN_GROUP_2.equals(qrType);
+    }
     /** 招新答疑群 */
     public static final String TYPE_QA_GROUP = "QA_GROUP";
 
