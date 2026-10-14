@@ -29,6 +29,7 @@ public class RecruitmentQrCodeServiceImpl implements IRecruitmentQrCodeService {
     private static final Set<String> VALID_TYPES = Set.of(
             RecruitmentQrCode.TYPE_DEPT,
             RecruitmentQrCode.TYPE_MAIN_GROUP,
+            RecruitmentQrCode.TYPE_MAIN_GROUP_2,
             RecruitmentQrCode.TYPE_QA_GROUP);
 
     /** 二维码通常几十 KB，给到 2MB 足够；限制住免得有人传整张截图 */
@@ -46,7 +47,7 @@ public class RecruitmentQrCodeServiceImpl implements IRecruitmentQrCodeService {
         }
         if (!VALID_TYPES.contains(qrType)) {
             throw new BusinessException(BusinessExceptionEnum.PARAMETER_VALIDATION_FAILED,
-                    "二维码类型只能是 DEPT / MAIN_GROUP / QA_GROUP，收到: " + qrType);
+                    "二维码类型只能是 DEPT / MAIN_GROUP / MAIN_GROUP_2 / QA_GROUP，收到: " + qrType);
         }
         if (RecruitmentQrCode.TYPE_DEPT.equals(qrType) && (deptId == null || deptId <= 0)) {
             throw new BusinessException(BusinessExceptionEnum.PARAMETER_VALIDATION_FAILED,
@@ -127,7 +128,7 @@ public class RecruitmentQrCodeServiceImpl implements IRecruitmentQrCodeService {
         if (cycleId == null) {
             return List.of();
         }
-        List<RecruitmentQrCode> out = new ArrayList<>(2);
+        List<RecruitmentQrCode> out = new ArrayList<>(3);
 
         if (deptId != null && deptId > 0) {
             RecruitmentQrCode dept = qrCodeMapper.selectOne(new LambdaQueryWrapper<RecruitmentQrCode>()
@@ -139,12 +140,15 @@ public class RecruitmentQrCodeServiceImpl implements IRecruitmentQrCodeService {
             }
         }
 
-        RecruitmentQrCode main = qrCodeMapper.selectOne(new LambdaQueryWrapper<RecruitmentQrCode>()
-                .eq(RecruitmentQrCode::getCycleId, cycleId)
-                .eq(RecruitmentQrCode::getQrType, RecruitmentQrCode.TYPE_MAIN_GROUP)
-                .eq(RecruitmentQrCode::getDeptId, RecruitmentQrCode.NO_DEPT));
-        if (main != null) {
-            out.add(resolve(main));
+        // 大群可能有两个（第一个满员后开了第二个），录取者两张都附，按大群、大群 2 的顺序
+        for (String mainType : List.of(RecruitmentQrCode.TYPE_MAIN_GROUP, RecruitmentQrCode.TYPE_MAIN_GROUP_2)) {
+            RecruitmentQrCode main = qrCodeMapper.selectOne(new LambdaQueryWrapper<RecruitmentQrCode>()
+                    .eq(RecruitmentQrCode::getCycleId, cycleId)
+                    .eq(RecruitmentQrCode::getQrType, mainType)
+                    .eq(RecruitmentQrCode::getDeptId, RecruitmentQrCode.NO_DEPT));
+            if (main != null) {
+                out.add(resolve(main));
+            }
         }
         return out;
     }

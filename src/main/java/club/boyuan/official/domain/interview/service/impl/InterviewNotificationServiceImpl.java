@@ -437,7 +437,7 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
     }
 
     /**
-     * 录取通知里要附的二维码：本人部门那张 + 大群那张。
+     * 录取通知里要附的二维码：本人部门那张 + 大群（有第二个大群时两张都附）。
      * 取不到就返回空列表 —— 模板会改成「登录官网查看」，而不是留一块空图。
      */
     private List<MailTemplate.QrItem> qrItems(Integer cycleId, Integer deptId) {
@@ -461,6 +461,9 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
         }
         if (RecruitmentQrCode.TYPE_MAIN_GROUP.equals(qr.getQrType())) {
             return "社团大群";
+        }
+        if (RecruitmentQrCode.TYPE_MAIN_GROUP_2.equals(qr.getQrType())) {
+            return "社团大群 2";
         }
         String dept = resolveDepartmentName(qr.getDeptId());
         return StringUtils.hasText(dept) ? dept + "群" : "部门群";

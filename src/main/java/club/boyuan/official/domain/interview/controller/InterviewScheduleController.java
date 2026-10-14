@@ -68,6 +68,9 @@ public class InterviewScheduleController {
         if (club.boyuan.official.persistence.entity.RecruitmentQrCode.TYPE_MAIN_GROUP.equals(qr.getQrType())) {
             return "社团大群";
         }
+        if (club.boyuan.official.persistence.entity.RecruitmentQrCode.TYPE_MAIN_GROUP_2.equals(qr.getQrType())) {
+            return "社团大群 2";
+        }
         Department d = departmentMapper.selectById(qr.getDeptId());
         return d != null ? d.getDeptName() + "群" : "部门群";
     }
