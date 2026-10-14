@@ -27,6 +27,9 @@ public class PreAdmissionDraft {
 
     @TableField(exist = false)
     private Integer userId;
+    /** 该同学当前的正式结果（0 待定 / 1 通过 / 2 未通过）：已有结果的草稿是冲突，转正不了 */
+    @TableField(exist = false)
+    private Integer decision;
     @TableField(exist = false)
     private String userName;
     @TableField(exist = false)

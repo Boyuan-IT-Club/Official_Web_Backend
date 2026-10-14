@@ -22,6 +22,81 @@
                        AND sr.status = 5))
     </sql>
 
+    <!--
+        自动补齐结果名单（ResultRosterService.ensure），口径与原「从面试安排生成名单」一致：
+        本届已提交（status ≥ 2）、非初筛未通过（≠ 5）的简历各一行待定结果；有生效安排的带上 schedule_id。
+        已有行一律跳过：按 (cycle_id, resume_id) 判断；飞书拉回的遗留行只有 schedule_id，再按安排兜一道。
+        防重靠 uk_cycle_resume 与 uk_schedule 两个唯一键 + no-op 的 ODKU（不用 INSERT IGNORE：它会把外键错误降成警告）。
+    -->
+    <insert id="ensureRoster">
+        INSERT INTO interview_result (schedule_id, resume_id, cycle_id, user_id, decision)
+        SELECT live.schedule_id, r.resume_id, r.cycle_id, COALESCE(r.user_id, live.user_id), 0
+        FROM resume r
+        LEFT JOIN interview_schedule live
+               ON live.resume_id = r.resume_id AND live.cycle_id = r.cycle_id AND live.status = 1
+        WHERE r.cycle_id = #{cycleId}
+          AND r.status &gt;= 2 AND r.status &lt;&gt; 5
+          AND COALESCE(r.user_id, live.user_id) IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM interview_result x
+                          WHERE x.cycle_id = r.cycle_id AND x.resume_id = r.resume_id)
+          AND (live.schedule_id IS NULL OR NOT EXISTS
+                 (SELECT 1 FROM interview_result y WHERE y.schedule_id = live.schedule_id))
+        ON DUPLICATE KEY UPDATE result_id = result_id
+    </insert>
+
+    <!--
+        录取统计：总数与按部门拆分。和结果列表同一口径（排除初筛未通过且仍待定的行）。
+        录取部门只认 interview_result.assigned_dept_id，与社员部门 user.dept_id 无关。
+    -->
+    <select id="selectSummaryTotals" resultType="club.boyuan.official.domain.interview.dto.ResultSummaryDTO$Totals">
+        SELECT COUNT(*) AS candidates,
+               COALESCE(SUM(ir.decision = 0), 0) AS pending,
+               COALESCE(SUM(ir.decision = 3), 0) AS adjusting,
+               COALESCE(SUM(ir.decision = 1), 0) AS admitted,
+               COALESCE(SUM(ir.decision = 2), 0) AS rejected,
+               COALESCE(SUM(EXISTS (SELECT 1 FROM pre_admission_draft pad WHERE pad.result_id = ir.result_id)
+                            AND ir.decision IN (0, 3)), 0) AS in_pre_admission,
+               COALESCE(SUM(ir.notified_at IS NOT NULL), 0) AS notified
+        FROM interview_result ir
+        LEFT JOIN interview_schedule isc ON ir.schedule_id = isc.schedule_id
+        WHERE COALESCE(ir.cycle_id, isc.cycle_id) = #{cycleId}
+          AND NOT <include refid="screenRejectedPending"/>
+    </select>
+
+    <select id="selectSummaryDepartments" resultType="club.boyuan.official.domain.interview.dto.ResultSummaryDTO$DeptRow">
+        SELECT d.dept_id, d.dept_name,
+               COALESCE(SUM(b.first_dept_id = d.dept_id), 0) AS first_choice,
+               COALESCE(SUM(b.second_dept_id = d.dept_id), 0) AS second_choice,
+               COALESCE(SUM(b.draft_dept_id = d.dept_id AND b.decision IN (0, 3)), 0) AS pre_admitted,
+               COALESCE(SUM(b.decision = 1 AND b.assigned_dept_id = d.dept_id), 0) AS admitted,
+               COALESCE(SUM(b.decision = 1 AND b.assigned_dept_id = d.dept_id
+                            AND b.first_dept_id &lt;=&gt; d.dept_id), 0) AS admitted_first_choice,
+               COALESCE(SUM(b.decision = 1 AND b.assigned_dept_id = d.dept_id
+                            AND NOT (b.first_dept_id &lt;=&gt; d.dept_id)
+                            AND b.second_dept_id &lt;=&gt; d.dept_id), 0) AS admitted_second_choice,
+               COALESCE(SUM(b.decision = 1 AND b.assigned_dept_id = d.dept_id
+                            AND NOT (b.first_dept_id &lt;=&gt; d.dept_id)
+                            AND NOT (b.second_dept_id &lt;=&gt; d.dept_id)), 0) AS admitted_other,
+               COALESCE(SUM(b.decision = 1 AND b.assigned_dept_id = d.dept_id
+                            AND b.notified_at IS NOT NULL), 0) AS admitted_notified
+        FROM department d
+        LEFT JOIN (
+            SELECT ir.result_id, ir.decision, ir.assigned_dept_id, ir.notified_at,
+                   ip.first_dept_id, ip.second_dept_id, pad.assigned_dept_id AS draft_dept_id
+            FROM interview_result ir
+            LEFT JOIN interview_schedule isc ON ir.schedule_id = isc.schedule_id
+            LEFT JOIN interview_preference ip ON ip.resume_id = COALESCE(ir.resume_id, isc.resume_id)
+            LEFT JOIN pre_admission_draft pad ON pad.result_id = ir.result_id
+            WHERE COALESCE(ir.cycle_id, isc.cycle_id) = #{cycleId}
+              AND NOT <include refid="screenRejectedPending"/>
+        ) b ON (b.first_dept_id = d.dept_id OR b.second_dept_id = d.dept_id
+                OR b.assigned_dept_id = d.dept_id OR b.draft_dept_id = d.dept_id)
+        GROUP BY d.dept_id, d.dept_name, d.status
+        <!-- 停用的部门只要本届有人报过或录过就照样列出，否则统计会少一块对不上总数 -->
+        HAVING d.status = 1 OR COUNT(b.result_id) &gt; 0
+        ORDER BY d.dept_id
+    </select>
+
     <select id="selectResultPage" resultType="club.boyuan.official.persistence.entity.InterviewResult">
         SELECT
         ir.result_id,

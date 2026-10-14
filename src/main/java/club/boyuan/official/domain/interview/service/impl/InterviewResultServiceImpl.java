@@ -8,6 +8,7 @@ import club.boyuan.official.persistence.entity.Resume;
 import club.boyuan.official.persistence.entity.InterviewSchedule;
 import club.boyuan.official.common.exception.BusinessException;
 import club.boyuan.official.common.exception.BusinessExceptionEnum;
+import club.boyuan.official.domain.interview.dto.ResultSummaryDTO;
 import club.boyuan.official.domain.interview.dto.BatchDecisionRequestDTO;
 import club.boyuan.official.domain.interview.dto.BatchDecisionResponseDTO;
 import club.boyuan.official.domain.interview.dto.InterviewResultResponseDTO;
@@ -26,6 +27,7 @@ import java.util.Objects;
 import club.boyuan.official.persistence.entity.User;
 import club.boyuan.official.persistence.mapper.InterviewResultMapper;
 import club.boyuan.official.domain.interview.service.IInterviewResultService;
+import club.boyuan.official.domain.interview.service.ResultRosterService;
 import club.boyuan.official.domain.user.service.IUserService;
 import club.boyuan.official.domain.interview.service.InterviewNotificationService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -75,6 +77,8 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
     private InterviewResultChangeMapper changeMapper;
     @Autowired
     private DepartmentMapper departmentMapper;
+    @Autowired
+    private ResultRosterService rosterService;
     @Override
     public SendNotificationsResponseDTO sendNotifications(SendNotificationsRequestDTO requestDTO) {
         List<Integer> resultIds = requestDTO.getResultIds();
@@ -140,6 +144,8 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
 
     @Override
     public InterviewResultResponseDTO list(Integer cycleId, String name, String decision, String department, Integer page, Integer size) {
+        // 名单自动补齐：不再需要管理员手动点「从面试安排生成名单」
+        rosterService.ensure(cycleId);
 
         //构建查询对象
         Page<InterviewResult> pageInfo = new Page<>(page, size);
@@ -275,77 +281,31 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
     }
 
     /**
-     * 从 Spring Security 上下文取当前用户ID，用于记录决定人。
+     * 旧的「从面试安排生成名单」入口，已弃用：名单现在在打开相关页面时自动补齐（ResultRosterService）。
+     * 保留接口兼容旧前端，内部走同一条幂等 SQL，口径不变。
      */
     @Override
-    @Transactional
     public int seedFromSchedules(Integer cycleId) {
         if (cycleId == null) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
         }
+        return rosterService.ensure(cycleId);
+    }
 
-        // 已有结果行的简历一律不动（无论站内建的还是飞书拉的）
-        Set<Integer> seededResumes = baseMapper.selectList(
-                        new LambdaQueryWrapper<InterviewResult>().eq(InterviewResult::getCycleId, cycleId))
-                .stream()
-                .map(InterviewResult::getResumeId)
-                .filter(java.util.Objects::nonNull)
-                .collect(Collectors.toSet());
-
-        List<InterviewSchedule> schedules = interviewScheduleMapper.selectList(
-                new LambdaQueryWrapper<InterviewSchedule>()
-                        .eq(InterviewSchedule::getCycleId, cycleId)
-                        .eq(InterviewSchedule::getStatus, 1));
-        Map<Integer, InterviewSchedule> scheduleByResume = new java.util.HashMap<>();
-        for (InterviewSchedule sc : schedules) {
-            if (sc.getResumeId() != null) {
-                scheduleByResume.putIfAbsent(sc.getResumeId(), sc);
-            }
+    @Override
+    public ResultSummaryDTO summary(Integer cycleId) {
+        if (cycleId == null) {
+            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
         }
-
-        // 本周期所有已提交的简历，而不只是「有面试安排的」——
-        // 选了「不能参加线下面试」的同学不进排期，因人数原因没排上的也一样，
-        // 只看 schedule 会让他们在「结果与通知」里彻底消失，管理员无从录取或婉拒。
-        //
-        // 但初筛未通过的不算：他们在简历阶段就被刷掉了，不参与分配、拿不到面试，
-        // 未通过通知也有单独入口。生成进来只会让人在录取名单里看到一批没面试过的人，
-        // 一旦被批量婉拒还会再收到一封未录取邮件。
-        List<Resume> submitted = resumeMapper.selectList(
-                new LambdaQueryWrapper<Resume>()
-                        .eq(Resume::getCycleId, cycleId)
-                        .ge(Resume::getStatus, 2)
-                        .ne(Resume::getStatus, RESUME_STATUS_SCREEN_REJECTED));
-
-        int created = 0;
-        for (Resume resume : submitted) {
-            if (resume.getResumeId() == null || seededResumes.contains(resume.getResumeId())) {
-                continue;
-            }
-            InterviewSchedule sc = scheduleByResume.get(resume.getResumeId());
-            Integer userId = resume.getUserId();
-            if (userId == null && sc != null) {
-                userId = sc.getUserId();
-            }
-            if (userId == null) {
-                log.warn("简历 {} 无法解析候选人，跳过生成结果行", resume.getResumeId());
-                continue;
-            }
-            InterviewResult row = new InterviewResult()
-                    .setScheduleId(sc == null ? null : sc.getScheduleId())   // 无安排时留空（V34 起可空）
-                    .setResumeId(resume.getResumeId())
-                    .setCycleId(cycleId)
-                    .setUserId(userId)
-                    .setDecision(0);   // 0=待定，等管理员在「结果与通知」里定
-            baseMapper.insert(row);
-            created++;
+        rosterService.ensure(cycleId);
+        ResultSummaryDTO dto =
+                new ResultSummaryDTO();
+        ResultSummaryDTO.Totals totals = baseMapper.selectSummaryTotals(cycleId);
+        if (totals != null) {
+            dto.setTotals(totals);
         }
-        log.info("周期 {} 生成结果名单：新建 {} 行（其中无面试安排 {} 行），跳过已存在 {} 行",
-                cycleId, created,
-                submitted.stream().filter(r -> r.getResumeId() != null
-                        && !seededResumes.contains(r.getResumeId())
-                        && !scheduleByResume.containsKey(r.getResumeId())).count(),
-                seededResumes.size());
-        return created;
+        dto.setDepartments(baseMapper.selectSummaryDepartments(cycleId));
+        return dto;
     }
 
     /** 1 通过 / 2 未通过 才算「已定」；0 待定、3 待调剂都还没决定 */

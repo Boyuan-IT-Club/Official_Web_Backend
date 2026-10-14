@@ -1,5 +1,6 @@
 package club.boyuan.official.persistence.mapper;
 
+import club.boyuan.official.domain.interview.dto.ResultSummaryDTO;
 import club.boyuan.official.persistence.entity.InterviewResult;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -27,6 +28,14 @@ public interface InterviewResultMapper extends BaseMapper<InterviewResult> {
     /** 只返回该周期仍未发布决定（decision=0）的结果，用于加入预录取名单。 */
     List<Integer> selectPendingResultIdsInCycle(@Param("cycleId") Integer cycleId,
                                                 @Param("resultIds") List<Integer> resultIds);
+
+    /** 自动补齐结果名单，返回插入行数（见 ResultRosterService） */
+    int ensureRoster(@Param("cycleId") Integer cycleId);
+
+    ResultSummaryDTO.Totals selectSummaryTotals(@Param("cycleId") Integer cycleId);
+
+    List<ResultSummaryDTO.DeptRow> selectSummaryDepartments(
+            @Param("cycleId") Integer cycleId);
 
     /**
      * 批量录入能动的结果行（本周期、仍未决定、不是初筛未通过、不在预录取名单里），

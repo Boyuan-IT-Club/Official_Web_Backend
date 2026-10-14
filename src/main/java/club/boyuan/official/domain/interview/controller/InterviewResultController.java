@@ -3,6 +3,7 @@ package club.boyuan.official.domain.interview.controller;
 
 import java.util.Map;
 import club.boyuan.official.common.dto.*;
+import club.boyuan.official.domain.interview.dto.ResultSummaryDTO;
 import club.boyuan.official.domain.interview.dto.*;
 import club.boyuan.official.persistence.entity.InterviewResult;
 import club.boyuan.official.domain.interview.service.IInterviewResultService;
@@ -113,6 +114,16 @@ public class InterviewResultController {
             @RequestParam Integer cycleId) {
         int created = interviewResultService.seedFromSchedules(cycleId);
         return ResponseEntity.ok(ResponseMessage.success(Map.of("created", created)));
+    }
+
+    /**
+     * 录取统计：总数（待定/录取/未通过/在预录取/已通知）与按部门拆分
+     * （志愿人数、预录取、已录取及其中一志愿/二志愿/调剂、已通知）。打开时自动补齐名单。
+     */
+    @GetMapping("/summary")
+    public ResponseEntity<ResponseMessage<ResultSummaryDTO>> summary(
+            @RequestParam Integer cycleId) {
+        return ResponseEntity.ok(ResponseMessage.success(interviewResultService.summary(cycleId)));
     }
 
     @GetMapping("/list")

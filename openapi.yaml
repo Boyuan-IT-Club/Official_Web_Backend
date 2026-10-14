@@ -9378,16 +9378,15 @@ paths:
           headers: {}
   /api/interview/result/seed-from-schedules:
     post:
-      summary: 从面试安排生成结果名单
-      deprecated: false
+      summary: 补齐结果名单（已弃用）
+      deprecated: true
       description: >-
-        为指定周期的全部生效面试安排（status=1）各生成一行待定结果（decision=0），
-        已有结果行的安排一律跳过（幂等）。此前结果行只有飞书拉取会创建 ——
-        不接飞书「结果与通知」就是空的；生成后用单行更新/批量录取即可全站内定结果，
-        飞书变为可选项。
+        已弃用：名单现在在打开录取结果、预录取、结果通知、流程进度、录取统计时自动补齐，
+        无需手动点「从面试安排生成名单」。保留本接口只为兼容旧前端，内部走同一条幂等 SQL。
 
-        初筛未通过（简历 status=5）的不生成：他们在简历阶段就被刷掉了，
-        不参与分配、拿不到面试，未通过通知也有单独入口。
+        补齐口径：本周期简历已过初筛（status ≥ 2 且不是 5 初筛未通过）的同学各一行待定结果
+        （decision=0），有生效面试安排的挂上安排；按（周期, 简历）和按面试安排两种方式去重，
+        已有结果行的一律跳过，重复调用不会多建。
       tags:
       - 面试结果
       parameters:
@@ -9424,6 +9423,106 @@ paths:
                 - data
           headers: {}
 
+  /api/interview/result/summary:
+    get:
+      summary: 录取统计
+      deprecated: false
+      description: >-
+        服务端统一算的录取统计，取代前端自己按当前页数人数。打开时自动补齐名单。
+        口径与结果列表一致：不含初筛未通过且结果仍待定的人。
+
+        totals：名单总人数、待定、待调剂（历史取值，按未决定处理）、已录取、未通过、
+        在预录取名单里尚未转正、已发过结果通知。
+
+        departments：每个部门的第一/第二志愿人数、预录取（未转正）、已录取，
+        以及已录取中第一志愿 / 第二志愿 / 调剂（两个志愿都不是本部门）各几人、已通知几人。
+        停用的部门只要本届有人报过或录过就照样列出。已录取但没填录取部门的人只计入 totals。
+      tags:
+      - 面试结果
+      parameters:
+      - name: cycleId
+        in: query
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      totals:
+                        type: object
+                        properties:
+                          candidates:
+                            type: integer
+                            description: 名单总人数
+                          pending:
+                            type: integer
+                            description: 待定
+                          adjusting:
+                            type: integer
+                            description: 待调剂（历史取值）
+                          admitted:
+                            type: integer
+                            description: 已录取
+                          rejected:
+                            type: integer
+                            description: 未通过
+                          inPreAdmission:
+                            type: integer
+                            description: 在预录取名单里、尚未转正
+                          notified:
+                            type: integer
+                            description: 已发过结果通知
+                      departments:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            deptId:
+                              type: integer
+                            deptName:
+                              type: string
+                            firstChoice:
+                              type: integer
+                              description: 第一志愿报本部门的人数
+                            secondChoice:
+                              type: integer
+                              description: 第二志愿报本部门的人数
+                            preAdmitted:
+                              type: integer
+                              description: 预录取到本部门、尚未转正
+                            admitted:
+                              type: integer
+                              description: 最终录取到本部门
+                            admittedFirstChoice:
+                              type: integer
+                            admittedSecondChoice:
+                              type: integer
+                            admittedOther:
+                              type: integer
+                              description: 调剂录取（两个志愿都不是本部门）
+                            admittedNotified:
+                              type: integer
+                    required:
+                    - totals
+                    - departments
+                required:
+                - code
+                - message
+                - data
+          headers: {}
+
   /api/interview/result/pre-admission:
     get:
       summary: 查看预录取名单及部门统计
@@ -9432,7 +9531,10 @@ paths:
         中返回各部门人数；草稿不会改变学生端进度，也不会触发通知或正式名册。
 
         初筛未通过且结果仍待定的候选人即便以前被加进过草稿，也不出现在名单和人数里
-        （与结果列表同一口径）。
+        （与结果列表同一口径）。打开时自动补齐结果名单。
+
+        每个候选人带 decision（当前正式结果）：不是 0 待定的草稿是冲突——人已经有正式结果，
+        转正不了，需要先移出名单。
       tags:
       - 面试管理/结果与通知
       parameters:
@@ -9516,8 +9618,13 @@ paths:
       summary: 一键转正预录取名单
       description: >-
         在一个事务中把本周期整份预录取名单写为正式“通过”决定及录取部门，然后清空草稿。
-        若其中任何候选人已被其他入口定稿，整批回滚并提示刷新。接口不会自动发邮件；
-        转正成功后继续调用既有 send-notifications 接口显式通知。
+        接口不会自动发邮件；转正成功后继续调用既有 send-notifications 接口显式通知。
+
+        转正前先检查冲突：名单里若有人已经有正式结果（通过/未通过），返回 409 并在
+        message 里列出这些同学的姓名，请先把他们移出名单再转正（以前只提示「请刷新」，刷新也没用）。
+        转正过程中若有人的结果刚被别的入口改动，整批回滚并提示刷新。
+
+        每个被转正的人写一条变更留痕（action=FINALIZE）。待定但没进名单的人保持待定，不受影响。
 
         只发布名单里看得到的人：初筛未通过且仍待定的草稿不会被转正（也不计入回滚判断）。
       tags:
@@ -9649,6 +9756,9 @@ paths:
         firstDeptName / secondDeptName 志愿部门。
 
         不含初筛未通过（简历 status=5）且结果仍待定的行；已做过决定的照常返回。
+
+        名单自动补齐：每次查询前，本周期过了初筛的同学若还没有结果行，自动补一行待定，
+        不再需要手动「从面试安排生成名单」。
 
         排序：线下面试在前、线上面试（onlineInterview=true）在后，组内按创建时间倒序。
       tags:
@@ -15124,6 +15234,9 @@ components:
                     type: integer
                   departmentName:
                     type: string
+                  decision:
+                    type: integer
+                    description: 当前正式结果（0 待定 1 通过 2 未通过 3 待调剂）；非 0 的草稿转正不了
                   updatedAt:
                     type: string
                     format: date-time
