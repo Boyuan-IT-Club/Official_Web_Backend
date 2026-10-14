@@ -174,9 +174,14 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
         }
 
         // 结果的周期挂在 interview_schedule 上，先过滤出确实属于本周期的 ID，
-        // 夹带的别届 ID 计入 skipped 而不是跟着一起被改
+        // 夹带的别届 ID 计入 skipped 而不是跟着一起被改。
+        // onlyPending 时再收窄到「仍为待定、不是初筛未通过、且不在预录取名单里」的行：
+        // 防止按一份旧列表把别人刚录取的人改掉，也不动部门已打算录取（草稿里）的人
+        boolean onlyPending = Boolean.TRUE.equals(request.getOnlyPending());
         List<Integer> requested = request.getResultIds();
-        List<Integer> valid = baseMapper.selectResultIdsInCycle(request.getCycleId(), requested);
+        List<Integer> valid = onlyPending
+                ? baseMapper.selectRejectablePendingResultIdsInCycle(request.getCycleId(), requested)
+                : baseMapper.selectResultIdsInCycle(request.getCycleId(), requested);
         Set<Integer> validSet = new HashSet<>(valid);
         List<Integer> skipped = new ArrayList<>();
         for (Integer id : requested) {
@@ -196,11 +201,16 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
                 .set(InterviewResult::getAssignedDeptId, decision == 1 ? request.getAssignedDeptId() : null)
                 .set(InterviewResult::getDecisionBy, currentUserId())
                 .set(InterviewResult::getDecisionAt, LocalDateTime.now());
-        this.update(wrapper);
+        if (onlyPending) {
+            // 上面筛完到这里写入之间若有人抢先改了某一行、或把人加进了预录取名单，这一行也不动
+            wrapper.eq(InterviewResult::getDecision, 0)
+                    .notExists("SELECT 1 FROM pre_admission_draft pad WHERE pad.result_id = interview_result.result_id");
+        }
+        int updated = baseMapper.update(null, wrapper);
 
-        log.info("批量录取完成，cycleId={}，decision={}，deptId={}，更新 {} 条，跳过 {} 条",
-                request.getCycleId(), decision, request.getAssignedDeptId(), valid.size(), skipped.size());
-        return new BatchDecisionResponseDTO(valid.size(), skipped);
+        log.info("批量录取完成，cycleId={}，decision={}，deptId={}，onlyPending={}，更新 {} 条，跳过 {} 条",
+                request.getCycleId(), decision, request.getAssignedDeptId(), onlyPending, updated, skipped.size());
+        return new BatchDecisionResponseDTO(updated, skipped);
     }
 
     /**

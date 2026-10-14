@@ -9713,6 +9713,8 @@ paths:
 
         同一批走一条 `UPDATE ... IN (...)`，要么都改要么都不改；同时写入决定人与决定时间。
 
+        `onlyPending=true` 时只更新执行这一刻仍为待定（decision=0）、不是初筛未通过、且不在预录取名单里的行，其余计入 `skipped`。管理端「待定全部标为未通过」用它防止按一份旧列表把别人刚录取的人改掉。
+
         需要 `resume:audit` 权限。
       tags:
       - 面试管理/结果与通知
@@ -9745,6 +9747,11 @@ paths:
                   type: integer
                   nullable: true
                   description: 录取部门，decision=1 时必填
+                onlyPending:
+                  type: boolean
+                  nullable: true
+                  description: >-
+                    只改执行时仍为待定、不是初筛未通过、且不在预录取名单里的行（缺省 false，按 resultIds 原样覆盖）
       responses:
         '200':
           description: 操作成功
@@ -9767,7 +9774,8 @@ paths:
                         type: array
                         items:
                           type: integer
-                        description: 不属于该周期或已不存在的 resultId
+                        description: >-
+                          不属于该周期或已不存在的 resultId；onlyPending 时还包括已不是待定、初筛未通过或在预录取名单里的
         '400':
           description: 参数校验失败（decision 越界、未选人、录取未指定部门等）
         '403':

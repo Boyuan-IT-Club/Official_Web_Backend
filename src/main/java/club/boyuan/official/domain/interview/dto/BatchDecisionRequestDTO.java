@@ -31,4 +31,15 @@ public class BatchDecisionRequestDTO {
 
     /** decision=1 时必填：录取进哪个部门 */
     private Integer assignedDeptId;
+
+    /**
+     * 只改执行这一刻仍为「待定」的行（可选，缺省 false = 按 resultIds 原样覆盖）。
+     *
+     * 「待定全部标为未通过」靠它兜底：前端列表可能是几分钟前加载的，期间别的管理员
+     * 可能已经把其中几人录取了（比如预录取刚转正）。按显式 ID 直接覆盖，会把这些
+     * 录取悄悄改成未通过，随后还会给他们发感谢信。
+     * 开启后只更新仍为待定、不是初筛未通过（有单独的通知入口）、且不在预录取名单里的行，
+     * 其余计入 skipped。预录取名单里的人在转正前 decision 也是 0，不排除会被一起标掉。
+     */
+    private Boolean onlyPending;
 }
