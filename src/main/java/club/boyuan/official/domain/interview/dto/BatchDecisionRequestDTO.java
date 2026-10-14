@@ -33,7 +33,9 @@ public class BatchDecisionRequestDTO {
     private Integer assignedDeptId;
 
     /**
-     * 只改执行这一刻仍为「待定」的行（可选，缺省 false = 按 resultIds 原样覆盖）。
+     * 已弃用：批量入口现在一律只改仍未决定的行（「已定即锁」），传不传结果都一样，保留只为兼容旧前端。
+     *
+     * 原含义：只改执行这一刻仍为「待定」的行（缺省 false = 按 resultIds 原样覆盖）。
      *
      * 「待定全部标为未通过」靠它兜底：前端列表可能是几分钟前加载的，期间别的管理员
      * 可能已经把其中几人录取了（比如预录取刚转正）。按显式 ID 直接覆盖，会把这些

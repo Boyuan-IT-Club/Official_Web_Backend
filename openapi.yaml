@@ -9713,7 +9713,11 @@ paths:
 
         同一批走一条 `UPDATE ... IN (...)`，要么都改要么都不改；同时写入决定人与决定时间。
 
-        `onlyPending=true` 时只更新执行这一刻仍为待定（decision=0）、不是初筛未通过、且不在预录取名单里的行，其余计入 `skipped`。管理端「待定全部标为未通过」用它防止按一份旧列表把别人刚录取的人改掉。
+        **已定即锁**：批量入口一律只改仍未决定（decision 为 0 待定或 3 待调剂）、不是初筛未通过、且不在预录取名单里的行，并在事务内锁住这些行再写入。已有结果（1/2）的人不会被批量覆盖，要改只能走单行更正并填原因。其余 ID 计入 `skipped`，其中「已有结果」与「在预录取名单里」的人数分别在 `skippedDecided`、`skippedInPreAdmission` 返回。每条实际改动写入 `interview_result_change` 留痕。
+
+        `decision=1` 时 `assignedDeptId` 必须是启用中的部门。
+
+        `onlyPending` 已弃用：上述规则恒生效，传不传结果都一样。
 
         需要 `resume:audit` 权限。
       tags:
@@ -9750,8 +9754,9 @@ paths:
                 onlyPending:
                   type: boolean
                   nullable: true
+                  deprecated: true
                   description: >-
-                    只改执行时仍为待定、不是初筛未通过、且不在预录取名单里的行（缺省 false，按 resultIds 原样覆盖）
+                    已弃用。批量入口现在恒只改仍未决定、不是初筛未通过、且不在预录取名单里的行，传不传都一样
       responses:
         '200':
           description: 操作成功
@@ -9775,16 +9780,32 @@ paths:
                         items:
                           type: integer
                         description: >-
-                          不属于该周期或已不存在的 resultId；onlyPending 时还包括已不是待定、初筛未通过或在预录取名单里的
+                          未被改动的 resultId：不属于该周期、已不存在、已有结果、初筛未通过或在预录取名单里
+                      skippedDecided:
+                        type: integer
+                        description: 其中已有结果（通过/未通过）而被跳过的人数，需逐个更正
+                      skippedInPreAdmission:
+                        type: integer
+                        description: 其中在预录取名单里而被跳过的人数，请在预录取页处理
         '400':
           description: 参数校验失败（decision 越界、未选人、录取未指定部门等）
         '403':
           description: 无 resume:audit 权限
   /api/interview/result/update/{resultId}:
     put:
-      summary: 修改录取结果
+      summary: 录入 / 更正单个录取结果
       deprecated: false
-      description: 修改指定的录取结果
+      description: |-
+        给一位同学录入或更正面试结果。「已定即锁」的唯一出口：
+
+        - 只能定为 1（通过）或 2（未通过），不能改回待定——学生端实时读库，已看到的结果不能消失。
+        - 结果原本是待定（0）或待调剂（3）：直接录入，`reason` 可空。
+        - 结果已定（1/2）且结论或部门有变化：视为「更正」，`reason` 必填，否则 409（3615）。
+        - 该同学在预录取名单里：409（3616），请在预录取页处理或先移出名单。
+        - `decision=1` 须给启用中的 `assignedDeptId`；`decision=2` 一律清空录取部门。
+        - 乐观更新：读到之后被别人改过则 409（5006），请刷新重试。内容没变化时原样返回、不写库。
+        - 每次实际变动写入 `interview_result_change` 留痕（含改前改后、改动时是否已通知、原因、操作人）。
+        - 决定人取当前登录用户，不接受客户端传入。
       tags:
       - 面试结果模块
       parameters:
@@ -9800,25 +9821,42 @@ paths:
           application/json:
             schema:
               type: object
+              required:
+              - decision
               properties:
                 decision:
                   type: integer
-                  description: 决定：0-待定，1-通过，2-不通过，3-待调剂
+                  enum:
+                  - 1
+                  - 2
+                  description: 1 通过 / 2 未通过
                   example: 1
                 assignedDeptId:
                   type: integer
-                  description: 分配部门ID
+                  nullable: true
+                  description: 录取部门，decision=1 时必填且须启用；decision=2 时忽略并清空
                   example: 2
+                reason:
+                  type: string
+                  nullable: true
+                  maxLength: 255
+                  description: 更正原因。结果已定（1/2）后再改时必填
             examples: {}
         required: true
       responses:
         '200':
-          description: 录取结果修改成功
+          description: 录入或更正成功（内容无变化时原样返回）
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResponseMessageInterviewResult'
           headers: {}
+        '400':
+          description: 参数校验失败（decision 不是 1/2、录取未选部门、部门不存在或已停用）
+        '404':
+          description: 面试结果不存在（3617）
+        '409':
+          description: 结果已定但未填原因（3615）/ 在预录取名单里（3616）/ 期间被别人改过（5006）
   /api/interview/statistics:
     get:
       summary: 获取面试统计信息（未实现，代码中无此接口）

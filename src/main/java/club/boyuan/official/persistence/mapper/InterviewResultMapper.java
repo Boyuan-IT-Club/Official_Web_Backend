@@ -29,8 +29,9 @@ public interface InterviewResultMapper extends BaseMapper<InterviewResult> {
                                                 @Param("resultIds") List<Integer> resultIds);
 
     /**
-     * 「待定全部标为未通过」能动的 result_id：本周期、仍待定、不是初筛未通过、且不在预录取名单里。
+     * 批量录入能动的结果行（本周期、仍未决定、不是初筛未通过、不在预录取名单里），
+     * 并 FOR UPDATE 锁住。须在事务内调用。
      */
-    List<Integer> selectRejectablePendingResultIdsInCycle(@Param("cycleId") Integer cycleId,
-                                                          @Param("resultIds") List<Integer> resultIds);
+    List<club.boyuan.official.persistence.entity.InterviewResult> lockBatchTargets(
+            @Param("cycleId") Integer cycleId, @Param("resultIds") List<Integer> resultIds);
 }

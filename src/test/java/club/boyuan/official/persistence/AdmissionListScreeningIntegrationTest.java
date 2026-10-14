@@ -196,21 +196,28 @@ class AdmissionListScreeningIntegrationTest {
                 "一键标记之后照常能转正，不会因为草稿成员被改掉而整批回滚");
         assertEquals(DECISION_ADMITTED, count("SELECT decision FROM interview_result WHERE result_id = ?", drafted));
 
-        // 不开 onlyPending 的旧路径（手动勾选后批量标记）这次不改：仍按 ID 显式覆盖。
-        // 「结果确定后不能再改」的锁定规则在录取流程梳理里另行设计，这里只锁住现状不被意外改坏
+        // 已定即锁：不带 onlyPending 的旧路径（手动勾选后批量标记）也不能再覆盖已定的结果，
+        // 已录取、甚至已发过录取信的人不会被一次批量操作改成未通过。要改只能逐个「更正」并填原因
         BatchDecisionRequestDTO explicit = new BatchDecisionRequestDTO();
         explicit.setCycleId(cycleId);
         explicit.setDecision(DECISION_REJECTED);
         explicit.setResultIds(List.of(admitted));
-        assertEquals(1, resultService.batchDecision(explicit).getUpdated());
-        assertEquals(DECISION_REJECTED, count("SELECT decision FROM interview_result WHERE result_id = ?", admitted));
-        assertEquals(0, count("SELECT COUNT(*) FROM interview_result WHERE result_id = ? AND assigned_dept_id IS NOT NULL",
-                admitted), "标记未通过时清空录取部门");
+        BatchDecisionResponseDTO locked = resultService.batchDecision(explicit);
+        assertEquals(0, locked.getUpdated(), "已定的结果不能被批量覆盖");
+        assertEquals(1, locked.getSkippedDecided(), "如实告诉前端：跳过的这一位是因为已有结果");
+        assertEquals(DECISION_ADMITTED, count("SELECT decision FROM interview_result WHERE result_id = ?", admitted));
+        assertEquals(DEPT_TECH, count("SELECT assigned_dept_id FROM interview_result WHERE result_id = ?", admitted));
+
+        // 每一次实际改动都留痕：P1、P2 各一条 BATCH，转正那位不在这里记（转正留痕在下一批做）
+        assertEquals(2, count("SELECT COUNT(*) FROM interview_result_change WHERE cycle_id = ? AND action = 'BATCH'", cycleId));
+        assertEquals(0, count("SELECT COUNT(*) FROM interview_result_change WHERE result_id = ?", admitted),
+                "被跳过的人不该有变更记录");
     }
 
     @AfterEach
     void cleanup() {
         if (cycleId != null) {
+            jdbc.update("DELETE FROM interview_result_change WHERE cycle_id = ?", cycleId);
             // 草稿随结果级联删；结果没有挂在简历上，要先手动删
             jdbc.update("DELETE FROM pre_admission_draft WHERE cycle_id = ?", cycleId);
             jdbc.update("DELETE FROM interview_result WHERE cycle_id = ?", cycleId);

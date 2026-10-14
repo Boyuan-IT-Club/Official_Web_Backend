@@ -122,21 +122,29 @@
     </select>
 
     <!--
-        「待定全部标为未通过」能动的行：在 selectPendingResultIdsInCycle 的基础上，
-        再排除已在预录取名单里的人。草稿成员的 decision 在转正前一直是 0，不排除的话
-        会把部门打算录取的人标成未通过，随后转正还会因为条数对不上整批回滚。
-        不能直接改 selectPendingResultIdsInCycle：预录取写入要靠它放行草稿成员（改部门）。
+        批量录入能动的行，并在事务里锁住它们（「已定即锁」）。
+
+        条件：本周期、仍未决定（0 待定 / 3 待调剂）、不是初筛未通过、且不在预录取名单里。
+        - 已定的结果（1 通过 / 2 未通过）任何批量入口都不能改，只能逐个「更正」并填原因；
+        - 预录取名单里的人转正前 decision 也是 0，不排除会把部门打算录取的人一起改掉，
+          随后转正还会因为条数对不上整批回滚；
+        - 不能直接改 selectPendingResultIdsInCycle：预录取写入要靠它放行草稿成员（改部门）。
+
+        FOR UPDATE OF ir：只锁结果行，不连带锁联表的面试安排。锁住后再按这批 ID 更新，
+        写入的行与留痕的行严格一致，期间别人改不动它们。
     -->
-    <select id="selectRejectablePendingResultIdsInCycle" resultType="java.lang.Integer">
-        SELECT ir.result_id
+    <select id="lockBatchTargets" resultType="club.boyuan.official.persistence.entity.InterviewResult">
+        SELECT ir.result_id, ir.decision, ir.assigned_dept_id, ir.notified_at,
+               COALESCE(ir.cycle_id, isc.cycle_id) AS cycle_id
         FROM interview_result ir
         LEFT JOIN interview_schedule isc ON ir.schedule_id = isc.schedule_id
         WHERE COALESCE(ir.cycle_id, isc.cycle_id) = #{cycleId}
-          AND ir.decision = 0
+          AND ir.decision IN (0, 3)
           AND NOT <include refid="screenRejectedPending"/>
           AND NOT EXISTS (SELECT 1 FROM pre_admission_draft pad WHERE pad.result_id = ir.result_id)
           AND ir.result_id IN
         <foreach collection="resultIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        FOR UPDATE OF ir
     </select>
 
     <!-- 预录取写入前的校验：只放行本周期、仍待定、且不是初筛未通过的行 -->

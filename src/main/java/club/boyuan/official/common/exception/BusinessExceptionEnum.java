@@ -160,6 +160,9 @@ public enum BusinessExceptionEnum {
     INTERVIEW_SCHEDULE_NOT_FOUND(3612, "面试安排不存在", HttpStatus.BAD_REQUEST),
     INTERVIEW_PREFERENCE_LOCKED_BY_SCHEDULE(3613, "面试已安排，志愿与可面试时间不可再修改；如需调整请在申请中心提交改期申请", HttpStatus.CONFLICT),
     INTERVIEW_SCHEDULE_NOT_ACTIVE(3614, "面试安排已取消或未生效，无法修改面试时间", HttpStatus.CONFLICT),
+    INTERVIEW_RESULT_DECIDED(3615, "该同学的结果已确定，更正需填写原因", HttpStatus.CONFLICT),
+    INTERVIEW_RESULT_IN_PRE_ADMISSION(3616, "该同学在预录取名单里，请在预录取页处理或先移出名单", HttpStatus.CONFLICT),
+    INTERVIEW_RESULT_NOT_FOUND(3617, "面试结果不存在", HttpStatus.NOT_FOUND),
 
     // 面试评价与协同相关异常 (3700-3799)
     EVALUATION_BOARD_NOT_OPENED(3701, "该周期的评价表尚未开启", HttpStatus.BAD_REQUEST),
