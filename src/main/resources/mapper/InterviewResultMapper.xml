@@ -25,7 +25,7 @@
     <!--
         自动补齐结果名单（ResultRosterService.ensure），口径与原「从面试安排生成名单」一致：
         本届已提交（status ≥ 2）、非初筛未通过（≠ 5）的简历各一行待定结果；有生效安排的带上 schedule_id。
-        已有行一律跳过：按 (cycle_id, resume_id) 判断；飞书拉回的遗留行只有 schedule_id，再按安排兜一道。
+        已有行一律跳过：按 (cycle_id, resume_id) 判断；飞书拉回的遗留行只有 schedule_id，再按该简历本届的安排兜一道。
         防重靠 uk_cycle_resume 与 uk_schedule 两个唯一键 + no-op 的 ODKU（不用 INSERT IGNORE：它会把外键错误降成警告）。
     -->
     <insert id="ensureRoster">
@@ -39,8 +39,10 @@
           AND COALESCE(r.user_id, live.user_id) IS NOT NULL
           AND NOT EXISTS (SELECT 1 FROM interview_result x
                           WHERE x.cycle_id = r.cycle_id AND x.resume_id = r.resume_id)
-          AND (live.schedule_id IS NULL OR NOT EXISTS
-                 (SELECT 1 FROM interview_result y WHERE y.schedule_id = live.schedule_id))
+          <!-- 老行只挂着安排：这份简历本届任何一个安排（含已取消的）上有结果行就算已有，不能再补一行 -->
+          AND NOT EXISTS (SELECT 1 FROM interview_result y
+                          JOIN interview_schedule ys ON ys.schedule_id = y.schedule_id
+                          WHERE ys.resume_id = r.resume_id AND ys.cycle_id = r.cycle_id)
         ON DUPLICATE KEY UPDATE result_id = result_id
     </insert>
 

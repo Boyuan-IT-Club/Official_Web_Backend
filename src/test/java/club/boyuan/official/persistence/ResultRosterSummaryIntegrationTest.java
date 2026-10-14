@@ -81,6 +81,12 @@ class ResultRosterSummaryIntegrationTest {
         // 飞书拉回建的老行：只有 schedule_id，没有 cycle_id / resume_id
         insert("INSERT INTO interview_result (schedule_id, user_id, decision) VALUES (?, ?, 0)",
                 legacySchedule, userOf(legacy));
+        // 老行挂在一个已取消的安排上（改期取消后没再排）：同样算已有
+        int cancelled = resume("CXL", 2);
+        int cancelledSchedule = schedule(cancelled);
+        jdbc.update("UPDATE interview_schedule SET status = 2 WHERE schedule_id = ?", cancelledSchedule);
+        insert("INSERT INTO interview_result (schedule_id, user_id, decision) VALUES (?, ?, 2)",
+                cancelledSchedule, userOf(cancelled));
         int existing = resume("HAS", 2);
         insert("INSERT INTO interview_result (resume_id, cycle_id, user_id, decision) VALUES (?, ?, ?, 1)",
                 existing, cycleId, userOf(existing));
@@ -96,7 +102,9 @@ class ResultRosterSummaryIntegrationTest {
         assertEquals(0, count("SELECT COUNT(*) FROM interview_result WHERE resume_id = ?", legacy),
                 "老行按安排认出来了，不能再按简历补一行");
         assertEquals(1, count("SELECT COUNT(*) FROM interview_result WHERE resume_id = ?", existing));
-        assertEquals(4, count("SELECT COUNT(*) FROM interview_result ir"
+        assertEquals(0, count("SELECT COUNT(*) FROM interview_result WHERE resume_id = ?", cancelled),
+                "挂在已取消安排上的老行也算已有，不能给同一个人再补一行");
+        assertEquals(5, count("SELECT COUNT(*) FROM interview_result ir"
                 + " LEFT JOIN interview_schedule s ON s.schedule_id = ir.schedule_id"
                 + " WHERE COALESCE(ir.cycle_id, s.cycle_id) = ?", cycleId));
     }
