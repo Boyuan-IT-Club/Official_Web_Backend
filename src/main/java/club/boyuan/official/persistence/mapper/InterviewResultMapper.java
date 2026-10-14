@@ -27,4 +27,10 @@ public interface InterviewResultMapper extends BaseMapper<InterviewResult> {
     /** 只返回该周期仍未发布决定（decision=0）的结果，用于加入预录取名单。 */
     List<Integer> selectPendingResultIdsInCycle(@Param("cycleId") Integer cycleId,
                                                 @Param("resultIds") List<Integer> resultIds);
+
+    /**
+     * 「待定全部标为未通过」能动的 result_id：本周期、仍待定、不是初筛未通过、且不在预录取名单里。
+     */
+    List<Integer> selectRejectablePendingResultIdsInCycle(@Param("cycleId") Integer cycleId,
+                                                          @Param("resultIds") List<Integer> resultIds);
 }

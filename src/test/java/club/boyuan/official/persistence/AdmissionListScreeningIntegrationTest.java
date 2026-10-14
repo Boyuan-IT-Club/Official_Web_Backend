@@ -1,5 +1,7 @@
 package club.boyuan.official.persistence;
 
+import club.boyuan.official.domain.interview.dto.BatchDecisionRequestDTO;
+import club.boyuan.official.domain.interview.dto.BatchDecisionResponseDTO;
 import club.boyuan.official.domain.interview.dto.InterviewResultResponseDTO;
 import club.boyuan.official.domain.interview.dto.PreAdmissionBatchRequestDTO;
 import club.boyuan.official.domain.interview.dto.PreAdmissionListResponseDTO;
@@ -149,6 +151,61 @@ class AdmissionListScreeningIntegrationTest {
         assertEquals(DECISION_ADMITTED, count("SELECT decision FROM interview_result WHERE result_id = ?", resultA));
         assertEquals(DECISION_PENDING, count("SELECT decision FROM interview_result WHERE result_id = ?", resultE),
                 "初筛未通过的 E 绝不能被悄悄录取");
+    }
+
+    @Test
+    @DisplayName("批量标记未通过 onlyPending：只改执行时仍待定的行；已录取/初筛未通过/预录取名单里/别届的一律跳过，转正不受影响")
+    void batchRejectOnlyPendingNeverOverwritesDecidedRows() {
+        String tag = "rej" + System.nanoTime();
+        cycleId = insert("INSERT INTO recruitment_cycle (cycle_name, start_date, end_date, academic_year, status, is_active)"
+                        + " VALUES (?, ?, ?, '2099-2100', 2, 1)",
+                tag, LocalDate.now().minusDays(30), LocalDate.now().plusDays(30));
+
+        int p1 = legacyResult(resume(tag, "P1", RESUME_SUBMITTED), DECISION_PENDING);
+        int p2 = legacyResult(resume(tag, "P2", RESUME_SUBMITTED), DECISION_PENDING);
+        // 前端列表加载之后，别的管理员把这个人录取了（比如预录取转正）
+        int admitted = legacyResult(resume(tag, "ADM", RESUME_SUBMITTED), DECISION_ADMITTED);
+        jdbc.update("UPDATE interview_result SET assigned_dept_id = ? WHERE result_id = ?", DEPT_TECH, admitted);
+        // 初筛未通过、仍待定：有单独的通知入口，这里不能顺手改成面试未通过
+        int screenRejected = legacyResult(resume(tag, "SR", RESUME_SCREEN_REJECTED), DECISION_PENDING);
+        // 已在预录取名单里（转正前 decision 仍是 0）：部门打算录取，不能被一键标掉
+        int drafted = legacyResult(resume(tag, "DRF", RESUME_SUBMITTED), DECISION_PENDING);
+        jdbc.update("INSERT INTO pre_admission_draft (cycle_id, result_id, assigned_dept_id) VALUES (?, ?, ?)",
+                cycleId, drafted, DEPT_TECH);
+        int foreign = Integer.MAX_VALUE;
+
+        BatchDecisionRequestDTO req = new BatchDecisionRequestDTO();
+        req.setCycleId(cycleId);
+        req.setDecision(DECISION_REJECTED);
+        req.setOnlyPending(true);
+        req.setResultIds(List.of(p1, p2, admitted, screenRejected, drafted, foreign));
+        BatchDecisionResponseDTO res = resultService.batchDecision(req);
+
+        assertEquals(2, res.getUpdated(), "只有仍待定的 P1、P2 被改");
+        assertEquals(java.util.Set.of(admitted, screenRejected, drafted, foreign), new java.util.HashSet<>(res.getSkipped()));
+        assertEquals(DECISION_REJECTED, count("SELECT decision FROM interview_result WHERE result_id = ?", p1));
+        assertEquals(DECISION_REJECTED, count("SELECT decision FROM interview_result WHERE result_id = ?", p2));
+        assertEquals(DECISION_ADMITTED, count("SELECT decision FROM interview_result WHERE result_id = ?", admitted),
+                "别人刚录取的人绝不能被一份旧列表改成未通过");
+        assertEquals(DEPT_TECH, count("SELECT assigned_dept_id FROM interview_result WHERE result_id = ?", admitted),
+                "录取部门也得原样保留");
+        assertEquals(DECISION_PENDING, count("SELECT decision FROM interview_result WHERE result_id = ?", screenRejected));
+        assertEquals(DECISION_PENDING, count("SELECT decision FROM interview_result WHERE result_id = ?", drafted),
+                "预录取名单里的人不能被一键标成未通过");
+        assertEquals(1, preAdmissionService.finalizeCycle(cycleId),
+                "一键标记之后照常能转正，不会因为草稿成员被改掉而整批回滚");
+        assertEquals(DECISION_ADMITTED, count("SELECT decision FROM interview_result WHERE result_id = ?", drafted));
+
+        // 不开 onlyPending 的旧路径（手动勾选后批量标记）这次不改：仍按 ID 显式覆盖。
+        // 「结果确定后不能再改」的锁定规则在录取流程梳理里另行设计，这里只锁住现状不被意外改坏
+        BatchDecisionRequestDTO explicit = new BatchDecisionRequestDTO();
+        explicit.setCycleId(cycleId);
+        explicit.setDecision(DECISION_REJECTED);
+        explicit.setResultIds(List.of(admitted));
+        assertEquals(1, resultService.batchDecision(explicit).getUpdated());
+        assertEquals(DECISION_REJECTED, count("SELECT decision FROM interview_result WHERE result_id = ?", admitted));
+        assertEquals(0, count("SELECT COUNT(*) FROM interview_result WHERE result_id = ? AND assigned_dept_id IS NOT NULL",
+                admitted), "标记未通过时清空录取部门");
     }
 
     @AfterEach
