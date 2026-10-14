@@ -5,6 +5,8 @@ import club.boyuan.official.integration.feishu.dto.ImportFromFeishuTableRequestD
 import club.boyuan.official.integration.feishu.dto.ImportFromFeishuTableResponseDTO;
 import club.boyuan.official.persistence.entity.Department;
 import club.boyuan.official.persistence.entity.InterviewResult;
+import club.boyuan.official.persistence.entity.InterviewResultChange;
+import club.boyuan.official.persistence.entity.PreAdmissionDraft;
 import club.boyuan.official.persistence.entity.InterviewSchedule;
 import club.boyuan.official.persistence.entity.Resume;
 import club.boyuan.official.persistence.entity.User;
@@ -13,8 +15,12 @@ import club.boyuan.official.common.exception.BusinessExceptionEnum;
 import club.boyuan.official.domain.user.service.DepartmentService;
 import club.boyuan.official.domain.interview.service.IInterviewResultService;
 import club.boyuan.official.domain.interview.service.IInterviewScheduleService;
+import club.boyuan.official.domain.interview.service.ResultRosterService;
+import club.boyuan.official.persistence.mapper.InterviewResultChangeMapper;
+import club.boyuan.official.persistence.mapper.PreAdmissionDraftMapper;
 import club.boyuan.official.persistence.mapper.ResumeMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import club.boyuan.official.domain.user.service.IUserService;
 import club.boyuan.official.domain.resume.service.IRecruitmentCycleService;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +34,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -48,6 +55,9 @@ public class FeishuTablePullImportExecutor {
     private final IInterviewResultService interviewResultService;
     private final DepartmentService departmentService;
     private final IRecruitmentCycleService recruitmentCycleService;
+    private final ResultRosterService rosterService;
+    private final PreAdmissionDraftMapper preAdmissionDraftMapper;
+    private final InterviewResultChangeMapper changeMapper;
 
     public ImportFromFeishuTableResponseDTO execute(
             ImportFromFeishuTableRequestDTO request, Integer defaultOperatorUserId) {
@@ -143,17 +153,18 @@ public class FeishuTablePullImportExecutor {
             User user = resolveUserInCycle(record.name().trim(), preload);
             rowResult.setUserId(user.getUserId());
 
-            if (updateUserDept && dept != null) {
-                user.setDeptId(dept.getDeptId());
-                userService.updateById(user);
-            }
-
             Integer decisionBy = resolveDecisionByUserId(record.decisionMakerName(), defaultOperatorUserId, preload);
             Integer assignedDeptId = dept != null ? dept.getDeptId() : null;
 
             InterviewResult result = upsertInterviewResult(
                     user, assignedDeptId, decision, decisionBy, preload);
             rowResult.setResultId(result.getResultId());
+
+            // 结果写进去了才改用户部门：被锁住没写进去的行，不能把人的部门改了
+            if (updateUserDept && dept != null) {
+                user.setDeptId(dept.getDeptId());
+                userService.updateById(user);
+            }
             return rowResult.setSuccess(true).setMessage("导入成功，decision=" + decision);
         } catch (BusinessException ex) {
             return rowResult.setSuccess(false).setMessage(ex.getMessage());
@@ -166,6 +177,8 @@ public class FeishuTablePullImportExecutor {
     private PullPreloadContext buildPreloadContext(
             Integer cycleId, List<FeishuBitableRecord> records, Integer defaultOperatorUserId) {
         Map<String, Department> deptByName = loadDepartmentByName();
+        // 先把名单补齐：没挂面试安排的人也有名单行，拉回时按简历就能找到，不会再新建一行
+        rosterService.ensure(cycleId);
 
         List<Resume> cycleResumes = resumeMapper.selectList(
                 new LambdaQueryWrapper<Resume>().eq(Resume::getCycleId, cycleId));
@@ -220,6 +233,19 @@ public class FeishuTablePullImportExecutor {
                     .list()
                     .forEach(r -> resultByScheduleId.put(r.getScheduleId(), r));
         }
+        Map<Integer, InterviewResult> resultByResumeId = new HashMap<>();
+        interviewResultService.lambdaQuery()
+                .eq(InterviewResult::getCycleId, cycleId)
+                .isNotNull(InterviewResult::getResumeId)
+                .list()
+                .forEach(r -> resultByResumeId.put(r.getResumeId(), r));
+        Set<Integer> draftedResultIds = preAdmissionDraftMapper.selectList(
+                        new LambdaQueryWrapper<PreAdmissionDraft>()
+                                .select(PreAdmissionDraft::getResultId)
+                                .eq(PreAdmissionDraft::getCycleId, cycleId))
+                .stream()
+                .map(PreAdmissionDraft::getResultId)
+                .collect(Collectors.toSet());
 
         Set<String> decisionNames = new HashSet<>();
         for (FeishuBitableRecord record : records) {
@@ -248,6 +274,8 @@ public class FeishuTablePullImportExecutor {
                 resumeByUserId,
                 scheduleByResumeId,
                 resultByScheduleId,
+                resultByResumeId,
+                draftedResultIds,
                 decisionByUserName,
                 defaultOperatorUserId);
     }
@@ -335,36 +363,104 @@ public class FeishuTablePullImportExecutor {
         }
 
         InterviewSchedule schedule = preload.scheduleByResumeId.get(resume.getResumeId());
-        if (schedule == null) {
-            throw new BusinessException(BusinessExceptionEnum.INTERVIEW_BOOKING_NOT_FOUND,
-                    "该用户在本周期无有效面试安排，无法写入面试结果");
+        // 名单行先按简历找（自动生成的行可能还没挂面试安排），再按面试安排找老数据
+        InterviewResult existing = preload.resultByResumeId.get(resume.getResumeId());
+        if (existing == null && schedule != null) {
+            existing = preload.resultByScheduleId.get(schedule.getScheduleId());
         }
-
-        InterviewResult existing = preload.resultByScheduleId.get(schedule.getScheduleId());
+        // 录取部门只对通过 / 待调剂有意义，未通过、待定不留部门，免得残留成「录取到某部门」
+        Integer toDept = (decision == 1 || decision == 3) ? deptId : null;
         LocalDateTime now = LocalDateTime.now();
+
         if (existing != null) {
-            existing.setDecision(decision);
-            if (deptId != null) {
-                existing.setAssignedDeptId(deptId);
+            if (preload.draftedResultIds.contains(existing.getResultId())) {
+                throw new BusinessException(BusinessExceptionEnum.INTERVIEW_RESULT_IN_PRE_ADMISSION,
+                        "该同学在预录取名单里，以平台为准，飞书拉回不覆盖");
             }
+            if (Objects.equals(existing.getDecision(), decision)
+                    && Objects.equals(existing.getAssignedDeptId(), toDept)) {
+                return existing;
+            }
+            if (isDecided(existing.getDecision())) {
+                throw new BusinessException(BusinessExceptionEnum.INTERVIEW_RESULT_DECIDED,
+                        "平台上已有正式结果，飞书拉回不覆盖；如需更正请在平台「录取结果」里填写原因更正");
+            }
+            LambdaUpdateWrapper<InterviewResult> wrapper = new LambdaUpdateWrapper<InterviewResult>()
+                    .eq(InterviewResult::getResultId, existing.getResultId())
+                    // 拉回不在事务里：判断完到写入之间结果可能被别人定了，条件更新兜底
+                    .in(InterviewResult::getDecision, 0, 3)
+                    .notExists("SELECT 1 FROM pre_admission_draft pad WHERE pad.result_id = interview_result.result_id")
+                    .set(InterviewResult::getDecision, decision)
+                    .set(InterviewResult::getAssignedDeptId, toDept)
+                    .set(InterviewResult::getDecisionAt, now);
+            if (decisionByUserId != null) {
+                wrapper.set(InterviewResult::getDecisionBy, decisionByUserId);
+            }
+            if (existing.getCycleId() == null) {
+                wrapper.set(InterviewResult::getCycleId, resume.getCycleId());
+            }
+            if (existing.getResumeId() == null) {
+                wrapper.set(InterviewResult::getResumeId, resume.getResumeId());
+            }
+            if (!interviewResultService.update(wrapper)) {
+                throw new BusinessException(BusinessExceptionEnum.RESOURCE_CONFLICT,
+                        "该同学的结果刚被别人改过，飞书拉回未覆盖，请到平台上核对");
+            }
+            logChange(existing.getResultId(), resume.getCycleId(), existing, decision, toDept, decisionByUserId);
+            existing.setDecision(decision)
+                    .setAssignedDeptId(toDept)
+                    .setDecisionAt(now);
             if (decisionByUserId != null) {
                 existing.setDecisionBy(decisionByUserId);
             }
-            existing.setDecisionAt(now);
-            interviewResultService.updateById(existing);
+            if (existing.getCycleId() == null) {
+                existing.setCycleId(resume.getCycleId());
+            }
+            if (existing.getResumeId() == null) {
+                existing.setResumeId(resume.getResumeId());
+                preload.resultByResumeId.put(resume.getResumeId(), existing);
+            }
             return existing;
         }
 
+        if (schedule == null) {
+            throw new BusinessException(BusinessExceptionEnum.INTERVIEW_BOOKING_NOT_FOUND,
+                    "该同学不在本周期的录取名单里（简历未通过初筛或无有效面试安排），无法写入面试结果");
+        }
         InterviewResult created = new InterviewResult()
                 .setScheduleId(schedule.getScheduleId())
                 .setUserId(user.getUserId())
-                .setAssignedDeptId(deptId)
+                .setResumeId(resume.getResumeId())
+                .setCycleId(resume.getCycleId())
+                .setAssignedDeptId(toDept)
                 .setDecision(decision)
                 .setDecisionBy(decisionByUserId)
                 .setDecisionAt(now);
         interviewResultService.save(created);
         preload.resultByScheduleId.put(schedule.getScheduleId(), created);
+        preload.resultByResumeId.put(resume.getResumeId(), created);
+        if (decision != 0) {
+            logChange(created.getResultId(), resume.getCycleId(), null, decision, toDept, decisionByUserId);
+        }
         return created;
+    }
+
+    private static boolean isDecided(Integer decision) {
+        return decision != null && (decision == 1 || decision == 2);
+    }
+
+    private void logChange(Integer resultId, Integer cycleId, InterviewResult before,
+                           int toDecision, Integer toDept, Integer operator) {
+        changeMapper.insert(new InterviewResultChange()
+                .setResultId(resultId)
+                .setCycleId(cycleId)
+                .setAction(InterviewResultChange.ACTION_FEISHU)
+                .setFromDecision(before != null ? before.getDecision() : null)
+                .setFromDeptId(before != null ? before.getAssignedDeptId() : null)
+                .setToDecision(toDecision)
+                .setToDeptId(toDept)
+                .setWasNotified(before != null && before.getNotifiedAt() != null ? 1 : 0)
+                .setOperatorId(operator));
     }
 
     private record PullPreloadContext(
@@ -374,6 +470,8 @@ public class FeishuTablePullImportExecutor {
             Map<Integer, Resume> resumeByUserId,
             Map<Integer, InterviewSchedule> scheduleByResumeId,
             Map<Integer, InterviewResult> resultByScheduleId,
+            Map<Integer, InterviewResult> resultByResumeId,
+            Set<Integer> draftedResultIds,
             Map<String, Integer> decisionByUserName,
             Integer defaultOperatorUserId) {
     }

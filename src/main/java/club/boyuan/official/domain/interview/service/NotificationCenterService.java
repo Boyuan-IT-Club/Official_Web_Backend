@@ -34,12 +34,15 @@ public class NotificationCenterService {
     private final UserMapper userMapper;
     private final InterviewScheduleMapper scheduleMapper;
     private final InterviewResultMapper resultMapper;
+    private final ResultRosterService rosterService;
     private final InterviewNotificationLogMapper notificationLogMapper;
     private final InterviewSessionMapper sessionMapper;
     private final DepartmentMapper departmentMapper;
     private final club.boyuan.official.messaging.InterviewNotificationProducer notificationProducer;
 
     public NotificationCenterDTO overview(Integer cycleId) {
+        // 通知页靠结果名单算「待发」，名单没补齐就会漏人
+        rosterService.ensure(cycleId);
         List<Resume> rejected = resumeMapper.selectList(new LambdaQueryWrapper<Resume>()
                 .eq(Resume::getCycleId, cycleId)
                 .eq(Resume::getStatus, ResumeServiceImpl.STATUS_SCREEN_REJECTED));

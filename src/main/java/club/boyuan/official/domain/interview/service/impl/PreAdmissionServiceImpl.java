@@ -7,11 +7,15 @@ import club.boyuan.official.domain.interview.dto.PreAdmissionListResponseDTO;
 import club.boyuan.official.domain.interview.dto.PreAdmissionMutationResponseDTO;
 import club.boyuan.official.domain.interview.dto.PreAdmissionRemoveRequestDTO;
 import club.boyuan.official.domain.interview.service.PreAdmissionService;
+import club.boyuan.official.domain.interview.service.ResultRosterService;
 import club.boyuan.official.domain.user.service.IUserService;
 import club.boyuan.official.persistence.entity.Department;
+import club.boyuan.official.persistence.entity.InterviewResult;
+import club.boyuan.official.persistence.entity.InterviewResultChange;
 import club.boyuan.official.persistence.entity.PreAdmissionDraft;
 import club.boyuan.official.persistence.entity.User;
 import club.boyuan.official.persistence.mapper.DepartmentMapper;
+import club.boyuan.official.persistence.mapper.InterviewResultChangeMapper;
 import club.boyuan.official.persistence.mapper.InterviewResultMapper;
 import club.boyuan.official.persistence.mapper.PreAdmissionDraftMapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -26,7 +30,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -37,6 +43,8 @@ public class PreAdmissionServiceImpl implements PreAdmissionService {
     private final InterviewResultMapper resultMapper;
     private final DepartmentMapper departmentMapper;
     private final IUserService userService;
+    private final ResultRosterService rosterService;
+    private final InterviewResultChangeMapper changeMapper;
 
     @Override
     public PreAdmissionListResponseDTO list(Integer cycleId, String name, String department,
@@ -44,6 +52,7 @@ public class PreAdmissionServiceImpl implements PreAdmissionService {
         if (cycleId == null) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "招募周期不能为空");
         }
+        rosterService.ensure(cycleId);
         Page<PreAdmissionDraft> result = draftMapper.selectDraftPage(
                 new Page<>(page, size), cycleId, name, department);
         return new PreAdmissionListResponseDTO(result.getTotal(), result.getRecords(),
@@ -91,12 +100,36 @@ public class PreAdmissionServiceImpl implements PreAdmissionService {
         if (drafts.isEmpty()) {
             return 0;
         }
-        int published = draftMapper.publishToResults(cycleId, currentUserId());
+        // 已有结果的人发布不了：先点名，别等发布到一半条数对不上才整批回滚、只给一句「请刷新」
+        List<String> conflicts = draftMapper.selectConflictNames(cycleId);
+        if (!conflicts.isEmpty()) {
+            throw new BusinessException(BusinessExceptionEnum.RESOURCE_CONFLICT,
+                    "以下同学的结果已经不是待定，转正不了，请先把他们移出预录取名单：" + String.join("、", conflicts));
+        }
+        List<Integer> resultIds = drafts.stream().map(PreAdmissionDraft::getResultId).toList();
+        Map<Integer, InterviewResult> before = resultMapper.selectBatchIds(resultIds).stream()
+                .collect(Collectors.toMap(InterviewResult::getResultId, r -> r));
+        Integer operator = currentUserId();
+        int published = draftMapper.publishToResults(cycleId, operator);
         if (published != drafts.size()) {
             throw new BusinessException(BusinessExceptionEnum.RESOURCE_CONFLICT,
-                    "预录取名单中有候选人已被定稿，请刷新名单后重试");
+                    "预录取名单中有候选人的结果刚被改动，请刷新名单后重试");
         }
-        draftMapper.deleteBatch(cycleId, drafts.stream().map(PreAdmissionDraft::getResultId).toList());
+        // 转正同样留痕：谁、何时把哪些人从待定转成了录取到哪个部门
+        for (PreAdmissionDraft draft : drafts) {
+            InterviewResult prev = before.get(draft.getResultId());
+            changeMapper.insert(new InterviewResultChange()
+                    .setResultId(draft.getResultId())
+                    .setCycleId(cycleId)
+                    .setAction(InterviewResultChange.ACTION_FINALIZE)
+                    .setFromDecision(prev != null ? prev.getDecision() : 0)
+                    .setFromDeptId(prev != null ? prev.getAssignedDeptId() : null)
+                    .setToDecision(1)
+                    .setToDeptId(draft.getAssignedDeptId())
+                    .setWasNotified(prev != null && prev.getNotifiedAt() != null ? 1 : 0)
+                    .setOperatorId(operator));
+        }
+        draftMapper.deleteBatch(cycleId, resultIds);
         log.info("预录取名单转正完成，cycleId={}，发布 {} 人", cycleId, published);
         return published;
     }

@@ -1,5 +1,6 @@
 package club.boyuan.official.domain.interview.service;
 
+import club.boyuan.official.domain.interview.dto.ResultSummaryDTO;
 import club.boyuan.official.domain.interview.dto.BatchDecisionRequestDTO;
 import club.boyuan.official.domain.interview.dto.BatchDecisionResponseDTO;
 import club.boyuan.official.domain.interview.dto.InterviewResultResponseDTO;
@@ -43,4 +44,7 @@ public interface IInterviewResultService extends IService<InterviewResult> {
      * @return 本次新建的行数
      */
     int seedFromSchedules(Integer cycleId);
+
+    /** 录取统计：总数与按部门拆分（会先自动补齐名单） */
+    ResultSummaryDTO summary(Integer cycleId);
 }

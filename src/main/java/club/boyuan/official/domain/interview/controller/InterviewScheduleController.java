@@ -100,7 +100,9 @@ public class InterviewScheduleController {
         data.put("resultId", result.getResultId());
         data.put("decision", result.getDecision()); // 1=通过 2=未通过
         data.put("decisionAt", result.getDecisionAt());
-        if (result.getAssignedDeptId() != null) {
+        // 部门只对录取者给出：未通过的行可能残留历史部门（此前标未通过不清空部门），
+        // 返回出去学生会以为自己被某个部门录了
+        if (Integer.valueOf(1).equals(result.getDecision()) && result.getAssignedDeptId() != null) {
             Department dept = departmentMapper.selectById(result.getAssignedDeptId());
             data.put("assignedDeptId", result.getAssignedDeptId());
             data.put("assignedDeptName", dept != null ? dept.getDeptName() : null);

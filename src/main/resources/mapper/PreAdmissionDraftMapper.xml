@@ -3,7 +3,7 @@
 <mapper namespace="club.boyuan.official.persistence.mapper.PreAdmissionDraftMapper">
 
     <select id="selectDraftPage" resultType="club.boyuan.official.persistence.entity.PreAdmissionDraft">
-        SELECT pad.*, ir.user_id, u.name AS user_name, d.dept_name AS department_name
+        SELECT pad.*, ir.user_id, ir.decision, u.name AS user_name, d.dept_name AS department_name
         FROM pre_admission_draft pad
         JOIN interview_result ir ON ir.result_id = pad.result_id
         JOIN user u ON u.user_id = ir.user_id
@@ -32,6 +32,29 @@
           AND NOT <include refid="club.boyuan.official.persistence.mapper.InterviewResultMapper.screenRejectedPending"/>
         GROUP BY d.dept_id, d.dept_name
         ORDER BY d.dept_name
+    </select>
+
+    <!-- 流程进度里的「预录取人数」：与名单同一口径 -->
+    <select id="countVisibleDrafts" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM pre_admission_draft pad
+        JOIN interview_result ir ON ir.result_id = pad.result_id
+        WHERE pad.cycle_id = #{cycleId}
+          AND NOT <include refid="club.boyuan.official.persistence.mapper.InterviewResultMapper.screenRejectedPending"/>
+    </select>
+
+    <!--
+        挂在「已有结果」的行上的草稿：转正时这些人发布不了，以前只会报「有候选人已被定稿，请刷新」，
+        刷新也没用。现在转正前先把名字查出来告诉管理员，请他先移出名单。
+    -->
+    <select id="selectConflictNames" resultType="java.lang.String">
+        SELECT COALESCE(NULLIF(u.name, ''), u.username)
+        FROM pre_admission_draft pad
+        JOIN interview_result ir ON ir.result_id = pad.result_id
+        JOIN user u ON u.user_id = ir.user_id
+        WHERE pad.cycle_id = #{cycleId}
+          AND ir.decision &lt;&gt; 0
+          AND NOT <include refid="club.boyuan.official.persistence.mapper.InterviewResultMapper.screenRejectedPending"/>
+        ORDER BY pad.draft_id
     </select>
 
     <insert id="upsertBatch">
