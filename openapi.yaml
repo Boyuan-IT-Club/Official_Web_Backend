@@ -3227,6 +3227,732 @@ paths:
           description: 键不在热载白名单或值为空
         '502':
           description: Agent 服务不可达
+  /api/admin/agent/retrospective/snapshot:
+    post:
+      summary: 采集并保存周期指标快照
+      deprecated: false
+      description: 转发 Agent 服务 POST /admin/retrospective/snapshot。内容与最新一版相同则不落新版本(created=false)。采集是同步的,可能要几十秒。权限 evaluation:run。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                cycle_id: 2026
+      responses:
+        '200':
+          description: 采集完成(是否每个域都采到要看 data.snapshot.domains)
+        '404':
+          description: 后端查不到这个周期
+        '502':
+          description: Agent 服务不可达(含读超时)
+    get:
+      summary: 读周期指标快照
+      deprecated: false
+      description: 转发 Agent 服务 GET /admin/retrospective/snapshot。不给 version 取最新一版;给 baseline_cycle_id 时每个指标附 prev/delta/delta_ratio。权限 resume:audit 或 evaluation:run。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      parameters:
+      - name: cycle_id
+        in: query
+        description: 招新周期 ID
+        required: true
+        schema:
+          type: integer
+      - name: version
+        in: query
+        description: 快照版本,缺省取最新一版
+        required: false
+        schema:
+          type: integer
+      - name: baseline_cycle_id
+        in: query
+        description: 基线周期 ID,给了就对着它算差值
+        required: false
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: ''
+        '400':
+          description: 基线周期与本周期相同
+        '404':
+          description: 该周期还没有快照 / 指定版本不存在 / 基线周期还没有快照
+        '409':
+          description: 基线周期没有同一版指标定义的快照,不能对比
+        '502':
+          description: Agent 服务不可达(含读超时)
+  /api/admin/agent/retrospective/snapshots:
+    get:
+      summary: 周期指标快照版本列表
+      deprecated: false
+      description: 转发 Agent 服务 GET /admin/retrospective/snapshots。新版本在前,不含指标正文。权限 resume:audit 或 evaluation:run。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      parameters:
+      - name: cycle_id
+        in: query
+        description: 招新周期 ID
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: ''
+        '502':
+          description: Agent 服务不可达(含读超时)
+  /api/admin/agent/retrospective/run:
+    post:
+      summary: 生成一版周期复盘报告草稿
+      deprecated: false
+      description: 转发 Agent 服务 POST /admin/retrospective/run。先采一次快照,再后台生成;立即返回占到的版本号,之后轮询 report 接口直到 status 变成 draft 或 failed。权限 evaluation:run。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                cycle_id: 2026
+                baseline_cycle_id: 2025
+      responses:
+        '202':
+          description: 已开始生成
+        '400':
+          description: 基线周期与本周期相同
+        '404':
+          description: 后端查不到这个周期,或基线周期还没有快照
+        '409':
+          description: 该周期已有一份报告在生成,或基线周期没有同一版指标定义的快照
+        '503':
+          description: 报告生成没有开启(功能未开放,不是故障)
+        '502':
+          description: Agent 服务不可达(含读超时)
+  /api/admin/agent/retrospective/report:
+    get:
+      summary: 读周期复盘报告
+      deprecated: false
+      description: 转发 Agent 服务 GET /admin/retrospective/report。不给 version 取最新一版;没有 evaluation:run 的人只看得到已发布的版本(由 Agent 按令牌裁决)。权限 resume:audit 或 evaluation:run。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      parameters:
+      - name: cycle_id
+        in: query
+        description: 招新周期 ID
+        required: true
+        schema:
+          type: integer
+      - name: version
+        in: query
+        description: 报告版本,缺省取最新一版
+        required: false
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: ''
+        '404':
+          description: 没有可见的报告版本
+        '502':
+          description: Agent 服务不可达(含读超时)
+  /api/admin/agent/retrospective/reports:
+    get:
+      summary: 周期复盘报告版本列表
+      deprecated: false
+      description: 转发 Agent 服务 GET /admin/retrospective/reports。新版本在前,不含正文;没有 evaluation:run 的人只看到已发布的。权限 resume:audit 或 evaluation:run。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      parameters:
+      - name: cycle_id
+        in: query
+        description: 招新周期 ID
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: ''
+        '502':
+          description: Agent 服务不可达(含读超时)
+  /api/admin/agent/retrospective/publish:
+    post:
+      summary: 发布周期复盘报告
+      deprecated: false
+      description: 转发 Agent 服务 POST /admin/retrospective/publish。发布一个草稿版本,该周期原先已发布的那版转为 superseded。权限 evaluation:run。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                cycle_id: 2026
+                version: 4
+      responses:
+        '200':
+          description: 已发布
+        '404':
+          description: 没有这个版本
+        '409':
+          description: 该版本不是草稿
+        '503':
+          description: 审计写入失败,报告没有发布,可重试
+        '502':
+          description: Agent 服务不可达(含读超时)
+  /api/admin/agent/org-memory:
+    get:
+      summary: 组织记忆列表
+      deprecated: false
+      description: 转发 Agent 服务 GET /admin/org-memory。最近勾选的在前;data.enabled 是召回开关现在的状态,每项的 expired 为真表示已过保质期、等人续期或退役。权限 evaluation:run。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      parameters:
+      - name: status
+        in: query
+        description: approved / retired,缺省看全部
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: ''
+        '502':
+          description: Agent 服务不可达(含读超时)
+  /api/admin/agent/org-memory/approve:
+    post:
+      summary: 勾选复盘教训为组织记忆
+      deprecated: false
+      description: 转发 Agent 服务 POST /admin/org-memory/approve。把已发布报告里的一条候选教训存成组织记忆;content 不给就用报告里的原文。权限 evaluation:run。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                cycle_id: 2026
+                version: 4
+                lesson_index: 0
+                audience: admin
+                valid_days: 365
+      responses:
+        '201':
+          description: 已勾选,data 是组织记忆对象
+        '404':
+          description: 没有这份报告,或报告里没有这条教训
+        '409':
+          description: 报告不是已发布状态,或这条教训已经勾选过
+        '422':
+          description: 文字过不了闸门(超长、疑似个人信息、像指令),或请求体不合法
+        '503':
+          description: 审计写入失败,没有勾选,可重试
+        '502':
+          description: Agent 服务不可达(含读超时)
+  /api/admin/agent/org-memory/retire:
+    post:
+      summary: 退役组织记忆
+      deprecated: false
+      description: 转发 Agent 服务 POST /admin/org-memory/retire。不再召回,记录保留。权限 evaluation:run。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                memory_id: org_3f9a1c2b
+      responses:
+        '200':
+          description: 已退役
+        '404':
+          description: 组织记忆不存在
+        '409':
+          description: 已经退役
+        '503':
+          description: 审计写入失败,没有执行,可重试
+        '502':
+          description: Agent 服务不可达(含读超时)
+  /api/admin/agent/org-memory/renew:
+    post:
+      summary: 续期组织记忆
+      deprecated: false
+      description: 转发 Agent 服务 POST /admin/org-memory/renew。保质期改为从现在起 valid_days 天(缺省 365)。权限 evaluation:run。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                memory_id: org_3f9a1c2b
+                valid_days: 365
+      responses:
+        '200':
+          description: 已续期,data 是组织记忆对象
+        '404':
+          description: 组织记忆不存在
+        '409':
+          description: 已经退役
+        '503':
+          description: 审计写入失败,没有执行,可重试
+        '502':
+          description: Agent 服务不可达(含读超时)
+  /api/admin/agent/kb/ops/runs:
+    post:
+      summary: 启动知识库运营离线分析
+      deprecated: false
+      description: 转发 Agent 服务 POST /admin/kb/ops/runs。后台执行,返回 run_id;之后轮询运行列表看结局。权限 kb:manage。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      requestBody:
+        required: false
+        description: 可不带;days 是往回看多少天的检索日志(1-30,默认 7)
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                days: 7
+      responses:
+        '202':
+          description: 已启动
+        '409':
+          description: 已有分析在跑
+        '502':
+          description: Agent 服务不可达(含读超时)
+    get:
+      summary: 知识库运营分析运行列表
+      deprecated: false
+      description: 转发 Agent 服务 GET /admin/kb/ops/runs。新的在前。权限 kb:manage。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      parameters:
+      - name: limit
+        in: query
+        description: 条数(1-50,默认 20)
+        required: false
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: ''
+        '502':
+          description: Agent 服务不可达(含读超时)
+  /api/admin/agent/kb/ops/topics:
+    get:
+      summary: 知识缺口主题清单
+      deprecated: false
+      description: 转发 Agent 服务 GET /admin/kb/ops/topics。按影响面从大到小;run_id 缺省取最近一次成功的运行,一次都没成功过时返回空清单(run 为 null)。权限 kb:manage。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      parameters:
+      - name: run_id
+        in: query
+        description: 运行号,缺省取最近一次成功的运行
+        required: false
+        schema:
+          type: string
+      - name: scope
+        in: query
+        description: actionable(缺省)/ all / untriaged / official_knowledge / personal_data / out_of_scope / chitchat
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: ''
+        '400':
+          description: scope 取值无效
+        '404':
+          description: 运行不存在
+        '502':
+          description: Agent 服务不可达(含读超时)
+  /api/admin/agent/kb/ops/drafts:
+    get:
+      summary: 知识库草稿列表
+      deprecated: false
+      description: 转发 Agent 服务 GET /admin/kb/ops/drafts。新的在前。权限 kb:manage。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      parameters:
+      - name: status
+        in: query
+        description: pending(缺省)/ approved / rejected / superseded / all
+        required: false
+        schema:
+          type: string
+      - name: kind
+        in: query
+        description: alt_question / new_faq / missing
+        required: false
+        schema:
+          type: string
+      - name: page
+        in: query
+        description: 页码(默认 1)
+        required: false
+        schema:
+          type: integer
+      - name: size
+        in: query
+        description: 每页条数(1-100,默认 20)
+        required: false
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: ''
+        '400':
+          description: status 或 kind 取值无效
+        '502':
+          description: Agent 服务不可达(含读超时)
+  /api/admin/agent/kb/ops/drafts/{draftId}:
+    get:
+      summary: 知识库草稿详情
+      deprecated: false
+      description: 转发 Agent 服务 GET /admin/kb/ops/drafts/{id}。补问法草稿附带目标 FAQ 的现有内容(target)。权限 kb:manage。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      parameters:
+      - name: draftId
+        in: path
+        description: 草稿号
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: ''
+        '404':
+          description: 草稿不存在
+        '502':
+          description: Agent 服务不可达(含读超时)
+    put:
+      summary: 批准前修改知识库草稿
+      deprecated: false
+      description: 转发 Agent 服务 PUT /admin/kb/ops/drafts/{id}。只有待审的草稿能改;改动只落在草稿上,不碰知识库。权限 kb:manage。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      parameters:
+      - name: draftId
+        in: path
+        description: 草稿号
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                question: 社费是多少
+                answer: 每学期 20 元
+                cycle_id: 2026
+      responses:
+        '200':
+          description: 已保存
+        '404':
+          description: 草稿不存在
+        '409':
+          description: 草稿已处理,或正在被别人处理
+        '502':
+          description: Agent 服务不可达(含读超时)
+  /api/admin/agent/kb/ops/drafts/{draftId}/approve:
+    post:
+      summary: 批准知识库草稿并发布
+      deprecated: false
+      description: 转发 Agent 服务 POST /admin/kb/ops/drafts/{id}/approve。唯一会向知识库写内容的动作;data.audit_recorded 为 false 表示已发布但缺一条结果审计。权限 kb:manage。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      parameters:
+      - name: draftId
+        in: path
+        description: 草稿号
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: 已发布到知识库
+        '400':
+          description: 草稿内容不齐,不能发布
+        '404':
+          description: 草稿不存在
+        '409':
+          description: 草稿已处理,或正在被别人处理
+        '503':
+          description: 审计或嵌入服务不可用,草稿没有发布,可重试
+        '502':
+          description: Agent 服务不可达(含读超时)
+  /api/admin/agent/kb/ops/drafts/{draftId}/reject:
+    post:
+      summary: 驳回知识库草稿
+      deprecated: false
+      description: 转发 Agent 服务 POST /admin/kb/ops/drafts/{id}/reject。不发布,草稿归档。权限 kb:manage。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      parameters:
+      - name: draftId
+        in: path
+        description: 草稿号
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: 已驳回
+        '404':
+          description: 草稿不存在
+        '409':
+          description: 草稿已处理,或正在被别人处理
+        '503':
+          description: 审计服务不可用,驳回没有执行,可重试
+        '502':
+          description: Agent 服务不可达(含读超时)
+  /api/admin/agent/kb/ops/faithfulness/runs:
+    post:
+      summary: 启动知识库忠实度抽样
+      deprecated: false
+      description: 转发 Agent 服务 POST /admin/kb/ops/faithfulness/runs。后台执行,返回 run_id;之后轮询运行列表看结局。权限 kb:manage。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      requestBody:
+        required: false
+        description: 可不带;days 是往回看多少天的对话(1-30,默认 7),sample_size 是抽多少轮(1-100,默认 30)
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                days: 7
+                sample_size: 30
+      responses:
+        '202':
+          description: 已启动
+        '409':
+          description: 抽样没有在配置里打开,或已有抽样在跑(看 message 区分)
+        '502':
+          description: Agent 服务不可达(含读超时)
+    get:
+      summary: 忠实度抽样运行列表
+      deprecated: false
+      description: 转发 Agent 服务 GET /admin/kb/ops/faithfulness/runs。新的在前,忠实度与引用核验的数字在每项的 stats 里。权限 kb:manage。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      parameters:
+      - name: limit
+        in: query
+        description: 条数(1-50,默认 20)
+        required: false
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: ''
+        '502':
+          description: Agent 服务不可达(含读超时)
+  /api/admin/agent/kb/ops/faithfulness/samples:
+    get:
+      summary: 忠实度抽样样本
+      deprecated: false
+      description: 转发 Agent 服务 GET /admin/kb/ops/faithfulness/samples。一次抽样的样本(那一轮的问题与回复、逐条说法的结论),有问题的排前面;run_id 缺省取最近一次成功的运行,一次都没成功过时返回空列表(run 为 null)。权限 kb:manage。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      parameters:
+      - name: run_id
+        in: query
+        description: 运行号,缺省取最近一次成功的运行
+        required: false
+        schema:
+          type: string
+      - name: problems_only
+        in: query
+        description: 只看有无依据或矛盾说法的样本(默认 false)
+        required: false
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: ''
+        '404':
+          description: 运行不存在
+        '502':
+          description: Agent 服务不可达(含读超时)
+  /api/admin/agent/evaluation/calibration/cases:
+    get:
+      summary: 初筛校准案例列表
+      deprecated: false
+      description: 转发 Agent 服务 GET /admin/evaluation/calibration/cases。data.watermark 是当前最大的案例号,data.enabled 是评分时是否给评委看判例的开关。权限 resume:audit。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      parameters:
+      - name: checklist
+        in: query
+        description: 按清单过滤(部门名或「认真程度」)
+        required: false
+        schema:
+          type: string
+      - name: item
+        in: query
+        description: 按判定项过滤
+        required: false
+        schema:
+          type: string
+      - name: include_retired
+        in: query
+        description: 是否连已停用的一起返回(默认 false)
+        required: false
+        schema:
+          type: boolean
+      - name: limit
+        in: query
+        description: 条数(默认 200)
+        required: false
+        schema:
+          type: integer
+      - name: offset
+        in: query
+        description: 偏移量(默认 0)
+        required: false
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: ''
+        '502':
+          description: Agent 服务不可达(含读超时)
+    post:
+      summary: 录入一条种子判例
+      deprecated: false
+      description: 转发 Agent 服务 POST /admin/evaluation/calibration/cases。新判例只对之后才开跑的周期生效。权限 evaluation:run。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                checklist: 技术部
+                item: 有项目经历
+                met: true
+                quote: 做过课程设计
+                reason: 课程设计算项目经历
+      responses:
+        '201':
+          description: 已入库
+        '400':
+          description: 入库筛查不过(判定项不存在、内容不齐等)
+        '503':
+          description: 审计或嵌入服务不可用,判例没有入库,可重试
+        '502':
+          description: Agent 服务不可达(含读超时)
+  /api/admin/agent/evaluation/calibration/cases/{caseId}:
+    delete:
+      summary: 停用一条校准案例
+      deprecated: false
+      description: 转发 Agent 服务 DELETE /admin/evaluation/calibration/cases/{id}。不删行,停用立即生效(包括已经在评的周期)。权限 evaluation:run。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      parameters:
+      - name: caseId
+        in: path
+        description: 案例号
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: 已停用
+        '404':
+          description: 判例不存在或已停用
+        '503':
+          description: 审计服务不可用,没有执行,可重试
+        '502':
+          description: Agent 服务不可达(含读超时)
+  /api/admin/agent/evaluation/calibration/harvest:
+    post:
+      summary: 从已结束周期收割校准案例
+      deprecated: false
+      description: 转发 Agent 服务 POST /admin/evaluation/calibration/harvest。把一个已结束周期里人机一致的评分卡收割成校准案例,返回各步计数;重复收割是幂等的。权限 evaluation:run。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                cycle_id: 2025
+      responses:
+        '200':
+          description: 收割完成
+        '409':
+          description: 收割功能未启用,或该周期还在进行中
+        '503':
+          description: 确认不了周期是否结束,或审计、嵌入服务不可用
+        '502':
+          description: Agent 服务不可达(含读超时)
+  /api/admin/agent/evaluation/clauses:
+    get:
+      summary: 评分条款候选列表
+      deprecated: false
+      description: 转发 Agent 服务 GET /admin/evaluation/clauses。一个周期已生成的条款候选,支持卡数多的在前;没生成过则 items 为空,data.enabled 是「允许生成」的开关。候选只读展示,不会改任何规则。权限 resume:audit。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      parameters:
+      - name: cycle_id
+        in: query
+        description: 招新周期 ID
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: ''
+        '502':
+          description: Agent 服务不可达(含读超时)
+  /api/admin/agent/evaluation/clauses/generate:
+    post:
+      summary: 生成评分条款候选
+      deprecated: false
+      description: 转发 Agent 服务 POST /admin/evaluation/clauses/generate。为一个已结束的周期生成候选,整批替换该周期原有的候选,返回各步计数。同步调一次模型,可能要几十秒。权限 evaluation:run。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                cycle_id: 2025
+      responses:
+        '200':
+          description: 生成完成
+        '409':
+          description: 生成功能未启用,或该周期还在进行中
+        '502':
+          description: 模型两次都没给出合规的输出(原有的候选保留,message 是 Agent 的说明);或 Agent 服务不可达(含读超时)
+        '503':
+          description: 确认不了周期是否结束,或审计服务不可用
   /api/admin/cache/clear:
     post:
       summary: 清理Redis缓存
