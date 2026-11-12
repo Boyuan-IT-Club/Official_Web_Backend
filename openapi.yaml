@@ -3406,6 +3406,110 @@ paths:
           description: 审计写入失败,报告没有发布,可重试
         '502':
           description: Agent 服务不可达(含读超时)
+  /api/admin/agent/org-memory:
+    get:
+      summary: 组织记忆列表
+      deprecated: false
+      description: 转发 Agent 服务 GET /admin/org-memory。最近勾选的在前;data.enabled 是召回开关现在的状态,每项的 expired 为真表示已过保质期、等人续期或退役。权限 evaluation:run。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      parameters:
+      - name: status
+        in: query
+        description: approved / retired,缺省看全部
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: ''
+        '502':
+          description: Agent 服务不可达(含读超时)
+  /api/admin/agent/org-memory/approve:
+    post:
+      summary: 勾选复盘教训为组织记忆
+      deprecated: false
+      description: 转发 Agent 服务 POST /admin/org-memory/approve。把已发布报告里的一条候选教训存成组织记忆;content 不给就用报告里的原文。权限 evaluation:run。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                cycle_id: 2026
+                version: 4
+                lesson_index: 0
+                audience: admin
+                valid_days: 365
+      responses:
+        '201':
+          description: 已勾选,data 是组织记忆对象
+        '404':
+          description: 没有这份报告,或报告里没有这条教训
+        '409':
+          description: 报告不是已发布状态,或这条教训已经勾选过
+        '422':
+          description: 文字过不了闸门(超长、疑似个人信息、像指令),或请求体不合法
+        '503':
+          description: 审计写入失败,没有勾选,可重试
+        '502':
+          description: Agent 服务不可达(含读超时)
+  /api/admin/agent/org-memory/retire:
+    post:
+      summary: 退役组织记忆
+      deprecated: false
+      description: 转发 Agent 服务 POST /admin/org-memory/retire。不再召回,记录保留。权限 evaluation:run。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                memory_id: org_3f9a1c2b
+      responses:
+        '200':
+          description: 已退役
+        '404':
+          description: 组织记忆不存在
+        '409':
+          description: 已经退役
+        '503':
+          description: 审计写入失败,没有执行,可重试
+        '502':
+          description: Agent 服务不可达(含读超时)
+  /api/admin/agent/org-memory/renew:
+    post:
+      summary: 续期组织记忆
+      deprecated: false
+      description: 转发 Agent 服务 POST /admin/org-memory/renew。保质期改为从现在起 valid_days 天(缺省 365)。权限 evaluation:run。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                memory_id: org_3f9a1c2b
+                valid_days: 365
+      responses:
+        '200':
+          description: 已续期,data 是组织记忆对象
+        '404':
+          description: 组织记忆不存在
+        '409':
+          description: 已经退役
+        '503':
+          description: 审计写入失败,没有执行,可重试
+        '502':
+          description: Agent 服务不可达(含读超时)
   /api/admin/agent/kb/ops/runs:
     post:
       summary: 启动知识库运营离线分析
@@ -3618,6 +3722,75 @@ paths:
           description: 草稿已处理,或正在被别人处理
         '503':
           description: 审计服务不可用,驳回没有执行,可重试
+        '502':
+          description: Agent 服务不可达(含读超时)
+  /api/admin/agent/kb/ops/faithfulness/runs:
+    post:
+      summary: 启动知识库忠实度抽样
+      deprecated: false
+      description: 转发 Agent 服务 POST /admin/kb/ops/faithfulness/runs。后台执行,返回 run_id;之后轮询运行列表看结局。权限 kb:manage。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      requestBody:
+        required: false
+        description: 可不带;days 是往回看多少天的对话(1-30,默认 7),sample_size 是抽多少轮(1-100,默认 30)
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                days: 7
+                sample_size: 30
+      responses:
+        '202':
+          description: 已启动
+        '409':
+          description: 抽样没有在配置里打开,或已有抽样在跑(看 message 区分)
+        '502':
+          description: Agent 服务不可达(含读超时)
+    get:
+      summary: 忠实度抽样运行列表
+      deprecated: false
+      description: 转发 Agent 服务 GET /admin/kb/ops/faithfulness/runs。新的在前,忠实度与引用核验的数字在每项的 stats 里。权限 kb:manage。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      parameters:
+      - name: limit
+        in: query
+        description: 条数(1-50,默认 20)
+        required: false
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: ''
+        '502':
+          description: Agent 服务不可达(含读超时)
+  /api/admin/agent/kb/ops/faithfulness/samples:
+    get:
+      summary: 忠实度抽样样本
+      deprecated: false
+      description: 转发 Agent 服务 GET /admin/kb/ops/faithfulness/samples。一次抽样的样本(那一轮的问题与回复、逐条说法的结论),有问题的排前面;run_id 缺省取最近一次成功的运行,一次都没成功过时返回空列表(run 为 null)。权限 kb:manage。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      parameters:
+      - name: run_id
+        in: query
+        description: 运行号,缺省取最近一次成功的运行
+        required: false
+        schema:
+          type: string
+      - name: problems_only
+        in: query
+        description: 只看有无依据或矛盾说法的样本(默认 false)
+        required: false
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: ''
+        '404':
+          description: 运行不存在
         '502':
           description: Agent 服务不可达(含读超时)
   /api/admin/agent/evaluation/calibration/cases:

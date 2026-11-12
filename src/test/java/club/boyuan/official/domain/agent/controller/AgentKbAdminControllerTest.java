@@ -333,4 +333,95 @@ class AgentKbAdminControllerTest {
         assertThrows(ResourceAccessException.class, () -> controller.opsTopics(AUTH, null, null));
         assertThrows(ResourceAccessException.class, () -> controller.approveOpsDraft(AUTH, 12L));
     }
+
+    // ── 忠实度抽样(/ops/faithfulness/**)──
+
+    @Test
+    @DisplayName("启动抽样:请求体转发,202 保持;不带请求体时转发 null")
+    void startFaithfulnessRun_keeps202() throws Exception {
+        Map<String, Object> body = Map.of("days", 14, "sample_size", 50);
+        when(client.postKbFaithfulnessRun(AUTH, body))
+                .thenReturn(upstream(HttpStatus.ACCEPTED, "{\"run_id\":\"kbfaith_1\",\"status\":\"running\"}"));
+        when(client.postKbFaithfulnessRun(eq(AUTH), isNull()))
+                .thenReturn(upstream(HttpStatus.ACCEPTED, "{\"run_id\":\"kbfaith_2\",\"status\":\"running\"}"));
+
+        ResponseEntity<ResponseMessage<?>> resp = controller.startFaithfulnessRun(AUTH, body);
+        assertEquals(HttpStatus.ACCEPTED, resp.getStatusCode());
+        assertEquals(
+                objectMapper.readTree("{\"run_id\":\"kbfaith_1\",\"status\":\"running\"}"),
+                resp.getBody().getData());
+
+        assertEquals(HttpStatus.ACCEPTED, controller.startFaithfulnessRun(AUTH, null).getStatusCode());
+    }
+
+    @Test
+    @DisplayName("启动抽样:功能未启用 / 已有抽样在跑都是 409,状态码保持,靠 detail 区分")
+    void startFaithfulnessRun_conflictIsPassedThrough() {
+        Map<String, Object> disabled = Map.of("days", 7);
+        Map<String, Object> busy = Map.of("days", 8);
+        when(client.postKbFaithfulnessRun(AUTH, disabled))
+                .thenReturn(upstream(HttpStatus.CONFLICT, "{\"detail\":\"忠实度抽样没有在配置里打开\"}"));
+        when(client.postKbFaithfulnessRun(AUTH, busy))
+                .thenReturn(upstream(HttpStatus.CONFLICT, "{\"detail\":\"已有一次抽样在运行\"}"));
+
+        ResponseEntity<ResponseMessage<?>> off = controller.startFaithfulnessRun(AUTH, disabled);
+        assertEquals(HttpStatus.CONFLICT, off.getStatusCode());
+        assertEquals(409, off.getBody().getCode());
+        assertEquals("忠实度抽样没有在配置里打开", off.getBody().getMessage());
+
+        ResponseEntity<ResponseMessage<?>> running = controller.startFaithfulnessRun(AUTH, busy);
+        assertEquals(HttpStatus.CONFLICT, running.getStatusCode());
+        assertEquals("已有一次抽样在运行", running.getBody().getMessage());
+    }
+
+    @Test
+    @DisplayName("抽样运行列表:limit 转发,缺省转发 null")
+    void faithfulnessRuns_forwardLimit() throws Exception {
+        when(client.getKbFaithfulnessRuns(AUTH, 20))
+                .thenReturn(upstream(HttpStatus.OK, "{\"items\":[],\"total\":0}"));
+        when(client.getKbFaithfulnessRuns(eq(AUTH), isNull()))
+                .thenReturn(upstream(HttpStatus.OK, "{}"));
+
+        ResponseEntity<ResponseMessage<?>> resp = controller.faithfulnessRuns(AUTH, 20);
+        assertEquals(HttpStatus.OK, resp.getStatusCode());
+        assertEquals(objectMapper.readTree("{\"items\":[],\"total\":0}"), resp.getBody().getData());
+        assertEquals(HttpStatus.OK, controller.faithfulnessRuns(AUTH, null).getStatusCode());
+    }
+
+    @Test
+    @DisplayName("抽样样本:run_id/problems_only 转发,缺省转发 null;响应体原样进 data;运行不存在 404")
+    void faithfulnessSamples_forwardParamsAndKeep404() throws Exception {
+        String samples = "{\"run\":{\"run_id\":\"kbfaith_1\"},\"items\":[{\"sample_id\":3,"
+                + "\"user_message\":\"入社要交钱吗\",\"reply_summary\":\"要缴纳会费。\",\"contradicted\":1}],\"total\":1}";
+        when(client.getKbFaithfulnessSamples(AUTH, "kbfaith_1", true))
+                .thenReturn(upstream(HttpStatus.OK, samples));
+        when(client.getKbFaithfulnessSamples(eq(AUTH), isNull(), isNull()))
+                .thenReturn(upstream(HttpStatus.OK, "{\"run\":null,\"items\":[],\"total\":0}"));
+        when(client.getKbFaithfulnessSamples(AUTH, "nope", null))
+                .thenReturn(upstream(HttpStatus.NOT_FOUND, "{\"detail\":\"运行不存在\"}"));
+
+        ResponseEntity<ResponseMessage<?>> resp = controller.faithfulnessSamples(AUTH, "kbfaith_1", true);
+        assertEquals(HttpStatus.OK, resp.getStatusCode());
+        assertEquals(objectMapper.readTree(samples), resp.getBody().getData());
+
+        assertEquals(
+                objectMapper.readTree("{\"run\":null,\"items\":[],\"total\":0}"),
+                controller.faithfulnessSamples(AUTH, null, null).getBody().getData());
+
+        ResponseEntity<ResponseMessage<?>> missing = controller.faithfulnessSamples(AUTH, "nope", null);
+        assertEquals(HttpStatus.NOT_FOUND, missing.getStatusCode());
+        assertEquals("运行不存在", missing.getBody().getMessage());
+    }
+
+    @Test
+    @DisplayName("忠实度抽样:Agent 不可达时读、写接口都上抛 ResourceAccessException")
+    void faithfulnessUnreachableExceptionPropagates() {
+        when(client.getKbFaithfulnessSamples(AUTH, null, null))
+                .thenThrow(new ResourceAccessException("Connection refused"));
+        when(client.postKbFaithfulnessRun(AUTH, null))
+                .thenThrow(new ResourceAccessException("Connection refused"));
+
+        assertThrows(ResourceAccessException.class, () -> controller.faithfulnessSamples(AUTH, null, null));
+        assertThrows(ResourceAccessException.class, () -> controller.startFaithfulnessRun(AUTH, null));
+    }
 }

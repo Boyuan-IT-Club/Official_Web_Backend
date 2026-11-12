@@ -41,7 +41,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 /**
- * 周期复盘 / 知识库运营 / 校准案例三组代理路由的权限边界(同
+ * 周期复盘 / 组织记忆 / 知识库运营(含忠实度抽样)/ 校准案例代理路由的权限边界(同
  * ResumeEvaluationSecurityTest 先例:最小 Spring 上下文只装配控制器与方法级鉴权,
  * 不连数据库,Agent 客户端是替身)。
  *
@@ -50,9 +50,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
  * - 其余权限码、未登录 → 在 Backend 这一层就被拒,**没有任何请求转发给 Agent**
  *   (不能只靠 Agent 侧拒绝)。
  *
- * 权限码与 Agent 侧一致:复盘的采集/生成/发布、判例的录入/停用/收割要
- * evaluation:run;复盘读取要 resume:audit 或 evaluation:run;判例查看要 resume:audit;
- * 知识库运营全部要 kb:manage。
+ * 权限码与 Agent 侧一致:复盘的采集/生成/发布、组织记忆的全部接口、判例的
+ * 录入/停用/收割要 evaluation:run;复盘读取要 resume:audit 或 evaluation:run;
+ * 判例查看要 resume:audit;知识库运营(含忠实度抽样)全部要 kb:manage。
  */
 @ExtendWith(SpringExtension.class)
 @ContextConfiguration(classes = AgentProxySecurityTest.TestConfig.class)
@@ -60,7 +60,7 @@ class AgentProxySecurityTest {
 
     private static final String AUTH = "Bearer user-jwt";
 
-    /** 与这三组路由相邻的全部权限码:每条路由都逐个试,防止「给错了码也能进」。 */
+    /** 与这些路由相邻的全部权限码:每条路由都逐个试,防止「给错了码也能进」。 */
     private static final List<String> AUTHORITIES = List.of(
             "agent:monitor", "kb:manage", "resume:audit", "evaluation:run",
             "interview:evaluate", "resume:view");
@@ -93,6 +93,11 @@ class AgentProxySecurityTest {
         AgentEvaluationProxyController evaluationController(AgentAdminClient client) {
             return new AgentEvaluationProxyController(client, new ObjectMapper());
         }
+
+        @Bean
+        AgentOrgMemoryProxyController orgMemoryController(AgentAdminClient client) {
+            return new AgentOrgMemoryProxyController(client, new ObjectMapper());
+        }
     }
 
     @Autowired
@@ -106,6 +111,9 @@ class AgentProxySecurityTest {
 
     @Autowired
     private AgentEvaluationProxyController evaluation;
+
+    @Autowired
+    private AgentOrgMemoryProxyController orgMemory;
 
     @BeforeEach
     void resetClient() {
@@ -137,6 +145,11 @@ class AgentProxySecurityTest {
             new Route("GET retrospective/report", READ, t -> t.retrospective.report(AUTH, 2026, null)),
             new Route("GET retrospective/reports", READ, t -> t.retrospective.reports(AUTH, 2026)),
             new Route("POST retrospective/publish", RUN, t -> t.retrospective.publishReport(AUTH, BODY)),
+            // 组织记忆
+            new Route("GET org-memory", RUN, t -> t.orgMemory.list(AUTH, null)),
+            new Route("POST org-memory/approve", RUN, t -> t.orgMemory.approve(AUTH, BODY)),
+            new Route("POST org-memory/retire", RUN, t -> t.orgMemory.retire(AUTH, BODY)),
+            new Route("POST org-memory/renew", RUN, t -> t.orgMemory.renew(AUTH, BODY)),
             // 知识库运营
             new Route("POST kb/ops/runs", KB, t -> t.kb.startOpsRun(AUTH, null)),
             new Route("GET kb/ops/runs", KB, t -> t.kb.opsRuns(AUTH, null)),
@@ -146,6 +159,9 @@ class AgentProxySecurityTest {
             new Route("PUT kb/ops/drafts/{id}", KB, t -> t.kb.editOpsDraft(AUTH, 12L, BODY)),
             new Route("POST kb/ops/drafts/{id}/approve", KB, t -> t.kb.approveOpsDraft(AUTH, 12L)),
             new Route("POST kb/ops/drafts/{id}/reject", KB, t -> t.kb.rejectOpsDraft(AUTH, 12L)),
+            new Route("POST kb/ops/faithfulness/runs", KB, t -> t.kb.startFaithfulnessRun(AUTH, null)),
+            new Route("GET kb/ops/faithfulness/runs", KB, t -> t.kb.faithfulnessRuns(AUTH, null)),
+            new Route("GET kb/ops/faithfulness/samples", KB, t -> t.kb.faithfulnessSamples(AUTH, null, null)),
             // 校准案例
             new Route("GET evaluation/calibration/cases", AUDIT,
                     t -> t.evaluation.calibrationCases(AUTH, null, null, null, null, null)),
@@ -190,12 +206,13 @@ class AgentProxySecurityTest {
     }
 
     /**
-     * 兜底:三个代理控制器里每个声明了路由的方法都必须带权限(方法上或类上的
+     * 兜底:这几个代理控制器里每个声明了路由的方法都必须带权限(方法上或类上的
      * {@code @PreAuthorize})。以后往里加路由忘了写权限,这条会红。
      */
     @ParameterizedTest
     @ValueSource(classes = {
             AgentRetrospectiveProxyController.class,
+            AgentOrgMemoryProxyController.class,
             AgentKbAdminController.class,
             AgentEvaluationProxyController.class})
     void 每个代理路由都声明了权限(Class<?> controller) {

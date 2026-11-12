@@ -32,8 +32,8 @@ import org.springframework.web.client.ResourceAccessException;
  * 查询串、Authorization 头与请求体,以及上游状态码与响应体原样取回。
  *
  * 控制器单测里客户端是替身,看不到下游地址怎么拼;路径拼错、参数名写错、
- * 查询值没转义这类问题只有在这里才看得见。覆盖周期复盘、知识库运营、校准案例
- * 三组方法。
+ * 查询值没转义这类问题只有在这里才看得见。覆盖周期复盘、组织记忆、知识库运营
+ * (含忠实度抽样)、校准案例的方法。
  */
 class AgentAdminClientTest {
 
@@ -229,6 +229,64 @@ class AgentAdminClientTest {
         assertNoBody(reject);
     }
 
+    @Test
+    @DisplayName("忠实度抽样:启动可带体可不带;limit/run_id/problems_only 只在给了时才拼")
+    void kbFaithfulnessRoutes() throws IOException {
+        Map<String, Object> body = Map.of("days", 14, "sample_size", 50);
+
+        Received start = call(() -> client.postKbFaithfulnessRun(AUTH, body));
+        assertRequest(start, "POST", "/admin/kb/ops/faithfulness/runs", null);
+        assertJsonBody(start, body);
+
+        Received startDefault = call(() -> client.postKbFaithfulnessRun(AUTH, null));
+        assertRequest(startDefault, "POST", "/admin/kb/ops/faithfulness/runs", null);
+        assertNoBody(startDefault);
+
+        Received runs = call(() -> client.getKbFaithfulnessRuns(AUTH, 20));
+        assertRequest(runs, "GET", "/admin/kb/ops/faithfulness/runs", "limit=20");
+
+        Received runsDefault = call(() -> client.getKbFaithfulnessRuns(AUTH, null));
+        assertRequest(runsDefault, "GET", "/admin/kb/ops/faithfulness/runs", null);
+
+        Received samples = call(() -> client.getKbFaithfulnessSamples(AUTH, "kbfaith_1", true));
+        assertRequest(samples, "GET", "/admin/kb/ops/faithfulness/samples", "run_id=kbfaith_1&problems_only=true");
+
+        Received all = call(() -> client.getKbFaithfulnessSamples(AUTH, null, false));
+        assertRequest(all, "GET", "/admin/kb/ops/faithfulness/samples", "problems_only=false");
+
+        Received samplesDefault = call(() -> client.getKbFaithfulnessSamples(AUTH, null, null));
+        assertRequest(samplesDefault, "GET", "/admin/kb/ops/faithfulness/samples", null);
+    }
+
+    // ── 组织记忆 ──
+
+    @Test
+    @DisplayName("组织记忆:列表在 /admin/org-memory 本身(可带 status);勾选/退役/续期 POST 带体")
+    void orgMemoryRoutes() throws IOException {
+        Map<String, Object> approve = Map.of(
+                "cycle_id", 2026, "version", 4, "lesson_index", 0, "audience", "member");
+        Map<String, Object> retire = Map.of("memory_id", "org_9");
+        Map<String, Object> renew = Map.of("memory_id", "org_9", "valid_days", 180);
+
+        Received list = call(() -> client.getOrgMemories(AUTH, "approved"));
+        assertRequest(list, "GET", "/admin/org-memory", "status=approved");
+
+        Received listAll = call(() -> client.getOrgMemories(AUTH, null));
+        assertRequest(listAll, "GET", "/admin/org-memory", null);
+
+        Received approved = call(() -> client.postOrgMemoryApprove(AUTH, approve));
+        assertRequest(approved, "POST", "/admin/org-memory/approve", null);
+        assertJsonBody(approved, approve);
+
+        Received retired = call(() -> client.postOrgMemoryRetire(AUTH, retire));
+        assertRequest(retired, "POST", "/admin/org-memory/retire", null);
+        assertJsonBody(retired, retire);
+
+        Received renewed = call(() -> client.postOrgMemoryRenew(AUTH, renew));
+        assertRequest(renewed, "POST", "/admin/org-memory/renew", null);
+        assertJsonBody(renewed, renew);
+    }
+
     // ── 校准案例 ──
 
     @Test
@@ -299,6 +357,14 @@ class AgentAdminClientTest {
         reply(201, "{\"case_id\":8}");
         assertEquals(HttpStatus.CREATED,
                 client.postCalibrationCase(AUTH, Map.of("checklist", "技术部")).getStatusCode());
+
+        reply(202, "{\"run_id\":\"kbfaith_1\",\"status\":\"running\"}");
+        assertEquals(HttpStatus.ACCEPTED, client.postKbFaithfulnessRun(AUTH, null).getStatusCode());
+
+        reply(201, "{\"memory_id\":\"org_9\",\"status\":\"approved\"}");
+        ResponseEntity<String> created = client.postOrgMemoryApprove(AUTH, Map.of("cycle_id", 2026));
+        assertEquals(HttpStatus.CREATED, created.getStatusCode());
+        assertEquals("{\"memory_id\":\"org_9\",\"status\":\"approved\"}", created.getBody());
     }
 
     @Test
@@ -326,6 +392,19 @@ class AgentAdminClientTest {
         reply(500, "{\"detail\":\"收割失败,请稍后重试\"}");
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR,
                 client.postCalibrationHarvest(AUTH, Map.of("cycle_id", 2025)).getStatusCode());
+
+        reply(409, "{\"detail\":\"忠实度抽样没有在配置里打开\"}");
+        ResponseEntity<String> disabled = client.postKbFaithfulnessRun(AUTH, Map.of());
+        assertEquals(HttpStatus.CONFLICT, disabled.getStatusCode());
+        assertEquals("{\"detail\":\"忠实度抽样没有在配置里打开\"}", disabled.getBody());
+
+        reply(422, "{\"detail\":\"内容疑似含个人信息\"}");
+        assertEquals(HttpStatus.UNPROCESSABLE_ENTITY,
+                client.postOrgMemoryApprove(AUTH, Map.of("cycle_id", 2026)).getStatusCode());
+
+        reply(409, "{\"detail\":\"这条组织记忆已经退役\"}");
+        assertEquals(HttpStatus.CONFLICT,
+                client.postOrgMemoryRenew(AUTH, Map.of("memory_id", "org_old")).getStatusCode());
     }
 
     // ── 不可达与超时 ──

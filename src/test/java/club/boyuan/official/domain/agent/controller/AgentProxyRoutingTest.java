@@ -32,7 +32,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.client.ResourceAccessException;
 
 /**
- * 三组新代理路由走一遍 DispatcherServlet(standalone MockMvc,不起 Spring 上下文、
+ * 新代理路由(周期复盘、组织记忆、知识库运营、校准案例)走一遍 DispatcherServlet
+ * (standalone MockMvc,不起 Spring 上下文、
  * 不连数据库,Agent 客户端是替身)。直调控制器方法的单测看不到这些:
  * - 前端实际请求的 URL、HTTP 方法、查询参数名(snake_case)能不能路由到对应方法;
  * - 写到 HTTP 响应里的状态码与信封({code, message, data});
@@ -51,6 +52,7 @@ class AgentProxyRoutingTest {
             mock(AgentAdminClient.class, invocation -> ResponseEntity.ok("{}"));
     private final MockMvc mvc = MockMvcBuilders.standaloneSetup(
                     new AgentRetrospectiveProxyController(client, objectMapper),
+                    new AgentOrgMemoryProxyController(client, objectMapper),
                     new AgentKbAdminController(client, objectMapper),
                     new AgentEvaluationProxyController(client, objectMapper))
             .setControllerAdvice(new GlobalExceptionHandler())
@@ -147,6 +149,53 @@ class AgentProxyRoutingTest {
     }
 
     @Test
+    @DisplayName("忠实度抽样 3 条路由:/kb/ops/faithfulness/**,查询参数 run_id / problems_only")
+    void kbFaithfulnessRoutes() throws Exception {
+        mvc.perform(json(post(BASE + "/kb/ops/faithfulness/runs"), "{\"days\":14,\"sample_size\":50}"))
+                .andExpect(status().isOk());
+        verify(client).postKbFaithfulnessRun(AUTH, Map.of("days", 14, "sample_size", 50));
+
+        mvc.perform(authed(post(BASE + "/kb/ops/faithfulness/runs"))).andExpect(status().isOk());
+        verify(client).postKbFaithfulnessRun(AUTH, null);
+
+        mvc.perform(authed(get(BASE + "/kb/ops/faithfulness/runs").param("limit", "20")))
+                .andExpect(status().isOk());
+        verify(client).getKbFaithfulnessRuns(AUTH, 20);
+
+        mvc.perform(authed(get(BASE + "/kb/ops/faithfulness/samples")
+                        .param("run_id", "kbfaith_1").param("problems_only", "true")))
+                .andExpect(status().isOk());
+        verify(client).getKbFaithfulnessSamples(AUTH, "kbfaith_1", true);
+
+        mvc.perform(authed(get(BASE + "/kb/ops/faithfulness/samples"))).andExpect(status().isOk());
+        verify(client).getKbFaithfulnessSamples(AUTH, null, null);
+    }
+
+    @Test
+    @DisplayName("组织记忆 4 条路由:列表在 /org-memory 本身,勾选/退役/续期是它下面的 POST")
+    void orgMemoryRoutes() throws Exception {
+        mvc.perform(authed(get(BASE + "/org-memory").param("status", "approved"))).andExpect(status().isOk());
+        verify(client).getOrgMemories(AUTH, "approved");
+
+        mvc.perform(authed(get(BASE + "/org-memory"))).andExpect(status().isOk());
+        verify(client).getOrgMemories(AUTH, null);
+
+        mvc.perform(json(post(BASE + "/org-memory/approve"),
+                        "{\"cycle_id\":2026,\"version\":4,\"lesson_index\":0,\"audience\":\"member\"}"))
+                .andExpect(status().isOk());
+        verify(client).postOrgMemoryApprove(AUTH,
+                Map.of("cycle_id", 2026, "version", 4, "lesson_index", 0, "audience", "member"));
+
+        mvc.perform(json(post(BASE + "/org-memory/retire"), "{\"memory_id\":\"org_9\"}"))
+                .andExpect(status().isOk());
+        verify(client).postOrgMemoryRetire(AUTH, Map.of("memory_id", "org_9"));
+
+        mvc.perform(json(post(BASE + "/org-memory/renew"), "{\"memory_id\":\"org_9\",\"valid_days\":180}"))
+                .andExpect(status().isOk());
+        verify(client).postOrgMemoryRenew(AUTH, Map.of("memory_id", "org_9", "valid_days", 180));
+    }
+
+    @Test
     @DisplayName("启动分析:不带请求体也能进(转发 null),空对象照样转发")
     void kbOpsRunBodyIsOptional() throws Exception {
         mvc.perform(authed(post(BASE + "/kb/ops/runs"))).andExpect(status().isOk());
@@ -206,6 +255,42 @@ class AgentProxyRoutingTest {
     }
 
     @Test
+    @DisplayName("追加路由的状态码:启动抽样 202、勾选 201 保持;未启用 409、过不了闸门 422 原样写出")
+    void faithfulnessAndOrgMemoryStatusesAreWrittenThrough() throws Exception {
+        when(client.postKbFaithfulnessRun(eq(AUTH), any()))
+                .thenReturn(upstream(HttpStatus.ACCEPTED, "{\"run_id\":\"kbfaith_1\",\"status\":\"running\"}"))
+                .thenReturn(upstream(HttpStatus.CONFLICT, "{\"detail\":\"忠实度抽样没有在配置里打开\"}"));
+        when(client.postOrgMemoryApprove(eq(AUTH), any()))
+                .thenReturn(upstream(HttpStatus.CREATED, "{\"memory_id\":\"org_9\",\"status\":\"approved\"}"))
+                .thenReturn(upstream(HttpStatus.UNPROCESSABLE_ENTITY, "{\"detail\":\"内容疑似含个人信息\"}"));
+        when(client.postOrgMemoryRetire(eq(AUTH), any()))
+                .thenReturn(upstream(HttpStatus.CONFLICT, "{\"detail\":\"这条组织记忆已经退役\"}"));
+
+        mvc.perform(json(post(BASE + "/kb/ops/faithfulness/runs"), "{}"))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data.run_id").value("kbfaith_1"));
+        mvc.perform(json(post(BASE + "/kb/ops/faithfulness/runs"), "{}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(409))
+                .andExpect(jsonPath("$.message").value("忠实度抽样没有在配置里打开"));
+
+        String approve = "{\"cycle_id\":2026,\"version\":4,\"lesson_index\":0}";
+        mvc.perform(json(post(BASE + "/org-memory/approve"), approve))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data.memory_id").value("org_9"));
+        mvc.perform(json(post(BASE + "/org-memory/approve"), approve))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value(422))
+                .andExpect(jsonPath("$.message").value("内容疑似含个人信息"));
+
+        mvc.perform(json(post(BASE + "/org-memory/retire"), "{\"memory_id\":\"org_old\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("这条组织记忆已经退役"));
+    }
+
+    @Test
     @DisplayName("上游 404/409/503:HTTP 状态码各自保持,信封 code 同状态码、message 是 detail")
     void errorStatusesAreWrittenThrough() throws Exception {
         when(client.getKbOpsDraft(AUTH, 404L))
@@ -233,13 +318,17 @@ class AgentProxyRoutingTest {
     }
 
     @Test
-    @DisplayName("Agent 不可达:三个控制器的 @ExceptionHandler 都转成 HTTP 502 + code 502")
+    @DisplayName("Agent 不可达:各控制器的 @ExceptionHandler 都转成 HTTP 502 + code 502")
     void unreachableBecomes502() throws Exception {
         when(client.getRetrospectiveSnapshots(AUTH, 2026))
                 .thenThrow(new ResourceAccessException("Connection refused"));
         when(client.postKbOpsDraftApprove(AUTH, 12L))
                 .thenThrow(new ResourceAccessException("Connection refused"));
         when(client.deleteCalibrationCase(AUTH, 8L))
+                .thenThrow(new ResourceAccessException("Connection refused"));
+        when(client.getOrgMemories(AUTH, null))
+                .thenThrow(new ResourceAccessException("Connection refused"));
+        when(client.getKbFaithfulnessSamples(AUTH, null, null))
                 .thenThrow(new ResourceAccessException("Connection refused"));
 
         mvc.perform(authed(get(BASE + "/retrospective/snapshots").param("cycle_id", "2026")))
@@ -249,6 +338,12 @@ class AgentProxyRoutingTest {
                 .andExpect(status().isBadGateway())
                 .andExpect(jsonPath("$.code").value(502));
         mvc.perform(authed(delete(BASE + "/evaluation/calibration/cases/8")))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.code").value(502));
+        mvc.perform(authed(get(BASE + "/org-memory")))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.code").value(502));
+        mvc.perform(authed(get(BASE + "/kb/ops/faithfulness/samples")))
                 .andExpect(status().isBadGateway())
                 .andExpect(jsonPath("$.code").value(502));
     }
@@ -296,10 +391,12 @@ class AgentProxyRoutingTest {
     }
 
     @Test
-    @DisplayName("没有声明的方法不可用:草稿不能 DELETE,判例不能 PUT,都不转发")
+    @DisplayName("没有声明的方法不可用:草稿不能 DELETE,判例不能 PUT,组织记忆不能 DELETE,都不转发")
     void undeclaredMethodsAreNotRouted() throws Exception {
         mvc.perform(authed(delete(BASE + "/kb/ops/drafts/12"))).andExpect(notSuccessful());
         mvc.perform(json(put(BASE + "/evaluation/calibration/cases/8"), "{}")).andExpect(notSuccessful());
+        mvc.perform(authed(delete(BASE + "/org-memory/org_9"))).andExpect(notSuccessful());
+        mvc.perform(authed(get(BASE + "/org-memory/approve"))).andExpect(notSuccessful());
 
         verifyNoInteractions(client);
     }

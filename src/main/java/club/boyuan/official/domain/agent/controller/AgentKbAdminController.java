@@ -30,7 +30,7 @@ import org.springframework.web.client.ResourceAccessException;
  * 与 {@link AgentAdminController} 的差别只在权限码:知识库是**独立授权面**
  * kb:manage(V42 种子),可单独授予知识运营而无需 agent:monitor 的其它
  * 运营权限;Agent 侧 /admin/kb* 同码自校,双道闸。知识库运营(/ops/**:
- * 离线分析、主题清单、草稿审核)同属这一授权面。
+ * 离线分析、主题清单、草稿审核、忠实度抽样)同属这一授权面。
  *
  * 响应信封/错误提取与 AgentAdminController 同约定(2xx 包 success 信封,
  * 4xx/5xx 提取 detail/message 转同状态码 error,连接失败转 502)。
@@ -183,6 +183,34 @@ public class AgentKbAdminController {
             @RequestHeader("Authorization") String authorization,
             @PathVariable long draftId) {
         return wrap(agentAdminClient.postKbOpsDraftReject(authorization, draftId));
+    }
+
+    // ── 忠实度抽样(/ops/faithfulness/**):抽查助手的回复有没有知识库依据。
+    // 样本响应里带用户与助手的对话片段——只原样透传,不落日志。
+
+    /** 启动一次忠实度抽样(后台执行,202);功能未启用或已有抽样在跑 409。请求体可缺省。 */
+    @PostMapping("/ops/faithfulness/runs")
+    public ResponseEntity<ResponseMessage<?>> startFaithfulnessRun(
+            @RequestHeader("Authorization") String authorization,
+            @RequestBody(required = false) Map<String, Object> body) {
+        return wrap(agentAdminClient.postKbFaithfulnessRun(authorization, body));
+    }
+
+    /** 最近的抽样运行(新的在前;忠实度与引用核验的数字在每项的 stats 里)。 */
+    @GetMapping("/ops/faithfulness/runs")
+    public ResponseEntity<ResponseMessage<?>> faithfulnessRuns(
+            @RequestHeader("Authorization") String authorization,
+            @RequestParam(value = "limit", required = false) Integer limit) {
+        return wrap(agentAdminClient.getKbFaithfulnessRuns(authorization, limit));
+    }
+
+    /** 一次抽样的样本;run_id 缺省取最近一次成功的运行,problems_only 只看有问题的。 */
+    @GetMapping("/ops/faithfulness/samples")
+    public ResponseEntity<ResponseMessage<?>> faithfulnessSamples(
+            @RequestHeader("Authorization") String authorization,
+            @RequestParam(value = "run_id", required = false) String runId,
+            @RequestParam(value = "problems_only", required = false) Boolean problemsOnly) {
+        return wrap(agentAdminClient.getKbFaithfulnessSamples(authorization, runId, problemsOnly));
     }
 
     /** 上游响应 → 站内统一信封(与 AgentAdminController 同约定)。 */

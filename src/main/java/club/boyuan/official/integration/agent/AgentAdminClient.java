@@ -395,6 +395,43 @@ public class AgentAdminClient {
     }
 
 
+    // ── 组织记忆代理:/admin/org-memory* —— 双道闸 evaluation:run
+    // (Backend @PreAuthorize 见 AgentOrgMemoryProxyController)──
+
+    /** 组织记忆列表(status 缺省看全部)。 */
+    public ResponseEntity<String> getOrgMemories(String authorization, String status) {
+        return exchange(restClient.get()
+                .uri(uri -> new Query()
+                        .add("status", status)
+                        .build(uri, "/admin/org-memory"))
+                .header("Authorization", authorization));
+    }
+
+    /** 勾选已发布报告里的一条候选教训,存成组织记忆。 */
+    public ResponseEntity<String> postOrgMemoryApprove(String authorization, Object body) {
+        return exchange(restClient.post()
+                .uri("/admin/org-memory/approve")
+                .header("Authorization", authorization)
+                .body(body));
+    }
+
+    /** 退役一条组织记忆(不再召回,记录保留)。 */
+    public ResponseEntity<String> postOrgMemoryRetire(String authorization, Object body) {
+        return exchange(restClient.post()
+                .uri("/admin/org-memory/retire")
+                .header("Authorization", authorization)
+                .body(body));
+    }
+
+    /** 续期一条组织记忆。 */
+    public ResponseEntity<String> postOrgMemoryRenew(String authorization, Object body) {
+        return exchange(restClient.post()
+                .uri("/admin/org-memory/renew")
+                .header("Authorization", authorization)
+                .body(body));
+    }
+
+
     // ── 知识库运营代理:/admin/kb/ops/* —— 双道闸 kb:manage
     // (Backend @PreAuthorize 见 AgentKbAdminController)──
 
@@ -464,6 +501,34 @@ public class AgentAdminClient {
     public ResponseEntity<String> postKbOpsDraftReject(String authorization, long draftId) {
         return exchange(restClient.post()
                 .uri("/admin/kb/ops/drafts/{id}/reject", draftId)
+                .header("Authorization", authorization));
+    }
+
+    /** 启动一次忠实度抽样(Agent 后台执行,返回 202);body 可缺省,由 Agent 取默认天数与样本量。 */
+    public ResponseEntity<String> postKbFaithfulnessRun(String authorization, Object body) {
+        RestClient.RequestBodySpec spec = restClient.post()
+                .uri("/admin/kb/ops/faithfulness/runs")
+                .header("Authorization", authorization);
+        return exchange(body == null ? spec : spec.body(body));
+    }
+
+    /** 最近的忠实度抽样运行。 */
+    public ResponseEntity<String> getKbFaithfulnessRuns(String authorization, Integer limit) {
+        return exchange(restClient.get()
+                .uri(uri -> new Query()
+                        .add("limit", limit)
+                        .build(uri, "/admin/kb/ops/faithfulness/runs"))
+                .header("Authorization", authorization));
+    }
+
+    /** 一次抽样的样本(runId 缺省取最近一次成功的运行;响应里有对话片段,不落日志)。 */
+    public ResponseEntity<String> getKbFaithfulnessSamples(
+            String authorization, String runId, Boolean problemsOnly) {
+        return exchange(restClient.get()
+                .uri(uri -> new Query()
+                        .add("run_id", runId)
+                        .add("problems_only", problemsOnly)
+                        .build(uri, "/admin/kb/ops/faithfulness/samples"))
                 .header("Authorization", authorization));
     }
 
