@@ -304,6 +304,33 @@ class AgentKbAdminControllerTest {
     }
 
     @Test
+    @DisplayName("批准草稿失败:Agent 的 detail 原样进 message——前端靠它说明「知识库有没有被改动」")
+    void approveOpsDraft_detailIsCopiedVerbatimIntoMessage() {
+        String notChanged = "发布失败,知识库未改动,请稍后重试";
+        String alreadyWritten = "内容已写入知识库(条目 kb_draft17),但草稿状态更新失败;请重试批准,重试不会重复发布";
+        String incomplete = "「待补充」草稿还没有写答案,不能发布";
+        when(client.postKbOpsDraftApprove(AUTH, 21L))
+                .thenReturn(upstream(HttpStatus.INTERNAL_SERVER_ERROR, "{\"detail\":\"" + notChanged + "\"}"));
+        when(client.postKbOpsDraftApprove(AUTH, 22L))
+                .thenReturn(upstream(HttpStatus.INTERNAL_SERVER_ERROR, "{\"detail\":\"" + alreadyWritten + "\"}"));
+        when(client.postKbOpsDraftApprove(AUTH, 23L))
+                .thenReturn(upstream(HttpStatus.BAD_REQUEST, "{\"detail\":\"" + incomplete + "\"}"));
+
+        ResponseEntity<ResponseMessage<?>> untouched = controller.approveOpsDraft(AUTH, 21L);
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, untouched.getStatusCode());
+        assertEquals(notChanged, untouched.getBody().getMessage());
+
+        ResponseEntity<ResponseMessage<?>> written = controller.approveOpsDraft(AUTH, 22L);
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, written.getStatusCode());
+        assertEquals(500, written.getBody().getCode());
+        assertEquals(alreadyWritten, written.getBody().getMessage());
+
+        ResponseEntity<ResponseMessage<?>> bad = controller.approveOpsDraft(AUTH, 23L);
+        assertEquals(HttpStatus.BAD_REQUEST, bad.getStatusCode());
+        assertEquals(incomplete, bad.getBody().getMessage());
+    }
+
+    @Test
     @DisplayName("驳回草稿:草稿号转发;已被处理 409")
     void rejectOpsDraft_forwardsIdAndKeeps409() throws Exception {
         when(client.postKbOpsDraftReject(AUTH, 12L))

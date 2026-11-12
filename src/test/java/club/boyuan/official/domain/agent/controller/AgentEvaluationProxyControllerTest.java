@@ -193,4 +193,78 @@ class AgentEvaluationProxyControllerTest {
         assertEquals(HttpStatus.BAD_GATEWAY, handled.getStatusCode());
         assertEquals(502, handled.getBody().getCode());
     }
+
+    // ── 评分条款候选(/clauses/**)──
+
+    @Test
+    @DisplayName("条款候选列表:cycle_id 转发,2xx 包信封")
+    void clauseCandidates_forwardsAndWraps() throws Exception {
+        when(client.getEvaluationClauses(AUTH, 2025))
+                .thenReturn(upstream(HttpStatus.OK, "{\"items\":[],\"total\":0,\"cycle_id\":2025,\"enabled\":false}"));
+
+        var resp = controller.clauseCandidates(AUTH, 2025);
+
+        assertEquals(HttpStatus.OK, resp.getStatusCode());
+        assertEquals(
+                objectMapper.readTree("{\"items\":[],\"total\":0,\"cycle_id\":2025,\"enabled\":false}"),
+                resp.getBody().getData());
+    }
+
+    @Test
+    @DisplayName("生成条款候选:请求体转发;未启用/周期还开着 409、确认不了周期 503、模型输出不合规 502 各自保持")
+    void generateClauseCandidates_forwardsBodyAndKeepsStatuses() throws Exception {
+        Map<String, Object> ended = Map.of("cycle_id", 2025);
+        Map<String, Object> disabled = Map.of("cycle_id", 2024);
+        Map<String, Object> open = Map.of("cycle_id", 2026);
+        Map<String, Object> unknown = Map.of("cycle_id", 2023);
+        Map<String, Object> badOutput = Map.of("cycle_id", 2022);
+        when(client.postEvaluationClausesGenerate(AUTH, ended))
+                .thenReturn(upstream(HttpStatus.OK, "{\"cycle_id\":2025,\"candidates_stored\":4}"));
+        when(client.postEvaluationClausesGenerate(AUTH, disabled))
+                .thenReturn(upstream(HttpStatus.CONFLICT, "{\"detail\":\"生成评分条款候选的功能未启用\"}"));
+        when(client.postEvaluationClausesGenerate(AUTH, open))
+                .thenReturn(upstream(HttpStatus.CONFLICT, "{\"detail\":\"该周期还在进行中,结束后才能生成条款候选\"}"));
+        when(client.postEvaluationClausesGenerate(AUTH, unknown))
+                .thenReturn(upstream(HttpStatus.SERVICE_UNAVAILABLE, "{\"detail\":\"无法确认该周期是否已结束,未执行\"}"));
+        when(client.postEvaluationClausesGenerate(AUTH, badOutput))
+                .thenReturn(upstream(HttpStatus.BAD_GATEWAY,
+                        "{\"detail\":\"模型没有给出合规的候选,本次未写入;原有的候选保留\"}"));
+
+        var ok = controller.generateClauseCandidates(AUTH, ended);
+        assertEquals(HttpStatus.OK, ok.getStatusCode());
+        assertEquals(
+                objectMapper.readTree("{\"cycle_id\":2025,\"candidates_stored\":4}"),
+                ok.getBody().getData());
+
+        var off = controller.generateClauseCandidates(AUTH, disabled);
+        assertEquals(HttpStatus.CONFLICT, off.getStatusCode());
+        assertEquals(409, off.getBody().getCode());
+        assertEquals("生成评分条款候选的功能未启用", off.getBody().getMessage());
+
+        var stillOpen = controller.generateClauseCandidates(AUTH, open);
+        assertEquals(HttpStatus.CONFLICT, stillOpen.getStatusCode());
+        assertEquals("该周期还在进行中,结束后才能生成条款候选", stillOpen.getBody().getMessage());
+
+        var unavailable = controller.generateClauseCandidates(AUTH, unknown);
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, unavailable.getStatusCode());
+        assertEquals("无法确认该周期是否已结束,未执行", unavailable.getBody().getMessage());
+
+        var modelFailed = controller.generateClauseCandidates(AUTH, badOutput);
+        assertEquals(HttpStatus.BAD_GATEWAY, modelFailed.getStatusCode());
+        assertEquals(502, modelFailed.getBody().getCode());
+        assertEquals("模型没有给出合规的候选,本次未写入;原有的候选保留", modelFailed.getBody().getMessage());
+    }
+
+    @Test
+    @DisplayName("评分条款候选:Agent 不可达时读、写接口都上抛 ResourceAccessException")
+    void clausesUnreachableExceptionPropagates() {
+        Map<String, Object> body = Map.of("cycle_id", 2025);
+        when(client.getEvaluationClauses(AUTH, 2025))
+                .thenThrow(new ResourceAccessException("Connection refused"));
+        when(client.postEvaluationClausesGenerate(AUTH, body))
+                .thenThrow(new ResourceAccessException("Connection refused"));
+
+        assertThrows(ResourceAccessException.class, () -> controller.clauseCandidates(AUTH, 2025));
+        assertThrows(ResourceAccessException.class, () -> controller.generateClauseCandidates(AUTH, body));
+    }
 }

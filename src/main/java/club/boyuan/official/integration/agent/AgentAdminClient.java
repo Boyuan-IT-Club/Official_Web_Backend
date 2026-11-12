@@ -32,8 +32,9 @@ public class AgentAdminClient {
 
     /**
      * 长读超时:Agent 在响应前同步做完重活的接口(复盘指标采集要读后端统计与几张日志表,
-     * 校准案例收割要逐条算向量)。与管理端前端给采集接口单独放宽的 60 秒对齐——
-     * 按默认 15 秒掐断的话,Agent 其实采完了,页面却只看到 502。
+     * 校准案例收割要逐条算向量,评分条款候选要同步调一次模型,批准草稿要发布进知识库并
+     * 重建向量)。与管理端前端给这些请求单独放宽的 60 秒对齐——按默认 15 秒掐断的话,
+     * Agent 其实做完了,页面却只看到代理自己的 502,拿不到 Agent 的说明。
      */
     private static final Duration SLOW_READ_TIMEOUT = Duration.ofSeconds(60);
 
@@ -490,9 +491,12 @@ public class AgentAdminClient {
                 .body(body));
     }
 
-    /** 批准草稿并发布到知识库。 */
+    /**
+     * 批准草稿并发布到知识库(走长超时)。这是知识库运营里唯一会改知识库的操作:
+     * 代理先断开的话,前端拿不到 Agent 关于「知识库有没有被改动」的说明。
+     */
     public ResponseEntity<String> postKbOpsDraftApprove(String authorization, long draftId) {
-        return exchange(restClient.post()
+        return exchange(slowRestClient.post()
                 .uri("/admin/kb/ops/drafts/{id}/approve", draftId)
                 .header("Authorization", authorization));
     }
@@ -533,8 +537,9 @@ public class AgentAdminClient {
     }
 
 
-    // ── 初筛校准案例代理:/admin/evaluation/calibration/* —— 双道闸:查看
-    // resume:audit,录入/停用/收割 evaluation:run
+    // ── 初筛校准案例与评分条款候选代理:/admin/evaluation/calibration/*、
+    // /admin/evaluation/clauses* —— 双道闸:查看 resume:audit,
+    // 录入/停用/收割/生成 evaluation:run
     // (Backend @PreAuthorize 见 AgentEvaluationProxyController)──
 
     /** 校准案例列表(可按清单、判定项过滤)。 */
@@ -571,6 +576,23 @@ public class AgentAdminClient {
     public ResponseEntity<String> postCalibrationHarvest(String authorization, Object body) {
         return exchange(slowRestClient.post()
                 .uri("/admin/evaluation/calibration/harvest")
+                .header("Authorization", authorization)
+                .body(body));
+    }
+
+    /** 一个周期已生成的评分条款候选(只读展示)。 */
+    public ResponseEntity<String> getEvaluationClauses(String authorization, int cycleId) {
+        return exchange(restClient.get()
+                .uri(uri -> new Query()
+                        .add("cycle_id", cycleId)
+                        .build(uri, "/admin/evaluation/clauses"))
+                .header("Authorization", authorization));
+    }
+
+    /** 为已结束的周期生成评分条款候选(Agent 同步调一次模型,走长超时)。 */
+    public ResponseEntity<String> postEvaluationClausesGenerate(String authorization, Object body) {
+        return exchange(slowRestClient.post()
+                .uri("/admin/evaluation/clauses/generate")
                 .header("Authorization", authorization)
                 .body(body));
     }

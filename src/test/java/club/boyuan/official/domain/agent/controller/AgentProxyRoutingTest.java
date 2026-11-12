@@ -32,7 +32,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.client.ResourceAccessException;
 
 /**
- * 新代理路由(周期复盘、组织记忆、知识库运营、校准案例)走一遍 DispatcherServlet
+ * 新代理路由(周期复盘、组织记忆、知识库运营、校准案例、评分条款候选)走一遍 DispatcherServlet
  * (standalone MockMvc,不起 Spring 上下文、
  * 不连数据库,Agent 客户端是替身)。直调控制器方法的单测看不到这些:
  * - 前端实际请求的 URL、HTTP 方法、查询参数名(snake_case)能不能路由到对应方法;
@@ -232,6 +232,66 @@ class AgentProxyRoutingTest {
         verify(client).postCalibrationHarvest(AUTH, Map.of("cycle_id", 2025));
     }
 
+    @Test
+    @DisplayName("评分条款候选 2 条路由:列表用 cycle_id(snake_case),生成 POST 带体")
+    void clauseCandidateRoutes() throws Exception {
+        mvc.perform(authed(get(BASE + "/evaluation/clauses").param("cycle_id", "2025")))
+                .andExpect(status().isOk());
+        verify(client).getEvaluationClauses(AUTH, 2025);
+
+        mvc.perform(json(post(BASE + "/evaluation/clauses/generate"), "{\"cycle_id\":2025}"))
+                .andExpect(status().isOk());
+        verify(client).postEvaluationClausesGenerate(AUTH, Map.of("cycle_id", 2025));
+    }
+
+    @Test
+    @DisplayName("生成条款候选的状态码:未启用 409、确认不了周期 503、模型输出不合规 502 原样写出,message 是 Agent 的说明")
+    void clauseGenerateStatusesAreWrittenThrough() throws Exception {
+        when(client.postEvaluationClausesGenerate(eq(AUTH), any()))
+                .thenReturn(upstream(HttpStatus.CONFLICT, "{\"detail\":\"生成评分条款候选的功能未启用\"}"))
+                .thenReturn(upstream(HttpStatus.SERVICE_UNAVAILABLE, "{\"detail\":\"无法确认该周期是否已结束,未执行\"}"))
+                .thenReturn(upstream(HttpStatus.BAD_GATEWAY,
+                        "{\"detail\":\"模型没有给出合规的候选,本次未写入;原有的候选保留\"}"));
+        String body = "{\"cycle_id\":2025}";
+
+        mvc.perform(json(post(BASE + "/evaluation/clauses/generate"), body))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(409))
+                .andExpect(jsonPath("$.message").value("生成评分条款候选的功能未启用"));
+        mvc.perform(json(post(BASE + "/evaluation/clauses/generate"), body))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.message").value("无法确认该周期是否已结束,未执行"));
+        mvc.perform(json(post(BASE + "/evaluation/clauses/generate"), body))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.code").value(502))
+                .andExpect(jsonPath("$.message").value("模型没有给出合规的候选,本次未写入;原有的候选保留"));
+    }
+
+    @Test
+    @DisplayName("批准草稿失败:写到 HTTP 响应里的 message 就是 Agent 的 detail 原文;代理自己的 502 文案不同,分得开")
+    void approveFailureMessageIsAgentDetailVerbatim() throws Exception {
+        String alreadyWritten = "内容已写入知识库(条目 kb_draft17),但草稿状态更新失败;请重试批准,重试不会重复发布";
+        when(client.postKbOpsDraftApprove(AUTH, 22L))
+                .thenReturn(upstream(HttpStatus.INTERNAL_SERVER_ERROR, "{\"detail\":\"" + alreadyWritten + "\"}"));
+        when(client.postKbOpsDraftApprove(AUTH, 24L))
+                .thenReturn(upstream(HttpStatus.BAD_GATEWAY, "{\"detail\":\"嵌入服务调用失败,知识库未改动\"}"));
+        when(client.postKbOpsDraftApprove(AUTH, 25L))
+                .thenThrow(new ResourceAccessException("request timed out"));
+
+        mvc.perform(authed(post(BASE + "/kb/ops/drafts/22/approve")))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value(500))
+                .andExpect(jsonPath("$.message").value(alreadyWritten));
+        // Agent 自己的 502:带着 Agent 的说明
+        mvc.perform(authed(post(BASE + "/kb/ops/drafts/24/approve")))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.message").value("嵌入服务调用失败,知识库未改动"));
+        // 代理连不上 / 读超时的 502:固定文案,不说明知识库有没有被改动
+        mvc.perform(authed(post(BASE + "/kb/ops/drafts/25/approve")))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.message").value("Agent 服务不可达,请稍后重试"));
+    }
+
     // ── 写到 HTTP 响应里的状态码与信封 ──
 
     @Test
@@ -386,6 +446,9 @@ class AgentProxyRoutingTest {
         mvc.perform(authed(get(BASE + "/retrospective/report").param("cycle_id", "abc")))
                 .andExpect(status().isBadRequest());
         mvc.perform(authed(get(BASE + "/retrospective/reports"))).andExpect(status().isBadRequest());
+        mvc.perform(authed(get(BASE + "/evaluation/clauses"))).andExpect(status().isBadRequest());
+        mvc.perform(authed(get(BASE + "/evaluation/clauses").param("cycleId", "2025")))
+                .andExpect(status().isBadRequest());
 
         verifyNoInteractions(client);
     }

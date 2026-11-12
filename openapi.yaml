@@ -3910,6 +3910,49 @@ paths:
           description: 确认不了周期是否结束,或审计、嵌入服务不可用
         '502':
           description: Agent 服务不可达(含读超时)
+  /api/admin/agent/evaluation/clauses:
+    get:
+      summary: 评分条款候选列表
+      deprecated: false
+      description: 转发 Agent 服务 GET /admin/evaluation/clauses。一个周期已生成的条款候选,支持卡数多的在前;没生成过则 items 为空,data.enabled 是「允许生成」的开关。候选只读展示,不会改任何规则。权限 resume:audit。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      parameters:
+      - name: cycle_id
+        in: query
+        description: 招新周期 ID
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: ''
+        '502':
+          description: Agent 服务不可达(含读超时)
+  /api/admin/agent/evaluation/clauses/generate:
+    post:
+      summary: 生成评分条款候选
+      deprecated: false
+      description: 转发 Agent 服务 POST /admin/evaluation/clauses/generate。为一个已结束的周期生成候选,整批替换该周期原有的候选,返回各步计数。同步调一次模型,可能要几十秒。权限 evaluation:run。响应是站内统一信封,data 为 Agent 响应体原样;非 2xx 时状态码与 Agent 一致,message 取 Agent 的 detail。
+      tags:
+      - 客服 Agent 管理(管理员)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                cycle_id: 2025
+      responses:
+        '200':
+          description: 生成完成
+        '409':
+          description: 生成功能未启用,或该周期还在进行中
+        '502':
+          description: 模型两次都没给出合规的输出(原有的候选保留,message 是 Agent 的说明);或 Agent 服务不可达(含读超时)
+        '503':
+          description: 确认不了周期是否结束,或审计服务不可用
   /api/admin/cache/clear:
     post:
       summary: 清理Redis缓存

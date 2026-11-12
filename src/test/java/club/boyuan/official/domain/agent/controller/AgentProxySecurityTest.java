@@ -41,7 +41,8 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 /**
- * 周期复盘 / 组织记忆 / 知识库运营(含忠实度抽样)/ 校准案例代理路由的权限边界(同
+ * 周期复盘 / 组织记忆 / 知识库运营(含忠实度抽样)/ 校准案例 / 评分条款候选代理路由的
+ * 权限边界(同
  * ResumeEvaluationSecurityTest 先例:最小 Spring 上下文只装配控制器与方法级鉴权,
  * 不连数据库,Agent 客户端是替身)。
  *
@@ -51,8 +52,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
  *   (不能只靠 Agent 侧拒绝)。
  *
  * 权限码与 Agent 侧一致:复盘的采集/生成/发布、组织记忆的全部接口、判例的
- * 录入/停用/收割要 evaluation:run;复盘读取要 resume:audit 或 evaluation:run;
- * 判例查看要 resume:audit;知识库运营(含忠实度抽样)全部要 kb:manage。
+ * 录入/停用/收割、条款候选的生成要 evaluation:run;复盘读取要 resume:audit 或
+ * evaluation:run;判例与条款候选的查看要 resume:audit;知识库运营(含忠实度抽样)
+ * 全部要 kb:manage。
  */
 @ExtendWith(SpringExtension.class)
 @ContextConfiguration(classes = AgentProxySecurityTest.TestConfig.class)
@@ -169,7 +171,11 @@ class AgentProxySecurityTest {
             new Route("DELETE evaluation/calibration/cases/{id}", RUN,
                     t -> t.evaluation.retireCalibrationCase(AUTH, 8L)),
             new Route("POST evaluation/calibration/harvest", RUN,
-                    t -> t.evaluation.harvestCalibrationCases(AUTH, BODY)));
+                    t -> t.evaluation.harvestCalibrationCases(AUTH, BODY)),
+            // 评分条款候选
+            new Route("GET evaluation/clauses", AUDIT, t -> t.evaluation.clauseCandidates(AUTH, 2026)),
+            new Route("POST evaluation/clauses/generate", RUN,
+                    t -> t.evaluation.generateClauseCandidates(AUTH, BODY)));
 
     static Stream<Arguments> routeAuthorityMatrix() {
         return ROUTES.stream()

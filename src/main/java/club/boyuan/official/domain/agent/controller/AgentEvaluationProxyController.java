@@ -30,7 +30,7 @@ import org.springframework.web.client.ResourceAccessException;
  * - 队列/评分卡/采纳/驳回:resume:audit(评审权,#135 用户故事 1)
  * - 预置题库读取与勾选:interview:evaluate 或 resume:audit(#128:
  *   面试官场景内看题库,不破 resume:view 全库边界)
- * - 校准案例:查看 resume:audit;录入/停用/收割 evaluation:run
+ * - 校准案例与评分条款候选:查看 resume:audit;录入/停用/收割/生成 evaluation:run
  *
  * 信封/错误提取与 AgentAdminController 同约定。
  */
@@ -188,6 +188,27 @@ public class AgentEvaluationProxyController {
             @RequestHeader("Authorization") String authorization,
             @RequestBody Map<String, Object> body) {
         return wrap(agentAdminClient.postCalibrationHarvest(authorization, body));
+    }
+
+    // ── 评分条款候选(/clauses/**):周期结束后从人机不一致的判定里归纳,只给人看,
+    // 不会改任何规则。生成要调模型并读整个周期的卡,所以与触发初筛同一权限。
+
+    /** 一个周期已生成的评分条款候选(没生成过则 items 为空)。 */
+    @GetMapping("/clauses")
+    @PreAuthorize("hasAuthority('resume:audit')")
+    public ResponseEntity<ResponseMessage<?>> clauseCandidates(
+            @RequestHeader("Authorization") String authorization,
+            @RequestParam("cycle_id") int cycleId) {
+        return wrap(agentAdminClient.getEvaluationClauses(authorization, cycleId));
+    }
+
+    /** 为已结束的周期生成条款候选;功能未启用或周期还开着 409,模型输出不合规 502。 */
+    @PostMapping("/clauses/generate")
+    @PreAuthorize("hasAuthority('evaluation:run')")
+    public ResponseEntity<ResponseMessage<?>> generateClauseCandidates(
+            @RequestHeader("Authorization") String authorization,
+            @RequestBody Map<String, Object> body) {
+        return wrap(agentAdminClient.postEvaluationClausesGenerate(authorization, body));
     }
 
     private ResponseEntity<ResponseMessage<?>> wrap(ResponseEntity<String> upstream) {

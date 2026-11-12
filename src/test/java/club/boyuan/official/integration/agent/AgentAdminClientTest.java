@@ -33,7 +33,7 @@ import org.springframework.web.client.ResourceAccessException;
  *
  * 控制器单测里客户端是替身,看不到下游地址怎么拼;路径拼错、参数名写错、
  * 查询值没转义这类问题只有在这里才看得见。覆盖周期复盘、组织记忆、知识库运营
- * (含忠实度抽样)、校准案例的方法。
+ * (含忠实度抽样)、校准案例、评分条款候选的方法。
  */
 class AgentAdminClientTest {
 
@@ -316,6 +316,19 @@ class AgentAdminClientTest {
         assertJsonBody(reap, harvest);
     }
 
+    @Test
+    @DisplayName("评分条款候选:列表带 cycle_id,生成 POST 带体")
+    void clauseCandidateRoutes() throws IOException {
+        Map<String, Object> body = Map.of("cycle_id", 2025);
+
+        Received list = call(() -> client.getEvaluationClauses(AUTH, 2025));
+        assertRequest(list, "GET", "/admin/evaluation/clauses", "cycle_id=2025");
+
+        Received generate = call(() -> client.postEvaluationClausesGenerate(AUTH, body));
+        assertRequest(generate, "POST", "/admin/evaluation/clauses/generate", null);
+        assertJsonBody(generate, body);
+    }
+
     // ── 查询值转义 ──
 
     @Test
@@ -405,6 +418,12 @@ class AgentAdminClientTest {
         reply(409, "{\"detail\":\"这条组织记忆已经退役\"}");
         assertEquals(HttpStatus.CONFLICT,
                 client.postOrgMemoryRenew(AUTH, Map.of("memory_id", "org_old")).getStatusCode());
+
+        // Agent 自己返回的 502(模型输出不合规):照样取回状态码与 detail,不当成不可达
+        reply(502, "{\"detail\":\"模型没有给出合规的候选,本次未写入;原有的候选保留\"}");
+        ResponseEntity<String> modelFailed = client.postEvaluationClausesGenerate(AUTH, Map.of("cycle_id", 2025));
+        assertEquals(HttpStatus.BAD_GATEWAY, modelFailed.getStatusCode());
+        assertEquals("{\"detail\":\"模型没有给出合规的候选,本次未写入;原有的候选保留\"}", modelFailed.getBody());
     }
 
     // ── 不可达与超时 ──
@@ -425,7 +444,7 @@ class AgentAdminClientTest {
     }
 
     @Test
-    @DisplayName("读超时分两档:同步做重活的接口(采集快照/生成报告/收割)走长超时,其余走默认")
+    @DisplayName("读超时分两档:同步做重活的接口(采集快照/生成报告/收割/生成条款候选/批准草稿)走长超时,其余走默认")
     void slowRoutesUseTheLongReadTimeout() {
         AgentAdminClient tiered = new AgentAdminClient(
                 baseUrl(), Duration.ofMillis(200), Duration.ofSeconds(10));
@@ -436,12 +455,18 @@ class AgentAdminClientTest {
         assertEquals(HttpStatus.OK, tiered.postRetrospectiveSnapshot(AUTH, body).getStatusCode());
         assertEquals(HttpStatus.OK, tiered.postRetrospectiveRun(AUTH, body).getStatusCode());
         assertEquals(HttpStatus.OK, tiered.postCalibrationHarvest(AUTH, body).getStatusCode());
+        assertEquals(HttpStatus.OK, tiered.postEvaluationClausesGenerate(AUTH, body).getStatusCode());
+        assertEquals(HttpStatus.OK, tiered.postKbOpsDraftApprove(AUTH, 12L).getStatusCode());
 
         // 默认档:超时按不可达处理
         assertThrows(ResourceAccessException.class,
                 () -> tiered.getRetrospectiveSnapshots(AUTH, 2026));
         assertThrows(ResourceAccessException.class,
                 () -> tiered.postRetrospectivePublish(AUTH, body));
+        assertThrows(ResourceAccessException.class,
+                () -> tiered.postKbOpsDraftReject(AUTH, 12L));
+        assertThrows(ResourceAccessException.class,
+                () -> tiered.getEvaluationClauses(AUTH, 2025));
     }
 
     @Test
