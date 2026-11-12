@@ -131,4 +131,206 @@ class AgentKbAdminControllerTest {
         assertEquals(HttpStatus.BAD_GATEWAY, handled.getStatusCode());
         assertEquals(502, handled.getBody().getCode());
     }
+
+    // ── 知识库运营(/ops/**)──
+
+    @Test
+    @DisplayName("启动分析:请求体转发;202 保持(不抹成 200),data 带回 run_id")
+    void startOpsRun_keeps202() throws Exception {
+        Map<String, Object> body = Map.of("days", 14);
+        when(client.postKbOpsRun(AUTH, body))
+                .thenReturn(upstream(HttpStatus.ACCEPTED, "{\"run_id\":\"r1\",\"status\":\"running\"}"));
+
+        ResponseEntity<ResponseMessage<?>> resp = controller.startOpsRun(AUTH, body);
+
+        assertEquals(HttpStatus.ACCEPTED, resp.getStatusCode());
+        assertEquals(
+                objectMapper.readTree("{\"run_id\":\"r1\",\"status\":\"running\"}"),
+                resp.getBody().getData());
+    }
+
+    @Test
+    @DisplayName("启动分析:不带请求体时转发 null(Agent 取默认天数)")
+    void startOpsRun_forwardsMissingBody() {
+        when(client.postKbOpsRun(eq(AUTH), isNull()))
+                .thenReturn(upstream(HttpStatus.ACCEPTED, "{\"run_id\":\"r2\",\"status\":\"running\"}"));
+
+        assertEquals(HttpStatus.ACCEPTED, controller.startOpsRun(AUTH, null).getStatusCode());
+    }
+
+    @Test
+    @DisplayName("启动分析:已有分析在跑 409,状态码保持 + detail 人话")
+    void startOpsRun_conflictIsPassedThrough() {
+        Map<String, Object> body = Map.of();
+        when(client.postKbOpsRun(AUTH, body))
+                .thenReturn(upstream(HttpStatus.CONFLICT, "{\"detail\":\"已有一次分析在运行\"}"));
+
+        ResponseEntity<ResponseMessage<?>> resp = controller.startOpsRun(AUTH, body);
+
+        assertEquals(HttpStatus.CONFLICT, resp.getStatusCode());
+        assertEquals(409, resp.getBody().getCode());
+        assertEquals("已有一次分析在运行", resp.getBody().getMessage());
+    }
+
+    @Test
+    @DisplayName("运行列表/主题清单:limit、run_id、scope 原样转发,缺省转发 null")
+    void opsRunsAndTopics_forwardParams() throws Exception {
+        when(client.getKbOpsRuns(AUTH, 20))
+                .thenReturn(upstream(HttpStatus.OK, "{\"items\":[],\"total\":0}"));
+        when(client.getKbOpsRuns(eq(AUTH), isNull()))
+                .thenReturn(upstream(HttpStatus.OK, "{}"));
+        when(client.getKbOpsTopics(AUTH, "r1", "all"))
+                .thenReturn(upstream(HttpStatus.OK, "{\"run\":{\"run_id\":\"r1\"},\"items\":[],\"total\":0}"));
+        when(client.getKbOpsTopics(eq(AUTH), isNull(), isNull()))
+                .thenReturn(upstream(HttpStatus.OK, "{\"run\":null,\"items\":[],\"total\":0}"));
+
+        ResponseEntity<ResponseMessage<?>> runs = controller.opsRuns(AUTH, 20);
+        assertEquals(HttpStatus.OK, runs.getStatusCode());
+        assertEquals(objectMapper.readTree("{\"items\":[],\"total\":0}"), runs.getBody().getData());
+        assertEquals(HttpStatus.OK, controller.opsRuns(AUTH, null).getStatusCode());
+
+        ResponseEntity<ResponseMessage<?>> topics = controller.opsTopics(AUTH, "r1", "all");
+        assertEquals(HttpStatus.OK, topics.getStatusCode());
+        assertEquals(
+                objectMapper.readTree("{\"run\":{\"run_id\":\"r1\"},\"items\":[],\"total\":0}"),
+                topics.getBody().getData());
+        assertEquals(
+                objectMapper.readTree("{\"run\":null,\"items\":[],\"total\":0}"),
+                controller.opsTopics(AUTH, null, null).getBody().getData());
+    }
+
+    @Test
+    @DisplayName("主题清单:运行不存在 404、scope 无效 400,状态码保持")
+    void opsTopics_errorsArePassedThrough() {
+        when(client.getKbOpsTopics(AUTH, "nope", null))
+                .thenReturn(upstream(HttpStatus.NOT_FOUND, "{\"detail\":\"运行不存在\"}"));
+        when(client.getKbOpsTopics(AUTH, null, "bogus"))
+                .thenReturn(upstream(HttpStatus.BAD_REQUEST, "{\"detail\":\"scope 取值无效\"}"));
+
+        ResponseEntity<ResponseMessage<?>> notFound = controller.opsTopics(AUTH, "nope", null);
+        assertEquals(HttpStatus.NOT_FOUND, notFound.getStatusCode());
+        assertEquals("运行不存在", notFound.getBody().getMessage());
+
+        ResponseEntity<ResponseMessage<?>> badScope = controller.opsTopics(AUTH, null, "bogus");
+        assertEquals(HttpStatus.BAD_REQUEST, badScope.getStatusCode());
+        assertEquals("scope 取值无效", badScope.getBody().getMessage());
+    }
+
+    @Test
+    @DisplayName("草稿列表:status/kind/page/size 原样转发,缺省转发 null")
+    void opsDrafts_forwardParams() throws Exception {
+        when(client.getKbOpsDrafts(AUTH, "all", "new_faq", 2, 50))
+                .thenReturn(upstream(HttpStatus.OK, "{\"items\":[],\"total\":0}"));
+        when(client.getKbOpsDrafts(eq(AUTH), isNull(), isNull(), isNull(), isNull()))
+                .thenReturn(upstream(HttpStatus.OK, "{}"));
+
+        ResponseEntity<ResponseMessage<?>> resp = controller.opsDrafts(AUTH, "all", "new_faq", 2, 50);
+        assertEquals(HttpStatus.OK, resp.getStatusCode());
+        assertEquals(objectMapper.readTree("{\"items\":[],\"total\":0}"), resp.getBody().getData());
+        assertEquals(HttpStatus.OK, controller.opsDrafts(AUTH, null, null, null, null).getStatusCode());
+    }
+
+    @Test
+    @DisplayName("草稿详情:草稿号转发;不存在 404")
+    void opsDraftDetail_forwardsIdAndKeeps404() throws Exception {
+        when(client.getKbOpsDraft(AUTH, 12L))
+                .thenReturn(upstream(HttpStatus.OK, "{\"draft_id\":12,\"status\":\"pending\"}"));
+        when(client.getKbOpsDraft(AUTH, 404L))
+                .thenReturn(upstream(HttpStatus.NOT_FOUND, "{\"detail\":\"草稿不存在\"}"));
+
+        ResponseEntity<ResponseMessage<?>> ok = controller.opsDraftDetail(AUTH, 12L);
+        assertEquals(HttpStatus.OK, ok.getStatusCode());
+        assertEquals(
+                objectMapper.readTree("{\"draft_id\":12,\"status\":\"pending\"}"),
+                ok.getBody().getData());
+
+        ResponseEntity<ResponseMessage<?>> missing = controller.opsDraftDetail(AUTH, 404L);
+        assertEquals(HttpStatus.NOT_FOUND, missing.getStatusCode());
+        assertEquals("草稿不存在", missing.getBody().getMessage());
+    }
+
+    @Test
+    @DisplayName("修改草稿:草稿号与请求体原样转发;已处理 409")
+    void editOpsDraft_forwardsIdAndBody() throws Exception {
+        Map<String, Object> body = Map.of("question", "社费多少", "answer", "每学期 20 元");
+        when(client.putKbOpsDraft(AUTH, 12L, body))
+                .thenReturn(upstream(HttpStatus.OK, "{\"draft_id\":12,\"status\":\"pending\"}"));
+        when(client.putKbOpsDraft(AUTH, 13L, body))
+                .thenReturn(upstream(HttpStatus.CONFLICT, "{\"detail\":\"草稿已处理(当前状态 approved)\"}"));
+
+        ResponseEntity<ResponseMessage<?>> ok = controller.editOpsDraft(AUTH, 12L, body);
+        assertEquals(HttpStatus.OK, ok.getStatusCode());
+        assertEquals(
+                objectMapper.readTree("{\"draft_id\":12,\"status\":\"pending\"}"),
+                ok.getBody().getData());
+
+        ResponseEntity<ResponseMessage<?>> conflict = controller.editOpsDraft(AUTH, 13L, body);
+        assertEquals(HttpStatus.CONFLICT, conflict.getStatusCode());
+        assertEquals("草稿已处理(当前状态 approved)", conflict.getBody().getMessage());
+    }
+
+    @Test
+    @DisplayName("批准草稿:草稿号转发;正在被处理 409、审计写不进 503、嵌入失败 502 各自保持")
+    void approveOpsDraft_forwardsIdAndKeepsStatuses() throws Exception {
+        when(client.postKbOpsDraftApprove(AUTH, 12L))
+                .thenReturn(upstream(HttpStatus.OK,
+                        "{\"draft_id\":12,\"status\":\"approved\",\"published_source_id\":\"kb_9\",\"audit_recorded\":true}"));
+        when(client.postKbOpsDraftApprove(AUTH, 13L))
+                .thenReturn(upstream(HttpStatus.CONFLICT, "{\"detail\":\"这份草稿正在被处理,请稍后刷新\"}"));
+        when(client.postKbOpsDraftApprove(AUTH, 14L))
+                .thenReturn(upstream(HttpStatus.SERVICE_UNAVAILABLE,
+                        "{\"detail\":\"审计服务不可用,草稿未发布,请稍后重试\"}"));
+        when(client.postKbOpsDraftApprove(AUTH, 15L))
+                .thenReturn(upstream(HttpStatus.BAD_GATEWAY, "{\"detail\":\"嵌入服务调用失败\"}"));
+
+        ResponseEntity<ResponseMessage<?>> ok = controller.approveOpsDraft(AUTH, 12L);
+        assertEquals(HttpStatus.OK, ok.getStatusCode());
+        assertEquals(
+                objectMapper.readTree(
+                        "{\"draft_id\":12,\"status\":\"approved\",\"published_source_id\":\"kb_9\",\"audit_recorded\":true}"),
+                ok.getBody().getData());
+
+        ResponseEntity<ResponseMessage<?>> conflict = controller.approveOpsDraft(AUTH, 13L);
+        assertEquals(HttpStatus.CONFLICT, conflict.getStatusCode());
+        assertEquals("这份草稿正在被处理,请稍后刷新", conflict.getBody().getMessage());
+
+        ResponseEntity<ResponseMessage<?>> auditDown = controller.approveOpsDraft(AUTH, 14L);
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, auditDown.getStatusCode());
+        assertEquals("审计服务不可用,草稿未发布,请稍后重试", auditDown.getBody().getMessage());
+
+        ResponseEntity<ResponseMessage<?>> embedding = controller.approveOpsDraft(AUTH, 15L);
+        assertEquals(HttpStatus.BAD_GATEWAY, embedding.getStatusCode());
+        assertEquals("嵌入服务调用失败", embedding.getBody().getMessage());
+    }
+
+    @Test
+    @DisplayName("驳回草稿:草稿号转发;已被处理 409")
+    void rejectOpsDraft_forwardsIdAndKeeps409() throws Exception {
+        when(client.postKbOpsDraftReject(AUTH, 12L))
+                .thenReturn(upstream(HttpStatus.OK, "{\"draft_id\":12,\"status\":\"rejected\"}"));
+        when(client.postKbOpsDraftReject(AUTH, 13L))
+                .thenReturn(upstream(HttpStatus.CONFLICT, "{\"detail\":\"草稿已被处理\"}"));
+
+        ResponseEntity<ResponseMessage<?>> ok = controller.rejectOpsDraft(AUTH, 12L);
+        assertEquals(HttpStatus.OK, ok.getStatusCode());
+        assertEquals(
+                objectMapper.readTree("{\"draft_id\":12,\"status\":\"rejected\"}"),
+                ok.getBody().getData());
+
+        ResponseEntity<ResponseMessage<?>> conflict = controller.rejectOpsDraft(AUTH, 13L);
+        assertEquals(HttpStatus.CONFLICT, conflict.getStatusCode());
+        assertEquals("草稿已被处理", conflict.getBody().getMessage());
+    }
+
+    @Test
+    @DisplayName("知识库运营:Agent 不可达时读、写接口都上抛 ResourceAccessException")
+    void opsUnreachableExceptionPropagates() {
+        when(client.getKbOpsTopics(AUTH, null, null))
+                .thenThrow(new ResourceAccessException("Connection refused"));
+        when(client.postKbOpsDraftApprove(AUTH, 12L))
+                .thenThrow(new ResourceAccessException("Connection refused"));
+
+        assertThrows(ResourceAccessException.class, () -> controller.opsTopics(AUTH, null, null));
+        assertThrows(ResourceAccessException.class, () -> controller.approveOpsDraft(AUTH, 12L));
+    }
 }

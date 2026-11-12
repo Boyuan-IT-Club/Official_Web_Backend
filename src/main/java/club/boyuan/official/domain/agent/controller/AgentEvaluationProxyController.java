@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,10 +26,11 @@ import org.springframework.web.client.ResourceAccessException;
 /**
  * 简历评估管理代理(B 模块 #135,B6/B7):Agent /admin/evaluation* 纯转发。
  *
- * 权限分两档(与 Agent 侧同码双道闸):
+ * 权限分三档(与 Agent 侧同码双道闸):
  * - 队列/评分卡/采纳/驳回:resume:audit(评审权,#135 用户故事 1)
  * - 预置题库读取与勾选:interview:evaluate 或 resume:audit(#128:
  *   面试官场景内看题库,不破 resume:view 全库边界)
+ * - 校准案例:查看 resume:audit;录入/停用/收割 evaluation:run
  *
  * 信封/错误提取与 AgentAdminController 同约定。
  */
@@ -141,6 +143,51 @@ public class AgentEvaluationProxyController {
             @RequestParam(value = "includeStale", required = false, defaultValue = "false")
             boolean includeStale) {
         return wrap(agentAdminClient.postEvaluationRetry(authorization, cycleId, includeStale));
+    }
+
+    // ── 校准案例(/calibration/**):判例会被原样放进评委的 prompt,改它等于改评分的
+    // 标尺——录入、停用、收割要 evaluation:run(与 Agent 侧同码),查看只要 resume:audit。
+    // 查询参数名与 Agent 契约一致(snake_case),前端按契约直接传。
+
+    /** 校准案例列表(可按清单、判定项过滤;include_retired 连已停用的一起看)。 */
+    @GetMapping("/calibration/cases")
+    @PreAuthorize("hasAuthority('resume:audit')")
+    public ResponseEntity<ResponseMessage<?>> calibrationCases(
+            @RequestHeader("Authorization") String authorization,
+            @RequestParam(value = "checklist", required = false) String checklist,
+            @RequestParam(value = "item", required = false) String item,
+            @RequestParam(value = "include_retired", required = false) Boolean includeRetired,
+            @RequestParam(value = "limit", required = false) Integer limit,
+            @RequestParam(value = "offset", required = false) Integer offset) {
+        return wrap(agentAdminClient.getCalibrationCases(
+                authorization, checklist, item, includeRetired, limit, offset));
+    }
+
+    /** 录入一条种子判例(201)。 */
+    @PostMapping("/calibration/cases")
+    @PreAuthorize("hasAuthority('evaluation:run')")
+    public ResponseEntity<ResponseMessage<?>> addCalibrationCase(
+            @RequestHeader("Authorization") String authorization,
+            @RequestBody Map<String, Object> body) {
+        return wrap(agentAdminClient.postCalibrationCase(authorization, body));
+    }
+
+    /** 停用一条判例(Agent 侧不删行)。案例号是整数,非数字在进控制器前就被拒(400)。 */
+    @DeleteMapping("/calibration/cases/{caseId}")
+    @PreAuthorize("hasAuthority('evaluation:run')")
+    public ResponseEntity<ResponseMessage<?>> retireCalibrationCase(
+            @RequestHeader("Authorization") String authorization,
+            @PathVariable long caseId) {
+        return wrap(agentAdminClient.deleteCalibrationCase(authorization, caseId));
+    }
+
+    /** 从已结束周期收割校准案例;功能未启用或周期还在进行中 409。 */
+    @PostMapping("/calibration/harvest")
+    @PreAuthorize("hasAuthority('evaluation:run')")
+    public ResponseEntity<ResponseMessage<?>> harvestCalibrationCases(
+            @RequestHeader("Authorization") String authorization,
+            @RequestBody Map<String, Object> body) {
+        return wrap(agentAdminClient.postCalibrationHarvest(authorization, body));
     }
 
     private ResponseEntity<ResponseMessage<?>> wrap(ResponseEntity<String> upstream) {

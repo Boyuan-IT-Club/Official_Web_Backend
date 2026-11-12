@@ -29,7 +29,8 @@ import org.springframework.web.client.ResourceAccessException;
  *
  * 与 {@link AgentAdminController} 的差别只在权限码:知识库是**独立授权面**
  * kb:manage(V42 种子),可单独授予知识运营而无需 agent:monitor 的其它
- * 运营权限;Agent 侧 /admin/kb* 同码自校,双道闸。
+ * 运营权限;Agent 侧 /admin/kb* 同码自校,双道闸。知识库运营(/ops/**:
+ * 离线分析、主题清单、草稿审核)同属这一授权面。
  *
  * 响应信封/错误提取与 AgentAdminController 同约定(2xx 包 success 信封,
  * 4xx/5xx 提取 detail/message 转同状态码 error,连接失败转 502)。
@@ -108,6 +109,80 @@ public class AgentKbAdminController {
             @RequestHeader("Authorization") String authorization,
             @PathVariable String sourceId) {
         return wrap(agentAdminClient.postKbReembed(authorization, sourceId));
+    }
+
+
+    // ── 知识库运营(/ops/**):离线分析、主题清单、草稿审核。权限同为 kb:manage
+    // (类级 @PreAuthorize)。查询参数名与 Agent 契约一致,前端按契约直接传。
+    // 草稿号是整数:声明成 long,非数字在进控制器前就被拒(400),拼不出别的下游路径。
+
+    /** 启动一次离线分析(后台执行,202);已有分析在跑 409。请求体可缺省(Agent 取默认天数)。 */
+    @PostMapping("/ops/runs")
+    public ResponseEntity<ResponseMessage<?>> startOpsRun(
+            @RequestHeader("Authorization") String authorization,
+            @RequestBody(required = false) Map<String, Object> body) {
+        return wrap(agentAdminClient.postKbOpsRun(authorization, body));
+    }
+
+    /** 最近的分析运行(新的在前)。 */
+    @GetMapping("/ops/runs")
+    public ResponseEntity<ResponseMessage<?>> opsRuns(
+            @RequestHeader("Authorization") String authorization,
+            @RequestParam(value = "limit", required = false) Integer limit) {
+        return wrap(agentAdminClient.getKbOpsRuns(authorization, limit));
+    }
+
+    /** 一次运行的主题清单;run_id 缺省取最近一次成功的运行。 */
+    @GetMapping("/ops/topics")
+    public ResponseEntity<ResponseMessage<?>> opsTopics(
+            @RequestHeader("Authorization") String authorization,
+            @RequestParam(value = "run_id", required = false) String runId,
+            @RequestParam(value = "scope", required = false) String scope) {
+        return wrap(agentAdminClient.getKbOpsTopics(authorization, runId, scope));
+    }
+
+    /** 草稿分页列表;status 缺省只看待审的,all 看全部。 */
+    @GetMapping("/ops/drafts")
+    public ResponseEntity<ResponseMessage<?>> opsDrafts(
+            @RequestHeader("Authorization") String authorization,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "kind", required = false) String kind,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "size", required = false) Integer size) {
+        return wrap(agentAdminClient.getKbOpsDrafts(authorization, status, kind, page, size));
+    }
+
+    /** 草稿详情(补问法草稿附带目标 FAQ 的现有内容)。 */
+    @GetMapping("/ops/drafts/{draftId}")
+    public ResponseEntity<ResponseMessage<?>> opsDraftDetail(
+            @RequestHeader("Authorization") String authorization,
+            @PathVariable long draftId) {
+        return wrap(agentAdminClient.getKbOpsDraft(authorization, draftId));
+    }
+
+    /** 批准前修改草稿的问题、答案与绑定周期(只落在草稿上)。 */
+    @PutMapping("/ops/drafts/{draftId}")
+    public ResponseEntity<ResponseMessage<?>> editOpsDraft(
+            @RequestHeader("Authorization") String authorization,
+            @PathVariable long draftId,
+            @RequestBody Map<String, Object> body) {
+        return wrap(agentAdminClient.putKbOpsDraft(authorization, draftId, body));
+    }
+
+    /** 批准草稿并发布到知识库(唯一会向知识库写内容的动作)。 */
+    @PostMapping("/ops/drafts/{draftId}/approve")
+    public ResponseEntity<ResponseMessage<?>> approveOpsDraft(
+            @RequestHeader("Authorization") String authorization,
+            @PathVariable long draftId) {
+        return wrap(agentAdminClient.postKbOpsDraftApprove(authorization, draftId));
+    }
+
+    /** 驳回草稿(不发布,草稿归档)。 */
+    @PostMapping("/ops/drafts/{draftId}/reject")
+    public ResponseEntity<ResponseMessage<?>> rejectOpsDraft(
+            @RequestHeader("Authorization") String authorization,
+            @PathVariable long draftId) {
+        return wrap(agentAdminClient.postKbOpsDraftReject(authorization, draftId));
     }
 
     /** 上游响应 → 站内统一信封(与 AgentAdminController 同约定)。 */
