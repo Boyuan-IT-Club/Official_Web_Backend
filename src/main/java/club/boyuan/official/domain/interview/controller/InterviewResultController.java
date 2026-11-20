@@ -3,6 +3,7 @@ package club.boyuan.official.domain.interview.controller;
 
 import java.util.Map;
 import club.boyuan.official.common.dto.*;
+import club.boyuan.official.domain.interview.dto.ResultSummaryDTO;
 import club.boyuan.official.domain.interview.dto.*;
 import club.boyuan.official.persistence.entity.InterviewResult;
 import club.boyuan.official.domain.interview.service.IInterviewResultService;
@@ -115,6 +116,16 @@ public class InterviewResultController {
         return ResponseEntity.ok(ResponseMessage.success(Map.of("created", created)));
     }
 
+    /**
+     * 录取统计：总数（待定/录取/未通过/在预录取/已通知）与按部门拆分
+     * （志愿人数、预录取、已录取及其中一志愿/二志愿/调剂、已通知）。打开时自动补齐名单。
+     */
+    @GetMapping("/summary")
+    public ResponseEntity<ResponseMessage<ResultSummaryDTO>> summary(
+            @RequestParam Integer cycleId) {
+        return ResponseEntity.ok(ResponseMessage.success(interviewResultService.summary(cycleId)));
+    }
+
     @GetMapping("/list")
     public ResponseEntity<ResponseMessage<InterviewResultResponseDTO>> list(
             @RequestParam Integer cycleId,
@@ -137,18 +148,16 @@ public class InterviewResultController {
 
     }
 
+    /**
+     * 单行录入 / 更正结果。已定的结果再改需填原因（409 3615），在预录取名单里的不能在这里改（409 3616）。
+     * 不再把一切异常吞成 400「更新面试结果失败」：前端要靠具体的错误码告诉管理员该怎么办。
+     */
     @PutMapping("/update/{resultId}")
     public ResponseEntity<ResponseMessage<InterviewResult>> update(@PathVariable Integer resultId,
                                                                    @Valid @RequestBody InterviewResultSaveDTO interviewResult) {
-        try {
-            log.info("更新面试结果");
-            InterviewResult result = interviewResultService.update(resultId, interviewResult);
-            return ResponseEntity.ok(ResponseMessage.success(result));
-        } catch (Exception e) {
-            log.error("更新面试结果失败", e);
-            return ResponseEntity.badRequest()
-                    .body(ResponseMessage.error(400, "更新面试结果失败"));
-        }
+        log.info("更新面试结果 resultId={}", resultId);
+        InterviewResult result = interviewResultService.update(resultId, interviewResult);
+        return ResponseEntity.ok(ResponseMessage.success(result));
     }
 
     //根据resultId获取面试结果

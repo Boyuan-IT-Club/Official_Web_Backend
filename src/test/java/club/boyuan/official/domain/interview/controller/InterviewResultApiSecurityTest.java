@@ -79,11 +79,22 @@ class InterviewResultApiSecurityTest {
         return request;
     }
 
+    private static void assertNotAccessDenied(org.junit.jupiter.api.function.Executable call) {
+        try {
+            call.execute();
+        } catch (AccessDeniedException denied) {
+            org.junit.jupiter.api.Assertions.fail("有权限的管理员不该被拒绝：" + denied.getMessage());
+        } catch (Throwable other) {
+            // 业务异常（结果不存在、参数校验）说明已经过了鉴权，正是本测试要确认的
+        }
+    }
+
     @Test
     @WithMockUser(authorities = "resume:audit")
     void 管理员可以批量录取并逐条录入结果() {
         assertDoesNotThrow(() -> controller.batchDecision(batchRequest()));
-        assertDoesNotThrow(() -> controller.update(10, new InterviewResultSaveDTO()));
+        // 单行修改现在会如实抛业务异常（结果不存在、参数不全等），这里只关心它不是权限拒绝
+        assertNotAccessDenied(() -> controller.update(10, new InterviewResultSaveDTO()));
         assertDoesNotThrow(() -> controller.list(1, null, null, null, 1, 10));
         assertDoesNotThrow(() -> controller.sendNotifications(notifyRequest()));
         assertDoesNotThrow(() -> controller.preAdmissionList(1, null, null, 1, 20));

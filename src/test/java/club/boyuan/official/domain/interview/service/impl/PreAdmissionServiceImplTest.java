@@ -2,9 +2,12 @@ package club.boyuan.official.domain.interview.service.impl;
 
 import club.boyuan.official.common.exception.BusinessException;
 import club.boyuan.official.domain.interview.dto.PreAdmissionBatchRequestDTO;
+import club.boyuan.official.domain.interview.service.ResultRosterService;
 import club.boyuan.official.persistence.entity.Department;
+import club.boyuan.official.persistence.entity.InterviewResultChange;
 import club.boyuan.official.persistence.entity.PreAdmissionDraft;
 import club.boyuan.official.persistence.mapper.DepartmentMapper;
+import club.boyuan.official.persistence.mapper.InterviewResultChangeMapper;
 import club.boyuan.official.persistence.mapper.InterviewResultMapper;
 import club.boyuan.official.persistence.mapper.PreAdmissionDraftMapper;
 import club.boyuan.official.domain.user.service.IUserService;
@@ -18,10 +21,12 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -32,6 +37,8 @@ class PreAdmissionServiceImplTest {
     @Mock private InterviewResultMapper resultMapper;
     @Mock private DepartmentMapper departmentMapper;
     @Mock private IUserService userService;
+    @Mock private ResultRosterService rosterService;
+    @Mock private InterviewResultChangeMapper changeMapper;
     @InjectMocks private PreAdmissionServiceImpl service;
 
     @Test
@@ -66,6 +73,21 @@ class PreAdmissionServiceImplTest {
         assertEquals(2, service.finalizeCycle(7));
 
         verify(draftMapper).deleteBatch(7, List.of(10, 12));
+        verify(changeMapper, times(2)).insert(any(InterviewResultChange.class));
+    }
+
+    @Test
+    void 转正前先点名已有正式结果的人且一个都不发布() {
+        when(draftMapper.selectForFinalize(7)).thenReturn(List.of(
+                new PreAdmissionDraft().setResultId(10),
+                new PreAdmissionDraft().setResultId(12)));
+        when(draftMapper.selectConflictNames(7)).thenReturn(List.of("张三", "李四"));
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.finalizeCycle(7));
+
+        assertTrue(ex.getMessage().contains("张三、李四"), ex.getMessage());
+        verify(draftMapper, never()).publishToResults(any(), any());
+        verify(draftMapper, never()).deleteBatch(any(), any());
     }
 
     @Test

@@ -3,6 +3,7 @@ package club.boyuan.official.common.exception;
 import club.boyuan.official.common.dto.ResponseMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -196,6 +197,20 @@ public class GlobalExceptionHandler {
     private static String describeFieldError(FieldError fe) {
         String msg = fe.getDefaultMessage();
         return msg == null || msg.isBlank() ? fe.getField() + " 不合法" : msg;
+    }
+
+    /**
+     * 唯一键冲突：两个管理员同时操作同一条数据（例如同时生成同一个人的结果行）。
+     * 这是并发撞车而不是系统故障，回 409 让前端提示刷新，而不是 500「系统异常」。
+     */
+    @ExceptionHandler(DuplicateKeyException.class)
+    public ResponseEntity<ResponseMessage<?>> handleDuplicateKey(DuplicateKeyException ex) {
+        logger.warn("唯一键冲突: {}", ex.getMostSpecificCause().getMessage());
+        ResponseMessage<?> response = new ResponseMessage<>(
+                BusinessExceptionEnum.RESOURCE_CONFLICT.getCode(),
+                "数据刚被别人改过，请刷新后重试",
+                null);
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
     }
 
     /**

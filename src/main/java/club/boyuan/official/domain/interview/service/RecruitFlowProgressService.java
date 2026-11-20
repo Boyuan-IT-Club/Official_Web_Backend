@@ -24,8 +24,10 @@ public class RecruitFlowProgressService {
     private final InterviewEvaluationMapper evaluationMapper;
     private final InterviewResultMapper resultMapper;
     private final PreAdmissionDraftMapper preAdmissionDraftMapper;
+    private final ResultRosterService rosterService;
 
     public RecruitFlowProgressDTO of(Integer cycleId) {
+        rosterService.ensure(cycleId);
         return RecruitFlowProgressDTO.builder()
                 .fieldCount(fieldDefinitionMapper.selectCount(new LambdaQueryWrapper<ResumeFieldDefinition>()
                         .eq(ResumeFieldDefinition::getCycleId, cycleId)
@@ -46,8 +48,8 @@ public class RecruitFlowProgressService {
                 .finalizedEvaluations(evaluationMapper.selectCount(new LambdaQueryWrapper<InterviewEvaluation>()
                         .eq(InterviewEvaluation::getCycleId, cycleId)
                         .eq(InterviewEvaluation::getStatus, InterviewEvaluation.STATUS_SUBMITTED)))
-                .preAdmitted(preAdmissionDraftMapper.selectCount(new LambdaQueryWrapper<PreAdmissionDraft>()
-                        .eq(PreAdmissionDraft::getCycleId, cycleId)))
+                // 与预录取名单同一口径：初筛未通过且仍待定的人即便留在草稿里也不计
+                .preAdmitted(preAdmissionDraftMapper.countVisibleDrafts(cycleId))
                 // decision=0 是「待定」，生成名单时的初始值，不算已决定
                 .decided(resultMapper.selectCount(new LambdaQueryWrapper<InterviewResult>()
                         .eq(InterviewResult::getCycleId, cycleId)
