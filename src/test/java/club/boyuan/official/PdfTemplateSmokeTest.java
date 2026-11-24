@@ -64,7 +64,7 @@ class PdfTemplateSmokeTest {
         byte[] pdf = PdfExportUtil.exportResumeToPdf(dto);
         assertUsable(pdf, "简历");
 
-        Path out = Path.of(System.getProperty("pdf.out", "target/resume-sample.pdf"));
+        Path out = Path.of(System.getProperty("pdf.out", ".mvn/build/resume-sample.pdf"));
         Files.createDirectories(out.getParent());
         Files.write(out, pdf);
         System.out.println("PDF 已生成：" + out.toAbsolutePath() + "  " + pdf.length + " bytes");
@@ -74,7 +74,7 @@ class PdfTemplateSmokeTest {
         byte[] withPhoto = PdfExportUtil.exportResumeToPdf(dto, portraitJpeg());
         assertUsable(withPhoto, "带头像的简历");
         assertTrue(withPhoto.length > pdf.length, "带照片的 PDF 反而更小，照片多半没画进去");
-        Path out2 = Path.of(System.getProperty("pdf.photo.out", "target/resume-sample-photo.pdf"));
+        Path out2 = Path.of(System.getProperty("pdf.photo.out", ".mvn/build/resume-sample-photo.pdf"));
         Files.write(out2, withPhoto);
         System.out.println("PDF（含头像）已生成：" + out2.toAbsolutePath() + "  " + withPhoto.length + " bytes");
     }
@@ -93,7 +93,7 @@ class PdfTemplateSmokeTest {
 
         byte[] pdf = PdfExportUtil.exportBlankTemplateToPdf("2026 秋季招新", fields);
         assertUsable(pdf, "空白模板");
-        Path out = Path.of(System.getProperty("tpl.out", "target/resume-template-sample.pdf"));
+        Path out = Path.of(System.getProperty("tpl.out", ".mvn/build/resume-template-sample.pdf"));
         Files.createDirectories(out.getParent());
         Files.write(out, pdf);
         System.out.println("模板 PDF 已生成：" + out.toAbsolutePath() + "  " + pdf.length + " bytes");

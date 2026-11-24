@@ -89,7 +89,7 @@ jobs:
       - name: Coverage summary
         if: always()
         run: |
-          CSV=target/site/jacoco/jacoco.csv
+          CSV=.mvn/build/site/jacoco/jacoco.csv
           if [ ! -f "$CSV" ]; then
             echo "未生成覆盖率报告（可能测试未跑到 report 阶段）" >> "$GITHUB_STEP_SUMMARY"
             exit 0
@@ -108,7 +108,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: surefire-reports
-          path: target/surefire-reports/
+          path: .mvn/build/surefire-reports/
+          include-hidden-files: true
           if-no-files-found: ignore
 
       - name: Publish coverage report
@@ -116,7 +117,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: jacoco-coverage
-          path: target/site/jacoco/
+          path: .mvn/build/site/jacoco/
+          include-hidden-files: true
           if-no-files-found: ignore
 
   # Docker 构建冒烟测试：PR 阶段验证 Dockerfile（分层解包/多阶段构建）能成功出镜像，
