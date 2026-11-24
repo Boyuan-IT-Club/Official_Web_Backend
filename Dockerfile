@@ -5,7 +5,7 @@
 # 服务器每次部署只需拉取几百 KB 的 application 层，而非整个 fat-jar。
 FROM eclipse-temurin:17-jre-jammy AS extract
 WORKDIR /extract
-COPY target/Official-*.jar app.jar
+COPY .mvn/build/Official-*.jar app.jar
 RUN java -Djarmode=layertools -jar app.jar extract
 
 # ── 阶段 2：运行镜像 ──────────────────────────────────────────────

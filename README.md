@@ -149,7 +149,7 @@ git push origin v1.2.3
 ### 本地测试环境部署
 
 ```bash
-# 构建 jar 包（Dockerfile 从 target/ 复制）
+# 构建 jar 包（Dockerfile 从 .mvn/build/ 复制）
 ./mvnw clean package -DskipTests
 
 # 构建并启动完整测试环境（包括应用、MySQL、Redis、RabbitMQ）

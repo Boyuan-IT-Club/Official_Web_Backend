@@ -1,4 +1,4 @@
-# 构建上下文排除:运行期数据卷/本地产物不进镜像(target 除外——Dockerfile 需要它)
+# 构建上下文排除:运行期数据卷/本地产物不进镜像(.mvn/build 中的 JAR 除外——Dockerfile 需要它)
 .git
 .idea
 *.iml

@@ -230,6 +230,7 @@
     </dependencies>
 
     <build>
+        <directory>${project.basedir}/.mvn/build</directory>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
