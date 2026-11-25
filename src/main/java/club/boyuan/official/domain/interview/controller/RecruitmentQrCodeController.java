@@ -51,6 +51,14 @@ public class RecruitmentQrCodeController {
         return ResponseEntity.ok(ResponseMessage.success("已删除"));
     }
 
+    @DeleteMapping
+    @PreAuthorize("hasAnyAuthority('cycle:manage', 'resume:audit')")
+    public ResponseEntity<ResponseMessage<String>> deleteByKey(@RequestParam Integer cycleId,
+            @RequestParam String qrType, @RequestParam(required = false) Integer deptId) {
+        qrCodeService.deleteByKey(cycleId, qrType, deptId);
+        return ResponseEntity.ok(ResponseMessage.success("已删除"));
+    }
+
     /**
      * 招新答疑群，简历填写页展示。
      * 公开给已登录用户 —— 还没投递的人也要能看到答疑群。

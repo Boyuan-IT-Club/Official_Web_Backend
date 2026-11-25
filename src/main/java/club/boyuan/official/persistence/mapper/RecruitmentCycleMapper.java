@@ -4,6 +4,7 @@ import club.boyuan.official.persistence.entity.RecruitmentCycle;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Update;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -19,6 +20,9 @@ public interface RecruitmentCycleMapper extends BaseMapper<RecruitmentCycle> {
      * @return 招募周期实体
      */
     RecruitmentCycle findById(Integer cycleId);
+
+    @Update("UPDATE recruitment_cycle SET qr_codes=JSON_OBJECT(), updated_at=updated_at WHERE cycle_id=#{cycleId} AND qr_codes IS NULL")
+    void initializeEmptyQrCodes(@Param("cycleId") Integer cycleId);
 
     /**
      * 清空周期的招新提示语。仅供「无投递周期的物理删除」前置清理：

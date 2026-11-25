@@ -1,6 +1,7 @@
 package club.boyuan.official.domain.resume.controller;
 
 import club.boyuan.official.domain.resume.dto.OpenCycleDTO;
+import club.boyuan.official.domain.resume.dto.RecruitmentCycleDTO;
 import club.boyuan.official.common.dto.PageResultDTO;
 import club.boyuan.official.common.dto.ResponseMessage;
 import club.boyuan.official.persistence.entity.RecruitmentCycle;
@@ -39,11 +40,11 @@ public class RecruitmentCycleController {
      */
     @PostMapping
     @PreAuthorize("hasAuthority('cycle:manage')")
-    public ResponseEntity<ResponseMessage<RecruitmentCycle>> createRecruitmentCycle(@RequestBody RecruitmentCycle recruitmentCycle) {
+    public ResponseEntity<ResponseMessage<RecruitmentCycleDTO>> createRecruitmentCycle(@RequestBody RecruitmentCycleDTO recruitmentCycle) {
         try {
             logger.info("创建招募周期");
-            RecruitmentCycle createdCycle = recruitmentCycleService.createRecruitmentCycle(recruitmentCycle);
-            return ResponseEntity.ok(new ResponseMessage<>(200, "招募周期创建成功", createdCycle));
+            RecruitmentCycle createdCycle = recruitmentCycleService.createRecruitmentCycle(recruitmentCycle.toEntity());
+            return ResponseEntity.ok(new ResponseMessage<>(200, "招募周期创建成功", RecruitmentCycleDTO.from(createdCycle)));
         } catch (BusinessException e) {
             logger.warn("创建招募周期业务异常，错误码: {}，错误信息: {}", e.getCode(), e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -61,11 +62,11 @@ public class RecruitmentCycleController {
      */
     @PutMapping
     @PreAuthorize("hasAuthority('cycle:manage')")
-    public ResponseEntity<ResponseMessage<RecruitmentCycle>> updateRecruitmentCycle(@RequestBody RecruitmentCycle recruitmentCycle) {
+    public ResponseEntity<ResponseMessage<RecruitmentCycleDTO>> updateRecruitmentCycle(@RequestBody RecruitmentCycleDTO recruitmentCycle) {
         try {
-            logger.info("更新招募周期，ID: {}", recruitmentCycle.getCycleId());
-            RecruitmentCycle updatedCycle = recruitmentCycleService.updateRecruitmentCycle(recruitmentCycle);
-            return ResponseEntity.ok(new ResponseMessage<>(200, "招募周期更新成功", updatedCycle));
+            logger.info("更新招募周期，ID: {}", recruitmentCycle.cycleId());
+            RecruitmentCycle updatedCycle = recruitmentCycleService.updateRecruitmentCycle(recruitmentCycle.toEntity());
+            return ResponseEntity.ok(new ResponseMessage<>(200, "招募周期更新成功", RecruitmentCycleDTO.from(updatedCycle)));
         } catch (BusinessException e) {
             logger.warn("更新招募周期业务异常，错误码: {}，错误信息: {}", e.getCode(), e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -105,7 +106,7 @@ public class RecruitmentCycleController {
      */
     @GetMapping("/{cycleId}")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ResponseMessage<RecruitmentCycle>> getRecruitmentCycleById(@PathVariable Integer cycleId) {
+    public ResponseEntity<ResponseMessage<RecruitmentCycleDTO>> getRecruitmentCycleById(@PathVariable Integer cycleId) {
         try {
             logger.debug("获取招募周期，ID: {}", cycleId);
             RecruitmentCycle cycle = recruitmentCycleService.getRecruitmentCycleById(cycleId);
@@ -113,7 +114,7 @@ public class RecruitmentCycleController {
                 logger.warn("招募周期不存在，ID: {}", cycleId);
                 throw new BusinessException(BusinessExceptionEnum.RECRUITMENT_CYCLE_NOT_FOUND);
             }
-            return ResponseEntity.ok(new ResponseMessage<>(200, "获取招募周期成功", cycle));
+            return ResponseEntity.ok(new ResponseMessage<>(200, "获取招募周期成功", RecruitmentCycleDTO.from(cycle)));
         } catch (BusinessException e) {
             logger.warn("获取招募周期业务异常，错误码: {}，错误信息: {}", e.getCode(), e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -131,11 +132,11 @@ public class RecruitmentCycleController {
      */
     @GetMapping
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ResponseMessage<List<RecruitmentCycle>>> getAllRecruitmentCycles() {
+    public ResponseEntity<ResponseMessage<List<RecruitmentCycleDTO>>> getAllRecruitmentCycles() {
         try {
             logger.debug("获取所有招募周期");
             List<RecruitmentCycle> cycles = recruitmentCycleService.getAllRecruitmentCycles();
-            return ResponseEntity.ok(new ResponseMessage<>(200, "获取招募周期列表成功", cycles));
+            return ResponseEntity.ok(new ResponseMessage<>(200, "获取招募周期列表成功", cycles.stream().map(RecruitmentCycleDTO::from).toList()));
         } catch (BusinessException e) {
             logger.warn("获取招募周期列表业务异常，错误码: {}，错误信息: {}", e.getCode(), e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -153,11 +154,11 @@ public class RecruitmentCycleController {
      */
     @GetMapping("/status/{status}")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ResponseMessage<List<RecruitmentCycle>>> getRecruitmentCyclesByStatus(@PathVariable Integer status) {
+    public ResponseEntity<ResponseMessage<List<RecruitmentCycleDTO>>> getRecruitmentCyclesByStatus(@PathVariable Integer status) {
         try {
             logger.debug("根据状态获取招募周期，状态: {}", status);
             List<RecruitmentCycle> cycles = recruitmentCycleService.getRecruitmentCyclesByStatus(status);
-            return ResponseEntity.ok(new ResponseMessage<>(200, "获取招募周期列表成功", cycles));
+            return ResponseEntity.ok(new ResponseMessage<>(200, "获取招募周期列表成功", cycles.stream().map(RecruitmentCycleDTO::from).toList()));
         } catch (BusinessException e) {
             logger.warn("根据状态获取招募周期列表业务异常，错误码: {}，错误信息: {}", e.getCode(), e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -215,11 +216,11 @@ public class RecruitmentCycleController {
 
     @GetMapping("/active/{isActive}")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ResponseMessage<List<RecruitmentCycle>>> getRecruitmentCyclesByIsActive(@PathVariable Integer isActive) {
+    public ResponseEntity<ResponseMessage<List<RecruitmentCycleDTO>>> getRecruitmentCyclesByIsActive(@PathVariable Integer isActive) {
         try {
             logger.debug("根据是否启用获取招募周期，是否启用: {}", isActive);
             List<RecruitmentCycle> cycles = recruitmentCycleService.getRecruitmentCyclesByIsActive(isActive);
-            return ResponseEntity.ok(new ResponseMessage<>(200, "获取招募周期列表成功", cycles));
+            return ResponseEntity.ok(new ResponseMessage<>(200, "获取招募周期列表成功", cycles.stream().map(RecruitmentCycleDTO::from).toList()));
         } catch (BusinessException e) {
             logger.warn("根据是否启用获取招募周期列表业务异常，错误码: {}，错误信息: {}", e.getCode(), e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -237,11 +238,11 @@ public class RecruitmentCycleController {
      */
     @GetMapping("/academic-year/{academicYear}")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ResponseMessage<RecruitmentCycle>> getRecruitmentCycleByAcademicYear(@PathVariable String academicYear) {
+    public ResponseEntity<ResponseMessage<RecruitmentCycleDTO>> getRecruitmentCycleByAcademicYear(@PathVariable String academicYear) {
         try {
             logger.debug("根据学年获取招募周期，学年: {}", academicYear);
             RecruitmentCycle cycle = recruitmentCycleService.getRecruitmentCycleByAcademicYear(academicYear);
-            return ResponseEntity.ok(new ResponseMessage<>(200, "获取招募周期成功", cycle));
+            return ResponseEntity.ok(new ResponseMessage<>(200, "获取招募周期成功", RecruitmentCycleDTO.from(cycle)));
         } catch (BusinessException e) {
             logger.warn("根据学年获取招募周期业务异常，错误码: {}，错误信息: {}", e.getCode(), e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -286,7 +287,7 @@ public class RecruitmentCycleController {
      */
     @PutMapping("/batch")
     @PreAuthorize("hasAuthority('cycle:manage')")
-    public ResponseEntity<ResponseMessage<String>> updateRecruitmentCycles(@RequestBody List<RecruitmentCycle> recruitmentCycles) {
+    public ResponseEntity<ResponseMessage<String>> updateRecruitmentCycles(@RequestBody List<RecruitmentCycleDTO> recruitmentCycles) {
         try {
             // 验证管理员权限
             User currentUser = getCurrentUser();
@@ -294,7 +295,7 @@ public class RecruitmentCycleController {
             // 权限检查由 @PreAuthorize 注解统一管理
             
             logger.info("管理员{}批量更新招募周期，数量: {}", currentUser.getUsername(), recruitmentCycles.size());
-            recruitmentCycleService.updateRecruitmentCycles(recruitmentCycles);
+            recruitmentCycleService.updateRecruitmentCycles(recruitmentCycles.stream().map(RecruitmentCycleDTO::toEntity).toList());
             return ResponseEntity.ok(new ResponseMessage<>(200, "招募周期批量更新成功", "招募周期批量更新成功"));
         } catch (BusinessException e) {
             logger.warn("批量更新招募周期业务异常，错误码: {}，错误信息: {}", e.getCode(), e.getMessage());
@@ -340,7 +341,7 @@ public class RecruitmentCycleController {
      */
     @GetMapping("/page")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ResponseMessage<PageResultDTO<RecruitmentCycle>>> getAllRecruitmentCyclesWithPagination(
+    public ResponseEntity<ResponseMessage<PageResultDTO<RecruitmentCycleDTO>>> getAllRecruitmentCyclesWithPagination(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "cycleId") String sortBy,
@@ -348,7 +349,7 @@ public class RecruitmentCycleController {
         try {
             logger.debug("分页获取所有招募周期，页码: {}, 大小: {}, 排序字段: {}, 排序顺序: {}", page, size, sortBy, sortOrder);
             PageResultDTO<RecruitmentCycle> pageResult = recruitmentCycleService.getAllRecruitmentCyclesWithPagination(page, size, sortBy, sortOrder);
-            return ResponseEntity.ok(new ResponseMessage<>(200, "获取招募周期列表成功", pageResult));
+            return ResponseEntity.ok(new ResponseMessage<>(200, "获取招募周期列表成功", RecruitmentCycleDTO.fromPage(pageResult)));
         } catch (BusinessException e) {
             logger.warn("分页获取招募周期列表业务异常，错误码: {}，错误信息: {}", e.getCode(), e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -366,7 +367,7 @@ public class RecruitmentCycleController {
      */
     @GetMapping("/search")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ResponseMessage<PageResultDTO<RecruitmentCycle>>> getRecruitmentCyclesByConditions(
+    public ResponseEntity<ResponseMessage<PageResultDTO<RecruitmentCycleDTO>>> getRecruitmentCyclesByConditions(
             @RequestParam(required = false) String cycleName,
             @RequestParam(required = false) String academicYear,
             @RequestParam(required = false) Integer status,
@@ -380,7 +381,7 @@ public class RecruitmentCycleController {
                     cycleName, academicYear, status, isActive, page, size, sortBy, sortOrder);
             PageResultDTO<RecruitmentCycle> pageResult = recruitmentCycleService.getRecruitmentCyclesByConditions(
                     cycleName, academicYear, status, isActive, page, size, sortBy, sortOrder);
-            return ResponseEntity.ok(new ResponseMessage<>(200, "获取招募周期列表成功", pageResult));
+            return ResponseEntity.ok(new ResponseMessage<>(200, "获取招募周期列表成功", RecruitmentCycleDTO.fromPage(pageResult)));
         } catch (BusinessException e) {
             logger.warn("根据条件分页查询招募周期列表业务异常，错误码: {}，错误信息: {}", e.getCode(), e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
