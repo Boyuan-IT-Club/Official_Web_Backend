@@ -1,7 +1,6 @@
 package club.boyuan.official.messaging;
 
 import club.boyuan.official.infra.notification.InterviewNotificationType;
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -12,7 +11,6 @@ import java.io.Serializable;
  */
 @Data
 @NoArgsConstructor
-@AllArgsConstructor
 public class InterviewNotificationMessage implements Serializable {
 
     private InterviewNotificationType type;
@@ -27,6 +25,19 @@ public class InterviewNotificationMessage implements Serializable {
      * 既没有 scheduleId 也没有 resultId，收件人只能从简历定位。
      */
     private Integer resumeId;
+
+    private Long deliveryId;
+    private Integer scheduleRevision;
+
+    public InterviewNotificationMessage(InterviewNotificationType type, Integer scheduleId, Integer resultId,
+                                        String requestId, String customBody, Integer resumeId) {
+        this.type = type;
+        this.scheduleId = scheduleId;
+        this.resultId = resultId;
+        this.requestId = requestId;
+        this.customBody = customBody;
+        this.resumeId = resumeId;
+    }
 
     /**
      * 不带 resumeId 的老构造：结果类通知与场次类通知都用不到简历 id，

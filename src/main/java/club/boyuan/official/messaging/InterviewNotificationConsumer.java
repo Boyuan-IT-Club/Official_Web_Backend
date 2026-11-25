@@ -18,9 +18,9 @@ public class InterviewNotificationConsumer {
     private final InterviewNotificationServiceImpl notificationService;
 
     @RabbitListener(queues = RabbitMQConfig.INTERVIEW_NOTIFICATION_QUEUE)
-    public void handle(InterviewNotificationMessage message) {
+    public void handle(InterviewNotificationMessage message, org.springframework.amqp.core.Message envelope) {
         try {
-            notificationService.deliver(message);
+            notificationService.deliver(message, envelope.getMessageProperties().getMessageId());
         } catch (Exception e) {
             log.error("面试通知发送失败 type={}, scheduleId={}, resultId={}",
                     message != null ? message.getType() : null,

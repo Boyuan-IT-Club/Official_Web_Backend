@@ -53,6 +53,10 @@ spring:
     password: ${MAIL_PASSWORD:}
     # 587/465 加密参数由 MailSenderConfig 按端口自动设置
   rabbitmq:
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USERNAME:root}

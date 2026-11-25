@@ -64,65 +64,28 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
     private InterviewNotificationService interviewNotificationService;
     @Override
     public SendNotificationsResponseDTO sendNotifications(SendNotificationsRequestDTO requestDTO) {
-        List<Integer> resultIds = requestDTO.getResultIds();
-        //发送通知的类型（暂时只有邮箱，未开通sms短信服务）
-        String notificationType = requestDTO.getNotificationType();
-        String customMessage = requestDTO.getCustomMessage();
-
-        int sendCount=0;
-        int failedCount=0;
-        ArrayList<Integer> failedId = new ArrayList<>();
-
-        for(Integer resultId:resultIds){
+        String action = club.boyuan.official.messaging.NotificationAction.start(requestDTO.getActionId());
+        var failed = new ArrayList<Integer>();
+        int accepted = 0;
+        for (Integer id : new java.util.LinkedHashSet<>(requestDTO.getResultIds())) {
             try {
-                //根据resultId查询面试结果
-                InterviewResult interviewResult = this.getById(resultId);
-                if(interviewResult==null){
-                    failedCount++;
-                    failedId.add(-1);
-                    throw new RuntimeException("面试结果不存在");
-                }
-                //获取用户信息
-                User user = userService.getById(interviewResult.getUserId());
-                if(user==null){
-                    failedCount++;
-                    failedId.add(-1);
-                    throw new RuntimeException("用户不存在");
-                }
-                //根据通知类型发送通知
-                Boolean sent = false;
-                switch (notificationType.toLowerCase()){
-                    case "email":
-                        sent = sendEmailNotification(interviewResult, customMessage);
-                        break;
-                    case "sms":
-                        sent = sendSmsNotifaction(user,interviewResult,customMessage);
-                        break;
-                    default:
-                        throw new RuntimeException("不支持的通知类型");
-                }
-                if(sent){
-                    sendCount++;
-                    // 通知留痕：只动 notified_at 一列。没有这行时发送完全无痕 ——
-                    // 管理端看不出谁通知过，重复点发送会对同一批人原样重发。
-                    this.update(new LambdaUpdateWrapper<InterviewResult>()
-                            .eq(InterviewResult::getResultId, resultId)
-                            .set(InterviewResult::getNotifiedAt, LocalDateTime.now()));
-                }else{
-                    failedCount++;
-                }
-            }catch (Exception e){
-                log.error("发送通知失败，resultId: {}", resultId, e);
-                failedCount++;
-                failedId.add(resultId);
+                InterviewResult row = id == null ? null : getById(id);
+                boolean ok = row != null && ("email".equalsIgnoreCase(requestDTO.getNotificationType()))
+                        && (Integer.valueOf(1).equals(row.getDecision()) || Integer.valueOf(2).equals(row.getDecision()))
+                        && interviewNotificationService.enqueueResultNotification(id, requestDTO.getCustomMessage(),
+                            club.boyuan.official.messaging.NotificationAction.item(action, "result", id));
+                if (ok) accepted++; else failed.add(id);
+            } catch (RuntimeException error) {
+                log.warn("结果通知未受理 resultId={}", id, error);
+                failed.add(id);
             }
         }
-        SendNotificationsResponseDTO responseDTO = new SendNotificationsResponseDTO();
-        responseDTO.setSentCount(sendCount);
-        responseDTO.setFailedCount(failedCount);
-        responseDTO.setFailedId(failedId);
-        return responseDTO;
-
+        var response = new SendNotificationsResponseDTO();
+        response.setQueued(accepted);
+        response.setSentCount(accepted);
+        response.setFailedCount(failed.size());
+        response.setFailedId(failed);
+        return response;
     }
 
     @Override
@@ -313,26 +276,4 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
         return user != null ? user.getUserId() : null;
     }
 
-    //sms尚未开通，短信通知功能留白
-    private Boolean sendSmsNotifaction(User user, InterviewResult interviewResult, String customMessage) {
-        return false;
-    }
-
-    private Boolean sendEmailNotification(InterviewResult interviewResult, String customMessage) {
-        try {
-            Integer decision = interviewResult.getDecision();
-            // 自定义正文也不能绕过最终决定闸门，否则管理员可能在草稿讨论期
-            // 误选待定结果并提前把录取信息发给学生。
-            if (decision == null || (decision != 1 && decision != 2)) {
-                log.warn("结果 decision={} 尚未定稿，拒绝发送结果通知，resultId={}",
-                        decision, interviewResult.getResultId());
-                return false;
-            }
-            interviewNotificationService.enqueueResultNotification(interviewResult.getResultId(), customMessage);
-            return true;
-        } catch (Exception e) {
-            log.error("投递结果通知失败 resultId={}", interviewResult.getResultId(), e);
-            return false;
-        }
-    }
 }

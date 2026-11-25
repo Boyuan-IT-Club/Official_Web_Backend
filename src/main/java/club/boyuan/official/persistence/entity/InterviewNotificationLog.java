@@ -17,7 +17,7 @@ import java.time.LocalDateTime;
 @Data
 @EqualsAndHashCode(callSuper = false)
 @Accessors(chain = true)
-@TableName("interview_notification_log")
+@TableName("delivery_sent_log")
 public class InterviewNotificationLog implements Serializable {
 
     @TableId(value = "id", type = IdType.AUTO)

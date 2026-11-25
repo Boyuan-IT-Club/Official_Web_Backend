@@ -116,14 +116,10 @@ class ScheduleNoticeLocationTest {
         when(resumeDataService.getResumeEmail(resume)).thenReturn("10265101424@stu.ecnu.edu.cn");
         when(resumeDataService.getResumeName(resume)).thenReturn("周楷炎");
 
-        service.deliver(new InterviewNotificationMessage(
+        var mail = service.prepare(new InterviewNotificationMessage(
                 InterviewNotificationType.BOOKING_SUCCESS, 91, null, "req-room", null));
-
-        ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
-        verify(messageUtils).sendHtmlEmail(anyString(), anyString(), html.capture(), text.capture());
-        assertTrue(html.getValue().contains("普陀校区 教书院 205"), "HTML 版要有房间");
-        assertFalse(html.getValue().contains("待通知"), "房间不该再是「待通知」");
-        assertTrue(text.getValue().contains("面试地点：普陀校区 教书院 205"), "纯文本兜底版也要有");
+        assertTrue(mail.html().contains("普陀校区 教书院 205"), "HTML 版要有房间");
+        assertFalse(mail.html().contains("待通知"), "房间不该再是「待通知」");
+        assertTrue(mail.body().contains("面试地点：普陀校区 教书院 205"), "纯文本兜底版也要有");
     }
 }

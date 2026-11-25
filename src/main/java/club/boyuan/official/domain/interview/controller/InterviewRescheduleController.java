@@ -17,7 +17,6 @@ import club.boyuan.official.persistence.entity.RecruitmentCycle;
 import club.boyuan.official.persistence.entity.InterviewTimeSlot;
 import club.boyuan.official.persistence.mapper.InterviewScheduleMapper;
 import club.boyuan.official.persistence.mapper.InterviewSessionMapper;
-import club.boyuan.official.persistence.mapper.InterviewNotificationLogMapper;
 import club.boyuan.official.persistence.mapper.RecruitmentCycleMapper;
 import club.boyuan.official.persistence.mapper.UserMapper;
 
@@ -68,7 +67,6 @@ public class InterviewRescheduleController {
 
     private final RecruitmentCycleMapper recruitmentCycleMapper;
 
-    private final InterviewNotificationLogMapper notificationLogMapper;
 
     /**
      * 学生提交改期申请。要求本周期已有面试排期；同一排期存在待处理申请时不可重复提交。
@@ -214,29 +212,18 @@ public class InterviewRescheduleController {
         boolean wasActive = Integer.valueOf(1).equals(schedule.getStatus());
         schedule.setInterviewMode(1)
                 .setStatus(1);       // 已取消的行在这里重新生效：转线上不需要再排进任何场次
-        interviewScheduleMapper.updateById(schedule);
-        /*
-         * 解绑场次必须用 UpdateWrapper：MyBatis-Plus 默认跳过 null 字段，
-         * setSessionId(null) 走 updateById 根本写不进去（线上已经踩过——
-         * 人转了线上、座位也还了，那行却还指着原场次）。
-         */
-        interviewScheduleMapper.update(null,
-                new LambdaUpdateWrapper<InterviewSchedule>()
-                        .set(InterviewSchedule::getSessionId, null)
-                        .eq(InterviewSchedule::getScheduleId, schedule.getScheduleId()));
+        interviewScheduleMapper.update(null, new LambdaUpdateWrapper<InterviewSchedule>()
+                .set(InterviewSchedule::getInterviewMode, 1)
+                .set(InterviewSchedule::getStatus, 1)
+                .set(InterviewSchedule::getSessionId, null)
+                .set(InterviewSchedule::getNotifStatus, 0)
+                .eq(InterviewSchedule::getScheduleId, schedule.getScheduleId()));
         schedule.setSessionId(null);
         // 只有原本还占着座位的才归还；已取消的那行在取消时已经还过了
         if (wasActive && oldSessionId != null) {
             interviewSessionMapper.releaseOne(oldSessionId);
         }
         // 旧通知写的是线下教室，不摘掉会让补发被 alreadySent 静默跳过
-        notificationLogMapper.update(null, new LambdaUpdateWrapper<InterviewNotificationLog>()
-                .set(InterviewNotificationLog::getScheduleId, null)
-                .eq(InterviewNotificationLog::getScheduleId, schedule.getScheduleId())
-                .in(InterviewNotificationLog::getNotificationType, List.of(
-                        InterviewNotificationType.BOOKING_SUCCESS.name(),
-                        InterviewNotificationType.EVE_REMINDER.name(),
-                        InterviewNotificationType.DAY_REMINDER.name())));
         log.info("改期申请{}已同意为线上面试，安排{}已转线上并释放场次{}",
                 requestId, schedule.getScheduleId(), oldSessionId);
     }

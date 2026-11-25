@@ -19,6 +19,7 @@ public class InterviewResultListItem {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private LocalDateTime notifiedAt;
+    private String mailState;
     private String userName;
     private LocalDateTime interviewTime;
     private Integer resumeScore;
