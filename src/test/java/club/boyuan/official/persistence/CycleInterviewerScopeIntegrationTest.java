@@ -51,6 +51,8 @@ class CycleInterviewerScopeIntegrationTest {
     @Autowired
     private SessionInterviewerMapper sessionInterviewerMapper;
 
+    @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
+
     @Test
     @DisplayName("A 周期的面试官对 B 周期不成立，且未绑定任何场次时对两者都不成立")
     void interviewerScopeIsPerCycle() {
@@ -79,9 +81,13 @@ class CycleInterviewerScopeIntegrationTest {
             bindingId = binding.getId();
             assertNotNull(bindingId, "插入绑定后应回填主键");
 
-            assertTrue(evaluationBoardService.isInterviewerOfCycle(cycleA, INTERVIEWER_USER_ID),
-                    "绑定了 A 周期的场次，对 A 周期应成立");
-
+            assertFalse(evaluationBoardService.isInterviewerOfCycle(cycleA, INTERVIEWER_USER_ID),
+                    "旧绑定不能授予账号权限");
+            jdbc.update("INSERT INTO collab_doc(doc_name,cycle_id,locked) VALUES(?,?,0)", "eval-board:" + cycleA, cycleA);
+            Integer evaluator = jdbc.queryForObject("SELECT MIN(user_id) FROM evaluation_account_grant WHERE permission_code='interview:evaluate'", Integer.class);
+            assertNotNull(evaluator);
+            assertTrue(evaluationBoardService.isInterviewerOfCycle(cycleA, evaluator));
+            assertFalse(evaluationBoardService.isInterviewerOfCycle(cycleB, evaluator));
             assertFalse(evaluationBoardService.isInterviewerOfCycle(cycleB, INTERVIEWER_USER_ID),
                     "只绑定了 A 周期的场次，对 B 周期必须为 false —— 否则改一下文档名里的周期号"
                             + "就能看到别的周期的全部候选人与分数");
@@ -102,6 +108,7 @@ class CycleInterviewerScopeIntegrationTest {
                 timeSlotMapper.deleteById(slotA);
             }
             if (cycleA != null) {
+                jdbc.update("DELETE FROM collab_doc WHERE cycle_id=?", cycleA);
                 cycleMapper.deleteById(cycleA);
             }
             if (cycleB != null) {

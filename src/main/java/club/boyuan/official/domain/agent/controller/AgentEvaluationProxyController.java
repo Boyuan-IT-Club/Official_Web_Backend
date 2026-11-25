@@ -43,7 +43,10 @@ public class AgentEvaluationProxyController {
     private final AgentAdminClient agentAdminClient;
     private final ObjectMapper objectMapper;
 
-    public AgentEvaluationProxyController(AgentAdminClient agentAdminClient, ObjectMapper objectMapper) {
+    private final EvaluationQuestionScope questionScope;
+
+    public AgentEvaluationProxyController(AgentAdminClient agentAdminClient, ObjectMapper objectMapper, EvaluationQuestionScope questionScope) {
+        this.questionScope = questionScope;
         this.agentAdminClient = agentAdminClient;
         this.objectMapper = objectMapper;
     }
@@ -84,6 +87,7 @@ public class AgentEvaluationProxyController {
             @RequestHeader("Authorization") String authorization,
             @RequestParam("resumeId") long resumeId,
             @RequestParam("cycleId") int cycleId) {
+        questionScope.require(resumeId, cycleId, null, false);
         return wrap(agentAdminClient.getEvaluationScorecard(authorization, resumeId, cycleId));
     }
 
@@ -112,7 +116,10 @@ public class AgentEvaluationProxyController {
             @RequestHeader("Authorization") String authorization,
             @RequestParam("resumeId") long resumeId,
             @RequestParam("cycleId") int cycleId) {
-        return wrap(agentAdminClient.getEvaluationQbank(authorization, resumeId, cycleId));
+        questionScope.require(resumeId, cycleId, null, false);
+        var upstream = agentAdminClient.getEvaluationQbank(authorization, resumeId, cycleId);
+        questionScope.remember(cycleId, resumeId, upstream);
+        return wrap(upstream);
     }
 
     /** 记录面试官勾选(pick log)。 */
@@ -121,7 +128,7 @@ public class AgentEvaluationProxyController {
     public ResponseEntity<ResponseMessage<?>> pick(
             @RequestHeader("Authorization") String authorization,
             @RequestBody Map<String, Object> body) {
-        return wrap(agentAdminClient.postEvaluationPick(authorization, body));
+        return wrap(agentAdminClient.postEvaluationPick(authorization, questionScope.validatePick(body)));
     }
 
     /** 勾选流水(resume:audit)。 */

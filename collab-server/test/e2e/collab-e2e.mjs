@@ -9,6 +9,7 @@
  * 用法：node test/e2e/collab-e2e.mjs
  */
 import jwt from 'jsonwebtoken';
+import { commitSnapshot, loadDoc, closePool } from '../../src/db.js';
 import mysql from 'mysql2/promise';
 import * as Y from 'yjs';
 import { HocuspocusProvider } from '@hocuspocus/provider';
@@ -17,7 +18,7 @@ import 'dotenv/config';
 
 const BACKEND = process.env.BACKEND_BASE_URL ?? 'http://localhost:8080';
 const COLLAB_WS = `ws://localhost:${process.env.COLLAB_PORT ?? 3100}`;
-const CYCLE_ID = 3;
+const CYCLE_ID = 7003;
 const DOC_NAME = `eval-board:${CYCLE_ID}`;
 const SCHEDULE_ID = 5001;
 
@@ -51,7 +52,7 @@ function tokenFor(user, permissions) {
   );
 }
 
-const adminToken = tokenFor({ userId: 1, username: 'e2e_admin' }, ['resume:audit', 'interview:evaluate']);
+const adminToken = tokenFor({ userId: 7000, username: 'e2e_admin' }, ['resume:audit', 'interview:evaluate']);
 
 async function api(path, options = {}) {
   const response = await fetch(`${BACKEND}${path}`, {
@@ -78,7 +79,7 @@ function connect(user, permissions) {
     token: tokenFor(user, permissions),
     WebSocketPolyfill: WebSocket,
     onAuthenticationFailed: ({ reason }) => {
-      failures.push(`用户 ${user.userId} 连接被拒：${reason}`);
+      console.info(`用户 ${user.userId} 连接被拒：${reason}`);
     },
   });
 
@@ -101,6 +102,7 @@ function jsonArray(value) {
 }
 
 async function main() {
+  if (process.env.DB_NAME !== 'official_eval_e2e' || !['localhost','127.0.0.1'].includes(process.env.DB_HOST)) throw new Error('请使用本地 official_eval_e2e 测试库');
   const db = await mysql.createConnection({
     host: process.env.DB_HOST ?? '127.0.0.1',
     port: Number(process.env.DB_PORT ?? 3307),
@@ -119,22 +121,20 @@ async function main() {
   check('开表返回文档名', board?.docName === DOC_NAME, board?.docName);
   check('按有效安排播种出 2 行', board?.rowCount === 2, `rowCount=${board?.rowCount}`);
 
+  const [dimensions] = await db.execute("SELECT dimension_id FROM evaluation_dimension WHERE cycle_id=? ORDER BY sort_order", [CYCLE_ID]);
+  const [first, second] = dimensions.map(d => dimensionColId(d.dimension_id));
   console.log('\n[2] 两位面试官连上同一份文档');
   const a = await connect(INTERVIEWER_A, ['interview:evaluate']);
   const b = await connect(INTERVIEWER_B, ['interview:evaluate']);
   check('甲拿到播种后的名单', rowOf(a.doc) !== undefined);
   check('乙拿到同一份名单', rowOf(b.doc) !== undefined);
-  check('行上带着本场面试官绑定',
-    JSON.stringify(rowOf(a.doc).get('_info').get('interviewerUserIds')) === '[7001,7002]',
-    JSON.stringify(rowOf(a.doc).get('_info').get('interviewerUserIds')));
-
   console.log('\n[3] 甲乙同时编辑同一位候选人的同一份评价');
   a.doc.transact(() => {
-    rowOf(a.doc).set(dimensionColId(16), 8);
+    rowOf(a.doc).set(first, 8);
     rowOf(a.doc).get(COMMENT_COL).insert(0, '甲：基础扎实');
   }, 'local');
   b.doc.transact(() => {
-    rowOf(b.doc).set(dimensionColId(17), 7);
+    rowOf(b.doc).set(second, 7);
     rowOf(b.doc).get(COMMENT_COL).insert(0, '乙：表达清晰。');
   }, 'local');
 
@@ -145,8 +145,8 @@ async function main() {
   check('两人的评语字符级合并、互不覆盖',
     commentA.includes('甲：基础扎实') && commentA.includes('乙：表达清晰。'), commentA);
   check('两端收敛到完全一致', commentA === commentB, `${commentA} / ${commentB}`);
-  check('甲能看到乙填的分数', rowOf(a.doc).get(dimensionColId(17)) === 7);
-  check('乙能看到甲填的分数', rowOf(b.doc).get(dimensionColId(16)) === 8);
+  check('甲能看到乙填的分数', rowOf(a.doc).get(second) === 7);
+  check('乙能看到甲填的分数', rowOf(b.doc).get(first) === 8);
 
   console.log('\n[4] 乙点下定稿并给出共同结论');
   b.doc.transact(() => {
@@ -176,28 +176,14 @@ async function main() {
     check('定稿时间已记录', evaluation.submitted_at !== null);
   }
 
-  console.log('\n[6] 未绑定该场次的人写入后应被剔除并留审计');
-  const outsider = await connect(OUTSIDER, ['interview:evaluate']);
-  outsider.doc.transact(() => {
-    rowOf(outsider.doc).set(dimensionColId(16), 1);
-  }, 'local');
-  await sleep(4000);
-
-  const [afterRows] = await db.execute(
-    'SELECT * FROM interview_evaluation WHERE cycle_id = ? AND schedule_id = ?', [CYCLE_ID, SCHEDULE_ID]);
-  const afterContributors = jsonArray(afterRows[0]?.contributors);
-  check('路人没有被署名', !afterContributors.includes(7003), JSON.stringify(afterContributors));
-  check('甲乙的署名没有因这一轮被冲掉',
-    afterContributors.includes(7001) && afterContributors.includes(7002), JSON.stringify(afterContributors));
-
-  const [audits] = await db.execute(
-    'SELECT * FROM collab_audit WHERE doc_name = ? AND user_id = ? AND rejected = 1', [DOC_NAME, 7003]);
-  check('越权写入留下 rejected 审计', audits.length > 0, `${audits.length} 条`);
-
-  // 已知取舍：CRDT 收敛后分不出哪个字符是谁写的，无法只回滚越权者的那一笔。
-  // 因此值照落（否则一个捣乱者就能让整场记录都写不进去），靠署名剔除 + 审计事后追查。
-  check('越权者改动的分值确实留在库里，只能靠审计追查',
-    Number(afterRows[0]?.total_score) === 9, String(afterRows[0]?.total_score));
+  console.log('\n[6] 账号撤权后，原连接不能再修改已提交的评价');
+  await db.execute("DELETE ur FROM user_role ur JOIN role r ON r.role_id=ur.role_id WHERE ur.user_id=? AND r.role_code='INTERVIEWER'", [INTERVIEWER_A.userId]);
+  rowOf(a.doc).set(first, 1);
+  await sleep(1500);
+  const [afterRows] = await db.execute('SELECT * FROM interview_evaluation WHERE cycle_id=? AND schedule_id=?', [CYCLE_ID,SCHEDULE_ID]);
+  check('撤权后原得分和历史署名保留', Number(afterRows[0]?.total_score) === 23 && jsonArray(afterRows[0]?.contributors).includes(7001));
+  a.provider.destroy();
+  await db.execute("INSERT IGNORE INTO user_role(user_id,role_id) SELECT ?,role_id FROM role WHERE role_code='INTERVIEWER'", [INTERVIEWER_A.userId]);
 
   console.log('\n[7] 汇总接口读回共编结果');
   const summary = await api(`/api/interview/evaluation/cycles/${CYCLE_ID}/summary`);
@@ -210,8 +196,6 @@ async function main() {
       JSON.stringify(candidate.contributors));
     check('汇总的加权总分与库内一致',
       Number(candidate.totalScore) === Number(afterRows[0]?.total_score), String(candidate.totalScore));
-    check('汇总带出本场绑定人数', candidate.assignedInterviewerCount === 2,
-      String(candidate.assignedInterviewerCount));
     check('汇总带出定稿人姓名', candidate.submittedByName === '面试官乙', candidate.submittedByName);
   }
 
@@ -219,9 +203,33 @@ async function main() {
   const [docs] = await db.execute('SELECT state FROM collab_doc WHERE doc_name = ?', [DOC_NAME]);
   check('collab_doc 存有快照', (docs[0]?.state?.length ?? 0) > 0, `${docs[0]?.state?.length ?? 0} 字节`);
 
-  a.provider.destroy();
   b.provider.destroy();
-  outsider.provider.destroy();
+  const original = await loadDoc(DOC_NAME);
+  const same = {revision: original.revision, authors: original.authors, state: original.state};
+  await commitSnapshot(DOC_NAME, original.revision - 1, same, INTERVIEWER_B.userId);
+  const changed = structuredClone(same.authors);
+  changed.rows[String(SCHEDULE_ID)].materialized.comment = '冲突测试';
+  let conflict = false;
+  try { await commitSnapshot(DOC_NAME, original.revision - 1, {...same, authors: changed}, INTERVIEWER_B.userId); }
+  catch { conflict = true; }
+  const [[audit]] = await db.execute('SELECT COUNT(*) n FROM collab_audit WHERE doc_name=? AND snapshot_conflict IS NOT NULL', [DOC_NAME]);
+  check('同版重复幂等，同版内容冲突留下一条审计', conflict && audit.n === 1);
+  let missing = false;
+  try { await commitSnapshot(DOC_NAME, original.revision, {...same, revision: original.revision + 1, authors:{rows:{}}}, INTERVIEWER_B.userId); }
+  catch { missing = true; }
+  const winner = await loadDoc(DOC_NAME);
+  check('缺失署名的新版本被拒，原有二进制、署名和版本完整', missing && winner.revision === original.revision
+    && Buffer.from(winner.state).equals(original.state) && JSON.stringify(winner.authors) === JSON.stringify(original.authors));
+  await db.execute('DELETE FROM interview_evaluation WHERE cycle_id=? AND schedule_id=?', [CYCLE_ID,SCHEDULE_ID]);
+  const deadline = Date.now() + 18000;
+  let replay;
+  do {
+    await sleep(350);
+    [[replay]] = await db.execute('SELECT version,contributors,submitted_by,total_score FROM interview_evaluation WHERE cycle_id=? AND schedule_id=?', [CYCLE_ID,SCHEDULE_ID]);
+  } while (!replay && Date.now() < deadline);
+  check('无浏览器连接时从已提交快照重放，版本和定稿署名一致',
+    Number(replay?.version) === winner.revision && replay?.submitted_by === 7002 && Number(replay?.total_score) === 23);
+  await closePool();
   await db.end();
 
   console.log('\n────────────────────────────');

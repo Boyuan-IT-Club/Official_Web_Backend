@@ -93,7 +93,7 @@ class AgentProxySecurityTest {
 
         @Bean
         AgentEvaluationProxyController evaluationController(AgentAdminClient client) {
-            return new AgentEvaluationProxyController(client, new ObjectMapper());
+            return new AgentEvaluationProxyController(client, new ObjectMapper(), org.mockito.Mockito.mock(EvaluationQuestionScope.class));
         }
 
         @Bean

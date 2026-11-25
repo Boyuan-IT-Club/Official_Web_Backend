@@ -54,7 +54,7 @@ class AgentProxyRoutingTest {
                     new AgentRetrospectiveProxyController(client, objectMapper),
                     new AgentOrgMemoryProxyController(client, objectMapper),
                     new AgentKbAdminController(client, objectMapper),
-                    new AgentEvaluationProxyController(client, objectMapper))
+                    new AgentEvaluationProxyController(client, objectMapper, org.mockito.Mockito.mock(EvaluationQuestionScope.class)))
             .setControllerAdvice(new GlobalExceptionHandler())
             .build();
 

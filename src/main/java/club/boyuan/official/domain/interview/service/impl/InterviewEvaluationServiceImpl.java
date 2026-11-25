@@ -79,6 +79,7 @@ public class InterviewEvaluationServiceImpl implements IInterviewEvaluationServi
     private final InterviewSessionMapper interviewSessionMapper;
     private final InterviewPreferenceMapper interviewPreferenceMapper;
     private final ObjectMapper objectMapper;
+    private final club.boyuan.official.persistence.mapper.EvaluationScopeMapper evaluationScopeMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -90,9 +91,16 @@ public class InterviewEvaluationServiceImpl implements IInterviewEvaluationServi
                     "文档名与周期不匹配：" + request.getDocName());
         }
 
-        CollabDoc doc = collabDocMapper.selectById(expectedDocName);
+        CollabDoc doc = request.getSnapshotRevision() == null ? collabDocMapper.selectById(expectedDocName)
+                : collabDocMapper.lockSnapshot(expectedDocName);
         if (doc == null) {
             throw new BusinessException(BusinessExceptionEnum.EVALUATION_BOARD_NOT_OPENED);
+        }
+        if (doc.getSnapshotRevision() != null && doc.getSnapshotRevision() > 0) {
+            return materializeCommitted(doc, request);
+        }
+        if (request.getSnapshotRevision() != null) {
+            throw new BusinessException(BusinessExceptionEnum.RESOURCE_CONFLICT, "协作快照尚未提交");
         }
         if (Integer.valueOf(1).equals(doc.getLocked())) {
             throw new BusinessException(BusinessExceptionEnum.EVALUATION_BOARD_LOCKED);
@@ -170,6 +178,55 @@ public class InterviewEvaluationServiceImpl implements IInterviewEvaluationServi
         return result;
     }
 
+    private MaterializeEvaluationResultDTO materializeCommitted(CollabDoc doc, MaterializeEvaluationRequestDTO request) {
+        var result = new MaterializeEvaluationResultDTO();
+        Long version = request.getSnapshotRevision();
+        if (version != null && version < doc.getSnapshotRevision()) return result;
+        if (!doc.getSnapshotRevision().equals(version))
+            throw new BusinessException(BusinessExceptionEnum.RESOURCE_CONFLICT, "快照版本不一致");
+        Map<Integer, BigDecimal> weights = listDimensions(doc.getCycleId()).stream()
+                .collect(Collectors.toMap(EvaluationDimension::getDimensionId, EvaluationDimension::getWeight));
+        com.fasterxml.jackson.databind.JsonNode rows;
+        try {
+            rows = objectMapper.readTree(doc.getAuthorState()).required("rows");
+        } catch (Exception error) {
+            throw new BusinessException(BusinessExceptionEnum.RESOURCE_CONFLICT, "已提交快照缺少署名");
+        }
+        for (var supplied : request.getItems()) {
+            var row = rows.path(String.valueOf(supplied.getScheduleId()));
+            if (supplied.getVersion() == null || row.path("editedRevision").asLong() != supplied.getVersion() || supplied.getVersion() > version)
+                throw new BusinessException(BusinessExceptionEnum.RESOURCE_CONFLICT, "评价行版本无效");
+            MaterializeEvaluationRequestDTO.EvaluationItem item;
+            try {
+                item = objectMapper.treeToValue(row.required("materialized"), MaterializeEvaluationRequestDTO.EvaluationItem.class);
+            } catch (Exception error) {
+                throw new BusinessException(BusinessExceptionEnum.RESOURCE_CONFLICT, "评价行快照无效");
+            }
+            if (!supplied.equals(item) || item.getContributors() == null || item.getLastEditedBy() == null
+                    || !item.getContributors().contains(item.getLastEditedBy()))
+                throw new BusinessException(BusinessExceptionEnum.RESOURCE_CONFLICT, "实际作者或评价内容与已提交快照不一致");
+            var schedule = interviewScheduleMapper.selectById(item.getScheduleId());
+            if (schedule == null || !doc.getCycleId().equals(schedule.getCycleId())) continue;
+            var existing = interviewEvaluationMapper.selectOne(new LambdaQueryWrapper<InterviewEvaluation>()
+                    .eq(InterviewEvaluation::getScheduleId, item.getScheduleId()).last("FOR UPDATE"));
+            if (existing != null && existing.getVersion() != null && existing.getVersion() >= item.getVersion()) continue;
+            var contributors = new LinkedHashSet<>(item.getContributors());
+            var historicalAuthors = new LinkedHashSet<>(contributors);
+            if (item.getSubmittedBy() != null) historicalAuthors.add(item.getSubmittedBy());
+            if (item.getDimensionWriters() != null) historicalAuthors.addAll(item.getDimensionWriters().values());
+            var entity = buildEntity(item, schedule, doc.getCycleId(), weights, contributors, historicalAuthors);
+            if (item.getSubmittedAt() != null && entity.getSubmittedBy() != null) {
+                String stamp = item.getSubmittedAt();
+                entity.setSubmittedAt(stamp.endsWith("Z")
+                        ? java.time.Instant.parse(stamp).atZone(java.time.ZoneId.of("Asia/Shanghai")).toLocalDateTime()
+                        : LocalDateTime.parse(stamp));
+            } else entity.setSubmittedAt(null);
+            interviewEvaluationMapper.upsertMaterialized(entity);
+            result.setAccepted(result.getAccepted()+1);
+        }
+        return result;
+    }
+
     @Override
     public EvaluationSummaryDTO summary(Integer cycleId) {
         List<EvaluationDimension> dimensions = listDimensions(cycleId);
@@ -196,7 +253,7 @@ public class InterviewEvaluationServiceImpl implements IInterviewEvaluationServi
                 .stream()
                 .collect(Collectors.toMap(InterviewEvaluation::getScheduleId, Function.identity(), (a, b) -> a));
 
-        Map<Integer, Integer> assignedBySchedule = countExpectedEvaluations(roster);
+        int evaluatorCount = evaluationScopeMapper.evaluatorIds().size();
         Map<Integer, User> users = loadUsers(roster, evaluationBySchedule.values());
         Map<Integer, Integer> resumeToUser = resolveMissingUserIds(roster);
         Map<Integer, Department> departments = loadDepartments(roster);
@@ -209,7 +266,7 @@ public class InterviewEvaluationServiceImpl implements IInterviewEvaluationServi
             summary.getCandidates().add(buildCandidateSummary(
                     schedule,
                     evaluationBySchedule.get(schedule.getScheduleId()),
-                    assignedBySchedule.getOrDefault(schedule.getScheduleId(), 0),
+                    evaluatorCount,
                     users, resumeToUser, departments,
                     locationBySession, preferenceByResume));
         }
@@ -398,27 +455,6 @@ public class InterviewEvaluationServiceImpl implements IInterviewEvaluationServi
             return value;
         }
         return value.substring(0, TOUCHED_KEYS_MAX_LENGTH - 3) + "...";
-    }
-
-    private Map<Integer, Integer> countExpectedEvaluations(List<InterviewSchedule> roster) {
-        Set<Integer> sessionIds = roster.stream()
-                .map(InterviewSchedule::getSessionId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-        if (sessionIds.isEmpty()) {
-            return Collections.emptyMap();
-        }
-        Map<Integer, Integer> countBySession = new HashMap<>();
-        for (SessionInterviewer binding : sessionInterviewerMapper.selectList(
-                new LambdaQueryWrapper<SessionInterviewer>().in(SessionInterviewer::getSessionId, sessionIds))) {
-            countBySession.merge(binding.getSessionId(), 1, Integer::sum);
-        }
-        Map<Integer, Integer> bySchedule = new HashMap<>();
-        for (InterviewSchedule schedule : roster) {
-            bySchedule.put(schedule.getScheduleId(),
-                    countBySession.getOrDefault(schedule.getSessionId(), 0));
-        }
-        return bySchedule;
     }
 
     private Map<Integer, User> loadUsers(List<InterviewSchedule> roster,

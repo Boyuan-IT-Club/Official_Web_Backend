@@ -76,8 +76,8 @@ public class ResumeAttachmentController {
         Resume resume = resumeService.getResumeById(resumeId);
         // 简历不存在时 owner 为 null：只有持权限的人能拿到一个空列表，
         // 学生则一律拒绝 —— 否则「存在 / 不存在」本身就成了可以枚举的信号
-        requireCanView(resume == null ? null : resume.getUserId());
-        return ResponseEntity.ok(ResponseMessage.success(attachmentService.listByResume(resumeId)));
+        requireCanView(resume == null ? null : resume.getUserId(), resumeId);
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore()).body(ResponseMessage.success(attachmentService.listByResume(resumeId)));
     }
 
     /** 删除自己上传的附件。 */
@@ -101,9 +101,11 @@ public class ResumeAttachmentController {
     @PreAuthorize("isAuthenticated()")
     public void content(@PathVariable Integer id,
                         @RequestParam(name = "inline", defaultValue = "false") boolean inline,
+                        @RequestHeader(value = "Range", required = false) String range,
                         HttpServletResponse response) throws IOException {
         ResumeAttachment a = attachmentService.getOrThrow(id);
-        requireCanView(a.getUserId());
+        requireCanView(a.getUserId(), a.getResumeId());
+        response.setHeader("Cache-Control", "private, no-store");
         boolean canInline = inline && attachmentService.previewable(a.getContentType(), a.getFileName());
 
         CosFile file = attachmentService.open(a);
@@ -124,7 +126,27 @@ public class ResumeAttachmentController {
                         + URLEncoder.encode(a.getFileName(), StandardCharsets.UTF_8).replace("+", "%20"));
 
         try (InputStream in = file.inputStream(); OutputStream out = response.getOutputStream()) {
-            in.transferTo(out);
+            long size = file.contentLength();
+            if (size < 0 || range == null) {
+                if (size >= 0) response.setHeader("Accept-Ranges", "bytes");
+                in.transferTo(out);
+                return;
+            }
+            response.setHeader("Accept-Ranges", "bytes");
+            try {
+                var parts = org.springframework.http.HttpRange.parseRanges(range);
+                if (parts.size() != 1 || size == 0) throw new IllegalArgumentException();
+                long start = parts.get(0).getRangeStart(size), end = parts.get(0).getRangeEnd(size);
+                if (start < 0 || start > end || start >= size) throw new IllegalArgumentException();
+                response.setStatus(206);
+                response.setHeader("Content-Range", "bytes " + start + "-" + end + "/" + size);
+                response.setContentLengthLong(end - start + 1);
+                org.springframework.util.StreamUtils.copyRange(in, out, start, end);
+            } catch (IllegalArgumentException invalid) {
+                response.setStatus(416);
+                response.setContentLengthLong(0);
+                response.setHeader("Content-Range", "bytes */" + size);
+            }
         }
     }
 
@@ -141,13 +163,16 @@ public class ResumeAttachmentController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ResponseMessage<Map<String, Object>>> url(
             @PathVariable Integer id,
-            @RequestParam(name = "inline", defaultValue = "false") boolean inline) {
+            @RequestParam(name = "inline", defaultValue = "false") boolean inline,
+            @RequestParam(defaultValue = "false") boolean controlled) {
         ResumeAttachment a = attachmentService.getOrThrow(id);
-        requireCanView(a.getUserId());
-        String url = attachmentService.presignedUrl(a, inline);
+        boolean restricted = requireCanView(a.getUserId(), a.getResumeId());
+        String url = null;
+        if (!restricted) url = attachmentService.presignedUrl(a, inline);
+        else if (controlled) url = "/api/resumes/attachments/" + id + "/content?inline=" + inline;
         Map<String, Object> body = new java.util.HashMap<>();
         body.put("url", url);
-        return ResponseEntity.ok(ResponseMessage.success(body));
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore()).body(ResponseMessage.success(body));
     }
 
     /**
@@ -156,16 +181,17 @@ public class ResumeAttachmentController {
      * 面试官一个权限码都不占，他的可见范围由场次绑定给出：自己要面的那几个人。
      * 这条 fallback 让面试评价表里的附件对面试官可见，同时不让他能枚举别人的。
      */
-    private void requireCanView(Integer ownerUserId) {
+    private boolean requireCanView(Integer ownerUserId, Integer resumeId) {
         User me = currentUser();
         Integer myId = me == null ? null : me.getUserId();
-        Collection<String> authorities = currentAuthorities();
+        Collection<String> authorities = new java.util.HashSet<>(currentAuthorities());
+        authorities.retainAll(candidateMaterialScope.currentGrants(myId));
         if (AttachmentAccess.canView(ownerUserId, myId, authorities)) {
-            return;
+            return false;
         }
         if (AttachmentAccess.isScopedViewer(authorities)
-                && candidateMaterialScope.canSeeCandidateMaterials(myId, ownerUserId)) {
-            return;
+                && candidateMaterialScope.canReadResume(myId, resumeId)) {
+            return true;
         }
         throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
     }

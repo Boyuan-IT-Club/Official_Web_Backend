@@ -16,6 +16,7 @@
     "@hocuspocus/server": "^2.15.2",
     "dotenv": "^16.4.7",
     "jsonwebtoken": "^9.0.2",
+    "lib0": "0.2.117",
     "mysql2": "^3.12.0",
     "yjs": "^13.6.20"
   },

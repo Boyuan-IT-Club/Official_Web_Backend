@@ -87,7 +87,7 @@ class InterviewEvaluationServiceImplTest {
                 interviewEvaluationMapper, interviewScheduleMapper, evaluationDimensionMapper,
                 sessionInterviewerMapper, collabDocMapper, collabAuditMapper,
                 resumeMapper, userMapper, departmentMapper,
-                interviewSessionMapper, interviewPreferenceMapper, new ObjectMapper());
+                interviewSessionMapper, interviewPreferenceMapper, new ObjectMapper(), org.mockito.Mockito.mock(club.boyuan.official.persistence.mapper.EvaluationScopeMapper.class));
 
         when(collabDocMapper.selectById(DOC_NAME)).thenReturn(
                 new CollabDoc().setDocName(DOC_NAME).setCycleId(CYCLE_ID).setLocked(0));

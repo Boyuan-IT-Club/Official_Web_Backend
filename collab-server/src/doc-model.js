@@ -174,24 +174,31 @@ export function reconcileColumns(doc, seed) {
   return { added, updated, removed };
 }
 
+const sameValue = (a, b) => a === b || JSON.stringify(a) === JSON.stringify(b);
+
 function writeRowInfo(rowMap, row) {
-  const info = new Y.Map();
-  info.set('scheduleId', row.scheduleId);
-  info.set('resumeId', row.resumeId);
-  info.set('userId', row.userId);
-  info.set('candidateName', row.candidateName);
-  info.set('account', row.account);
-  info.set('deptId', row.deptId);
-  info.set('deptName', row.deptName);
-  info.set('sessionId', row.sessionId);
-  info.set('location', row.location);
-  info.set('resumeScore', row.resumeScore);
-  info.set('resumeScoredByName', row.resumeScoredByName);
-  info.set('interviewTime', row.interviewTime);
-  // 前端据此判断「我是否负责这场」来决定该行可否编辑
-  info.set('interviewerUserIds', row.interviewerUserIds ?? []);
-  info.set('removed', false);
-  rowMap.set('_info', info);
+  const fields = {
+    scheduleId: row.scheduleId,
+    resumeId: row.resumeId,
+    userId: row.userId,
+    candidateName: row.candidateName,
+    account: row.account,
+    deptId: row.deptId,
+    deptName: row.deptName,
+    sessionId: row.sessionId,
+    location: row.location,
+    resumeScore: row.resumeScore,
+    resumeScoredByName: row.resumeScoredByName,
+    interviewTime: row.interviewTime,
+    interviewerUserIds: row.interviewerUserIds ?? [],
+    removed: false,
+  };
+  const existing = rowMap.get('_info');
+  const info = existing instanceof Y.Map ? existing : new Y.Map();
+  if (info !== existing) rowMap.set('_info', info);
+  for (const [key, value] of Object.entries(fields)) {
+    if (!sameValue(info.get(key), value)) info.set(key, value);
+  }
 }
 
 /**
@@ -217,13 +224,25 @@ function ensureSharedCells(rowMap, dimensionIds = []) {
 /**
  * 首次播种：把名单与维度写进空文档。
  */
-export function seedDoc(doc, seed) {
+function restoreRow(row, item) {
+  if (!item) return;
+  for (const [dimension, score] of Object.entries(item.scores ?? {})) row.set(dimensionColId(dimension), score);
+  for (const [key, text] of [[COMMENT_COL, item.comment], ...Object.entries(item.dimensionNotes ?? {}).map(([d,t]) => [dimensionNoteColId(d),t])]) {
+    if (!text) continue;
+    if (!(row.get(key) instanceof Y.Text)) row.set(key, new Y.Text());
+    row.get(key).insert(0, text);
+  }
+  if (item.recommendation != null) row.set(RECOMMENDATION_COL, item.recommendation);
+  if (item.status != null) row.set(STATUS_COL, item.status);
+}
+
+export function seedDoc(doc, seed, authors) {
   doc.transact(() => {
     const meta = doc.getMap('meta');
     meta.set('cycleId', seed.cycleId);
-    meta.set('locked', Boolean(seed.locked));
+    if (meta.get('locked') !== Boolean(seed.locked)) meta.set('locked', Boolean(seed.locked));
     meta.set('seededAt', new Date().toISOString());
-    meta.set('interviewerNames', seed.interviewerNames ?? {});
+    if (!sameValue(meta.get('interviewerNames'), seed.interviewerNames ?? {})) meta.set('interviewerNames', seed.interviewerNames ?? {});
 
     const columns = doc.getArray('columns');
     columns.delete(0, columns.length);
@@ -240,6 +259,7 @@ export function seedDoc(doc, seed) {
       rows.set(String(row.scheduleId), rowMap);
       writeRowInfo(rowMap, row);
       ensureSharedCells(rowMap, dimensionIds);
+      restoreRow(rowMap, authors?.rows[String(row.scheduleId)]?.materialized);
     }
   }, 'seed');
 }
@@ -248,18 +268,18 @@ export function seedDoc(doc, seed) {
  * 名单与列的对账：人工调剂或改期之后，把新增候选人补进文档、把已移除的标灰；
  * 管理员改过评分维度时，把列定义一并追平（见 reconcileColumns）。
  *
- * 移除采用标灰而非删除——面试官可能已经写了评价，硬删会连同已填内容一起丢掉。
+ * 移出名单的行从共享文档中删除，已提交的评价和署名保留在数据库。
  */
-export function reconcileDoc(doc, seed) {
+export function reconcileDoc(doc, seed, authors) {
   let added = 0;
   let removed = 0;
   let columns = { added: 0, updated: 0, removed: 0 };
 
   doc.transact(() => {
     const meta = doc.getMap('meta');
-    meta.set('locked', Boolean(seed.locked));
+    if (meta.get('locked') !== Boolean(seed.locked)) meta.set('locked', Boolean(seed.locked));
     // 面试官绑定可能被管理员改动，对账时一并刷新姓名对照表
-    meta.set('interviewerNames', seed.interviewerNames ?? {});
+    if (!sameValue(meta.get('interviewerNames'), seed.interviewerNames ?? {})) meta.set('interviewerNames', seed.interviewerNames ?? {});
 
     // 列先于行对账：新增维度要先有列，后面 ensureSharedCells 再给每行补上它的评语格
     columns = reconcileColumns(doc, seed);
@@ -274,6 +294,8 @@ export function reconcileDoc(doc, seed) {
       if (!rowMap) {
         rowMap = new Y.Map();
         rows.set(key, rowMap);
+        ensureSharedCells(rowMap, dimensionIds);
+        restoreRow(rowMap, authors?.rows[key]?.materialized);
         added += 1;
       }
       // 候选人快照与面试官绑定可能变化，刷新只读部分，不动已填单元格
@@ -285,8 +307,8 @@ export function reconcileDoc(doc, seed) {
     for (const key of [...rows.keys()]) {
       if (!seedIds.has(key)) {
         const info = rows.get(key)?.get('_info');
-        if (info instanceof Y.Map && info.get('removed') !== true) {
-          info.set('removed', true);
+        if (info instanceof Y.Map) {
+          rows.delete(key);
           removed += 1;
         }
       }
@@ -310,7 +332,7 @@ function cellValue(value) {
  * @param cycleId  周期ID
  * @param tracker  createWriterTracker 的返回值
  */
-export function materializeFromDoc(doc, cycleId, tracker = {}) {
+export function materializeFromDoc(doc, cycleId, tracker = {}, includeRows = new Set()) {
   const writers = tracker.writers ?? new Map();
   const contributorsByRow = tracker.contributorsByRow ?? new Map();
   const lastEditorByRow = tracker.lastEditorByRow ?? new Map();
@@ -384,7 +406,7 @@ export function materializeFromDoc(doc, cycleId, tracker = {}) {
       && Object.keys(item.dimensionNotes).length === 0
       && !item.comment
       && item.recommendation === null;
-    if (!untouched) {
+    if (!untouched || includeRows.has(rowKey)) {
       items.push(item);
     }
   }

@@ -66,7 +66,13 @@ class EvaluationApiSecurityTest {
                 IEvaluationDimensionService dimensionService,
                 IInterviewEvaluationService evaluationService,
                 IUserService userService) {
-            return new InterviewEvaluationController(boardService, dimensionService, evaluationService, userService);
+            var scope = mock(club.boyuan.official.persistence.mapper.EvaluationScopeMapper.class);
+            when(scope.viewerId("user")).thenReturn(7);
+            when(scope.boardAccess(7, 1)).thenReturn(true);
+            when(scope.boardGrants("user")).thenAnswer(x ->
+                    org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication()
+                            .getAuthorities().stream().map(a -> a.getAuthority()).toList());
+            return new InterviewEvaluationController(boardService, dimensionService, evaluationService, userService, scope);
         }
 
         @Bean

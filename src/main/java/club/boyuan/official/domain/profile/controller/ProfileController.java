@@ -23,11 +23,13 @@ import java.util.List;
 public class ProfileController {
 
     private final IProfileService profileService;
+    private final club.boyuan.official.persistence.mapper.EvaluationScopeMapper scope;
 
     /** 候选档案列表：有面试安排的候选人，按最近面试时间排序。跨全部周期。 */
     @GetMapping
     @PreAuthorize("hasAuthority('resume:view') or hasAuthority('evaluation:view')")
     public ResponseEntity<ResponseMessage<List<CandidateProfileListRow>>> list() {
+        requireGlobal();
         return ResponseEntity.ok(
                 new ResponseMessage<>(200, "候选档案列表获取成功", profileService.listCandidates()));
     }
@@ -39,32 +41,44 @@ public class ProfileController {
      * 只回 userId/name/username/awards/submissions —— 保住"面试官不能读个人敏感信息"边界。
      */
     @GetMapping("/{userId}")
-    @PreAuthorize("hasAuthority('resume:view') or hasAuthority('evaluation:view') or hasAuthority('interview:evaluate')")
+    @PreAuthorize("hasAnyAuthority('resume:view','evaluation:view')")
     public ResponseEntity<ResponseMessage<CandidateProfileDetail>> detail(@PathVariable Integer userId) {
-        CandidateProfileDetail detail = profileService.getProfile(userId);
-        if (!canReadSensitiveFields()) {
-            // 仅 interview:evaluate：裁剪敏感字段，保留评委打分所需的获奖/成绩
-            detail.setEmail(null);
-            detail.setPhone(null);
-            detail.setGithub(null);
-            detail.setMajor(null);
-            detail.setDeptName(null);
-            detail.setInterviews(Collections.emptyList());
-            detail.setResumes(Collections.emptyList());
+        requireGlobal();
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore()).body(ResponseMessage.success(profileService.getProfile(userId)));
+    }
+
+    @GetMapping("/{userId}/cycles/{cycleId}/resumes/{resumeId}")
+    @PreAuthorize("hasAnyAuthority('resume:view','evaluation:view','interview:evaluate')")
+    public ResponseEntity<ResponseMessage<CandidateProfileDetail>> boardDetail(@PathVariable Integer userId,
+            @PathVariable Integer cycleId, @PathVariable Integer resumeId) {
+        if (canReadSensitiveFields()) return detail(userId);
+        var viewer = scope.viewerId(club.boyuan.official.common.utils.SecurityUtil.getCurrentUsername());
+        if (viewer == null || !scope.candidate(viewer, resumeId, cycleId, null, userId, false)) {
+            throw new org.springframework.security.access.AccessDeniedException("无权查看该简历的候选档案");
         }
-        return ResponseEntity.ok(
-                new ResponseMessage<>(200, "候选档案详情获取成功", detail));
+        var full = profileService.getProfile(userId);
+        var result = new CandidateProfileDetail();
+        result.setUserId(userId);
+        result.setName(full.getName());
+        result.setUsername(full.getUsername());
+        result.setResumes(List.of());
+        result.setInterviews(List.of());
+        result.setAwards(List.of());
+        result.setSubmissions(full.getSubmissions() == null ? List.of() : full.getSubmissions().stream()
+                .filter(s -> cycleId.equals(s.getCycleId())).toList());
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore())
+                .body(ResponseMessage.success(result));
     }
 
     /** 是否具备读取个人敏感信息（PII/简历/面试安排）的权限：
          *  仅当持有 resume:view 或 evaluation:view；纯 interview:evaluate 面试官无此能力。 */
     private boolean canReadSensitiveFields() {
-        var auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || auth.getAuthorities() == null) {
-            return false;
-        }
-        return auth.getAuthorities().stream()
-                .anyMatch(a -> "resume:view".equals(a.getAuthority())
-                        || "evaluation:view".equals(a.getAuthority()));
+        Integer viewer = scope.viewerId(club.boyuan.official.common.utils.SecurityUtil.getCurrentUsername());
+        return viewer != null && scope.materialGrants(viewer).stream()
+                .anyMatch(p -> "resume:view".equals(p) || "evaluation:view".equals(p));
+    }
+
+    private void requireGlobal() {
+        if (!canReadSensitiveFields()) throw new org.springframework.security.access.AccessDeniedException("没有查看候选档案权限");
     }
 }

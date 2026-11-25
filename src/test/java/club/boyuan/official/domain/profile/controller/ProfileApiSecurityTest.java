@@ -48,7 +48,10 @@ class ProfileApiSecurityTest {
 
         @Bean
         ProfileController profileController(IProfileService profileService) {
-            return new ProfileController(profileService);
+            var scope = mock(club.boyuan.official.persistence.mapper.EvaluationScopeMapper.class);
+            when(scope.viewerId("user")).thenReturn(1);
+            when(scope.materialGrants(1)).thenReturn(List.of("resume:view"));
+            return new ProfileController(profileService, scope);
         }
     }
 
@@ -95,22 +98,8 @@ class ProfileApiSecurityTest {
 
     @Test
     @WithMockUser(authorities = "interview:evaluate")
-    void 面试官可读但敏感信息被裁剪仅保留获奖与成绩() {
-        when(profileService.getProfile(7)).thenReturn(fullDetail());
-        var resp = assertDoesNotThrow(() -> controller.detail(7));
-        CandidateProfileDetail body = resp.getBody().getData();
-        // 裁剪 PII
-        assertNull(body.getEmail());
-        assertNull(body.getPhone());
-        assertNull(body.getGithub());
-        assertNull(body.getMajor());
-        // 裁剪简历/面试
-        assertEquals(0, body.getResumes().size());
-        assertEquals(0, body.getInterviews().size());
-        // 保留身份 + 获奖 + 成绩
-        assertEquals("张三", body.getName());
-        assertEquals(1, body.getAwards().size());
-        assertEquals(1, body.getSubmissions().size());
+    void 面试官读取跨届整份档案被拒() {
+        assertThrows(AccessDeniedException.class, () -> controller.detail(7));
     }
 
     @Test
