@@ -67,4 +67,8 @@ public class InterviewPreference implements Serializable {
 
     @TableField("updated_at")
     private LocalDateTime updatedAt;
+
+    public java.util.List<Integer> acceptedTimes() {
+        return acceptedTimeSlotIds == null ? java.util.List.of() : acceptedTimeSlotIds;
+    }
 }

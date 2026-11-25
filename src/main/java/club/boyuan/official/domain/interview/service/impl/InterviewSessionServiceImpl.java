@@ -152,9 +152,7 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
         LambdaQueryWrapper<InterviewSession> wrapper = new LambdaQueryWrapper<InterviewSession>()
                 .eq(InterviewSession::getCycleId, cycleId);
         if (deptId != null) {
-            wrapper.and(q -> q.eq(InterviewSession::getDeptId, deptId)
-                    .or().apply("EXISTS (SELECT 1 FROM interview_session_dept d "
-                            + "WHERE d.session_id=interview_session.session_id AND d.dept_id={0})", deptId));
+            wrapper.apply("JSON_CONTAINS(dept_ids, CAST({0} AS JSON))", deptId);
         }
         if (onlyAvailable) {
             wrapper.eq(InterviewSession::getStatus, STATUS_AVAILABLE);
@@ -168,7 +166,7 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
         Map<Integer, String> deptNameMap = loadDeptNames(sessions);
 
         return sessions.stream()
-                .map(s -> buildDTO(s, timeSlotMap.get(s.getTimeSlotId()), deptNameMap.get(s.getDeptId())))
+                .map(s -> buildDTO(s, timeSlotMap.get(s.getTimeSlotId()), deptNameMap))
                 .filter(dto -> !onlyAvailable || dto.getRemaining() > 0)
                 .collect(Collectors.toList());
     }
@@ -179,18 +177,19 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
             return null;
         }
         InterviewTimeSlot timeSlot = interviewTimeSlotService.getById(session.getTimeSlotId());
-        Department dept = departmentMapper.selectById(session.getDeptId());
-        return buildDTO(session, timeSlot, dept == null ? null : dept.getDeptName());
+        return buildDTO(session, timeSlot, loadDeptNames(List.of(session)));
     }
 
-    private InterviewSessionDTO buildDTO(InterviewSession session, InterviewTimeSlot timeSlot, String deptName) {
+    private InterviewSessionDTO buildDTO(InterviewSession session, InterviewTimeSlot timeSlot, Map<Integer, String> deptNames) {
         InterviewSessionDTO dto = new InterviewSessionDTO();
         dto.setSessionId(session.getSessionId());
         dto.setCycleId(session.getCycleId());
         dto.setTimeSlotId(session.getTimeSlotId());
         dto.setDeptId(session.getDeptId());
-        dto.setDeptName(deptName);
-        fillDeptList(dto, session.getSessionId());
+        dto.setDeptName(deptNames.get(session.getDeptId()));
+        List<Integer> ids = session.coveredDepartments();
+        dto.setDeptIds(ids);
+        dto.setDeptNames(ids.stream().map(deptNames::get).filter(Objects::nonNull).toList());
         dto.setLocation(session.getLocation());
         dto.setCapacity(session.getCapacity());
         int occupied = session.getCurrentOccupied() == null ? 0 : session.getCurrentOccupied();
@@ -223,7 +222,7 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
 
     private Map<Integer, String> loadDeptNames(List<InterviewSession> sessions) {
         List<Integer> ids = sessions.stream()
-                .map(InterviewSession::getDeptId)
+                .flatMap(session -> session.coveredDepartments().stream())
                 .filter(Objects::nonNull)
                 .distinct()
                 .collect(Collectors.toList());
@@ -283,29 +282,4 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
         }
     }
 
-    /**
-     * 填充本场次覆盖的全部部门。
-     *
-     * 关联表没有记录时回落到主部门 —— V36 已回填存量数据，
-     * 正常不该发生；但缺了这条兜底，老数据在管理端会显示成「未设置部门」。
-     */
-    private void fillDeptList(InterviewSessionDTO dto, Integer sessionId) {
-        List<Integer> ids = interviewSessionDeptMapper.selectList(
-                        new LambdaQueryWrapper<club.boyuan.official.persistence.entity.InterviewSessionDept>()
-                                .eq(club.boyuan.official.persistence.entity.InterviewSessionDept::getSessionId, sessionId))
-                .stream()
-                .map(club.boyuan.official.persistence.entity.InterviewSessionDept::getDeptId)
-                .toList();
-        if (ids.isEmpty()) {
-            ids = dto.getDeptId() == null ? List.of() : List.of(dto.getDeptId());
-        }
-        dto.setDeptIds(ids);
-        dto.setDeptNames(ids.stream()
-                .map(id -> {
-                    Department d = departmentMapper.selectById(id);
-                    return d == null ? null : d.getDeptName();
-                })
-                .filter(java.util.Objects::nonNull)
-                .toList());
-    }
 }
