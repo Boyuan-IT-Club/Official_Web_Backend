@@ -3,8 +3,24 @@ package club.boyuan.official.persistence.mapper;
 import club.boyuan.official.persistence.entity.RecruitmentQrCode;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
-/** 招新二维码。查询都是简单条件，直接用 MyBatis-Plus 的条件构造器，不写 XML */
+import java.util.List;
+
 @Mapper
 public interface RecruitmentQrCodeMapper extends BaseMapper<RecruitmentQrCode> {
+
+    @Select("SELECT cycle_id FROM recruitment_cycle WHERE cycle_id=#{cycleId} FOR UPDATE")
+    Integer lockCycle(@Param("cycleId") int cycleId);
+
+    @Update("""
+        UPDATE recruitment_cycle c LEFT JOIN cycle_qr_source q ON q.cycle_id=c.cycle_id
+        SET c.qr_codes=COALESCE(q.qr_codes,JSON_OBJECT()), c.updated_at=c.updated_at
+        WHERE c.cycle_id=#{cycleId}
+        """)
+    void refreshCycleCodes(@Param("cycleId") int cycleId);
+
+    List<RecruitmentQrCode> readCycleCodes(@Param("cycleId") int cycleId);
 }

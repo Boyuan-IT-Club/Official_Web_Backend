@@ -172,6 +172,18 @@ docker compose down
 
 详见 `.github/workflows/docker-push.yml` 与飞书 wiki《09-1 CICD 与发布流程》。
 
+### 招新群码兼容迁移
+
+V54–V62 扩展官网表结构。群码的读写方式由 `official.recruitment.qr-storage` 控制。首次发布使用默认值 `LEGACY`，两台应用均升级后再切换。
+
+| 取值 | 读取来源 | 上传、替换与删除 |
+|---|---|---|
+| `LEGACY` | 原群码表 | 写原群码表 |
+| `DUAL_WRITE` | 原群码表 | 锁定周期，同事务更新原表和周期 JSON |
+| `CYCLE` | 周期 JSON | 继续双写，保留回退条件 |
+
+两台应用进入 `DUAL_WRITE` 后，短暂停群码管理写入，使用独立的 MySQL 批处理连接执行 [群码回填与逐项核对](ops/schema/backfill-cycle-qr.sql)。检查正常退出，再抽测报名答疑群和录取者的部门群／大群。两个节点都通过后可切为 `CYCLE`。切读异常时将两台应用恢复 `DUAL_WRITE`，继续从旧表读取。任何节点回到 `LEGACY` 写入后，下次切读前要重新回填对账。通用周期接口使用显式字段清单。
+
 ### 手动 Docker 部署（应急备用）
 
 1. 构建项目:
