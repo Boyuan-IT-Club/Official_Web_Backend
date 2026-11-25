@@ -15,6 +15,9 @@ import java.util.Map;
  * @since 2026-01-28
  */
 public interface InterviewScheduleMapper extends BaseMapper<InterviewSchedule> {
+    @org.apache.ibatis.annotations.Select("SELECT cycle_id FROM recruitment_cycle WHERE cycle_id=#{cycleId} FOR UPDATE")
+    Integer lockPreferenceCycle(int cycleId);
+
 
     /**
      * 候选档案列表：收录「至少一条面试安排」的用户，附带最近面试时间、地点、所属周期名。

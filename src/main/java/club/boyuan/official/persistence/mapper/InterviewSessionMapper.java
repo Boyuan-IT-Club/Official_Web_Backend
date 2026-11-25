@@ -3,6 +3,7 @@ package club.boyuan.official.persistence.mapper;
 import club.boyuan.official.persistence.entity.InterviewSession;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 /**
@@ -11,6 +12,26 @@ import org.apache.ibatis.annotations.Update;
  * @author dhy
  */
 public interface InterviewSessionMapper extends BaseMapper<InterviewSession> {
+
+    @Select("SELECT cycle_id FROM recruitment_cycle WHERE cycle_id=#{cycleId} FOR UPDATE")
+    Integer lockAllocationCycle(int cycleId);
+
+    @Select("SELECT cycle_id FROM recruitment_cycle WHERE cycle_id=(SELECT cycle_id FROM resume WHERE resume_id=#{resumeId}) FOR UPDATE")
+    Integer lockCycleForResume(int resumeId);
+
+    @Select("SELECT cycle_id FROM recruitment_cycle WHERE cycle_id=(SELECT cycle_id FROM interview_schedule WHERE schedule_id=#{scheduleId}) FOR UPDATE")
+    Integer lockCycleForSchedule(int scheduleId);
+
+    @Select("SELECT resume_id FROM resume WHERE cycle_id=#{cycleId} AND status >= 2 AND status <> 5 ORDER BY resume_id FOR UPDATE")
+    java.util.List<Integer> lockCandidates(int cycleId);
+
+    @Select("SELECT session_id FROM interview_session WHERE cycle_id=#{cycleId} ORDER BY session_id FOR UPDATE")
+    java.util.List<Integer> lockSessions(int cycleId);
+
+    @Select("SELECT interview_time FROM interview_schedule WHERE session_id=#{sessionId} AND status=1 "
+            + "AND interview_time IS NOT NULL AND (#{excludeId} IS NULL OR schedule_id!=#{excludeId}) ORDER BY schedule_id FOR UPDATE")
+    java.util.List<java.time.LocalDateTime> lockOccupiedTimes(@Param("sessionId") int sessionId,
+                                                             @Param("excludeId") Integer excludeId);
 
     /**
      * 在仍有剩余名额且状态可用时占用 1 个名额（原子操作）。

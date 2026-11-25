@@ -84,6 +84,9 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
     @Override
     @Transactional
     public SessionAssignmentResultDTO assign(Integer cycleId) {
+        interviewSessionMapper.lockAllocationCycle(cycleId);
+        interviewSessionMapper.lockCandidates(cycleId);
+        interviewSessionMapper.lockSessions(cycleId);
         validateCycleExists(cycleId);
         log.info("开始为周期 {} 执行场次分配", cycleId);
 
@@ -117,7 +120,6 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
         result.setCycleId(cycleId);
         result.setAssignedAt(LocalDateTime.now());
 
-        List<SessionState> touchedStates = new ArrayList<>();
 
         for (InterviewPreference pref : candidates) {
             Resume resume = resumeById.get(pref.getResumeId());
@@ -129,38 +131,31 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
             }
 
             SessionState chosen = null;
-            int matchedChoice = 0;
+            LocalDateTime start = null;
             Integer matchedDeptId = null;
-            if (pref.getFirstDeptId() != null) {
-                chosen = pickSession(statesByDept.get(pref.getFirstDeptId()), acceptable);
-                if (chosen != null) {
-                    matchedChoice = 1;
-                    matchedDeptId = pref.getFirstDeptId();
+            int matchedChoice = 0;
+            Integer[] choices = {pref.getFirstDeptId(), pref.getSecondDeptId()};
+            for (int i = 0; i < choices.length && start == null; i++) {
+                Integer department = choices[i];
+                if (department == null) continue;
+                while ((chosen = pickSession(statesByDept.get(department), acceptable)) != null) {
+                    start = reserve(chosen);
+                    if (start != null) {
+                        matchedDeptId = department;
+                        matchedChoice = i + 1;
+                        break;
+                    }
+                    chosen.occupied = chosen.session.getCapacity();
                 }
             }
-            if (chosen == null && pref.getSecondDeptId() != null) {
-                chosen = pickSession(statesByDept.get(pref.getSecondDeptId()), acceptable);
-                if (chosen != null) {
-                    matchedChoice = 2;
-                    matchedDeptId = pref.getSecondDeptId();
-                }
-            }
-
-            if (chosen == null) {
+            if (start == null) {
                 result.getUnassigned().add(buildUnassigned(pref, resume, deptNames, REASON_NO_MATCHING_SESSION));
                 continue;
             }
-
-            int index = chosen.occupyNext();
-            if (!touchedStates.contains(chosen)) {
-                touchedStates.add(chosen);
-            }
-            InterviewSchedule schedule = persistSchedule(resume, chosen, index, matchedChoice, matchedDeptId,
+            InterviewSchedule schedule = persistSchedule(resume, chosen, start, matchedChoice, matchedDeptId,
                     inactiveRows.get(resume.getResumeId()));
             result.getAssigned().add(buildAssigned(schedule, resume, chosen, matchedChoice, deptNames));
         }
-
-        persistOccupancy(touchedStates);
 
         result.setAssignedCount(result.getAssigned().size());
         result.setUnassignedCount(result.getUnassigned().size());
@@ -217,6 +212,7 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public SessionAssignmentResultDTO.AssignedItem assignOnline(Integer resumeId, LocalDateTime interviewTime) {
+        interviewSessionMapper.lockCycleForResume(resumeId);
         Resume resume = resumeService.getResumeById(resumeId);
         if (resume == null) {
             throw new BusinessException(BusinessExceptionEnum.RESUME_NOT_FOUND);
@@ -317,6 +313,7 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
     @Override
     @Transactional
     public SessionAssignmentResultDTO.AssignedItem manualAssign(Integer resumeId, Integer targetSessionId) {
+        interviewSessionMapper.lockCycleForResume(resumeId);
         InterviewSession target = interviewSessionService.getById(targetSessionId);
         if (target == null) {
             throw new BusinessException(BusinessExceptionEnum.INTERVIEW_SESSION_NOT_FOUND);
@@ -324,6 +321,10 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
         Resume resume = resumeService.getResumeById(resumeId);
         if (resume == null) {
             throw new BusinessException(BusinessExceptionEnum.RESUME_NOT_FOUND);
+        }
+
+        if (!Objects.equals(resume.getCycleId(), target.getCycleId())) {
+            throw new BusinessException(BusinessExceptionEnum.INTERVIEW_SESSION_CYCLE_MISMATCH);
         }
 
         /*
@@ -358,11 +359,14 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
             interviewSessionMapper.releaseOne(originalSessionId);
         }
 
-        // 重新读取目标场次占用数，本人索引 = 占用数 - 1
-        InterviewSession refreshed = interviewSessionService.getById(targetSessionId);
-        int index = Math.max(0, (refreshed.getCurrentOccupied() == null ? 1 : refreshed.getCurrentOccupied()) - 1);
         InterviewTimeSlot timeSlot = interviewTimeSlotService.getById(target.getTimeSlotId());
-        LocalDateTime start = computeStart(timeSlot, index, durationOf(target));
+        List<LocalDateTime> occupied = interviewSessionMapper.lockOccupiedTimes(targetSessionId,
+                schedule == null ? null : schedule.getScheduleId());
+        LocalDateTime start = alreadyInTarget && schedule.getInterviewTime() != null
+                ? schedule.getInterviewTime() : firstAvailable(timeSlot, durationOf(target), occupied);
+        if (start == null) {
+            throw new BusinessException(BusinessExceptionEnum.INTERVIEW_SESSION_FULL);
+        }
 
         boolean isNew = schedule == null;
         if (isNew) {
@@ -424,6 +428,7 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "面试时间不能为空");
         }
 
+        interviewSessionMapper.lockCycleForSchedule(scheduleId);
         InterviewSchedule schedule = interviewScheduleService.getById(scheduleId);
         if (schedule == null) {
             throw new BusinessException(BusinessExceptionEnum.INTERVIEW_SCHEDULE_NOT_FOUND);
@@ -590,10 +595,9 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
      *                 置为已取消、不删除——重排时再 insert 一行就撞唯一键，整次一键分配
      *                 跟着回滚。所以有旧行就原地复用。
      */
-    private InterviewSchedule persistSchedule(Resume resume, SessionState state, int index,
+    private InterviewSchedule persistSchedule(Resume resume, SessionState state, LocalDateTime start,
                                               int matchedChoice, Integer matchedDeptId,
                                               InterviewSchedule reusable) {
-        LocalDateTime start = computeStart(state.timeSlot, index, durationOf(state.session));
         InterviewSchedule schedule = reusable != null ? reusable : new InterviewSchedule();
         schedule.setResumeId(resume.getResumeId())
                 .setUserId(resume.getUserId())
@@ -642,21 +646,32 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
                         InterviewNotificationType.DAY_REMINDER.name())));
     }
 
-    private void persistOccupancy(List<SessionState> touchedStates) {
-        for (SessionState state : touchedStates) {
-            InterviewSession update = new InterviewSession()
-                    .setSessionId(state.session.getSessionId())
-                    .setCurrentOccupied(state.occupied);
-            interviewSessionService.updateById(update);
+    private LocalDateTime reserve(SessionState state) {
+        if (state.occupiedTimes == null) {
+            state.occupiedTimes = new ArrayList<>(interviewSessionMapper.lockOccupiedTimes(state.session.getSessionId(), null));
         }
-    }
-
-    private LocalDateTime computeStart(InterviewTimeSlot timeSlot, int index, int durationMinutes) {
-        if (timeSlot == null || timeSlot.getInterviewDate() == null || timeSlot.getStartTime() == null) {
+        LocalDateTime start = firstAvailable(state.timeSlot, durationOf(state.session), state.occupiedTimes);
+        if (start == null || interviewSessionMapper.occupyOneIfAvailable(state.session.getSessionId()) != 1) {
             return null;
         }
-        return LocalDateTime.of(timeSlot.getInterviewDate(), timeSlot.getStartTime())
-                .plusMinutes((long) index * durationMinutes);
+        state.occupiedTimes.add(start);
+        state.occupied++;
+        return start;
+    }
+
+    static LocalDateTime firstAvailable(InterviewTimeSlot window, int minutes, List<LocalDateTime> occupied) {
+        if (minutes <= 0 || window == null || window.getInterviewDate() == null
+                || window.getStartTime() == null || window.getEndTime() == null) return null;
+        LocalDateTime limit = window.getInterviewDate().atTime(window.getEndTime());
+        for (LocalDateTime slot = window.getInterviewDate().atTime(window.getStartTime());
+             !slot.plusMinutes(minutes).isAfter(limit); slot = slot.plusMinutes(minutes)) {
+            LocalDateTime start = slot;
+            LocalDateTime end = slot.plusMinutes(minutes);
+            if (occupied.stream().noneMatch(t -> t.isBefore(end) && t.plusMinutes(minutes).isAfter(start))) {
+                return start;
+            }
+        }
+        return null;
     }
 
     private int durationOf(InterviewSession session) {
@@ -810,6 +825,7 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
         private final InterviewSession session;
         private final InterviewTimeSlot timeSlot;
         private int occupied;
+        private List<LocalDateTime> occupiedTimes;
 
         private SessionState(InterviewSession session, InterviewTimeSlot timeSlot) {
             this.session = session;
@@ -820,11 +836,6 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
         private int remaining() {
             int capacity = session.getCapacity() == null ? 0 : session.getCapacity();
             return Math.max(0, capacity - occupied);
-        }
-
-        /** 占用一个名额并返回本人在该场次内的次序索引（0-based）。 */
-        private int occupyNext() {
-            return occupied++;
         }
 
         /** 稳定排序键：日期+开始时间+场次ID。 */

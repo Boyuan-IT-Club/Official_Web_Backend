@@ -21,8 +21,11 @@ import java.time.LocalDateTime;
 @Data
 @EqualsAndHashCode(callSuper = false)
 @Accessors(chain = true)
-@TableName("interview_session")
+@TableName(value = "interview_session", autoResultMap = true)
 public class InterviewSession implements Serializable {
+
+    @TableField(value = "dept_ids", typeHandler = com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler.class)
+    private java.util.List<Integer> deptIds;
 
     private static final long serialVersionUID = 1L;
 
