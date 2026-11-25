@@ -81,6 +81,8 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           cache: maven
+      - name: Use the website schema collation on the empty CI database
+        run: MYSQL_PWD="$DB_PASSWORD" mysql -h 127.0.0.1 -P "$MYSQL_PORT" -u "$DB_USERNAME" -e 'ALTER DATABASE official CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
       - name: Run tests
         run: |
           chmod +x mvnw
