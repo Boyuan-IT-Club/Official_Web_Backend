@@ -66,8 +66,8 @@ class AdmissionListScreeningIntegrationTest {
     @DisplayName("生成跳过初筛未通过；列表隐藏其待定行、保留已决定行；线上排最后；预录取写入/名单/人数/转正口径一致")
     void admissionListsExcludeScreenRejectedAndPutOnlineLast() {
         String tag = "adm" + System.nanoTime();
-        cycleId = insert("INSERT INTO recruitment_cycle (cycle_name, start_date, end_date, academic_year, status, is_active)"
-                        + " VALUES (?, ?, ?, '2099-2100', 2, 1)",
+        cycleId = insert("INSERT INTO recruitment_cycle (cycle_name, start_date, end_date, academic_year, status)"
+                        + " VALUES (?, ?, ?, '2099-2100', 1)",
                 tag, LocalDate.now().minusDays(30), LocalDate.now().plusDays(30));
         fieldId = insert("INSERT INTO resume_field_definition (cycle_id, field_key, field_label)"
                 + " VALUES (?, 'expected_interview_time', '面试时间')", cycleId);
@@ -171,8 +171,8 @@ class AdmissionListScreeningIntegrationTest {
     @DisplayName("批量标记未通过 onlyPending：只改执行时仍待定的行；已录取/初筛未通过/预录取名单里/别届的一律跳过，转正不受影响")
     void batchRejectOnlyPendingNeverOverwritesDecidedRows() {
         String tag = "rej" + System.nanoTime();
-        cycleId = insert("INSERT INTO recruitment_cycle (cycle_name, start_date, end_date, academic_year, status, is_active)"
-                        + " VALUES (?, ?, ?, '2099-2100', 2, 1)",
+        cycleId = insert("INSERT INTO recruitment_cycle (cycle_name, start_date, end_date, academic_year, status)"
+                        + " VALUES (?, ?, ?, '2099-2100', 1)",
                 tag, LocalDate.now().minusDays(30), LocalDate.now().plusDays(30));
 
         int p1 = legacyResult(resume(tag, "P1", RESUME_SUBMITTED), DECISION_PENDING);
