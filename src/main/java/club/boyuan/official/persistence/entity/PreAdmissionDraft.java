@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 /** 仅管理端可见的预录取草稿；最终结果仍以 interview_result 为准。 */
 @Data
 @Accessors(chain = true)
-@TableName("pre_admission_draft")
+@TableName("admission_active_draft")
 public class PreAdmissionDraft {
 
     @TableId(value = "draft_id", type = IdType.AUTO)

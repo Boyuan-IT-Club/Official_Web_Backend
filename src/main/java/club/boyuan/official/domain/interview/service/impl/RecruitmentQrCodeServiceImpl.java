@@ -6,13 +6,10 @@ import club.boyuan.official.domain.interview.service.IRecruitmentQrCodeService;
 import club.boyuan.official.infra.storage.CosStorageService;
 import club.boyuan.official.persistence.entity.RecruitmentQrCode;
 import club.boyuan.official.persistence.mapper.RecruitmentQrCodeMapper;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -41,20 +38,6 @@ public class RecruitmentQrCodeServiceImpl implements IRecruitmentQrCodeService {
     private final RecruitmentQrCodeMapper qrCodeMapper;
     private final CosStorageService cosStorageService;
 
-    enum Storage { LEGACY, DUAL_WRITE, CYCLE }
-
-    @Value("${official.recruitment.qr-storage:LEGACY}")
-    private Storage storage = Storage.LEGACY;
-
-    @PostConstruct
-    void reportStorageMode() {
-        log.info("Recruitment QR storage mode={}", storage);
-    }
-
-    private void refreshProjection(Integer cycleId) {
-        if (storage != Storage.LEGACY) qrCodeMapper.refreshCycleCodes(cycleId);
-    }
-
     private int departmentKey(Integer cycleId, String qrType, Integer deptId) {
         if (cycleId == null || !StringUtils.hasText(qrType)) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
@@ -72,13 +55,6 @@ public class RecruitmentQrCodeServiceImpl implements IRecruitmentQrCodeService {
 
     private static String path(String type, int dept) {
         return RecruitmentQrCode.TYPE_DEPT.equals(type) ? "$.DEPT.\"" + dept + "\"" : "$." + type;
-    }
-
-    private LambdaQueryWrapper<RecruitmentQrCode> atKey(int cycleId, String qrType, int deptId) {
-        return new LambdaQueryWrapper<RecruitmentQrCode>()
-                .eq(RecruitmentQrCode::getCycleId, cycleId)
-                .eq(RecruitmentQrCode::getQrType, qrType)
-                .eq(RecruitmentQrCode::getDeptId, deptId);
     }
 
     @Override
@@ -113,34 +89,11 @@ public class RecruitmentQrCodeServiceImpl implements IRecruitmentQrCodeService {
         if (qrCodeMapper.lockCycle(cycleId) == null) {
             throw new BusinessException(BusinessExceptionEnum.RECRUITMENT_CYCLE_NOT_FOUND);
         }
-        if (qrCodeMapper.parentOnly()) {
-            qrCodeMapper.putCode(cycleId, path(qrType, normalizedDept), normalizedDept != RecruitmentQrCode.NO_DEPT,
-                    java.util.UUID.randomUUID().toString(), objectKey, remark);
-            return resolve(qrCodeMapper.readCycleCodes(cycleId).stream()
-                    .filter(code -> qrType.equals(code.getQrType()) && normalizedDept == code.getDeptId())
-                    .findFirst().orElseThrow());
-        }
-        RecruitmentQrCode existing = qrCodeMapper.selectOne(atKey(cycleId, qrType, normalizedDept));
-
-        if (existing != null) {
-            // 同一个位置重复上传是「替换」而不是「再加一张」
-            existing.setImageUrl(objectKey).setRemark(remark);
-            qrCodeMapper.updateById(existing);
-            refreshProjection(cycleId);
-            log.info("二维码已替换 cycleId={}, type={}, deptId={}", cycleId, qrType, normalizedDept);
-            return resolve(existing);
-        }
-
-        RecruitmentQrCode created = new RecruitmentQrCode()
-                .setCycleId(cycleId)
-                .setQrType(qrType)
-                .setDeptId(normalizedDept)
-                .setImageUrl(objectKey)
-                .setRemark(remark);
-        qrCodeMapper.insert(created);
-        refreshProjection(cycleId);
-        log.info("二维码已上传 cycleId={}, type={}, deptId={}", cycleId, qrType, normalizedDept);
-        return resolve(created);
+        qrCodeMapper.putCode(cycleId, path(qrType, normalizedDept), normalizedDept != RecruitmentQrCode.NO_DEPT,
+                java.util.UUID.randomUUID().toString(), objectKey, remark);
+        return resolve(qrCodeMapper.readCycleCodes(cycleId).stream()
+                .filter(code -> qrType.equals(code.getQrType()) && normalizedDept == code.getDeptId())
+                .findFirst().orElseThrow());
     }
 
     @Override
@@ -152,13 +105,7 @@ public class RecruitmentQrCodeServiceImpl implements IRecruitmentQrCodeService {
     }
 
     private List<RecruitmentQrCode> rawCodes(Integer cycleId) {
-        if (storage == Storage.CYCLE || qrCodeMapper.parentOnly()) {
-            return qrCodeMapper.readCycleCodes(cycleId);
-        }
-        return qrCodeMapper.selectList(new LambdaQueryWrapper<RecruitmentQrCode>()
-                .eq(RecruitmentQrCode::getCycleId, cycleId)
-                .orderByAsc(RecruitmentQrCode::getQrType)
-                .orderByAsc(RecruitmentQrCode::getDeptId));
+        return qrCodeMapper.readCycleCodes(cycleId);
     }
 
     @Override
@@ -167,28 +114,11 @@ public class RecruitmentQrCodeServiceImpl implements IRecruitmentQrCodeService {
         if (identifier == null || identifier.isBlank()) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
         }
-        RecruitmentQrCode before = lookup(identifier);
+        RecruitmentQrCode before = qrCodeMapper.findIdentifier(identifier);
         if (before == null || qrCodeMapper.lockCycle(before.getCycleId()) == null) return;
-        RecruitmentQrCode current = lookup(identifier);
+        RecruitmentQrCode current = qrCodeMapper.findIdentifier(identifier);
         if (current == null || !Objects.equals(current.getCycleId(), before.getCycleId())) return;
-        removeLocked(current.getCycleId(), current.getQrType(), current.getDeptId());
-    }
-
-    private RecruitmentQrCode lookup(String identifier) {
-        if (storage != Storage.LEGACY || qrCodeMapper.parentOnly()) return qrCodeMapper.findIdentifier(identifier);
-        try {
-            return qrCodeMapper.selectById(Integer.valueOf(identifier));
-        } catch (NumberFormatException ignored) {
-            return null;
-        }
-    }
-
-    private void removeLocked(int cycleId, String type, int dept) {
-        if (qrCodeMapper.parentOnly()) {
-            qrCodeMapper.removeCode(cycleId, path(type, dept));
-        } else if (qrCodeMapper.delete(atKey(cycleId, type, dept)) > 0) {
-            refreshProjection(cycleId);
-        }
+        qrCodeMapper.removeCode(current.getCycleId(), path(current.getQrType(), current.getDeptId()));
     }
 
     @Override
@@ -196,7 +126,7 @@ public class RecruitmentQrCodeServiceImpl implements IRecruitmentQrCodeService {
     public void deleteByKey(Integer cycleId, String qrType, Integer deptId) {
         int normalizedDept = departmentKey(cycleId, qrType, deptId);
         if (qrCodeMapper.lockCycle(cycleId) != null) {
-            removeLocked(cycleId, qrType, normalizedDept);
+            qrCodeMapper.removeCode(cycleId, path(qrType, normalizedDept));
         }
     }
 

@@ -33,7 +33,7 @@ class RecruitmentQrCodeServiceImplTest {
     @DisplayName("录取者收到：本部门群、社团大群、社团大群 2，按这个顺序")
     @SuppressWarnings("unchecked")
     void admittedGetBothMainGroups() {
-        when(mapper.selectList(any(Wrapper.class))).thenReturn(List.of(
+        when(mapper.readCycleCodes(14)).thenReturn(List.of(
                 qr(RecruitmentQrCode.TYPE_DEPT, 1, "dept-1"),
                 qr(RecruitmentQrCode.TYPE_DEPT, 2, "private-dept-2"),
                 qr(RecruitmentQrCode.TYPE_MAIN_GROUP, 0, "main-1"),
@@ -51,7 +51,7 @@ class RecruitmentQrCodeServiceImplTest {
     @DisplayName("没配第二个大群时照旧只有部门群 + 大群")
     @SuppressWarnings("unchecked")
     void secondMainGroupIsOptional() {
-        when(mapper.selectList(any(Wrapper.class))).thenReturn(List.of(
+        when(mapper.readCycleCodes(14)).thenReturn(List.of(
                 qr(RecruitmentQrCode.TYPE_DEPT, 1, "dept-1"),
                 qr(RecruitmentQrCode.TYPE_MAIN_GROUP, 0, "main-1")));
         when(cos.resolveAvatarUrl(anyString())).thenAnswer(inv -> inv.getArgument(0));
@@ -68,12 +68,12 @@ class RecruitmentQrCodeServiceImplTest {
         when(cos.resolveAvatarUrl(anyString())).thenAnswer(inv -> inv.getArgument(0));
         MockMultipartFile file = new MockMultipartFile("file", "main2.png", "image/png", new byte[]{1, 2, 3});
 
+        when(mapper.readCycleCodes(14)).thenReturn(List.of(qr(RecruitmentQrCode.TYPE_MAIN_GROUP_2, 0, "qrcodes/main2.png")));
         RecruitmentQrCode saved = service.upload(14, RecruitmentQrCode.TYPE_MAIN_GROUP_2, 3, "社团大群 2", file);
 
         assertEquals(RecruitmentQrCode.TYPE_MAIN_GROUP_2, saved.getQrType());
         assertEquals(RecruitmentQrCode.NO_DEPT, saved.getDeptId());
-        verify(mapper).insert(any(RecruitmentQrCode.class));
-        verify(mapper, never()).refreshCycleCodes(14);
+        verify(mapper).putCode(eq(14), eq("$.MAIN_GROUP_2"), eq(false), anyString(), eq("qrcodes/main2.png"), eq("社团大群 2"));
     }
 
     @Test
