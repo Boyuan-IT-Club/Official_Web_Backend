@@ -4,6 +4,7 @@ import club.boyuan.official.domain.interview.dto.InterviewResultListItem;
 import club.boyuan.official.domain.interview.dto.BatchDecisionRequestDTO;
 import club.boyuan.official.domain.interview.dto.BatchDecisionResponseDTO;
 import club.boyuan.official.domain.interview.dto.InterviewResultResponseDTO;
+import club.boyuan.official.domain.interview.dto.SendNotificationsRequestDTO;
 import club.boyuan.official.domain.interview.dto.PreAdmissionBatchRequestDTO;
 import club.boyuan.official.domain.interview.dto.PreAdmissionListResponseDTO;
 import club.boyuan.official.domain.interview.dto.PreAdmissionMutationResponseDTO;
@@ -26,6 +27,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -40,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * 这些规则主要落在 SQL 里（JSON 函数、EXISTS、分页计数、多表 UPDATE 里的子查询），
  * 只有对着真库跑才算数。测试数据用 JdbcTemplate 直接插：User 实体的通用插入会撞缺失列。
  */
-@SpringBootTest
+@SpringBootTest(properties = "outbox.enabled=false")
 class AdmissionListScreeningIntegrationTest {
 
     /** V6 种子：部门 1 = 技术部 */
@@ -220,6 +222,45 @@ class AdmissionListScreeningIntegrationTest {
         assertEquals(DECISION_REJECTED, count("SELECT decision FROM interview_result WHERE result_id = ?", admitted));
         assertEquals(0, count("SELECT COUNT(*) FROM interview_result WHERE result_id = ? AND assigned_dept_id IS NOT NULL",
                 admitted), "标记未通过时清空录取部门");
+    }
+
+    @Test
+    @DisplayName("历史待核记录拦截发信，核实后重试同一操作只入队一次")
+    void heldResultCanBeQueuedOnceAfterEvidenceResolution() {
+        String tag = "mail" + System.nanoTime();
+        cycleId = insert("INSERT INTO recruitment_cycle (cycle_name, start_date, end_date, academic_year)"
+                + " VALUES (?, '2099-01-01', '2099-12-31', '2098-2099')", tag);
+        int resumeId = resume(tag, "A", RESUME_SUBMITTED);
+        int resultId = legacyResult(resumeId, DECISION_ADMITTED);
+        int operatorId = userIds.get(0);
+        String reviewKey = "test:" + UUID.randomUUID();
+        var request = new SendNotificationsRequestDTO();
+        request.setNotificationType("email");
+        request.setResultIds(List.of(resultId));
+        request.setActionId(UUID.randomUUID().toString());
+
+        try {
+            jdbc.update("CALL delivery_quarantine(?, JSON_OBJECT('fixture',true), 'ADMISSION', NULL, ?, NULL)",
+                    reviewKey, resultId);
+            assertEquals(List.of(resultId), resultService.sendNotifications(request).getFailedId());
+            assertEquals(0, count("SELECT COUNT(*) FROM message_delivery WHERE result_id=? AND delivery_kind='REQUEST'", resultId));
+            assertEquals("UNKNOWN", resultService.list(cycleId, null, null, null, 1, 10)
+                    .getInterviewResults().get(0).getMailState());
+
+            Long reviewId = jdbc.queryForObject("SELECT delivery_id FROM message_delivery WHERE review_key=?", Long.class, reviewKey);
+            jdbc.update("CALL delivery_resolve(?, 'CONFIRMED_UNSENT', ?, 'Synthetic test evidence', NULL, NULL, NULL, NULL)",
+                    reviewId, operatorId);
+            assertEquals(1, resultService.sendNotifications(request).getQueued());
+            assertEquals(1, resultService.sendNotifications(request).getQueued());
+            assertEquals(1, count("SELECT COUNT(*) FROM message_delivery WHERE result_id=? AND delivery_kind='REQUEST'", resultId));
+            var result = resultService.list(cycleId, null, null, null, 1, 10).getInterviewResults().get(0);
+            assertEquals(resultId, result.getResultId());
+            assertEquals("PENDING", result.getMailState());
+            assertNull(result.getNotifiedAt());
+            assertEquals(1, count("SELECT COUNT(*) FROM interview_result WHERE result_id=? AND notified_at IS NULL", resultId));
+        } finally {
+            jdbc.update("DELETE FROM message_delivery WHERE result_id = ?", resultId);
+        }
     }
 
     @AfterEach
