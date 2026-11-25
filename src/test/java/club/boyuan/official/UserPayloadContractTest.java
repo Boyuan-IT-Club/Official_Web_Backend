@@ -62,15 +62,16 @@ class UserPayloadContractTest {
         }
 
         String select = extractStatement(xml, "findByRoleAndDeptAndStatus");
-        String columnList = select.substring(select.indexOf("SELECT") + "SELECT".length(),
-                select.indexOf("FROM"));
+        assertTrue(select.contains("<include refid=\"userColumns\"/>"));
+        Matcher projection = Pattern.compile("<sql id=\"userColumns\">(.*?)</sql>", Pattern.DOTALL).matcher(xml);
+        assertTrue(projection.find(), "列表查询缺少字段清单");
+        String columnList = projection.group(1);
 
         Set<String> unmapped = new LinkedHashSet<>();
         for (String raw : columnList.split(",")) {
-            String col = raw.trim();
-            if (col.isEmpty() || col.equals("*") || col.endsWith(".*")) {
-                continue;
-            }
+            String expression = raw.trim();
+            int alias = expression.lastIndexOf(" AS ");
+            String col = alias < 0 ? expression.replaceFirst("^u\\.", "") : expression.substring(alias + 4);
             if (!mapped.contains(col)) {
                 unmapped.add(col);
             }
