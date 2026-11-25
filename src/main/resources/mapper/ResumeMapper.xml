@@ -9,38 +9,50 @@
         <result property="status" column="status"/>
         <!-- 分数与署名此前漏映射：走本 resultMap 的查询一直拿不到 resume_score -->
         <result property="resumeScore" column="resume_score"/>
-        <result property="scoredBy" column="scored_by"/>
+        <result property="scoredBy" column="latest_scorer_id"/>
         <result property="scoredAt" column="scored_at"/>
         <result property="submittedAt" column="submitted_at"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
     </resultMap>
 
-    <!-- 自定义查询方法 -->
+    <sql id="resumeColumns">
+        r.resume_id,r.user_id,r.cycle_id,r.status,r.resume_score,r.scored_at,r.submitted_at,r.created_at,r.updated_at,
+        (SELECT e.scorer_id FROM resume_score_entry e WHERE e.resume_id=r.resume_id
+         ORDER BY e.updated_at DESC,e.id DESC LIMIT 1) AS latest_scorer_id
+    </sql>
+    <select id="lockForScoring" resultMap="ResumeResultMap">
+        SELECT resume_id,user_id,cycle_id,status,resume_score,scored_at FROM resume WHERE resume_id=#{resumeId} FOR UPDATE
+    </select>
+    <select id="findWithScorerByIds" resultMap="ResumeResultMap">
+        SELECT <include refid="resumeColumns"/> FROM resume r WHERE r.resume_id IN
+        <foreach collection="ids" item="id" open="(" close=")" separator=",">#{id}</foreach>
+    </select>
+
     <select id="findByUserIdAndCycleId" resultMap="ResumeResultMap">
-        SELECT * FROM resume
+        SELECT <include refid="resumeColumns"/> FROM resume r
         WHERE user_id = #{userId} AND cycle_id = #{cycleId}
     </select>
 
     <select id="findById" parameterType="java.lang.Integer" resultMap="ResumeResultMap">
-        SELECT * FROM resume
+        SELECT <include refid="resumeColumns"/> FROM resume r
         WHERE resume_id = #{resumeId}
     </select>
 
     <select id="findByUserId" parameterType="java.lang.Integer" resultMap="ResumeResultMap">
-        SELECT * FROM resume
+        SELECT <include refid="resumeColumns"/> FROM resume r
         WHERE user_id = #{userId}
         ORDER BY created_at DESC
     </select>
 
     <select id="findByCycleId" parameterType="java.lang.Integer" resultMap="ResumeResultMap">
-        SELECT * FROM resume
+        SELECT <include refid="resumeColumns"/> FROM resume r
         WHERE cycle_id = #{cycleId}
         ORDER BY created_at DESC
     </select>
 
     <select id="queryResumes" resultMap="ResumeResultMap">
-        SELECT r.* FROM resume r
+        SELECT <include refid="resumeColumns"/> FROM resume r
         LEFT JOIN user u ON r.user_id = u.user_id
         <where>
             <if test="name != null and name != ''">
@@ -108,7 +120,7 @@
     </select>
 
     <select id="queryResumesWithPagination" resultMap="ResumeResultMap">
-        SELECT r.* FROM resume r
+        SELECT <include refid="resumeColumns"/> FROM resume r
         LEFT JOIN user u ON r.user_id = u.user_id
         <where>
             <if test="name != null and name != ''">

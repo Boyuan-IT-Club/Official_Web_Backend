@@ -14,9 +14,6 @@ public class DepartmentDTO {
     @Size(max = 50, message = "部门名称长度不能超过50个字符")
     private String deptName;
     
-    @NotBlank(message = "部门代码不能为空")
-    @Size(max = 20, message = "部门代码长度不能超过20个字符")
-    private String deptCode;
     
     @Size(max = 200, message = "部门描述长度不能超过200个字符")
     private String description;
@@ -28,6 +25,6 @@ public class DepartmentDTO {
     
     @Override
     public String toString() {
-        return "DepartmentDTO{deptId = " + deptId + ", deptName = " + deptName + ", deptCode = " + deptCode + ", description = " + description + ", status = " + status + "}";
+        return "DepartmentDTO{deptId = " + deptId + ", deptName = " + deptName + ", description = " + description + ", status = " + status + "}";
     }
 }

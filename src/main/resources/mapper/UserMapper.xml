@@ -10,13 +10,9 @@
         <result property="email" column="email"/>
         <result property="name" column="name"/>
         <result property="phone" column="phone"/>
-        <result property="role" column="role"/>
         <result property="major" column="major"/>
         <result property="github" column="github"/>
         <result property="deptId" column="dept_id"/>
-        <!-- dept / is_member 此前漏映射：findByRoleAndDeptAndStatus 明明 SELECT 了这两列,
-             但 resultMap 不认,MyBatis 直接丢弃 -> 接口 JSON 永远没有这两个键,
-             管理端「部门」列因此恒显示非社员,批量录取/分配部门看不出任何变化。 -->
         <result property="dept" column="dept"/>
         <result property="isMember" column="is_member"/>
         <result property="avatar" column="avatar"/>
@@ -26,28 +22,28 @@
         <result property="isDeleted" column="is_deleted"/>
     </resultMap>
 
-    <!-- 自定义查询方法 -->
+    <sql id="userColumns">
+        u.user_id,u.username,u.password,u.email,u.phone,u.name,u.major,u.github,u.dept_id,
+            u.avatar,u.status,u.is_member,u.is_deleted,u.create_time,u.update_time,
+            (SELECT d.dept_name FROM department d WHERE d.dept_id=u.dept_id) AS dept
+    </sql>
     <select id="selectById" parameterType="java.lang.Integer" resultMap="UserResultMap">
-        SELECT *
-        FROM user
+        SELECT <include refid="userColumns"/> FROM user u
         WHERE user_id = #{userId} AND is_deleted = 0
     </select>
 
     <select id="selectByUsername" parameterType="java.lang.String" resultMap="UserResultMap">
-        SELECT *
-        FROM user
+        SELECT <include refid="userColumns"/> FROM user u
         WHERE username = #{username} AND is_deleted = 0
     </select>
 
     <select id="selectByEmail" parameterType="java.lang.String" resultMap="UserResultMap">
-        SELECT *
-        FROM user
+        SELECT <include refid="userColumns"/> FROM user u
         WHERE email = #{email} AND is_deleted = 0
     </select>
 
     <select id="selectByPhone" parameterType="java.lang.String" resultMap="UserResultMap">
-        SELECT *
-        FROM user
+        SELECT <include refid="userColumns"/> FROM user u
         WHERE phone = #{phone} AND is_deleted = 0
     </select>
 
@@ -81,8 +77,7 @@
     </delete>
 
     <select id="selectAll" resultMap="UserResultMap">
-        SELECT *
-        FROM user
+        SELECT <include refid="userColumns"/> FROM user u
         WHERE is_deleted = 0
     </select>
 
@@ -139,7 +134,7 @@
     </sql>
 
     <select id="findByRoleAndDeptAndStatus" resultMap="UserResultMap">
-        SELECT u.*
+        SELECT <include refid="userColumns"/>
         FROM user u
         <where>
             <include refid="userFilterWhere"/>
@@ -172,8 +167,7 @@
     </select>
     
     <select id="searchUsers" parameterType="string" resultMap="UserResultMap">
-        SELECT *
-        FROM user 
+        SELECT <include refid="userColumns"/> FROM user u
         WHERE (username LIKE CONCAT('%', #{keyword}, '%') 
            OR name LIKE CONCAT('%', #{keyword}, '%') 
            OR email LIKE CONCAT('%', #{keyword}, '%') 
@@ -192,27 +186,21 @@
         AND is_deleted = 0
     </update>
     
-    <!-- 两列一起写。
-         user 表有 dept(varchar) 和 dept_id(int) 两列：界面读的是 dept，
-         而这条语句原来只写 dept_id —— 于是「分配部门」在列表上看不出任何变化，
-         两列还越走越偏（线上实测 8 人里 6 人不一致）。
+    <select id="departmentIdsByName" resultType="int">
+        SELECT dept_id FROM department WHERE dept_name=#{name} ORDER BY dept_id LIMIT 2
+    </select>
 
-         dept 为 NULL 表示取消分配：此时子查询取不到行，dept_id 自然落成 NULL；
-         EXISTS 那道存在性校验必须跳过 —— dept_name = NULL 恒不成立，
-         留着会让清空操作静默影响 0 行。 -->
+    <select id="departmentById" resultType="string">
+        SELECT dept_name FROM department WHERE dept_id=#{id}
+    </select>
+
     <update id="batchUpdateDeptByIds">
-        UPDATE user
-        SET dept = #{dept},
-            dept_id = (SELECT dept_id FROM department WHERE dept_name = #{dept} LIMIT 1),
-            update_time = NOW()
+        UPDATE user SET dept_id=#{deptId}, update_time=NOW()
         WHERE user_id IN
         <foreach collection="userIds" item="userId" open="(" separator="," close=")">
             #{userId}
         </foreach>
         AND is_deleted = 0
-        <if test="dept != null">
-            AND EXISTS (SELECT 1 FROM department WHERE dept_name = #{dept})
-        </if>
     </update>
     
     <update id="batchUpdateMembershipByIds">
@@ -226,8 +214,7 @@
     </update>
     
     <select id="selectUsersByIds" resultMap="UserResultMap">
-        SELECT *
-        FROM user
+        SELECT <include refid="userColumns"/> FROM user u
         WHERE user_id IN
         <foreach collection="userIds" item="userId" open="(" separator="," close=")">
             #{userId}

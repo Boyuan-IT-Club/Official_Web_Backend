@@ -111,6 +111,7 @@ public class MemberClaimServiceImpl implements MemberClaimService {
             userUpdate.set(User::getDeptId, finalDept);
         }
         userMapper.update(null, userUpdate);
+        claimMapper.grantMemberRole(claim.getUserId());
 
         claim.setStatus(MemberClaim.STATUS_APPROVED)
                 .setDeptId(finalDept)
@@ -145,7 +146,7 @@ public class MemberClaimServiceImpl implements MemberClaimService {
 
     /** 审批只对待审申请生效——防止两个管理员同时点、后一个把结论覆盖成相反的 */
     private MemberClaim requirePending(Integer claimId) {
-        MemberClaim claim = claimId == null ? null : claimMapper.selectById(claimId);
+        MemberClaim claim = claimId == null ? null : claimMapper.lockForReview(claimId);
         if (claim == null) {
             throw new BusinessException(BusinessExceptionEnum.MEMBER_CLAIM_NOT_FOUND);
         }

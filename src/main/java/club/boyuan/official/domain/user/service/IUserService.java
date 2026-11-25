@@ -67,6 +67,8 @@ public interface IUserService extends IService<User> {
      */
     int batchUpdateUserDept(List<Integer> userIds, String dept);
 
+    int batchUpdateUserDeptById(List<Integer> userIds, Integer deptId);
+
     /**
      * 批量更新用户会员状态
      * @param userIds 用户ID列表

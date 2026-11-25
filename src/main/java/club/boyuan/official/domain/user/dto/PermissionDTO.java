@@ -18,8 +18,6 @@ public class PermissionDTO {
     @Size(max = 50, message = "权限代码长度不能超过50个字符")
     private String permissionCode;
     
-    @Size(max = 100, message = "资源标识符长度不能超过100个字符")
-    private String resourceIdentifier;
     
     @Size(max = 200, message = "权限描述长度不能超过200个字符")
     private String description;
@@ -29,6 +27,6 @@ public class PermissionDTO {
     
     @Override
     public String toString() {
-        return "PermissionDTO{permissionId = " + permissionId + ", permissionName = " + permissionName + ", permissionCode = " + permissionCode + ", resourceIdentifier = " + resourceIdentifier + ", description = " + description + "}";
+        return "PermissionDTO{permissionId = " + permissionId + ", permissionName = " + permissionName + ", permissionCode = " + permissionCode + ", description = " + description + "}";
     }
 }

@@ -62,7 +62,7 @@ public final class ResumeSortOrder {
              * 和真打了 0 分（= 未通过初筛）混在一起就分不清了。
              * 「有没有打过分」看署名与时间（与 displayScore 同一口径）。
              */
-            return "(r.scored_by IS NULL AND r.scored_at IS NULL) ASC, r.resume_score " + direction + TIE_BREAKER;
+            return "(r.resume_score IS NULL OR (r.resume_score=0 AND r.scored_at IS NULL)) ASC, r.resume_score " + direction + TIE_BREAKER;
         }
         return column + " " + direction + TIE_BREAKER;
     }

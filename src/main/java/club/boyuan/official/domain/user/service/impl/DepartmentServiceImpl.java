@@ -49,15 +49,7 @@ public class DepartmentServiceImpl extends ServiceImpl<DepartmentMapper, Departm
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "部门名称不能为空");
         }
         
-        if (StringUtils.isBlank(departmentDTO.getDeptCode())) {
-            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "部门编码不能为空");
-        }
-        
-        // 检查部门编码是否已存在
-        if (departmentMapper.selectByDeptCode(departmentDTO.getDeptCode()) != null) {
-            throw new BusinessException(BusinessExceptionEnum.RESOURCE_CONFLICT, "部门编码已存在");
-        }
-        
+        // 编码列在兼容期由数据库生成。
         // 转换DTO为实体
         Department department = departmentConverter.toEntity(departmentDTO);
         
@@ -85,14 +77,6 @@ public class DepartmentServiceImpl extends ServiceImpl<DepartmentMapper, Departm
         Department existingDepartment = departmentMapper.selectById(departmentDTO.getDeptId());
         if (existingDepartment == null) {
             throw new BusinessException(BusinessExceptionEnum.DEPARTMENT_NOT_FOUND, "部门不存在");
-        }
-        
-        // 如果修改了部门编码，检查新编码是否已存在
-        if (StringUtils.isNotBlank(departmentDTO.getDeptCode()) && 
-                !departmentDTO.getDeptCode().equals(existingDepartment.getDeptCode())) {
-            if (departmentMapper.selectByDeptCode(departmentDTO.getDeptCode()) != null) {
-                throw new BusinessException(BusinessExceptionEnum.RESOURCE_CONFLICT, "部门编码已存在");
-            }
         }
         
         // 转换DTO为实体
@@ -148,21 +132,6 @@ public class DepartmentServiceImpl extends ServiceImpl<DepartmentMapper, Departm
     }
 
     @Override
-    public DepartmentDTO getDepartmentByCode(String deptCode) throws BusinessException {
-        if (StringUtils.isBlank(deptCode)) {
-            throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "部门编码不能为空");
-        }
-        
-        Department department = departmentMapper.selectByDeptCode(deptCode);
-        if (department == null) {
-            throw new BusinessException(BusinessExceptionEnum.DEPARTMENT_NOT_FOUND, "部门不存在");
-        }
-        
-        // 转换实体为DTO并返回
-        return departmentConverter.toDto(department);
-    }
-
-    @Override
     public List<DepartmentDTO> getDepartments(int status, String keyword, int page, int size, String sort) throws BusinessException {
         // 创建Lambda查询包装器
         LambdaQueryWrapper<Department> queryWrapper = new LambdaQueryWrapper<>();
@@ -174,10 +143,7 @@ public class DepartmentServiceImpl extends ServiceImpl<DepartmentMapper, Departm
         
         // 关键字条件（模糊匹配部门名称或编码）
         if (StringUtils.isNotBlank(keyword)) {
-            queryWrapper.and(wrapper -> wrapper
-                    .like(Department::getDeptName, keyword)
-                    .or()
-                    .like(Department::getDeptCode, keyword));
+            queryWrapper.like(Department::getDeptName, keyword);
         }
         
         // 排序处理
@@ -187,7 +153,7 @@ public class DepartmentServiceImpl extends ServiceImpl<DepartmentMapper, Departm
                 String column = sort.substring(1);
                 switch (column) {
                     case "deptName" -> queryWrapper.orderByDesc(Department::getDeptName);
-                    case "deptCode" -> queryWrapper.orderByDesc(Department::getDeptCode);
+                    case "deptCode" -> throw new BusinessException(BusinessExceptionEnum.PARAMETER_VALIDATION_FAILED, "部门编码排序已退役");
                     case "createTime" -> queryWrapper.orderByDesc(Department::getCreateTime);
                     default -> queryWrapper.orderByDesc(Department::getDeptId);
                 }
@@ -195,7 +161,7 @@ public class DepartmentServiceImpl extends ServiceImpl<DepartmentMapper, Departm
                 // 正序
                 switch (sort) {
                     case "deptName" -> queryWrapper.orderByAsc(Department::getDeptName);
-                    case "deptCode" -> queryWrapper.orderByAsc(Department::getDeptCode);
+                    case "deptCode" -> throw new BusinessException(BusinessExceptionEnum.PARAMETER_VALIDATION_FAILED, "部门编码排序已退役");
                     case "createTime" -> queryWrapper.orderByAsc(Department::getCreateTime);
                     default -> queryWrapper.orderByAsc(Department::getDeptId);
                 }

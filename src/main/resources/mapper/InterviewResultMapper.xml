@@ -48,7 +48,7 @@
         -- 录取决策的三个依据并到一行，免得在「评价汇总」「简历管理」之间来回切：
         -- 简历分（未署名 = 没打过分 → NULL，不能把默认 0 当成打过 0 分）、
         -- 面试评价加权总分与结论、志愿部门
-        CASE WHEN rs.scored_by IS NULL AND rs.scored_at IS NULL THEN NULL
+        CASE WHEN rs.resume_score=0 AND rs.scored_at IS NULL THEN NULL
              ELSE rs.resume_score END AS resume_score,
         live.interview_time AS interview_time,
         ev.total_score AS eval_total_score,

@@ -25,12 +25,4 @@ public interface DepartmentMapper extends BaseMapper<Department> {
      */
     @Select("SELECT * FROM department WHERE status = 1 ORDER BY dept_name")
     List<Department> selectEnabledDepartments();
-    
-    /**
-     * 根据部门编码查询部门
-     * @param deptCode 部门编码
-     * @return 部门对象
-     */
-    @Select("SELECT * FROM department WHERE dept_code = #{deptCode}")
-    Department selectByDeptCode(String deptCode);
 }

@@ -236,7 +236,7 @@ public class EvaluationBoardServiceImpl implements IEvaluationBoardService {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         Map<Integer, Resume> resumes = resumeIds.isEmpty() ? Collections.emptyMap()
-                : resumeMapper.selectBatchIds(resumeIds).stream()
+                : resumeMapper.findWithScorerByIds(resumeIds).stream()
                 .collect(Collectors.toMap(Resume::getResumeId, Function.identity(), (a, b) -> a));
 
         Set<Integer> userIds = roster.stream()

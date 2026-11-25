@@ -18,8 +18,6 @@ public class Department {
     @TableField("dept_name") // MyBatis-Plus 字段映射
     private String deptName;
 
-    @TableField("dept_code")
-    private String deptCode;
 
     @TableField("description")
     private String description;
@@ -42,9 +40,8 @@ public class Department {
     public Department() {
     }
 
-    public Department(String deptName, String deptCode) {
+    public Department(String deptName) {
         this.deptName = deptName;
-        this.deptCode = deptCode;
         this.status = 1; // 默认启用
     }
 
@@ -65,13 +62,7 @@ public class Department {
         this.deptName = deptName;
     }
 
-    public String getDeptCode() {
-        return deptCode;
-    }
 
-    public void setDeptCode(String deptCode) {
-        this.deptCode = deptCode;
-    }
 
     public String getDescription() {
         return description;
@@ -114,6 +105,6 @@ public class Department {
     }
 
     public String toString() {
-        return "Department{deptId = " + deptId + ", deptName = " + deptName + ", deptCode = " + deptCode + ", description = " + description + ", status = " + status + ", createTime = " + createTime + ", updateTime = " + updateTime + "}";
+        return "Department{deptId = " + deptId + ", deptName = " + deptName + ", description = " + description + ", status = " + status + ", createTime = " + createTime + ", updateTime = " + updateTime + "}";
     }
 }

@@ -539,7 +539,7 @@ public class ResumeServiceImpl implements IResumeService {
         if (resumeId == null || scorerUserId == null) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
         }
-        Resume resume = resumeMapper.selectById(resumeId);
+        Resume resume = resumeMapper.lockForScoring(resumeId);
         if (resume == null) {
             throw new BusinessException(BusinessExceptionEnum.RESUME_NOT_FOUND);
         }
@@ -559,27 +559,23 @@ public class ResumeServiceImpl implements IResumeService {
         Integer average;
         if (remaining.isEmpty()) {
             // 一个分都不剩：回到「未打分」。有没有打过分看署名与时间（见 displayScore），
-            // 所以两者都要清空；分数列 NOT NULL，只能归 0
+            // 评分汇总和最近评分时间同时清空。
             average = null;
             resumeMapper.update(null, new LambdaUpdateWrapper<Resume>()
                     .eq(Resume::getResumeId, resumeId)
-                    .set(Resume::getResumeScore, 0)
-                    .set(Resume::getScoredBy, null)
+                    .set(Resume::getResumeScore, null)
                     .set(Resume::getScoredAt, null));
-            resume.setResumeScore(0);
+            resume.setResumeScore(null);
             resume.setScoredBy(null);
             resume.setScoredAt(null);
         } else {
             average = (int) Math.round(remaining.stream().mapToInt(ResumeScoreEntry::getScore).average().orElse(0));
             // 「最近一次打分」的署名换成剩下的人里最近打的那一位
-            ResumeScoreEntry latest = remaining.stream()
-                    .max(java.util.Comparator.comparing(e -> e.getUpdatedAt() == null ? e.getCreatedAt() : e.getUpdatedAt()))
-                    .orElse(remaining.get(remaining.size() - 1));
+            ResumeScoreEntry latest = latestVote(remaining);
             LocalDateTime latestAt = latest.getUpdatedAt() == null ? latest.getCreatedAt() : latest.getUpdatedAt();
             resumeMapper.update(null, new LambdaUpdateWrapper<Resume>()
                     .eq(Resume::getResumeId, resumeId)
                     .set(Resume::getResumeScore, average)
-                    .set(Resume::getScoredBy, latest.getScorerId())
                     .set(Resume::getScoredAt, latestAt));
             resume.setResumeScore(average);
             resume.setScoredBy(latest.getScorerId());
@@ -696,7 +692,7 @@ public class ResumeServiceImpl implements IResumeService {
             throw new BusinessException(BusinessExceptionEnum.PARAMETER_VALIDATION_FAILED,
                     "简历评分需在 0~100 之间，收到: " + score);
         }
-        Resume resume = resumeMapper.selectById(resumeId);
+        Resume resume = resumeMapper.lockForScoring(resumeId);
         if (resume == null) {
             throw new BusinessException(BusinessExceptionEnum.RESUME_NOT_FOUND);
         }
@@ -730,22 +726,22 @@ public class ResumeServiceImpl implements IResumeService {
         }
 
         // 重算平均分写回聚合列。四舍五入取整，和列类型（int）一致；
-        // scored_by / scored_at 语义变为「最近一次打分」。
+        // 最近一票与列表的署名规则一致，同秒时取明细 ID 较大者。
         // 显式 UpdateWrapper 只动这三列，避免整实体写回覆盖并发修改。
         List<ResumeScoreEntry> entries = resumeScoreEntryMapper.selectList(
                 new LambdaQueryWrapper<ResumeScoreEntry>()
                         .eq(ResumeScoreEntry::getResumeId, resumeId)
                         .orderByAsc(ResumeScoreEntry::getCreatedAt));
+        ResumeScoreEntry latest = latestVote(entries);
         int average = (int) Math.round(entries.stream()
                 .mapToInt(ResumeScoreEntry::getScore).average().orElse(score));
         resumeMapper.update(null, new LambdaUpdateWrapper<Resume>()
                 .eq(Resume::getResumeId, resumeId)
                 .set(Resume::getResumeScore, average)
-                .set(Resume::getScoredBy, scorerUserId)
-                .set(Resume::getScoredAt, now));
+                .set(Resume::getScoredAt, latest.getUpdatedAt()));
         resume.setResumeScore(average);
-        resume.setScoredBy(scorerUserId);
-        resume.setScoredAt(now);
+        resume.setScoredBy(latest.getScorerId());
+        resume.setScoredAt(latest.getUpdatedAt());
 
         // 规则与理由见 statusAfterScore
         boolean hasZeroVoteNow = entries.stream().anyMatch(e -> Integer.valueOf(0).equals(e.getScore()));
@@ -912,11 +908,17 @@ public class ResumeServiceImpl implements IResumeService {
      * 「没打过分」和「打了 0 分」在这一列上没法区分——署名与时间才是有没有打过分的事实。
      * 没署名就返回 null，前端各处（未评分标记、下一位未打分）都以 null 为准。
      */
+    private static ResumeScoreEntry latestVote(List<ResumeScoreEntry> entries) {
+        return entries.stream().max(java.util.Comparator
+                .comparing(ResumeScoreEntry::getUpdatedAt)
+                .thenComparing(ResumeScoreEntry::getId)).orElseThrow();
+    }
+
     static Integer displayScore(Resume resume) {
         if (resume == null) {
             return null;
         }
-        if (resume.getScoredAt() == null && resume.getScoredBy() == null) {
+        if (Integer.valueOf(0).equals(resume.getResumeScore()) && resume.getScoredAt() == null && resume.getScoredBy() == null) {
             return null;
         }
         return resume.getResumeScore();

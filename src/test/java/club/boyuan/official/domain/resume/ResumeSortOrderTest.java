@@ -50,7 +50,7 @@ class ResumeSortOrderTest {
     void scoreSortPutsUnscoredLast() {
         String desc = ResumeSortOrder.orderBy("resume_score", "DESC");
         String asc = ResumeSortOrder.orderBy("resume_score", "ASC");
-        String unscoredLast = "(r.scored_by IS NULL AND r.scored_at IS NULL) ASC";
+        String unscoredLast = "(r.resume_score IS NULL OR (r.resume_score=0 AND r.scored_at IS NULL)) ASC";
         assertTrue(desc.startsWith(unscoredLast), desc);
         assertTrue(asc.startsWith(unscoredLast), "升序时未打分的也在最后：" + asc);
         assertTrue(desc.contains("r.resume_score DESC"));
