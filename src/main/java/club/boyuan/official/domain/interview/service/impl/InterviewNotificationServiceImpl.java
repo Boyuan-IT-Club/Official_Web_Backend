@@ -225,7 +225,8 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
      * 前一天提醒」房间都是「待通知」（2026 届 #14 周期 97 封全中）。
      */
     InterviewBookingDTO bookingOf(InterviewSchedule schedule) {
-        InterviewSlot slot = schedule.getSlotId() == null ? null : interviewSlotService.getById(schedule.getSlotId());
+        InterviewSlot slot = schedule.historicalSlot();
+        if (slot == null && schedule.getSlotId() != null) slot = interviewSlotService.getById(schedule.getSlotId());
         InterviewBookingDTO booking = InterviewBookingDTO.from(schedule, slot);
         /*
          * 线上面试没有教室，地点就是会议链接（周期级统一配置）。
@@ -241,9 +242,9 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
             }
             return booking;
         }
-        if (!StringUtils.hasText(booking.getLocation()) && schedule.getSessionId() != null) {
+        if (schedule.getSessionId() != null) {
             InterviewSession session = interviewSessionMapper.selectById(schedule.getSessionId());
-            if (session != null) {
+            if (session != null && StringUtils.hasText(session.getLocation())) {
                 booking.setLocation(session.getLocation());
             }
         }

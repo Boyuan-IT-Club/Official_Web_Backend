@@ -20,7 +20,7 @@
             SELECT
                 r.user_id AS userId,
                 s.interview_time AS latestInterviewTime,
-                COALESCE(se.location, sl.location) AS interviewLocation,
+                COALESCE(se.location, JSON_VALUE(s.legacy_slot_snapshot,'$.location'), sl.location) AS interviewLocation,
                 s.cycle_id AS cycleId,
                 ROW_NUMBER() OVER (
                     PARTITION BY r.user_id

@@ -3,7 +3,6 @@ package club.boyuan.official.domain.interview.controller;
 import club.boyuan.official.domain.interview.dto.AutoAssignInterviewResponseDTO;
 import club.boyuan.official.common.dto.ResponseMessage;
 import club.boyuan.official.common.utils.SecurityUtil;
-import club.boyuan.official.domain.interview.service.IInterviewScheduleService;
 import club.boyuan.official.domain.resume.service.IResumeService;
 import club.boyuan.official.domain.user.service.IUserService;
 import club.boyuan.official.persistence.entity.Department;
@@ -39,7 +38,6 @@ import java.util.Map;
 @AllArgsConstructor
 public class InterviewScheduleController {
 
-    private final IInterviewScheduleService interviewScheduleService;
     private final club.boyuan.official.domain.interview.service.IRecruitmentQrCodeService qrCodeService;
 
     private final IUserService userService;
@@ -159,6 +157,11 @@ public class InterviewScheduleController {
                 result.put("location", session.getLocation());
             }
         }
+        var history = schedule.historicalSlot();
+        if (history != null && result.get("location") == null) {
+            result.put("location", history.getLocation());
+            if (history.getMeetingLink() != null) result.put("meetingLink", history.getMeetingLink());
+        }
         /*
          * 候场教室按周期配置（recruitment_cycle.waiting_room），和面试教室不是一回事：
          * 面试教室属于场次，候场教室全周期共用。此前只有邮件里有这一行，
@@ -194,15 +197,6 @@ public class InterviewScheduleController {
     @PreAuthorize("hasAnyAuthority('interview:schedule', 'resume:audit')")
     public ResponseEntity<ResponseMessage<AutoAssignInterviewResponseDTO>> autoAssignInterviewsByCycleId(
             @PathVariable Integer cycleId) {
-        try {
-            log.info("开始一键分配面试，招募周期ID: {}", cycleId);
-            AutoAssignInterviewResponseDTO result = interviewScheduleService.autoAssignInterviews(cycleId);
-            log.info("一键分配面试完成，已分配 {} 人", result.getAssignedCount());
-            return ResponseEntity.ok(ResponseMessage.success(result));
-        } catch (Exception e) {
-            log.error("一键分配面试失败，招募周期ID: {}", cycleId, e);
-            return ResponseEntity.badRequest()
-                    .body(ResponseMessage.error(400, "分配失败: " + e.getMessage()));
-        }
+        return ResponseEntity.status(410).body(ResponseMessage.error(410, "旧时段分配已下线，请使用面试场次分配。"));
     }
 }

@@ -125,7 +125,8 @@ public class ProfileServiceImpl implements IProfileService {
                         sec.setDeptName(d != null ? d.getDeptName() : null);
                     }
                 } else {
-                    InterviewSlot slot = slotIdx.get(sc.getSlotId());
+                    InterviewSlot slot = sc.historicalSlot();
+                    if (slot == null) slot = slotIdx.get(sc.getSlotId());
                     if (slot != null) {
                         sec.setLocation(slot.getLocation());
                     }
@@ -159,7 +160,7 @@ public class ProfileServiceImpl implements IProfileService {
 
     private Map<Integer, InterviewSlot> indexSlots(List<InterviewSchedule> schedules) {
         if (schedules == null) return Collections.emptyMap();
-        List<Integer> ids = schedules.stream().map(InterviewSchedule::getSlotId)
+        List<Integer> ids = schedules.stream().filter(sc -> sc.getLegacySlotSnapshot() == null).map(InterviewSchedule::getSlotId)
                 .filter(java.util.Objects::nonNull).distinct().collect(Collectors.toList());
         if (ids.isEmpty()) return Collections.emptyMap();
         Map<Integer, InterviewSlot> map = new HashMap<>();
