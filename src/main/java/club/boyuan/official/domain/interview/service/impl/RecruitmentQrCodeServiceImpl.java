@@ -7,6 +7,7 @@ import club.boyuan.official.infra.storage.CosStorageService;
 import club.boyuan.official.persistence.entity.RecruitmentQrCode;
 import club.boyuan.official.persistence.mapper.RecruitmentQrCodeMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,6 +45,11 @@ public class RecruitmentQrCodeServiceImpl implements IRecruitmentQrCodeService {
 
     @Value("${official.recruitment.qr-storage:LEGACY}")
     private Storage storage = Storage.LEGACY;
+
+    @PostConstruct
+    void reportStorageMode() {
+        log.info("Recruitment QR storage mode={}", storage);
+    }
 
     private void refreshProjection(Integer cycleId) {
         if (storage != Storage.LEGACY) {
