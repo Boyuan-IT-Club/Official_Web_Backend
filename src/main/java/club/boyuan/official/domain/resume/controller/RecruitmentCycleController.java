@@ -322,7 +322,7 @@ public class RecruitmentCycleController {
             // 权限检查由 @PreAuthorize 注解统一管理
             
             logger.info("管理员{}根据当前时间更新招募周期状态", currentUser.getUsername());
-            recruitmentCycleService.updateRecruitmentCycleStatusesBasedOnDate(LocalDate.now());
+            recruitmentCycleService.updateRecruitmentCycleStatusesBasedOnDate(LocalDate.now(java.time.ZoneId.of("Asia/Shanghai")));
             return ResponseEntity.ok(new ResponseMessage<>(200, "招募周期状态更新成功", "招募周期状态更新成功"));
         } catch (BusinessException e) {
             logger.warn("根据当前时间更新招募周期状态业务异常，错误码: {}，错误信息: {}", e.getCode(), e.getMessage());

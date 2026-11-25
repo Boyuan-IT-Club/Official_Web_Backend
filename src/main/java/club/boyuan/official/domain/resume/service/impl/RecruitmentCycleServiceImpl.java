@@ -8,9 +8,6 @@ import club.boyuan.official.persistence.mapper.RecruitmentCycleMapper;
 import club.boyuan.official.domain.resume.service.IRecruitmentCycleService;
 import club.boyuan.official.domain.resume.service.IResumeFieldDefinitionService;
 import lombok.AllArgsConstructor;
-import org.apache.ibatis.session.ExecutorType;
-import org.apache.ibatis.session.SqlSession;
-import org.apache.ibatis.session.SqlSessionFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
@@ -31,7 +28,6 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
     
     private final RecruitmentCycleMapper recruitmentCycleMapper;
     private final IResumeFieldDefinitionService fieldDefinitionService;
-    private final SqlSessionFactory sqlSessionFactory;
     private final club.boyuan.official.persistence.mapper.ResumeMapper resumeMapper;
     private final club.boyuan.official.persistence.mapper.ResumeFieldDefinitionMapper resumeFieldDefinitionMapper;
     
@@ -40,10 +36,6 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
     public RecruitmentCycle createRecruitmentCycle(RecruitmentCycle recruitmentCycle) {
         logger.info("创建招募周期，名称: {}", recruitmentCycle.getCycleName());
         try {
-            // 设置默认值
-            if (recruitmentCycle.getStatus() == null) {
-                recruitmentCycle.setStatus(1); // 默认未开始
-            }
             if (recruitmentCycle.getIsActive() == null) {
                 recruitmentCycle.setIsActive(1); // 默认启用
             }
@@ -51,7 +43,7 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
             recruitmentCycleMapper.insert(recruitmentCycle);
             recruitmentCycleMapper.initializeEmptyQrCodes(recruitmentCycle.getCycleId());
             logger.info("招募周期创建成功，ID: {}", recruitmentCycle.getCycleId());
-            return recruitmentCycle;
+            return recruitmentCycleMapper.findById(recruitmentCycle.getCycleId());
         } catch (DuplicateKeyException e) {
             logger.warn("创建招募周期失败，学术年份已存在: {}", recruitmentCycle.getAcademicYear());
             throw new IllegalArgumentException("学术年份已存在: " + recruitmentCycle.getAcademicYear());
@@ -95,7 +87,7 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
             }
 
             logger.info("招募周期更新成功，ID: {}", recruitmentCycle.getCycleId());
-            return recruitmentCycle;
+            return recruitmentCycleMapper.findById(recruitmentCycle.getCycleId());
         } catch (Exception e) {
             logger.error("更新招募周期失败，ID: {}", recruitmentCycle.getCycleId(), e);
             throw e;
@@ -128,7 +120,6 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
                 resumeFieldDefinitionMapper.delete(
                         new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<club.boyuan.official.persistence.entity.ResumeFieldDefinition>()
                                 .eq(club.boyuan.official.persistence.entity.ResumeFieldDefinition::getCycleId, cycleId));
-                recruitmentCycleMapper.deleteTipsByCycleId(cycleId);
                 recruitmentCycleMapper.deleteById(cycleId);
                 logger.info("招募周期无任何投递，已物理删除，ID: {}", cycleId);
             }
@@ -216,7 +207,7 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
     
     @Override
     public List<OpenCycleDTO> getOpenCyclesForApplication() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(java.time.ZoneId.of("Asia/Shanghai"));
         List<RecruitmentCycle> open = recruitmentCycleMapper.findOpenForApplication(today);
         logger.debug("当前开放投递的周期数: {}，日期: {}", open.size(), today);
         return open.stream()
@@ -226,7 +217,7 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
 
     @Override
     public List<OpenCycleDTO> getUpcomingCyclesForApplication() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(java.time.ZoneId.of("Asia/Shanghai"));
         List<RecruitmentCycle> upcoming = recruitmentCycleMapper.findUpcomingForApplication(today);
         logger.debug("即将开放的周期数: {}，日期: {}", upcoming.size(), today);
         return upcoming.stream().map(c -> new OpenCycleDTO(c, countFields(c.getCycleId()))).toList();
@@ -244,14 +235,7 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
 
     @Override
     public void updateRecruitmentCycleStatusesBasedOnDate(LocalDate currentDate) {
-        logger.info("根据当前日期更新招募周期状态，当前日期: {}", currentDate);
-        try {
-            int updatedCount = recruitmentCycleMapper.updateStatusBasedOnDate(currentDate);
-            logger.info("根据当前日期更新招募周期状态完成，更新数量: {}", updatedCount);
-        } catch (Exception e) {
-            logger.error("根据当前日期更新招募周期状态失败，当前日期: {}", currentDate, e);
-            throw e;
-        }
+        logger.debug("周期阶段按上海日期实时计算，日期：{}", currentDate);
     }
     
     @Override
@@ -264,16 +248,8 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
                 return;
             }
 
-            // 使用批处理执行器进行批量更新
-            try (SqlSession sqlSession = sqlSessionFactory.openSession(ExecutorType.BATCH)) {
-                RecruitmentCycleMapper batchMapper = sqlSession.getMapper(RecruitmentCycleMapper.class);
-                
-                for (RecruitmentCycle cycle : recruitmentCycles) {
-                    batchMapper.updateById(cycle);
-                }
-                
-                sqlSession.commit();
-                sqlSession.clearCache();
+            for (RecruitmentCycle cycle : recruitmentCycles) {
+                recruitmentCycleMapper.updateById(cycle);
             }
             
             logger.info("批量更新招募周期完成");
@@ -346,6 +322,8 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
                 return "end_date";
             case "academicYear":
                 return "academic_year";
+            case "status":
+                return "status";
             case "isActive":
                 return "is_active";
             case "createdAt":

@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
  * 招募周期实体类
  * 用于管理社团的招募活动周期
  */
-@TableName("recruitment_cycle") // MyBatis-Plus 表映射注解
+@TableName("cycle_intake_config") // MyBatis-Plus 表映射注解
 public class RecruitmentCycle {
     @TableId(value = "cycle_id", type = IdType.AUTO) // MyBatis-Plus 主键映射，指定自增策略
     private Integer cycleId;
@@ -42,7 +42,7 @@ public class RecruitmentCycle {
      * 3 - 已结束
      * 4 - 已关闭
      */
-    @TableField("status")
+    @TableField(exist = false)
     private Integer status;
 
     /**
@@ -149,7 +149,10 @@ public class RecruitmentCycle {
     }
 
     public Integer getStatus() {
-        return status;
+        if (startDate == null || endDate == null) return status;
+        LocalDate today = LocalDate.now(java.time.ZoneId.of("Asia/Shanghai"));
+        if (today.isBefore(startDate)) return 1;
+        return today.isAfter(endDate) ? 3 : 2;
     }
 
     public void setStatus(Integer status) {
