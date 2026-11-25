@@ -9,5 +9,6 @@ public class SendNotificationsRequestDTO {
 
     private String notificationType;  // 通知类型: email, sms, wechat
 
+    private String actionId;
     private String customMessage;     // 自定义消息
 }

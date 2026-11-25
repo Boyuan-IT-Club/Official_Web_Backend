@@ -74,8 +74,14 @@ public class InterviewSchedule implements Serializable {
     /**
      * 旧自助时段ID（已弃用，方案B下为空）
      */
-    @TableField("slot_id")
+    @TableField(exist = false)
     private Integer slotId;
+
+    public Integer getSlotId() {
+        if (slotId != null) return slotId;
+        InterviewSlot saved = historicalSlot();
+        return saved == null ? null : saved.getSlotId();
+    }
 
     /**
      * 面试场次ID（方案B：部门×时间窗×地点）

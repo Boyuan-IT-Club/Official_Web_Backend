@@ -19,7 +19,6 @@ import club.boyuan.official.persistence.mapper.DepartmentMapper;
 import club.boyuan.official.persistence.mapper.EvaluationSubmissionMapper;
 import club.boyuan.official.persistence.mapper.InterviewScheduleMapper;
 import club.boyuan.official.persistence.mapper.InterviewSessionMapper;
-import club.boyuan.official.persistence.mapper.InterviewSlotMapper;
 import club.boyuan.official.persistence.mapper.RecruitmentCycleMapper;
 import club.boyuan.official.persistence.mapper.ResumeMapper;
 import club.boyuan.official.persistence.mapper.UserMapper;
@@ -41,7 +40,6 @@ public class ProfileServiceImpl implements IProfileService {
 
     private final InterviewScheduleMapper interviewScheduleMapper;
     private final InterviewSessionMapper interviewSessionMapper;
-    private final InterviewSlotMapper interviewSlotMapper;
     private final UserMapper userMapper;
     private final DepartmentMapper departmentMapper;
     private final RecruitmentCycleMapper recruitmentCycleMapper;
@@ -107,7 +105,6 @@ public class ProfileServiceImpl implements IProfileService {
 
         // 批量索引：场次/时段/周期/部门，供内存组装（避免逐行查库）
         Map<Integer, InterviewSession> sessionIdx = indexSessions(schedules);
-        Map<Integer, InterviewSlot> slotIdx = indexSlots(schedules);
         Map<Integer, RecruitmentCycle> cycleIdx = indexCycles(schedules);
         Map<Integer, Department> deptIdx = indexDepartments(schedules, sessionIdx);
 
@@ -126,7 +123,6 @@ public class ProfileServiceImpl implements IProfileService {
                     }
                 } else {
                     InterviewSlot slot = sc.historicalSlot();
-                    if (slot == null) slot = slotIdx.get(sc.getSlotId());
                     if (slot != null) {
                         sec.setLocation(slot.getLocation());
                     }
@@ -155,17 +151,6 @@ public class ProfileServiceImpl implements IProfileService {
         Map<Integer, InterviewSession> map = new HashMap<>();
         List<InterviewSession> list = interviewSessionMapper.selectBatchIds(ids);
         if (list != null) for (InterviewSession s : list) if (s != null) map.put(s.getSessionId(), s);
-        return map;
-    }
-
-    private Map<Integer, InterviewSlot> indexSlots(List<InterviewSchedule> schedules) {
-        if (schedules == null) return Collections.emptyMap();
-        List<Integer> ids = schedules.stream().filter(sc -> sc.getLegacySlotSnapshot() == null).map(InterviewSchedule::getSlotId)
-                .filter(java.util.Objects::nonNull).distinct().collect(Collectors.toList());
-        if (ids.isEmpty()) return Collections.emptyMap();
-        Map<Integer, InterviewSlot> map = new HashMap<>();
-        List<InterviewSlot> list = interviewSlotMapper.selectBatchIds(ids);
-        if (list != null) for (InterviewSlot s : list) if (s != null) map.put(s.getSlotId(), s);
         return map;
     }
 

@@ -51,7 +51,7 @@ public class SessionAssignmentController {
     private final club.boyuan.official.persistence.mapper.ResumeFieldValueMapper resumeFieldValueMapper;
     private final club.boyuan.official.persistence.mapper.InterviewSessionMapper interviewSessionMapper;
     private final club.boyuan.official.persistence.mapper.InterviewPreferenceMapper interviewPreferenceMapper;
-    private final club.boyuan.official.persistence.mapper.InterviewNotificationLogMapper notificationLogMapper;
+    private final club.boyuan.official.persistence.mapper.DeliveryStatusMapper deliveryStatuses;
 
     /**
      * 查询某周期的已分配名单（可按场次过滤），按面试时间排序。
@@ -122,9 +122,10 @@ public class SessionAssignmentController {
          * 却只代表一类，用户发完初筛通知回头看名单，看到的还是「未通知」。
          * 改为直接问通知日志，它才是发送的真实记录。
          */
-        java.util.Set<Integer> arrangedSent = sentSchedules("BOOKING_SUCCESS", scheduleIdsOf(schedules));
-        java.util.Set<Integer> eveSent = sentSchedules("EVE_REMINDER", scheduleIdsOf(schedules));
-        java.util.Set<Integer> daySent = sentSchedules("DAY_REMINDER", scheduleIdsOf(schedules));
+        var states = deliveryStatuses.byType(cycleId);
+        var arrangedSent = club.boyuan.official.persistence.mapper.DeliveryStatusMapper.sentIds(states, "BOOKING_SUCCESS");
+        var eveSent = club.boyuan.official.persistence.mapper.DeliveryStatusMapper.sentIds(states, "EVE_REMINDER");
+        var daySent = club.boyuan.official.persistence.mapper.DeliveryStatusMapper.sentIds(states, "DAY_REMINDER");
 
         // 简历状态：初筛未通过的人不该还占着场次，名单上要标出来
         java.util.Map<Integer, Integer> resumeStatus = resumeIds.isEmpty()
@@ -170,29 +171,6 @@ public class SessionAssignmentController {
             result.add(item);
         }
         return ResponseEntity.ok(ResponseMessage.success(result));
-    }
-
-    private static java.util.Set<Integer> scheduleIdsOf(
-            java.util.List<club.boyuan.official.persistence.entity.InterviewSchedule> schedules) {
-        return schedules.stream()
-                .map(club.boyuan.official.persistence.entity.InterviewSchedule::getScheduleId)
-                .filter(java.util.Objects::nonNull)
-                .collect(java.util.stream.Collectors.toSet());
-    }
-
-    /** 某类通知实际发到了哪些安排上 */
-    private java.util.Set<Integer> sentSchedules(String type, java.util.Set<Integer> scheduleIds) {
-        if (scheduleIds.isEmpty()) {
-            return java.util.Set.of();
-        }
-        return notificationLogMapper.selectList(
-                        new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<club.boyuan.official.persistence.entity.InterviewNotificationLog>()
-                                .eq(club.boyuan.official.persistence.entity.InterviewNotificationLog::getNotificationType, type)
-                                .in(club.boyuan.official.persistence.entity.InterviewNotificationLog::getScheduleId, scheduleIds))
-                .stream()
-                .map(club.boyuan.official.persistence.entity.InterviewNotificationLog::getScheduleId)
-                .filter(java.util.Objects::nonNull)
-                .collect(java.util.stream.Collectors.toSet());
     }
 
     /** 批量取这批简历里填的学号；本届没有学号字段时返回空表 */

@@ -136,8 +136,8 @@ class AdmissionListScreeningIntegrationTest {
         assertEquals(List.of(resultE), saved.getSkipped(), "初筛未通过的 E 应被拒收");
 
         // 模拟修复前就被加进草稿的 E
-        jdbc.update("INSERT INTO pre_admission_draft (cycle_id, result_id, assigned_dept_id) VALUES (?, ?, ?)",
-                cycleId, resultE, DEPT_TECH);
+        jdbc.update("UPDATE interview_result SET screened_draft=JSON_OBJECT('draftId',result_id,'deptId',?) WHERE cycle_id=? AND result_id=?",
+                DEPT_TECH, cycleId, resultE);
 
         PreAdmissionListResponseDTO drafts = preAdmissionService.list(cycleId, null, null, 1, 50);
         assertEquals(List.of(resultA),
@@ -184,8 +184,8 @@ class AdmissionListScreeningIntegrationTest {
         int screenRejected = legacyResult(resume(tag, "SR", RESUME_SCREEN_REJECTED), DECISION_PENDING);
         // 已在预录取名单里（转正前 decision 仍是 0）：部门打算录取，不能被一键标掉
         int drafted = legacyResult(resume(tag, "DRF", RESUME_SUBMITTED), DECISION_PENDING);
-        jdbc.update("INSERT INTO pre_admission_draft (cycle_id, result_id, assigned_dept_id) VALUES (?, ?, ?)",
-                cycleId, drafted, DEPT_TECH);
+        jdbc.update("UPDATE interview_result SET draft_dept_id=?,draft_created_at=CURRENT_TIMESTAMP,draft_updated_at=CURRENT_TIMESTAMP WHERE cycle_id=? AND result_id=?",
+                DEPT_TECH, cycleId, drafted);
         int foreign = Integer.MAX_VALUE;
 
         BatchDecisionRequestDTO req = new BatchDecisionRequestDTO();
@@ -226,7 +226,6 @@ class AdmissionListScreeningIntegrationTest {
     void cleanup() {
         if (cycleId != null) {
             // 草稿随结果级联删；结果没有挂在简历上，要先手动删
-            jdbc.update("DELETE FROM pre_admission_draft WHERE cycle_id = ?", cycleId);
             jdbc.update("DELETE FROM interview_result WHERE cycle_id = ?", cycleId);
             // 安排、字段值随简历级联删
             jdbc.update("DELETE FROM resume WHERE cycle_id = ?", cycleId);

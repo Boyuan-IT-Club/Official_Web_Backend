@@ -57,6 +57,7 @@ public class NotificationCenterDTO {
         private Integer resumeScore;
         /** 最近一次初筛未通过通知的发送时间；为空表示还没通知 */
         private LocalDateTime notifiedAt;
+        private String mailState;
     }
 
     /** 初筛未通过名单（在 overview 里一并返回，省一次请求） */
@@ -80,6 +81,9 @@ public class NotificationCenterDTO {
         private String location;
         /** 面试安排通知是否已发 */
         private boolean arranged;
+        private String arrangedState;
+        private String eveState;
+        private String dayState;
 
         /**
          * 收到过安排通知，但那封发出去之后安排又被改过——他手上拿的是旧时间。

@@ -39,23 +39,13 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * 录取/未录取通知的重发与去重。
- *
- * 线上问题：管理员对同一个人第二次点「发送通知」，界面显示成功、notified_at 也更新了，
- * 邮箱里却没有。原因是消费端按 (type, resultId) 去重——同一份结果的模板邮件只投递一次，
- * 第二次静默跳过。
- *
- * 去重的本意只有一个：MQ 重投同一条消息时别发两遍。那对应的键是 requestId
- * （每次入队一个新 id），不是 resultId。这里用一个内存里的假日志表模拟真实去重：
- * 普通 mock 返回固定值分不出「按 requestId 查」和「按结果查」，老代码新代码都会绿。
- */
+/** Envelopes must be claimed before sending the prepared result mail. */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class InterviewNotificationResendTest {
 
     @Mock private InterviewNotificationProducer notificationProducer;
-    @Mock private InterviewNotificationLogMapper notificationLogMapper;
+    @Mock private club.boyuan.official.messaging.DeliveryLedger ledger;
     @Mock private IInterviewScheduleService interviewScheduleService;
     @Mock private IInterviewSlotService interviewSlotService;
     @Mock private IResumeService resumeService;
@@ -70,20 +60,10 @@ class InterviewNotificationResendTest {
     @InjectMocks
     private InterviewNotificationServiceImpl service;
 
-    /** 假日志表：insert 进来的行都记着，selectCount 按查询条件在里面数 */
-    private final List<InterviewNotificationLog> logRows = new ArrayList<>();
-
     private static final int RESULT_ID = 42;
 
     @BeforeEach
     void setUp() {
-        // 纯单测里没有 Spring 启动，MyBatis-Plus 不知道实体的列名，
-        // LambdaQueryWrapper 一解析 sql 段就报 "can not find lambda cache"。手动注册一次。
-        com.baomidou.mybatisplus.core.metadata.TableInfoHelper.initTableInfo(
-                new org.apache.ibatis.builder.MapperBuilderAssistant(
-                        new com.baomidou.mybatisplus.core.MybatisConfiguration(), ""),
-                InterviewNotificationLog.class);
-
         InterviewResult admitted = new InterviewResult()
                 .setResultId(RESULT_ID).setUserId(7).setDecision(1)   // 1 = 录取
                 .setScheduleId(null).setAssignedDeptId(null);          // 无场次、无部门：走最短的模板路径
@@ -96,28 +76,20 @@ class InterviewNotificationResendTest {
         when(userService.getById(7)).thenReturn(u);
         when(interviewScheduleService.getById(any())).thenReturn(null);
 
-        when(notificationLogMapper.insert(any(InterviewNotificationLog.class))).thenAnswer(inv -> {
-            logRows.add(inv.getArgument(0));
-            return 1;
+        var claims = new java.util.HashSet<String>();
+        when(ledger.observe(any(), org.mockito.ArgumentMatchers.isNull())).thenAnswer(inv -> {
+            InterviewNotificationMessage m = inv.getArgument(0);
+            return m.getDeliveryId() == null ? null : m;
         });
-        // 按 wrapper 里实际查的列去数：request_id 还是 result_id
-        when(notificationLogMapper.selectCount(any())).thenAnswer(inv -> {
-            LambdaQueryWrapper<?> w = inv.getArgument(0);
-            String sql = w.getSqlSegment();
-            List<Object> params = new ArrayList<>(w.getParamNameValuePairs().values());
-            if (sql.contains("request_id")) {
-                Object rid = params.get(0);
-                return logRows.stream().filter(r -> Objects.equals(r.getRequestId(), rid)).count();
-            }
-            // (notification_type, result_id) 那条老路径
-            Object resultId = params.stream().filter(p -> p instanceof Integer).findFirst().orElse(null);
-            return logRows.stream().filter(r -> Objects.equals(r.getResultId(), resultId)).count();
-        });
+        when(ledger.claim(any(), anyString(), anyString(), any())).thenAnswer(inv ->
+                claims.add(((InterviewNotificationMessage) inv.getArgument(0)).getRequestId()));
     }
 
     private static InterviewNotificationMessage templated(String requestId) {
-        // type=null 让服务自己从 decision 解析；customBody=null 即模板邮件
-        return new InterviewNotificationMessage(null, null, RESULT_ID, requestId, null);
+        var m = new InterviewNotificationMessage(club.boyuan.official.infra.notification.InterviewNotificationType.ADMISSION,
+                null, RESULT_ID, requestId, null);
+        m.setDeliveryId(4L);
+        return m;
     }
 
     @Test
@@ -141,22 +113,11 @@ class InterviewNotificationResendTest {
     }
 
     @Test
-    @DisplayName("日志里记下 requestId，去重才有依据")
-    void logRowCarriesRequestId() {
-        service.deliver(templated("req-logged"));
-        org.junit.jupiter.api.Assertions.assertEquals(1, logRows.size());
-        org.junit.jupiter.api.Assertions.assertEquals("req-logged", logRows.get(0).getRequestId());
-        org.junit.jupiter.api.Assertions.assertEquals(RESULT_ID, logRows.get(0).getResultId());
-    }
-
-    @Test
-    @DisplayName("旧格式消息（无 requestId）退回按结果去重，部署窗口内不失去保护")
-    void legacyMessageWithoutRequestIdStillDedupesByResult() {
-        // 部署前已入队、仍在队列里的消息没有 requestId
-        service.deliver(templated(null));
-        service.deliver(templated(null));
-
-        verify(messageUtils, times(1)).sendHtmlEmail(anyString(), anyString(), anyString(), anyString());
+    void unversionedMessageCannotCallSmtp() {
+        var m = templated("old");
+        m.setDeliveryId(null);
+        service.deliver(m);
+        verify(messageUtils, never()).sendHtmlEmail(anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -201,60 +162,31 @@ class InterviewNotificationResendTest {
     }
 
     @Test
-    @DisplayName("有面试安排的同学重发：日志不占场次唯一槽位，不会连发")
-    void resultLogDoesNotOccupyScheduleSlot() {
-        // 线上事故：给有面试安排的同学重发结果通知，日志把 scheduleId 一起写进去，
-        // 撞上 uk_type_schedule（类型×场次唯一，本是给预约/提醒类通知用的）；
-        // 邮件已发出、写库抛异常 → MQ 判失败重投 → 每次重投再发一封，共 3 封。
-        InterviewResult scheduled = new InterviewResult()
-                .setResultId(RESULT_ID).setUserId(7).setDecision(1)
-                .setScheduleId(55).setCycleId(6);
-        when(interviewResultMapper.selectById(RESULT_ID)).thenReturn(scheduled);
-        club.boyuan.official.persistence.entity.InterviewSchedule sc =
-                new club.boyuan.official.persistence.entity.InterviewSchedule();
-        sc.setScheduleId(55);
-        sc.setResumeId(33);
-        sc.setCycleId(6);
-        when(interviewScheduleService.getById(55)).thenReturn(sc);
-
-        service.deliver(templated("req-scheduled"));
-
-        org.junit.jupiter.api.Assertions.assertEquals(1, logRows.size());
-        // 结果通知由 result_id + request_id 唯一确定，不该再占用场次的槽位
-        org.junit.jupiter.api.Assertions.assertNull(logRows.get(0).getScheduleId());
-        org.junit.jupiter.api.Assertions.assertEquals(RESULT_ID, logRows.get(0).getResultId());
+    void unknownSmtpOutcomeIsSettledBeforeDuplicateDelivery() {
+        var m = templated("uncertain");
+        org.mockito.Mockito.doThrow(new IllegalStateException()).when(messageUtils)
+                .sendHtmlEmail(anyString(), anyString(), anyString(), anyString());
+        service.deliver(m);
+        service.deliver(m);
+        verify(ledger).finish(org.mockito.ArgumentMatchers.eq(m),anyString(),org.mockito.ArgumentMatchers.eq(false),anyString());
+        verify(messageUtils).sendHtmlEmail(anyString(),anyString(),anyString(),anyString());
     }
 
     @Test
-    @DisplayName("写日志失败不上抛：邮件只发一次，不触发 MQ 重投")
-    void loggingFailureNeverTriggersRetry() {
-        // 记账失败不该让已送达的邮件被重投再发一遍
-        when(notificationLogMapper.insert(any(InterviewNotificationLog.class)))
-                .thenThrow(new org.springframework.dao.DuplicateKeyException("uk_type_schedule"));
-
-        service.deliver(templated("req-log-fail"));   // 不抛异常即为通过
-
-        verify(messageUtils, times(1)).sendHtmlEmail(anyString(), anyString(), anyString(), anyString());
-    }
-
-    @Test
-    @DisplayName("带补充说明的通知照样每次都发，且走模板（HTML）而非纯文本")
-    void customBodyAlwaysDelivers() {
-        InterviewNotificationMessage custom =
-                new InterviewNotificationMessage(null, null, RESULT_ID, "req-c1", "请于周五来签约");
-        service.deliver(custom);
-        service.deliver(new InterviewNotificationMessage(null, null, RESULT_ID, "req-c2", "请于周五来签约"));
-
-        // 管理员填的内容是补充而非替换：仍走录取模板，补充说明附在正文之后
-        verify(messageUtils, times(2)).sendHtmlEmail(anyString(), anyString(), anyString(), anyString());
-        verify(messageUtils, never()).sendEmail(anyString(), anyString(), anyString());
+    void pendingResultCannotUseCustomTemplate() {
+        when(interviewResultMapper.selectById(RESULT_ID)).thenReturn(new InterviewResult().setDecision(0));
+        var m = templated("draft");
+        m.setCustomBody("hello");
+        service.deliver(m);
+        verify(messageUtils, never()).sendHtmlEmail(anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
     @DisplayName("补充说明真的进了正文，且模板原文仍在")
     void customBodyIsAppendedNotReplacing() {
-        service.deliver(new InterviewNotificationMessage(
-                null, null, RESULT_ID, "req-append", "周五 19:00 见面会"));
+        var message = templated("custom");
+        message.setCustomBody("见面会");
+        service.deliver(message);
 
         org.mockito.ArgumentCaptor<String> html = org.mockito.ArgumentCaptor.forClass(String.class);
         org.mockito.ArgumentCaptor<String> plain = org.mockito.ArgumentCaptor.forClass(String.class);

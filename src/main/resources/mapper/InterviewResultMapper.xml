@@ -39,7 +39,8 @@
         ir.decision_at,
         ir.created_at,
         ir.updated_at,
-        ir.notified_at,
+        CASE WHEN delivery.mail_state='SENT' THEN delivery.confirmed_at END AS notified_at,
+        COALESCE(delivery.mail_state,'UNSENT') AS mail_state,
         ir.resume_id,
         -- 优先用结果自身的 cycle_id：没有面试安排的结果查不到 isc.cycle_id（V34）
         COALESCE(ir.cycle_id, isc.cycle_id) AS cycle_id,
@@ -76,6 +77,8 @@
                             THEN JSON_UNQUOTE(JSON_EXTRACT(fv.field_value, '$.canAttend')) END) = 'no')
         END AS online_interview
         FROM interview_result ir
+        LEFT JOIN delivery_target_status delivery ON delivery.target_id=ir.result_id AND delivery.cycle_id=ir.cycle_id
+          AND delivery.typ=(CASE ir.decision WHEN 1 THEN 'ADMISSION' WHEN 2 THEN 'REJECTION' END) COLLATE utf8mb4_unicode_ci
         LEFT JOIN interview_schedule isc ON ir.schedule_id = isc.schedule_id
         LEFT JOIN user u ON ir.user_id = u.user_id
         LEFT JOIN department d ON ir.assigned_dept_id = d.dept_id
@@ -166,8 +169,4 @@
     <select id="lockDraftResults" resultType="int">
         SELECT ir.result_id FROM interview_result ir <include refid="lockTarget"/> ORDER BY ir.result_id FOR UPDATE
     </select>
-    <delete id="clearLegacyDrafts">
-        DELETE FROM pre_admission_draft WHERE (SELECT enabled FROM parent_record_cutover)=0 AND result_id IN
-          <foreach collection="resultIds" item="id" open="(" separator="," close=")">#{id}</foreach>
-    </delete>
 </mapper>

@@ -417,12 +417,15 @@ public class ResumeController {
         String customBody = body.get("customMessage") == null
                 ? null : String.valueOf(body.get("customMessage"));
 
+        String action = club.boyuan.official.messaging.NotificationAction.start(
+                body.get("actionId") == null ? null : String.valueOf(body.get("actionId")));
         List<Integer> queued = new java.util.ArrayList<>();
         List<Integer> skipped = new java.util.ArrayList<>();
-        for (Integer resumeId : resumeIds) {
+        for (Integer resumeId : new java.util.LinkedHashSet<>(resumeIds)) {
             Resume resume = resumeService.getResumeById(resumeId);
-            if (resume != null && Integer.valueOf(5).equals(resume.getStatus())) {
-                interviewNotificationService.enqueueResumeRejectedNotification(resumeId, customBody);
+            if (resume != null && Integer.valueOf(5).equals(resume.getStatus())
+                    && interviewNotificationService.enqueueResumeRejectedNotification(resumeId, customBody,
+                        club.boyuan.official.messaging.NotificationAction.item(action, "screen", resumeId))) {
                 queued.add(resumeId);
             } else {
                 skipped.add(resumeId);
