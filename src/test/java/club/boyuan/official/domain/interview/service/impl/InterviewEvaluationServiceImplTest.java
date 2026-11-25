@@ -9,8 +9,6 @@ import club.boyuan.official.persistence.entity.CollabDoc;
 import club.boyuan.official.persistence.entity.EvaluationDimension;
 import club.boyuan.official.persistence.entity.InterviewEvaluation;
 import club.boyuan.official.persistence.entity.InterviewSchedule;
-import club.boyuan.official.persistence.entity.SessionInterviewer;
-import club.boyuan.official.persistence.mapper.CollabAuditMapper;
 import club.boyuan.official.persistence.mapper.CollabDocMapper;
 import club.boyuan.official.persistence.mapper.DepartmentMapper;
 import club.boyuan.official.domain.interview.dto.EvaluationSummaryDTO;
@@ -23,7 +21,6 @@ import club.boyuan.official.persistence.mapper.EvaluationDimensionMapper;
 import club.boyuan.official.persistence.mapper.InterviewEvaluationMapper;
 import club.boyuan.official.persistence.mapper.InterviewScheduleMapper;
 import club.boyuan.official.persistence.mapper.ResumeMapper;
-import club.boyuan.official.persistence.mapper.SessionInterviewerMapper;
 import club.boyuan.official.persistence.mapper.UserMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -70,9 +67,7 @@ class InterviewEvaluationServiceImplTest {
     @Mock private InterviewEvaluationMapper interviewEvaluationMapper;
     @Mock private InterviewScheduleMapper interviewScheduleMapper;
     @Mock private EvaluationDimensionMapper evaluationDimensionMapper;
-    @Mock private SessionInterviewerMapper sessionInterviewerMapper;
     @Mock private CollabDocMapper collabDocMapper;
-    @Mock private CollabAuditMapper collabAuditMapper;
     @Mock private ResumeMapper resumeMapper;
     @Mock private UserMapper userMapper;
     @Mock private DepartmentMapper departmentMapper;
@@ -85,21 +80,14 @@ class InterviewEvaluationServiceImplTest {
     void setUp() {
         service = new InterviewEvaluationServiceImpl(
                 interviewEvaluationMapper, interviewScheduleMapper, evaluationDimensionMapper,
-                sessionInterviewerMapper, collabDocMapper, collabAuditMapper,
+                collabDocMapper,
                 resumeMapper, userMapper, departmentMapper,
                 interviewSessionMapper, interviewPreferenceMapper, new ObjectMapper(), org.mockito.Mockito.mock(club.boyuan.official.persistence.mapper.EvaluationScopeMapper.class));
 
-        when(collabDocMapper.selectById(DOC_NAME)).thenReturn(
-                new CollabDoc().setDocName(DOC_NAME).setCycleId(CYCLE_ID).setLocked(0));
         when(evaluationDimensionMapper.selectList(any())).thenReturn(List.of(
                 dimension(1, "技术能力", new BigDecimal("2.00")),
-                dimension(2, "沟通表达", new BigDecimal("1.00"))));
-        when(interviewScheduleMapper.selectBatchIds(anyCollection())).thenReturn(List.of(
-                schedule(100, CYCLE_ID), schedule(101, CYCLE_ID)));
-        when(sessionInterviewerMapper.selectList(any())).thenReturn(List.of(
-                binding(SESSION_ID, 7), binding(SESSION_ID, 8)));
-        // 默认库里还没有历史评价，参与人从这一轮上报的开始攒
-        when(interviewEvaluationMapper.selectList(any())).thenReturn(List.of());
+                dimension(2, "沟通表达", BigDecimal.ONE)));
+        when(interviewScheduleMapper.selectById(100)).thenReturn(schedule(100, CYCLE_ID));
     }
 
     @Test
@@ -117,62 +105,23 @@ class InterviewEvaluationServiceImplTest {
     }
 
     @Test
-    void materialize_协同服务重启后上报的参与人与库中已记录的并集() {
-        // 重启后 tracker 只知道 8 动过手，但 7 之前就参与过，署名不能把他丢掉
-        when(interviewEvaluationMapper.selectList(any())).thenReturn(List.of(
-                new InterviewEvaluation().setScheduleId(100).setContributors("[7]")));
-
-        service.materialize(request(item(100, List.of(8), Map.of(1, new BigDecimal("8")))));
-
-        ArgumentCaptor<InterviewEvaluation> captor = ArgumentCaptor.forClass(InterviewEvaluation.class);
-        verify(interviewEvaluationMapper).upsertMaterialized(captor.capture());
-        assertEquals("[7,8]", captor.getValue().getContributors());
+    void unsignedLegacyMaterializationIsRejected() {
+        var request = request(item(100, List.of(7), Map.of()));
+        request.setSnapshotRevision(null);
+        assertThrows(BusinessException.class, () -> service.materialize(request));
+        verify(interviewEvaluationMapper, never()).upsertMaterialized(any());
     }
 
     @Test
-    void materialize_未绑定该场次的人被剔除出参与人但评价照常落库() {
-        MaterializeEvaluationResultDTO result = service.materialize(
-                request(item(100, List.of(7, 9), Map.of(1, new BigDecimal("8")))));
-
-        // 一个捣乱者不该让整场面试的记录都写不进去
-        assertEquals(1, result.getAccepted());
-        assertEquals(1, result.getRejected());
-        assertTrue(result.getRejectReasons().get(0).contains("用户 9"));
-
-        ArgumentCaptor<InterviewEvaluation> captor = ArgumentCaptor.forClass(InterviewEvaluation.class);
-        verify(interviewEvaluationMapper).upsertMaterialized(captor.capture());
-        assertEquals("[7]", captor.getValue().getContributors());
+    void callerCannotReplaceACommittedAuthor() {
+        var request = request(item(100, List.of(7, 8), Map.of()));
+        request.getItems().get(0).setLastEditedBy(99);
+        assertThrows(BusinessException.class, () -> service.materialize(request));
+        verify(interviewEvaluationMapper, never()).upsertMaterialized(any());
     }
 
     @Test
-    void materialize_越权者以rejected标记写入审计() {
-        service.materialize(request(item(100, List.of(9), Map.of(1, new BigDecimal("10")))));
-
-        ArgumentCaptor<CollabAudit> captor = ArgumentCaptor.forClass(CollabAudit.class);
-        verify(collabAuditMapper, times(1)).insert(captor.capture());
-        assertEquals(1, captor.getValue().getRejected());
-        assertEquals(9, captor.getValue().getUserId());
-        assertEquals(DOC_NAME, captor.getValue().getDocName());
-    }
-
-    @Test
-    void materialize_未绑定者点的定稿不被采信() {
-        MaterializeEvaluationRequestDTO.EvaluationItem item =
-                item(100, List.of(7), Map.of(1, new BigDecimal("8")));
-        item.setStatus(InterviewEvaluation.STATUS_SUBMITTED);
-        item.setSubmittedBy(9);
-        item.setLastEditedBy(9);
-
-        service.materialize(request(item));
-
-        ArgumentCaptor<InterviewEvaluation> captor = ArgumentCaptor.forClass(InterviewEvaluation.class);
-        verify(interviewEvaluationMapper).upsertMaterialized(captor.capture());
-        assertNull(captor.getValue().getSubmittedBy());
-        assertNull(captor.getValue().getLastEditedBy());
-    }
-
-    @Test
-    void materialize_绑定的面试官点定稿时记下定稿人() {
+    void materialize_保留已提交的定稿人() {
         MaterializeEvaluationRequestDTO.EvaluationItem item =
                 item(100, List.of(7, 8), Map.of(1, new BigDecimal("8")));
         item.setStatus(InterviewEvaluation.STATUS_SUBMITTED);
@@ -211,15 +160,10 @@ class InterviewEvaluationServiceImplTest {
     }
 
     @Test
-    void materialize_评价表锁定后整批拒绝() {
-        when(collabDocMapper.selectById(DOC_NAME)).thenReturn(
-                new CollabDoc().setDocName(DOC_NAME).setCycleId(CYCLE_ID).setLocked(1));
-
-        BusinessException exception = assertThrows(BusinessException.class,
-                () -> service.materialize(request(item(100, List.of(7), Map.of()))));
-
-        assertEquals(BusinessExceptionEnum.EVALUATION_BOARD_LOCKED.getCode(), exception.getCode());
-        verify(interviewEvaluationMapper, never()).upsertMaterialized(any());
+    void persistedSnapshotCanBeReplayedAfterBoardLock() {
+        var request = request(item(100, List.of(7), Map.of()));
+        snapshot.setLocked(1);
+        assertEquals(1, service.materialize(request).getAccepted());
     }
 
     @Test
@@ -234,32 +178,43 @@ class InterviewEvaluationServiceImplTest {
 
     @Test
     void materialize_面试安排不属于本周期时丢弃() {
-        when(interviewScheduleMapper.selectBatchIds(anyCollection()))
-                .thenReturn(List.of(schedule(100, 999)));
+        when(interviewScheduleMapper.selectById(100)).thenReturn(schedule(100, 999));
 
         MaterializeEvaluationResultDTO result = service.materialize(
                 request(item(100, List.of(7), Map.of(1, new BigDecimal("8")))));
 
         assertEquals(0, result.getAccepted());
-        assertEquals(1, result.getRejected());
+        assertEquals(0, result.getRejected());
         verify(interviewEvaluationMapper, never()).upsertMaterialized(any());
     }
 
     @Test
     void materialize_未开表时拒绝() {
-        when(collabDocMapper.selectById(DOC_NAME)).thenReturn(null);
-
-        BusinessException exception = assertThrows(BusinessException.class,
-                () -> service.materialize(request(item(100, List.of(7), Map.of()))));
+        var request = request(item(100, List.of(7), Map.of()));
+        when(collabDocMapper.lockSnapshot(DOC_NAME)).thenReturn(null);
+        BusinessException exception = assertThrows(BusinessException.class, () -> service.materialize(request));
 
         assertEquals(BusinessExceptionEnum.EVALUATION_BOARD_NOT_OPENED.getCode(), exception.getCode());
     }
+
+    private CollabDoc snapshot;
 
     private MaterializeEvaluationRequestDTO request(MaterializeEvaluationRequestDTO.EvaluationItem... items) {
         MaterializeEvaluationRequestDTO request = new MaterializeEvaluationRequestDTO();
         request.setDocName(DOC_NAME);
         request.setCycleId(CYCLE_ID);
         request.setItems(new ArrayList<>(List.of(items)));
+        request.setSnapshotRevision(1000L);
+        var json = new ObjectMapper();
+        var rows = json.createObjectNode();
+        for (var item : items) {
+            var row = rows.putObject(item.getScheduleId().toString());
+            row.put("editedRevision", item.getVersion());
+            row.set("materialized", json.valueToTree(item));
+        }
+        snapshot = new CollabDoc().setDocName(DOC_NAME).setCycleId(CYCLE_ID).setLocked(0)
+                .setSnapshotRevision(1000L).setAuthorState(json.createObjectNode().set("rows",rows).toString());
+        when(collabDocMapper.lockSnapshot(DOC_NAME)).thenReturn(snapshot);
         return request;
     }
 
@@ -269,6 +224,7 @@ class InterviewEvaluationServiceImplTest {
         MaterializeEvaluationRequestDTO.EvaluationItem item = new MaterializeEvaluationRequestDTO.EvaluationItem();
         item.setScheduleId(scheduleId);
         item.setContributors(contributors);
+        item.setLastEditedBy(contributors.get(0));
         item.setScores(scores);
         item.setVersion(1000L);
         return item;
@@ -281,10 +237,6 @@ class InterviewEvaluationServiceImplTest {
                 .setSessionId(SESSION_ID)
                 .setResumeId(scheduleId + 900)
                 .setUserId(scheduleId + 800);
-    }
-
-    private SessionInterviewer binding(Integer sessionId, Integer userId) {
-        return new SessionInterviewer().setSessionId(sessionId).setUserId(userId);
     }
 
     private EvaluationDimension dimension(Integer id, String name, BigDecimal weight) {
@@ -328,7 +280,6 @@ class InterviewEvaluationServiceImplTest {
                 .setStatus(1);
         when(interviewScheduleMapper.selectList(any())).thenReturn(List.of(schedule));
         when(interviewEvaluationMapper.selectList(any())).thenReturn(List.of());
-        when(sessionInterviewerMapper.selectList(any())).thenReturn(List.of());
         when(userMapper.selectUsersByIds(any())).thenReturn(List.of());
 
         // 部门全量：技术部(1) 只作为志愿出现，不在名单的 deptId 里

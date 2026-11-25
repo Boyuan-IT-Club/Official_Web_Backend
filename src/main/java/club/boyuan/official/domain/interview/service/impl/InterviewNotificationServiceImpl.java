@@ -24,7 +24,6 @@ import club.boyuan.official.infra.notification.InterviewNotificationEmailBuilder
 import club.boyuan.official.infra.notification.InterviewNotificationType;
 import club.boyuan.official.domain.user.service.DepartmentService;
 import club.boyuan.official.domain.interview.service.IInterviewScheduleService;
-import club.boyuan.official.domain.interview.service.IInterviewSlotService;
 import club.boyuan.official.domain.resume.service.IResumeService;
 import club.boyuan.official.domain.user.service.IUserService;
 import club.boyuan.official.domain.interview.service.InterviewNotificationService;
@@ -55,7 +54,6 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
     private final InterviewNotificationProducer notificationProducer;
     private final InterviewNotificationLogMapper notificationLogMapper;
     private final IInterviewScheduleService interviewScheduleService;
-    private final IInterviewSlotService interviewSlotService;
     private final IResumeService resumeService;
     private final IUserService userService;
     private final InterviewResultMapper interviewResultMapper;
@@ -226,7 +224,6 @@ public class InterviewNotificationServiceImpl implements InterviewNotificationSe
      */
     InterviewBookingDTO bookingOf(InterviewSchedule schedule) {
         InterviewSlot slot = schedule.historicalSlot();
-        if (slot == null && schedule.getSlotId() != null) slot = interviewSlotService.getById(schedule.getSlotId());
         InterviewBookingDTO booking = InterviewBookingDTO.from(schedule, slot);
         /*
          * 线上面试没有教室，地点就是会议链接（周期级统一配置）。

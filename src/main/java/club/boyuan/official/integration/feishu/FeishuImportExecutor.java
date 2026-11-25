@@ -12,7 +12,6 @@ import club.boyuan.official.common.exception.BusinessException;
 import club.boyuan.official.common.exception.BusinessExceptionEnum;
 import club.boyuan.official.persistence.mapper.ResumeMapper;
 import club.boyuan.official.domain.interview.service.IInterviewScheduleService;
-import club.boyuan.official.domain.interview.service.IInterviewSlotService;
 import club.boyuan.official.domain.interview.service.ILocationTableService;
 import club.boyuan.official.domain.interview.service.impl.LocationTableServiceImpl;
 import club.boyuan.official.persistence.mapper.InterviewSessionMapper;
@@ -50,7 +49,6 @@ public class FeishuImportExecutor {
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private final IInterviewScheduleService interviewScheduleService;
-    private final IInterviewSlotService interviewSlotService;
     private final InterviewSessionMapper interviewSessionMapper;
     private final ILocationTableService locationTableService;
     private final ResumeMapper resumeMapper;
@@ -60,7 +58,6 @@ public class FeishuImportExecutor {
     private final Executor feishuBucketExecutor;
 
     public FeishuImportExecutor(IInterviewScheduleService interviewScheduleService,
-                                IInterviewSlotService interviewSlotService,
                                 InterviewSessionMapper interviewSessionMapper,
                                 ILocationTableService locationTableService,
                                 ResumeMapper resumeMapper,
@@ -69,7 +66,6 @@ public class FeishuImportExecutor {
                                 FeishuProperties feishuProperties,
                                 @Qualifier("feishuBucketExecutor") Executor feishuBucketExecutor) {
         this.interviewScheduleService = interviewScheduleService;
-        this.interviewSlotService = interviewSlotService;
         this.interviewSessionMapper = interviewSessionMapper;
         this.locationTableService = locationTableService;
         this.resumeMapper = resumeMapper;
@@ -163,8 +159,7 @@ public class FeishuImportExecutor {
             wrapper.eq(InterviewSchedule::getSyncStatus, 0);
         }
         if (request.getSlotId() != null) {
-            wrapper.and(w -> w.eq(InterviewSchedule::getSlotId, request.getSlotId())
-                    .or().apply("JSON_VALUE(legacy_slot_snapshot, '$.slotId' RETURNING SIGNED)={0}", request.getSlotId()));
+            wrapper.apply("JSON_VALUE(legacy_slot_snapshot, '$.slotId' RETURNING SIGNED)={0}", request.getSlotId());
         }
         return interviewScheduleService.list(wrapper);
     }
@@ -176,22 +171,11 @@ public class FeishuImportExecutor {
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
-        List<Integer> slotIds = schedules.stream()
-                .filter(s -> s.getLegacySlotSnapshot() == null)
-                .map(InterviewSchedule::getSlotId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
         List<Integer> resumeIds = schedules.stream()
                 .map(InterviewSchedule::getResumeId)
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
-
-        Map<Integer, InterviewSlot> slotById = slotIds.isEmpty()
-                ? Map.of()
-                : interviewSlotService.listByIds(slotIds).stream()
-                .collect(Collectors.toMap(InterviewSlot::getSlotId, Function.identity(), (a, b) -> a));
 
         Map<Integer, Resume> resumeById = resumeIds.isEmpty()
                 ? Map.of()
@@ -206,7 +190,7 @@ public class FeishuImportExecutor {
                 : interviewSessionMapper.selectBatchIds(sessionIds).stream()
                 .collect(Collectors.toMap(InterviewSession::getSessionId, Function.identity(), (a, b) -> a));
 
-        return new PreloadContext(slotById, sessionById, locationTableService.urlMapOf(cycleId),
+        return new PreloadContext(sessionById, locationTableService.urlMapOf(cycleId),
                 snapshotByResumeId);
     }
 
@@ -221,7 +205,6 @@ public class FeishuImportExecutor {
                     ? null
                     : preload.sessionById.get(schedule.getSessionId());
             InterviewSlot slot = schedule.historicalSlot();
-            if (slot == null && schedule.getSlotId() != null) slot = preload.slotById.get(schedule.getSlotId());
             if (session == null && slot == null) {
                 log.warn("跳过 scheduleId={}：既没有场次也没有旧时段，无法判断地点", schedule.getScheduleId());
                 skipped++;
@@ -426,7 +409,6 @@ public class FeishuImportExecutor {
     }
 
     private record PreloadContext(
-            Map<Integer, InterviewSlot> slotById,
             Map<Integer, InterviewSession> sessionById,
             Map<String, String> tableUrlByLocation,
             Map<Integer, ResumeFieldReader.ResumeSnapshot> snapshotByResumeId) {

@@ -4,7 +4,7 @@
 
     <!-- 候选档案列表：收录「至少一条面试安排」的用户，每用户一行（多周期多简历不重复）。
          每行取该用户最近一次面试的时间/地点/周期，三者来自同一条 schedule 行，保证一致。
-         地点优先取场次(interview_session.location)，回退旧时段(interview_slot.location)。
+         地点优先取场次(interview_session.location)，回退排期的历史时段快照。
          ROW_NUMBER 窗口函数：MySQL 8.0+；本项目生产/测试均为 MySQL 8。 -->
     <select id="selectCandidateProfileRows" resultType="map">
         SELECT
@@ -20,7 +20,7 @@
             SELECT
                 r.user_id AS userId,
                 s.interview_time AS latestInterviewTime,
-                COALESCE(se.location, JSON_VALUE(s.legacy_slot_snapshot,'$.location'), sl.location) AS interviewLocation,
+                COALESCE(se.location, JSON_VALUE(s.legacy_slot_snapshot,'$.location')) AS interviewLocation,
                 s.cycle_id AS cycleId,
                 ROW_NUMBER() OVER (
                     PARTITION BY r.user_id
@@ -29,7 +29,6 @@
             FROM interview_schedule s
             INNER JOIN resume r ON r.resume_id = s.resume_id
             LEFT JOIN interview_session se ON se.session_id = s.session_id
-            LEFT JOIN interview_slot sl ON sl.slot_id = s.slot_id
         ) latest
         INNER JOIN user u ON u.user_id = latest.userId AND u.is_deleted = 0
         LEFT JOIN department d ON d.dept_id = u.dept_id
