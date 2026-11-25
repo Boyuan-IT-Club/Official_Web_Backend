@@ -2,7 +2,7 @@ spring:
   application:
     name: Official
   flyway:
-    enabled: true
+    enabled: false
     locations: classpath:db/migration
     baseline-on-migrate: true
     baseline-version: 1
@@ -19,7 +19,7 @@ spring:
       hibernate:
         format_sql: true
     hibernate:
-      ddl-auto: update
+      ddl-auto: none
     open-in-view: false
   mail:
     host: ${MAIL_HOST}

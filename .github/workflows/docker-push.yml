@@ -235,6 +235,20 @@ jobs:
     needs: pull
     if: github.event_name == 'push'
     steps:
+      - name: Apply primary database migrations
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST_A }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 10m
+          script: |
+            set -eu
+            cd ~/boyuan-official
+            image=$(docker compose config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["services"]["official"]["image"])')
+            docker run --rm --network container:official-mysql --env-file .schema-migrate.env \
+              --entrypoint java "$image" -cp 'BOOT-INF/classes:BOOT-INF/lib/*' club.boyuan.official.infra.db.MigrateSchema
+
       - name: Restart Node B (8.159.150.156)
         uses: appleboy/ssh-action@v1
         with:
@@ -321,8 +335,13 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           command_timeout: 3m
           script: |
-            app=$(docker ps --format '{{.Names}}' | grep -E -- '-app$' | head -1)
-            if [ -z "$app" ]; then echo "::error::找不到应用容器"; exit 1; fi
+            app=official-app
+
+            case "${{ matrix.node }}" in A) db_user=official_web_a;; B) db_user=official_web_b;; *) exit 1;; esac
+            docker exec "$app" sh -ec 'test "$DB_USERNAME" = "$1" && test -z "${MIGRATION_PASSWORD:-}${MYSQL_ROOT_PASSWORD:-}"' sh "$db_user"
+            if docker ps --format '{{.Names}}' | grep -qx official-collab; then
+              docker exec official-collab sh -ec 'test "$DB_USER" = official_collab && test -z "${MIGRATION_PASSWORD:-}"'
+            fi
 
             # 缺了会让功能静默失效的变量：必须存在，否则判失败
             missing=""
