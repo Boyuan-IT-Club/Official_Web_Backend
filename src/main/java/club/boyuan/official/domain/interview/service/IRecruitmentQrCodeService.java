@@ -21,6 +21,8 @@ public interface IRecruitmentQrCodeService {
     /** 删除某一张 */
     void delete(Integer id);
 
+    void deleteByKey(Integer cycleId, String qrType, Integer deptId);
+
     /**
      * 取某位录取者该看到的二维码：他所在部门那张 + 大群那张。
      * deptId 为空（还没分配部门）时只返回大群。

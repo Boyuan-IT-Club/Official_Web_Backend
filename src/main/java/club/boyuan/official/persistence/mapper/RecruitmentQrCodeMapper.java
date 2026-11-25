@@ -15,6 +15,9 @@ public interface RecruitmentQrCodeMapper extends BaseMapper<RecruitmentQrCode> {
     @Select("SELECT cycle_id FROM recruitment_cycle WHERE cycle_id=#{cycleId} FOR UPDATE")
     Integer lockCycle(@Param("cycleId") int cycleId);
 
+    @Select("SELECT EXISTS(SELECT 1 FROM department WHERE dept_id=#{deptId})")
+    boolean departmentExists(@Param("deptId") int deptId);
+
     @Update("""
         UPDATE recruitment_cycle c LEFT JOIN cycle_qr_source q ON q.cycle_id=c.cycle_id
         SET c.qr_codes=COALESCE(q.qr_codes,JSON_OBJECT()), c.updated_at=c.updated_at

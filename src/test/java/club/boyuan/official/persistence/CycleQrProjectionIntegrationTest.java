@@ -1,6 +1,7 @@
 package club.boyuan.official.persistence;
 
 import club.boyuan.official.domain.interview.service.IRecruitmentQrCodeService;
+import club.boyuan.official.domain.resume.service.IRecruitmentCycleService;
 import club.boyuan.official.infra.storage.CosStorageService;
 import club.boyuan.official.persistence.entity.RecruitmentCycle;
 import club.boyuan.official.persistence.entity.RecruitmentQrCode;
@@ -29,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest(properties = "official.recruitment.qr-storage=CYCLE")
@@ -37,6 +39,7 @@ class CycleQrProjectionIntegrationTest {
     @Autowired private IRecruitmentQrCodeService codes;
     @Autowired private RecruitmentQrCodeMapper qrMapper;
     @Autowired private RecruitmentCycleMapper cycles;
+    @Autowired private IRecruitmentCycleService cycleService;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private MockMvc mvc;
     @MockBean private CosStorageService cos;
@@ -46,8 +49,9 @@ class CycleQrProjectionIntegrationTest {
     void setup() throws Exception {
         RecruitmentCycle cycle = new RecruitmentCycle("projection-test", null, LocalDate.now(),
                 LocalDate.now().plusDays(1), "fixture-" + System.nanoTime() % 100000000);
-        cycles.insert(cycle);
+        cycleService.createRecruitmentCycle(cycle);
         cycleId = cycle.getCycleId();
+        assertEquals("{}", jdbc.queryForObject("SELECT qr_codes FROM recruitment_cycle WHERE cycle_id=?", String.class, cycleId));
         when(cos.upload(any(), eq("qrcodes"))).thenAnswer(call ->
                 ((MockMultipartFile) call.getArgument(0)).getOriginalFilename());
         when(cos.resolveAvatarUrl(anyString())).thenAnswer(call -> call.getArgument(0));
@@ -84,8 +88,51 @@ class CycleQrProjectionIntegrationTest {
         codes.delete(first.getId());
         assertNull(qrMapper.selectById(first.getId()));
         assertEquals(List.of("main"), codes.forAdmitted(cycleId, 1).stream().map(RecruitmentQrCode::getImageUrl).toList());
+        mvc.perform(delete("/api/recruitment/qrcodes").param("cycleId", String.valueOf(cycleId))
+                .param("qrType", "DEPT").param("deptId", "2")).andExpect(status().isOk());
+        assertEquals(List.of("main", "qa"), codes.listByCycle(cycleId).stream().map(RecruitmentQrCode::getImageUrl).toList());
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM recruitment_cycle c JOIN cycle_qr_source v "
                 + "ON c.cycle_id=v.cycle_id WHERE c.cycle_id=? AND NOT(c.qr_codes <=> v.qr_codes)", Integer.class, cycleId));
+    }
+
+    @Test
+    void studentSeesOnlyCodesAllowedByTheirPublishedResult() throws Exception {
+        upload("QA_GROUP", 0, "applicant-qa");
+        upload("DEPT", 1, "dept-one");
+        upload("DEPT", 2, "other-dept");
+        upload("MAIN_GROUP", 0, "main");
+        upload("MAIN_GROUP_2", 0, "main-two");
+        String name = "qr-student-" + cycleId;
+        jdbc.update("INSERT INTO user(username,password,email,name) VALUES(?,'test',?,'fixture')",
+                name, name + "@example.invalid");
+        int userId = jdbc.queryForObject("SELECT user_id FROM user WHERE username=?", Integer.class, name);
+        String myResult = "/api/interview/schedule/my-result";
+        String cycle = String.valueOf(cycleId);
+        try {
+            jdbc.update("INSERT INTO resume(user_id,cycle_id,status) VALUES(?,?,2)", userId, cycleId);
+            int resumeId = jdbc.queryForObject("SELECT resume_id FROM resume WHERE user_id=? AND cycle_id=?", Integer.class, userId, cycleId);
+            mvc.perform(get("/api/cycles/{id}", cycleId).with(user(name))).andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.cycleId").value(cycleId)).andExpect(jsonPath("$.data.qrCodes").doesNotExist());
+            mvc.perform(get("/api/recruitment/qrcodes/qa").param("cycleId", cycle).with(user(name))).andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.imageUrl").value("applicant-qa"));
+            mvc.perform(get("/api/recruitment/qrcodes").param("cycleId", cycle).with(user(name))).andExpect(status().isForbidden());
+            mvc.perform(delete("/api/recruitment/qrcodes").param("cycleId", cycle).param("qrType", "QA_GROUP")
+                    .with(user(name))).andExpect(status().isForbidden());
+            mvc.perform(get(myResult).param("cycleId", cycle).with(user(name))).andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data").doesNotExist());
+            jdbc.update("INSERT INTO interview_result(resume_id,cycle_id,user_id,decision,assigned_dept_id) VALUES(?,?,?,2,1)",
+                    resumeId, cycleId, userId);
+            mvc.perform(get(myResult).param("cycleId", cycle).with(user(name))).andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.decision").value(2)).andExpect(jsonPath("$.data.qrCodes").doesNotExist());
+            jdbc.update("UPDATE interview_result SET decision=1 WHERE resume_id=?", resumeId);
+            mvc.perform(get(myResult).param("cycleId", cycle).with(user(name))).andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.qrCodes[*].imageUrl",
+                            org.hamcrest.Matchers.contains("dept-one", "main", "main-two")));
+        } finally {
+            jdbc.update("DELETE FROM interview_result WHERE user_id=? AND cycle_id=?", userId, cycleId);
+            jdbc.update("DELETE FROM resume WHERE user_id=? AND cycle_id=?", userId, cycleId);
+            jdbc.update("DELETE FROM user WHERE user_id=?", userId);
+        }
     }
 
     @Test

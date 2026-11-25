@@ -36,6 +36,7 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
     private final club.boyuan.official.persistence.mapper.ResumeFieldDefinitionMapper resumeFieldDefinitionMapper;
     
     @Override
+    @Transactional
     public RecruitmentCycle createRecruitmentCycle(RecruitmentCycle recruitmentCycle) {
         logger.info("创建招募周期，名称: {}", recruitmentCycle.getCycleName());
         try {
@@ -48,6 +49,7 @@ public class RecruitmentCycleServiceImpl implements IRecruitmentCycleService {
             }
             
             recruitmentCycleMapper.insert(recruitmentCycle);
+            recruitmentCycleMapper.initializeEmptyQrCodes(recruitmentCycle.getCycleId());
             logger.info("招募周期创建成功，ID: {}", recruitmentCycle.getCycleId());
             return recruitmentCycle;
         } catch (DuplicateKeyException e) {
