@@ -72,14 +72,25 @@ public class InterviewTimeSlotServiceImpl extends ServiceImpl<InterviewTimeSlotM
     }
 
     @Override
+    public List<InterviewTimeSlot> lockByIds(List<Integer> ids) {
+        if (ids.isEmpty()) return List.of();
+        return list(new LambdaQueryWrapper<InterviewTimeSlot>().in(InterviewTimeSlot::getTimeSlotId, ids)
+                .orderByAsc(InterviewTimeSlot::getTimeSlotId).last("FOR UPDATE"));
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public void deleteTimeSlot(Integer timeSlotId) {
-        requireTimeSlot(timeSlotId);
+        if (lockByIds(List.of(timeSlotId)).isEmpty()) {
+            throw new BusinessException(BusinessExceptionEnum.INTERVIEW_TIME_SLOT_NOT_FOUND);
+        }
         Long sessionCount = interviewSessionMapper.selectCount(
                 new LambdaQueryWrapper<club.boyuan.official.persistence.entity.InterviewSession>()
                         .eq(club.boyuan.official.persistence.entity.InterviewSession::getTimeSlotId, timeSlotId));
         if (sessionCount != null && sessionCount > 0) {
             throw new BusinessException(BusinessExceptionEnum.INTERVIEW_TIME_SLOT_HAS_SESSION);
         }
+        baseMapper.removeFromPreferences(timeSlotId);
         removeById(timeSlotId);
         log.info("删除面试时间窗成功，timeSlotId={}", timeSlotId);
     }

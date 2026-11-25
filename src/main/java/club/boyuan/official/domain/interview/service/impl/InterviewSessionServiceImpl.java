@@ -20,6 +20,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collections;
 import java.util.List;
@@ -47,10 +48,11 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
     private final club.boyuan.official.persistence.mapper.InterviewSessionDeptMapper interviewSessionDeptMapper;
 
     @Override
+    @Transactional
     public InterviewSession createSession(CreateInterviewSessionRequestDTO request) {
         validateCycleExists(request.getCycleId());
 
-        InterviewTimeSlot timeSlot = interviewTimeSlotService.getById(request.getTimeSlotId());
+        InterviewTimeSlot timeSlot = interviewTimeSlotService.lockByIds(List.of(request.getTimeSlotId())).stream().findFirst().orElse(null);
         if (timeSlot == null) {
             throw new BusinessException(BusinessExceptionEnum.INTERVIEW_TIME_SLOT_NOT_FOUND);
         }
@@ -74,6 +76,7 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
                 // 主部门取第一个：那些只能显示一个部门的地方（飞书同步、
                 // 紧凑列表）仍读它，判定一律以关联表为准
                 .setDeptId(deptIds.get(0))
+                .setDeptIds(deptIds)
                 .setLocation(request.getLocation())
                 .setCapacity(request.getCapacity())
                 .setCurrentOccupied(0)
@@ -90,6 +93,7 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
     }
 
     @Override
+    @Transactional
     public InterviewSession updateSession(Integer sessionId, UpdateInterviewSessionRequestDTO request) {
         InterviewSession session = requireSession(sessionId);
         if (request.getLocation() != null) {
@@ -119,7 +123,7 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
                     throw new BusinessException(BusinessExceptionEnum.DEPARTMENT_NOT_FOUND);
                 }
             }
-            session.setDeptId(deptIds.get(0));
+            session.setDeptId(deptIds.get(0)).setDeptIds(deptIds);
             replaceSessionDepts(sessionId, deptIds);
         }
         updateById(session);
@@ -128,6 +132,7 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
     }
 
     @Override
+    @Transactional
     public void deleteSession(Integer sessionId) {
         requireSession(sessionId);
         Long scheduleCount = interviewScheduleMapper.selectCount(
@@ -137,6 +142,7 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
         if (scheduleCount != null && scheduleCount > 0) {
             throw new BusinessException(BusinessExceptionEnum.INTERVIEW_SESSION_HAS_SCHEDULE);
         }
+        replaceSessionDepts(sessionId, List.of());
         removeById(sessionId);
         log.info("删除面试场次成功，sessionId={}", sessionId);
     }
@@ -146,7 +152,9 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
         LambdaQueryWrapper<InterviewSession> wrapper = new LambdaQueryWrapper<InterviewSession>()
                 .eq(InterviewSession::getCycleId, cycleId);
         if (deptId != null) {
-            wrapper.eq(InterviewSession::getDeptId, deptId);
+            wrapper.and(q -> q.eq(InterviewSession::getDeptId, deptId)
+                    .or().apply("EXISTS (SELECT 1 FROM interview_session_dept d "
+                            + "WHERE d.session_id=interview_session.session_id AND d.dept_id={0})", deptId));
         }
         if (onlyAvailable) {
             wrapper.eq(InterviewSession::getStatus, STATUS_AVAILABLE);
@@ -227,7 +235,8 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
     }
 
     private InterviewSession requireSession(Integer sessionId) {
-        InterviewSession session = getById(sessionId);
+        InterviewSession session = getOne(new LambdaQueryWrapper<InterviewSession>()
+                .eq(InterviewSession::getSessionId, sessionId).last("FOR UPDATE"));
         if (session == null) {
             throw new BusinessException(BusinessExceptionEnum.INTERVIEW_SESSION_NOT_FOUND);
         }

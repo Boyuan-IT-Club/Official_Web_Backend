@@ -368,6 +368,7 @@ public class InterviewRescheduleController {
      * 管理员处理改期申请：status=1 同意（自动取消原场次安排，进入「分配与调剂」
      * 待调剂池，由管理员人工重排到新场次）；status=2 拒绝（原安排不动）。
      */
+    @org.springframework.transaction.annotation.Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     @PutMapping("/admin/{requestId}/handle")
     @PreAuthorize("hasAnyAuthority('interview:schedule', 'resume:audit')")
     public ResponseEntity<ResponseMessage<InterviewRescheduleRequest>> handle(
@@ -379,7 +380,8 @@ public class InterviewRescheduleController {
                 && status != InterviewRescheduleRequest.STATUS_REJECTED)) {
             return ResponseEntity.badRequest().body(ResponseMessage.error(400, "status 仅支持 1(同意)/2(拒绝)"));
         }
-        InterviewRescheduleRequest req = rescheduleMapper.selectById(requestId);
+        InterviewRescheduleRequest req = rescheduleMapper.selectOne(new LambdaQueryWrapper<InterviewRescheduleRequest>()
+                .eq(InterviewRescheduleRequest::getRequestId, requestId).last("FOR UPDATE"));
         if (req == null) {
             return ResponseEntity.badRequest().body(ResponseMessage.error(400, "申请不存在"));
         }
@@ -394,6 +396,7 @@ public class InterviewRescheduleController {
         rescheduleMapper.updateById(req);
 
         if (status == InterviewRescheduleRequest.STATUS_APPROVED && req.getScheduleId() != null) {
+            interviewSessionMapper.lockCycleForSchedule(req.getScheduleId());
             InterviewSchedule schedule = interviewScheduleMapper.selectById(req.getScheduleId());
             boolean toOnline = Integer.valueOf(InterviewRescheduleRequest.TYPE_TO_ONLINE)
                     .equals(req.getRequestType());
@@ -413,6 +416,7 @@ public class InterviewRescheduleController {
                     // 取消同时也解开意向锁（已取消的安排不再锁志愿，见 IntentLock 集成测试）。
                     schedule.setStatus(2); // 已取消，等待人工重排
                     interviewScheduleMapper.updateById(schedule);
+                    if (schedule.getSessionId() != null) interviewSessionMapper.releaseOne(schedule.getSessionId());
                     log.info("改期申请{}已同意，原面试安排{}已取消待重排", requestId, schedule.getScheduleId());
             }
         }

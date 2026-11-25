@@ -16,6 +16,8 @@ public interface IInterviewTimeSlotService extends IService<InterviewTimeSlot> {
 
     InterviewTimeSlot updateTimeSlot(Integer timeSlotId, UpdateInterviewTimeSlotRequestDTO request);
 
+    List<InterviewTimeSlot> lockByIds(List<Integer> ids);
+
     void deleteTimeSlot(Integer timeSlotId);
 
     /**

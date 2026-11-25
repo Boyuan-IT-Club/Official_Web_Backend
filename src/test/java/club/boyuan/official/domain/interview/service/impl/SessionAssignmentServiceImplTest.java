@@ -78,6 +78,7 @@ class SessionAssignmentServiceImplTest {
 
     @BeforeEach
     void registerTableInfo() {
+        when(interviewSessionMapper.occupyOneIfAvailable(any())).thenReturn(1);
         // 纯单测没有 Spring，LambdaUpdateWrapper.set 要立即解析列名，手动注册实体
         TableInfoHelper.initTableInfo(
                 new MapperBuilderAssistant(new MybatisConfiguration(), ""), InterviewNotificationLog.class);
@@ -175,6 +176,17 @@ class SessionAssignmentServiceImplTest {
                 .filter(a -> a.getResumeId() == resumeId).findFirst().orElse(null);
         assertNotNull(item, "缺少 resumeId=" + resumeId + " 的分配结果");
         return item;
+    }
+
+    @Test
+    void allocationFitsWholeIntervalAndReusesCancelledGap() {
+        LocalDate date = LocalDate.of(2026, 3, 1);
+        InterviewTimeSlot window = new InterviewTimeSlot().setInterviewDate(date)
+                .setStartTime(LocalTime.of(9, 0)).setEndTime(LocalTime.of(9, 35));
+        assertEquals(date.atTime(9, 10), SessionAssignmentServiceImpl.firstAvailable(window, 10,
+                List.of(date.atTime(9, 0), date.atTime(9, 20))));
+        assertNull(SessionAssignmentServiceImpl.firstAvailable(window, 10,
+                List.of(date.atTime(9, 4), date.atTime(9, 20))));
     }
 
     private static Resume resume(int resumeId, int userId) {
@@ -482,7 +494,7 @@ class SessionAssignmentServiceImplTest {
         when(interviewScheduleService.getOne(any(Wrapper.class), org.mockito.ArgumentMatchers.eq(false)))
                 .thenReturn(cancelledRow(555, 101, 1));
         when(interviewTimeSlotService.getById(10)).thenReturn(new InterviewTimeSlot()
-                .setTimeSlotId(10).setInterviewDate(LocalDate.of(2026, 3, 1)).setStartTime(LocalTime.of(9, 0)));
+                .setTimeSlotId(10).setInterviewDate(LocalDate.of(2026, 3, 1)).setStartTime(LocalTime.of(9, 0)).setEndTime(LocalTime.NOON));
         when(departmentMapper.selectList(nullable(Wrapper.class))).thenReturn(List.of(dept(1, "技术部")));
         when(interviewScheduleService.updateById(any(InterviewSchedule.class))).thenReturn(true);
 
@@ -516,7 +528,7 @@ class SessionAssignmentServiceImplTest {
                 .thenReturn(new InterviewSchedule().setScheduleId(556).setResumeId(101).setCycleId(1)
                         .setSessionId(999).setStatus(1));
         when(interviewTimeSlotService.getById(10)).thenReturn(new InterviewTimeSlot()
-                .setTimeSlotId(10).setInterviewDate(LocalDate.of(2026, 3, 1)).setStartTime(LocalTime.of(9, 0)));
+                .setTimeSlotId(10).setInterviewDate(LocalDate.of(2026, 3, 1)).setStartTime(LocalTime.of(9, 0)).setEndTime(LocalTime.NOON));
         when(departmentMapper.selectList(nullable(Wrapper.class))).thenReturn(List.of(dept(1, "技术部")));
         when(interviewScheduleService.updateById(any(InterviewSchedule.class))).thenReturn(true);
 
@@ -547,7 +559,7 @@ class SessionAssignmentServiceImplTest {
                 .thenReturn(new InterviewSchedule().setScheduleId(557).setResumeId(101).setCycleId(1)
                         .setSessionId(1000).setStatus(1));
         when(interviewTimeSlotService.getById(10)).thenReturn(new InterviewTimeSlot()
-                .setTimeSlotId(10).setInterviewDate(LocalDate.of(2026, 3, 1)).setStartTime(LocalTime.of(9, 0)));
+                .setTimeSlotId(10).setInterviewDate(LocalDate.of(2026, 3, 1)).setStartTime(LocalTime.of(9, 0)).setEndTime(LocalTime.NOON));
         when(departmentMapper.selectList(nullable(Wrapper.class))).thenReturn(List.of(dept(1, "技术部")));
         when(interviewScheduleService.updateById(any(InterviewSchedule.class))).thenReturn(true);
 
@@ -567,7 +579,7 @@ class SessionAssignmentServiceImplTest {
                 .thenReturn(new InterviewSchedule().setScheduleId(558).setResumeId(101).setCycleId(1)
                         .setSessionId(1000).setStatus(1));
         when(interviewTimeSlotService.getById(10)).thenReturn(new InterviewTimeSlot()
-                .setTimeSlotId(10).setInterviewDate(LocalDate.of(2026, 3, 1)).setStartTime(LocalTime.of(9, 0)));
+                .setTimeSlotId(10).setInterviewDate(LocalDate.of(2026, 3, 1)).setStartTime(LocalTime.of(9, 0)).setEndTime(LocalTime.NOON));
         when(departmentMapper.selectList(nullable(Wrapper.class))).thenReturn(List.of(dept(1, "技术部")));
         when(interviewScheduleService.updateById(any(InterviewSchedule.class))).thenReturn(true);
 
@@ -589,7 +601,7 @@ class SessionAssignmentServiceImplTest {
         when(interviewScheduleService.getOne(any(Wrapper.class), org.mockito.ArgumentMatchers.eq(false)))
                 .thenReturn(cancelledRow(559, 101, 1).setSessionId(1000));
         when(interviewTimeSlotService.getById(10)).thenReturn(new InterviewTimeSlot()
-                .setTimeSlotId(10).setInterviewDate(LocalDate.of(2026, 3, 1)).setStartTime(LocalTime.of(9, 0)));
+                .setTimeSlotId(10).setInterviewDate(LocalDate.of(2026, 3, 1)).setStartTime(LocalTime.of(9, 0)).setEndTime(LocalTime.NOON));
         when(departmentMapper.selectList(nullable(Wrapper.class))).thenReturn(List.of(dept(1, "技术部")));
         when(interviewScheduleService.updateById(any(InterviewSchedule.class))).thenReturn(true);
 

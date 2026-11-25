@@ -21,8 +21,11 @@ import java.time.LocalDateTime;
 @Data
 @EqualsAndHashCode(callSuper = false)
 @Accessors(chain = true)
-@TableName("interview_preference")
+@TableName(value = "interview_preference", autoResultMap = true)
 public class InterviewPreference implements Serializable {
+
+    @TableField(value = "accepted_time_slot_ids", typeHandler = com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler.class)
+    private java.util.List<Integer> acceptedTimeSlotIds;
 
     private static final long serialVersionUID = 1L;
 
@@ -50,7 +53,7 @@ public class InterviewPreference implements Serializable {
     /**
      * 第二志愿部门
      */
-    @TableField("second_dept_id")
+    @TableField(value = "second_dept_id", updateStrategy = com.baomidou.mybatisplus.annotation.FieldStrategy.ALWAYS)
     private Integer secondDeptId;
 
     /**

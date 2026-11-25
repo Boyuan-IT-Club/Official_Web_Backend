@@ -56,6 +56,7 @@ public class InterviewPreferenceServiceImpl extends ServiceImpl<InterviewPrefere
     @Override
     @Transactional
     public InterviewPreferenceDTO submitPreference(Integer userId, SubmitInterviewPreferenceRequestDTO request) {
+        interviewScheduleMapper.lockPreferenceCycle(request.getCycleId());
         Resume resume = requireSubmittedResume(userId, request.getCycleId());
 
         // 面试一旦安排（status=1）就锁定意向：算法已按旧志愿排完场次，
@@ -86,11 +87,11 @@ public class InterviewPreferenceServiceImpl extends ServiceImpl<InterviewPrefere
         }
 
         List<Integer> timeSlotIds = request.getTimeSlotIds() == null ? new ArrayList<>()
-                : request.getTimeSlotIds().stream().filter(Objects::nonNull).distinct().collect(Collectors.toList());
+                : request.getTimeSlotIds().stream().filter(Objects::nonNull).distinct().sorted().collect(Collectors.toList());
         if (timeSlotIds.isEmpty()) {
             throw new BusinessException(BusinessExceptionEnum.INTERVIEW_PREFERENCE_TIME_REQUIRED);
         }
-        List<InterviewTimeSlot> timeSlots = interviewTimeSlotService.listByIds(timeSlotIds);
+        List<InterviewTimeSlot> timeSlots = interviewTimeSlotService.lockByIds(timeSlotIds);
         if (timeSlots.size() != timeSlotIds.size()) {
             throw new BusinessException(BusinessExceptionEnum.INTERVIEW_PREFERENCE_TIME_INVALID);
         }
@@ -102,7 +103,8 @@ public class InterviewPreferenceServiceImpl extends ServiceImpl<InterviewPrefere
         }
 
         LocalDateTime now = LocalDateTime.now();
-        InterviewPreference preference = getByResumeId(resume.getResumeId());
+        InterviewPreference preference = getOne(new LambdaQueryWrapper<InterviewPreference>()
+                .eq(InterviewPreference::getResumeId, resume.getResumeId()).last("FOR UPDATE"));
         if (preference == null) {
             preference = new InterviewPreference()
                     .setResumeId(resume.getResumeId())
@@ -110,6 +112,7 @@ public class InterviewPreferenceServiceImpl extends ServiceImpl<InterviewPrefere
         }
         preference.setFirstDeptId(firstDeptId)
                 .setSecondDeptId(secondDeptId)
+                .setAcceptedTimeSlotIds(timeSlotIds)
                 .setSubmittedAt(now);
         saveOrUpdate(preference);
 
@@ -197,6 +200,7 @@ public class InterviewPreferenceServiceImpl extends ServiceImpl<InterviewPrefere
     @Override
     @Transactional
     public java.util.Map<String, Object> updateAttendance(Integer userId, UpdateAttendanceRequestDTO request) {
+        interviewScheduleMapper.lockPreferenceCycle(request.getCycleId());
         Resume resume = requireSubmittedResume(userId, request.getCycleId());
 
         boolean scheduled = interviewScheduleMapper.exists(new LambdaQueryWrapper<InterviewSchedule>()
