@@ -102,7 +102,6 @@ class InterviewChoiceConcurrencyTest {
             workers.shutdownNow();
             assertTrue(workers.awaitTermination(20, TimeUnit.SECONDS));
             jdbc.update("DELETE FROM interview_schedule WHERE cycle_id=?", cycleId);
-            jdbc.update("DELETE d FROM interview_session_dept d JOIN interview_session s USING(session_id) WHERE s.cycle_id=?", cycleId);
             jdbc.update("DELETE FROM resume WHERE cycle_id=?", cycleId);
             cycles.deleteById(cycleId);
             userIds.forEach(users::deleteById);

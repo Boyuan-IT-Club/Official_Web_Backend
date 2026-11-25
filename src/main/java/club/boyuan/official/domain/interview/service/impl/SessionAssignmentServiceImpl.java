@@ -22,7 +22,6 @@ import club.boyuan.official.persistence.entity.InterviewTimeSlot;
 import club.boyuan.official.persistence.entity.RecruitmentCycle;
 import club.boyuan.official.persistence.entity.Resume;
 import club.boyuan.official.persistence.mapper.DepartmentMapper;
-import club.boyuan.official.persistence.mapper.InterviewNotificationLogMapper;
 import club.boyuan.official.persistence.mapper.InterviewSessionMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -74,7 +73,6 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
     private final IResumeService resumeService;
     private final ResumeDataService resumeDataService;
     private final DepartmentMapper departmentMapper;
-    private final InterviewNotificationLogMapper notificationLogMapper;
 
     @Override
     @Transactional
@@ -256,36 +254,23 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
                 .setStatus(SCHEDULE_STATUS_ACTIVE)
                 .setSyncStatus(0)
                 .setNotes(finalTime != null ? "线上面试 - 管理员安排" : "线上面试 - 待约时间");
-        /*
-         * 不进通知队列。线上面试的时间是管理员私下和本人约的，和「简历里就选
-         * 只能线上」的同学同一套处理：系统不发模板信，人留在「待约线上面试」
-         * 名单里由管理员联系。notif_status 置 1 是为了不让他出现在「待发」
-         * 里让人以为漏了谁。
-         */
-        schedule.setNotifStatus(1);
+        schedule.setSessionId(null).setSlotId(null).setNotifStatus(0);
         if (isNew) {
             interviewScheduleService.save(schedule);
         } else {
-            interviewScheduleService.updateById(schedule);
+            var change = new LambdaUpdateWrapper<InterviewSchedule>()
+                    .set(InterviewSchedule::getInterviewMode, 1)
+                    .set(InterviewSchedule::getInterviewTime, finalTime)
+                    .set(InterviewSchedule::getTimeOverridden, schedule.getTimeOverridden())
+                    .set(InterviewSchedule::getStatus, schedule.getStatus())
+                    .set(InterviewSchedule::getSyncStatus, 0)
+                    .set(InterviewSchedule::getNotifStatus, 0)
+                    .set(InterviewSchedule::getNotes, schedule.getNotes())
+                    .set(InterviewSchedule::getSessionId, null)
+                    .set(InterviewSchedule::getSlotId, null)
+                    .eq(InterviewSchedule::getScheduleId, schedule.getScheduleId());
+            interviewScheduleService.update(null, change);
         }
-        /*
-         * 解绑场次要单独走 UpdateWrapper。
-         *
-         * MyBatis-Plus 默认 FieldStrategy.NOT_NULL：updateById 会把值为 null 的
-         * 字段整个跳过，所以 setSessionId(null) 根本不会落库。线上因此出现过
-         * 「人已转线上、座位也还了，但那行还指着原场次」——场次 29 的
-         * current_occupied=10，实际挂在它名下的生效安排却有 11 条。
-         * 必须显式 set(字段, null) 才写得进去。
-         */
-        interviewScheduleService.update(null,
-                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<InterviewSchedule>()
-                        .set(InterviewSchedule::getSessionId, null)
-                        .set(InterviewSchedule::getSlotId, null)
-                        .eq(InterviewSchedule::getScheduleId, schedule.getScheduleId()));
-        schedule.setSessionId(null);
-
-        // 时间和参加方式都变了，旧通知不该再占去重名额
-        detachScheduleNotices(schedule.getScheduleId());
 
         log.info("已安排线上面试，resumeId={}, scheduleId={}, time={}, 释放场次={}",
                 resumeId, schedule.getScheduleId(),
@@ -391,7 +376,6 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
             interviewScheduleService.updateById(schedule);
             // 不再只在「从已取消复活」时摘：只要安排内容变了，旧通知就不该
             // 再占去重名额，否则补发会被 alreadySent 静默跳过
-            detachScheduleNotices(schedule.getScheduleId());
         }
 
         SessionState state = new SessionState(target, timeSlot);
@@ -527,7 +511,6 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
          * 管理员看到「待发 1」，点了发送却返回 skipped，什么都没发出去。
          * 两个口径必须一起动。
          */
-        detachScheduleNotices(scheduleId);
 
         UpdateInterviewTimeResponseDTO response = new UpdateInterviewTimeResponseDTO();
         response.setScheduleId(scheduleId);
@@ -609,33 +592,11 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
             interviewScheduleService.save(schedule);
         } else {
             interviewScheduleService.updateById(schedule);
-            detachScheduleNotices(schedule.getScheduleId());
         }
         return schedule;
     }
 
-    /**
-     * 已取消的安排被重新启用，等于一份新安排——时间、地点大概率都变了。
-     *
-     * 但场次类通知按 (notification_type, schedule_id) 去重（uk_type_schedule），
-     * 旧安排发过的「面试安排通知 / 前一天 / 当天提醒」会让新安排的同类通知被当成
-     * 已发而跳过：学生手里拿着旧时间，系统却以为通知过了。
-     *
-     * 把这些记录从这条安排上摘下（schedule_id 置空）。发送历史（收件人、时间）
-     * 原样保留，只是不再占新安排的去重名额。
-     */
-    private void detachScheduleNotices(Integer scheduleId) {
-        if (scheduleId == null) {
-            return;
-        }
-        notificationLogMapper.update(null, new LambdaUpdateWrapper<InterviewNotificationLog>()
-                .set(InterviewNotificationLog::getScheduleId, null)
-                .eq(InterviewNotificationLog::getScheduleId, scheduleId)
-                .in(InterviewNotificationLog::getNotificationType, List.of(
-                        InterviewNotificationType.BOOKING_SUCCESS.name(),
-                        InterviewNotificationType.EVE_REMINDER.name(),
-                        InterviewNotificationType.DAY_REMINDER.name())));
-    }
+
 
     private LocalDateTime reserve(SessionState state) {
         if (state.occupiedTimes == null) {

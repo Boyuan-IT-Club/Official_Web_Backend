@@ -3,7 +3,6 @@ package club.boyuan.official.domain.interview.service.impl;
 import club.boyuan.official.common.utils.MessageUtils;
 import club.boyuan.official.domain.interview.dto.InterviewBookingDTO;
 import club.boyuan.official.domain.interview.service.IInterviewScheduleService;
-import club.boyuan.official.domain.interview.service.IInterviewSlotService;
 import club.boyuan.official.domain.interview.service.IRecruitmentQrCodeService;
 import club.boyuan.official.domain.resume.service.IResumeService;
 import club.boyuan.official.domain.resume.service.ResumeDataService;
@@ -54,7 +53,6 @@ class ScheduleNoticeLocationTest {
     @Mock private InterviewNotificationProducer notificationProducer;
     @Mock private InterviewNotificationLogMapper notificationLogMapper;
     @Mock private IInterviewScheduleService interviewScheduleService;
-    @Mock private IInterviewSlotService interviewSlotService;
     @Mock private IResumeService resumeService;
     @Mock private IUserService userService;
     @Mock private InterviewResultMapper interviewResultMapper;
@@ -92,14 +90,12 @@ class ScheduleNoticeLocationTest {
     void planBTakesLocationFromSession() {
         InterviewBookingDTO b = service.bookingOf(planB());
         assertEquals("普陀校区 教书院 205", b.getLocation());
-        verify(interviewSlotService, never()).getById(any());
     }
 
     @Test
     @DisplayName("方案A 安排：仍以 slot 的地点为准，不去查场次")
     void planAKeepsSlotLocation() {
-        InterviewSchedule a = planB().setSlotId(5).setSessionId(null);
-        when(interviewSlotService.getById(5)).thenReturn(new InterviewSlot().setSlotId(5).setLocation("理科大楼 A301"));
+        InterviewSchedule a = planB().setLegacySlotSnapshot("{\"slotId\":5,\"location\":\"理科大楼 A301\"}").setSessionId(null);
         assertEquals("理科大楼 A301", service.bookingOf(a).getLocation());
         verify(interviewSessionMapper, never()).selectById(any());
     }
@@ -116,14 +112,10 @@ class ScheduleNoticeLocationTest {
         when(resumeDataService.getResumeEmail(resume)).thenReturn("10265101424@stu.ecnu.edu.cn");
         when(resumeDataService.getResumeName(resume)).thenReturn("周楷炎");
 
-        service.deliver(new InterviewNotificationMessage(
+        var mail = service.prepare(new InterviewNotificationMessage(
                 InterviewNotificationType.BOOKING_SUCCESS, 91, null, "req-room", null));
-
-        ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
-        verify(messageUtils).sendHtmlEmail(anyString(), anyString(), html.capture(), text.capture());
-        assertTrue(html.getValue().contains("普陀校区 教书院 205"), "HTML 版要有房间");
-        assertFalse(html.getValue().contains("待通知"), "房间不该再是「待通知」");
-        assertTrue(text.getValue().contains("面试地点：普陀校区 教书院 205"), "纯文本兜底版也要有");
+        assertTrue(mail.html().contains("普陀校区 教书院 205"), "HTML 版要有房间");
+        assertFalse(mail.html().contains("待通知"), "房间不该再是「待通知」");
+        assertTrue(mail.body().contains("面试地点：普陀校区 教书院 205"), "纯文本兜底版也要有");
     }
 }

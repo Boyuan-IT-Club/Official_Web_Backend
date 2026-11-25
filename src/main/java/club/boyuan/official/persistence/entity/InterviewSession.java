@@ -47,8 +47,18 @@ public class InterviewSession implements Serializable {
     /**
      * 部门ID
      */
-    @TableField("dept_id")
-    private Integer deptId;
+    public Integer getDeptId() {
+        return deptIds == null || deptIds.isEmpty() ? null : deptIds.get(0);
+    }
+
+    public InterviewSession setDeptId(Integer primary) {
+        if (primary == null) return this;
+        var ordered = new java.util.LinkedHashSet<Integer>();
+        ordered.add(primary);
+        if (deptIds != null) ordered.addAll(deptIds);
+        this.deptIds = java.util.List.copyOf(ordered);
+        return this;
+    }
 
     /**
      * 面试地点
@@ -87,7 +97,6 @@ public class InterviewSession implements Serializable {
     private LocalDateTime updatedAt;
 
     public java.util.List<Integer> coveredDepartments() {
-        if (deptIds != null && !deptIds.isEmpty()) return deptIds;
-        return deptId == null ? java.util.List.of() : java.util.List.of(deptId);
+        return deptIds == null ? java.util.List.of() : deptIds;
     }
 }

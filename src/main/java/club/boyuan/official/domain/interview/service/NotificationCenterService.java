@@ -33,7 +33,7 @@ public class NotificationCenterService {
     private final ResumeFieldValueMapper fieldValueMapper;
     private final UserMapper userMapper;
     private final InterviewScheduleMapper scheduleMapper;
-    private final InterviewResultMapper resultMapper;
+    private final DeliveryStatusMapper deliveryStatuses;
     private final InterviewNotificationLogMapper notificationLogMapper;
     private final InterviewSessionMapper sessionMapper;
     private final DepartmentMapper departmentMapper;
@@ -44,12 +44,14 @@ public class NotificationCenterService {
                 .eq(Resume::getCycleId, cycleId)
                 .eq(Resume::getStatus, ResumeServiceImpl.STATUS_SCREEN_REJECTED));
 
-        Map<Integer, LocalDateTime> rejectNotified = latestSentByResume(
-                rejected.stream().map(Resume::getResumeId).toList());
-
-        List<NotificationCenterDTO.ScreenedOutItem> screenedOut = buildScreenedOut(cycleId, rejected, rejectNotified);
-
-        long rejectedSent = screenedOut.stream().filter(i -> i.getNotifiedAt() != null).count();
+        var states = deliveryStatuses.byType(cycleId);
+        var screenedOut = buildScreenedOut(cycleId, rejected, Map.of());
+        for (var item : screenedOut) {
+            var state = DeliveryStatusMapper.state(states, "RESUME_REJECTED", item.getResumeId());
+            item.setMailState(state.mailState());
+            item.setNotifiedAt(state.sent() ? state.confirmedAt() : null);
+        }
+        long rejectedSent = screenedOut.stream().filter(item -> "SENT".equals(item.getMailState())).count();
 
         // 面试通知：生效安排都该收到；notif_status=1 表示「安排通知」已送达
         /*
@@ -61,28 +63,26 @@ public class NotificationCenterService {
                 .eq(InterviewSchedule::getCycleId, cycleId)
                 .eq(InterviewSchedule::getStatus, 1)
                 .ne(InterviewSchedule::getInterviewMode, 1));
-        Set<Integer> scheduleIds = schedules.stream()
-                .map(InterviewSchedule::getScheduleId).collect(Collectors.toSet());
-        long arrangedSent = schedules.stream()
-                .filter(s -> Integer.valueOf(1).equals(s.getNotifStatus())).count();
-
-        // 结果通知：只有已录入决定的人才该收到，「待定」不发
-        List<InterviewResult> results = resultMapper.selectList(new LambdaQueryWrapper<InterviewResult>()
-                .eq(InterviewResult::getCycleId, cycleId)
-                .ne(InterviewResult::getDecision, 0));
-        long resultSent = results.stream().filter(r -> r.getNotifiedAt() != null).count();
-
-        Set<Integer> eveSent = sentScheduleIds(InterviewNotificationType.EVE_REMINDER, scheduleIds);
-        Set<Integer> daySent = sentScheduleIds(InterviewNotificationType.DAY_REMINDER, scheduleIds);
-        List<NotificationCenterDTO.ScheduleNoticeItem> scheduleNotices =
-                buildScheduleNotices(cycleId, schedules, eveSent, daySent);
+        var arranged = DeliveryStatusMapper.sentIds(states, "BOOKING_SUCCESS");
+        var eveSent = DeliveryStatusMapper.sentIds(states, "EVE_REMINDER");
+        var daySent = DeliveryStatusMapper.sentIds(states, "DAY_REMINDER");
+        long resultTotal = states.getOrDefault("ADMISSION", Map.of()).size() + states.getOrDefault("REJECTION", Map.of()).size();
+        long resultSent = DeliveryStatusMapper.sentIds(states, "ADMISSION").size() + DeliveryStatusMapper.sentIds(states, "REJECTION").size();
+        var scheduleNotices = buildScheduleNotices(cycleId, schedules, eveSent, daySent);
+        for (var item : scheduleNotices) {
+            int id = item.getScheduleId();
+            item.setArranged(arranged.contains(id));
+            item.setArrangedState(DeliveryStatusMapper.state(states, "BOOKING_SUCCESS", id).mailState());
+            item.setEveState(DeliveryStatusMapper.state(states, "EVE_REMINDER", id).mailState());
+            item.setDayState(DeliveryStatusMapper.state(states, "DAY_REMINDER", id).mailState());
+        }
 
         return NotificationCenterDTO.builder()
                 .resumeRejected(bucket(screenedOut.size(), rejectedSent))
-                .interviewArranged(bucket(schedules.size(), arrangedSent))
+                .interviewArranged(bucket(schedules.size(), arranged.size()))
                 .eveReminder(bucket(schedules.size(), eveSent.size()))
                 .dayReminder(bucket(schedules.size(), daySent.size()))
-                .result(bucket(results.size(), resultSent))
+                .result(bucket(resultTotal, resultSent))
                 .screenedOut(screenedOut)
                 .schedules(scheduleNotices)
                 .staleNoticeCount(scheduleNotices.stream()
@@ -119,7 +119,7 @@ public class NotificationCenterService {
                         .in(InterviewSchedule::getScheduleId, scheduleIds))
                 .stream().map(InterviewSchedule::getScheduleId).collect(Collectors.toSet());
 
-        Set<Integer> sent = sentScheduleIds(type, valid);
+        Set<Integer> sent = DeliveryStatusMapper.sentIds(deliveryStatuses.byType(cycleId), type.name());
         List<Integer> queued = new ArrayList<>();
         List<Integer> skipped = new ArrayList<>();
         for (Integer id : scheduleIds) {
@@ -127,12 +127,10 @@ public class NotificationCenterService {
                 skipped.add(id);
                 continue;
             }
-            if (type == InterviewNotificationType.BOOKING_SUCCESS) {
-                notificationProducer.publishBookingSuccess(id, java.util.UUID.randomUUID().toString());
-            } else {
-                notificationProducer.publishReminder(type, id);
-            }
-            queued.add(id);
+            boolean accepted = type == InterviewNotificationType.BOOKING_SUCCESS
+                    ? notificationProducer.publishBookingSuccess(id, java.util.UUID.randomUUID().toString())
+                    : notificationProducer.publishReminder(type, id);
+            if (accepted) queued.add(id); else skipped.add(id);
         }
         return Map.of("queued", queued.size(), "skipped", skipped);
     }
@@ -168,18 +166,6 @@ public class NotificationCenterService {
     }
 
     /** 某类通知实际发到了哪些安排上。回集合而不是计数：名单要逐人标已发/未发 */
-    private Set<Integer> sentScheduleIds(InterviewNotificationType type, Set<Integer> scheduleIds) {
-        if (scheduleIds.isEmpty()) {
-            return Set.of();
-        }
-        return notificationLogMapper.selectList(new LambdaQueryWrapper<InterviewNotificationLog>()
-                        .eq(InterviewNotificationLog::getNotificationType, type.name())
-                        .in(InterviewNotificationLog::getScheduleId, scheduleIds))
-                .stream()
-                .map(InterviewNotificationLog::getScheduleId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-    }
 
     /**
      * 面试安排名单 + 三类通知逐人的发送状态。
@@ -295,23 +281,6 @@ public class NotificationCenterService {
         return latest;
     }
 
-    private Map<Integer, LocalDateTime> latestSentByResume(List<Integer> resumeIds) {
-        if (resumeIds.isEmpty()) {
-            return Map.of();
-        }
-        Map<Integer, LocalDateTime> latest = new HashMap<>();
-        for (InterviewNotificationLog logRow : notificationLogMapper.selectList(
-                new LambdaQueryWrapper<InterviewNotificationLog>()
-                        .eq(InterviewNotificationLog::getNotificationType,
-                                InterviewNotificationType.RESUME_REJECTED.name())
-                        .in(InterviewNotificationLog::getResumeId, resumeIds))) {
-            LocalDateTime prev = latest.get(logRow.getResumeId());
-            if (prev == null || (logRow.getSentAt() != null && logRow.getSentAt().isAfter(prev))) {
-                latest.put(logRow.getResumeId(), logRow.getSentAt());
-            }
-        }
-        return latest;
-    }
 
     private List<NotificationCenterDTO.ScreenedOutItem> buildScreenedOut(
             Integer cycleId, List<Resume> rejected, Map<Integer, LocalDateTime> notified) {

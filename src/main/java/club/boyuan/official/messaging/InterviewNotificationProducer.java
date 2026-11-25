@@ -1,10 +1,8 @@
 package club.boyuan.official.messaging;
 
-import club.boyuan.official.infra.config.RabbitMQConfig;
 import club.boyuan.official.infra.notification.InterviewNotificationType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
 
 @Slf4j
@@ -12,35 +10,39 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class InterviewNotificationProducer {
 
-    private final RabbitTemplate rabbitTemplate;
+    private final DeliveryLedger ledger;
 
-    public void publish(InterviewNotificationMessage message) {
-        rabbitTemplate.convertAndSend(RabbitMQConfig.INTERVIEW_NOTIFICATION_QUEUE, message);
-        log.info("面试通知消息已投递 type={}, scheduleId={}, resultId={}",
-                message.getType(), message.getScheduleId(), message.getResultId());
+    public boolean publish(InterviewNotificationMessage message) {
+        if (message.getRequestId() == null) message.setRequestId(java.util.UUID.randomUUID().toString());
+        return ledger.enqueue(message).accepted();
     }
 
-    public void publishBookingSuccess(Integer scheduleId, String requestId) {
-        publish(new InterviewNotificationMessage(
+    public boolean publishBookingSuccess(Integer scheduleId, String requestId) {
+        return publish(new InterviewNotificationMessage(
                 InterviewNotificationType.BOOKING_SUCCESS, scheduleId, null, requestId, null, null));
     }
 
-    public void publishReminder(InterviewNotificationType type, Integer scheduleId) {
-        publish(new InterviewNotificationMessage(type, scheduleId, null, null, null, null));
+    public boolean publishReminder(InterviewNotificationType type, Integer scheduleId) {
+        return publish(new InterviewNotificationMessage(type, scheduleId, null, null, null, null));
     }
 
-    public void publishResult(Integer resultId, String customBody) {
-        // 每次入队一个新的 requestId：消费端按它去重。
-        // 这样 MQ 重投同一条消息会被拦（同 id），管理员点第二次重发会放行（新 id）。
-        // 原来这里传 null，消费端只能退回按 (type, resultId) 去重，把重发也拦掉了。
-        publish(new InterviewNotificationMessage(
-                null, null, resultId, java.util.UUID.randomUUID().toString(), customBody, null));
+    public boolean publishResult(Integer resultId, String customBody) {
+        return publishResult(resultId, customBody, java.util.UUID.randomUUID().toString());
+    }
+
+    public boolean publishResult(Integer resultId, String customBody, String requestId) {
+        return publish(new InterviewNotificationMessage(
+                null, null, resultId, requestId, customBody, null));
     }
 
     /** 简历未通过初筛的通知。与结果通知一样每次一个新 requestId，允许重发。 */
-    public void publishResumeRejected(Integer resumeId, String customBody) {
-        publish(new InterviewNotificationMessage(
+    public boolean publishResumeRejected(Integer resumeId, String customBody) {
+        return publishResumeRejected(resumeId, customBody, java.util.UUID.randomUUID().toString());
+    }
+
+    public boolean publishResumeRejected(Integer resumeId, String customBody, String requestId) {
+        return publish(new InterviewNotificationMessage(
                 InterviewNotificationType.RESUME_REJECTED, null, null,
-                java.util.UUID.randomUUID().toString(), customBody, resumeId));
+                requestId, customBody, resumeId));
     }
 }

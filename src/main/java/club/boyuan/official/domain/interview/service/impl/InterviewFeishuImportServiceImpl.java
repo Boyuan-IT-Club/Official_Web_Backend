@@ -15,7 +15,6 @@ import club.boyuan.official.integration.feishu.FeishuSyncTaskRecord;
 import club.boyuan.official.integration.feishu.FeishuSyncTaskRedisStore;
 import club.boyuan.official.integration.feishu.FeishuSyncTaskStatus;
 import club.boyuan.official.messaging.FeishuSyncMessage;
-import club.boyuan.official.messaging.FeishuSyncProducer;
 import club.boyuan.official.messaging.outbox.MessageOutboxService;
 import club.boyuan.official.messaging.outbox.OutboxAggregateType;
 import club.boyuan.official.messaging.outbox.OutboxEventType;
@@ -43,7 +42,6 @@ import org.springframework.stereotype.Service;
 public class InterviewFeishuImportServiceImpl implements InterviewFeishuImportService {
 
     private final FeishuSyncTaskRedisStore taskRedisStore;
-    private final FeishuSyncProducer feishuSyncProducer;
     private final FeishuImportExecutor feishuImportExecutor;
     private final FeishuTablePullImportExecutor feishuTablePullImportExecutor;
     private final MessageOutboxService messageOutboxService;
@@ -78,15 +76,11 @@ public class InterviewFeishuImportServiceImpl implements InterviewFeishuImportSe
     }
 
     private void enqueueFeishuSyncMessage(Long taskId) {
-        if (messageOutboxService.isEnabled()) {
-            messageOutboxService.enqueue(
-                    OutboxEventType.FEISHU_SYNC,
-                    OutboxAggregateType.FEISHU_SYNC,
-                    String.valueOf(taskId),
-                    new FeishuSyncMessage(taskId));
-        } else {
-            feishuSyncProducer.publish(taskId);
-        }
+        messageOutboxService.enqueue(
+                OutboxEventType.FEISHU_SYNC,
+                OutboxAggregateType.FEISHU_SYNC,
+                String.valueOf(taskId),
+                new FeishuSyncMessage(taskId));
     }
 
     @Override

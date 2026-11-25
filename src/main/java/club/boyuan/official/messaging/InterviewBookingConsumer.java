@@ -1,78 +1,35 @@
 package club.boyuan.official.messaging;
 
 import club.boyuan.official.infra.config.RabbitMQConfig;
-import club.boyuan.official.domain.interview.dto.InterviewBookingDTO;
-import club.boyuan.official.persistence.entity.User;
-import club.boyuan.official.domain.user.service.IUserService;
-import club.boyuan.official.domain.interview.service.InterviewBookingSeckillService;
-import club.boyuan.official.domain.interview.service.InterviewNotificationService;
-import club.boyuan.official.domain.interview.service.impl.InterviewBookingAsyncPersistenceService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
-import club.boyuan.official.infra.seckill.InterviewBookingLuaInventoryService;
-import club.boyuan.official.infra.seckill.InterviewBookingRedisKeys;
 
-import java.util.concurrent.TimeUnit;
+import java.util.UUID;
 
-/**
- * 消费者：异步将 Redis 预扣结果落库。
- * <p>幂等：{@code processed:{requestId}} Redis SETNX，重复消息直接跳过。
- * 失败：删除 processed 标记并调用 {@link InterviewBookingSeckillService#markRequestFailed}，
- * 内部通过 {@code rollback_remain.lua} 回滚库存，避免超卖。
- */
-@Slf4j
+/** Retired bookings are acknowledged only after their original envelope is durable. */
 @Component
 @RequiredArgsConstructor
 public class InterviewBookingConsumer {
-
-    private final InterviewBookingAsyncPersistenceService persistenceService;
-    private final InterviewBookingSeckillService seckillService;
-    private final InterviewBookingLuaInventoryService luaInventoryService;
-    private final InterviewNotificationService interviewNotificationService;
-    private final StringRedisTemplate stringRedisTemplate;
+    private final JdbcTemplate jdbc;
+    private final ObjectMapper json;
 
     @RabbitListener(queues = RabbitMQConfig.INTERVIEW_BOOKING_QUEUE)
-    public void handlePersist(InterviewBookingMessage message) {
-        if (message == null || message.getRequestId() == null) {
-            log.warn("无效预约落库消息，已忽略");
-            return;
+    public void handlePersist(InterviewBookingMessage booking, org.springframework.amqp.core.Message brokerMessage)
+            throws JsonProcessingException {
+        String key = booking.getRequestId();
+        if (key == null || key.isBlank()) {
+            String brokerId = brokerMessage.getMessageProperties().getMessageId();
+            key = "unidentified:" + (brokerId == null ? UUID.randomUUID() : UUID.nameUUIDFromBytes(
+                    brokerId.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
         }
-
-        String processedKey = InterviewBookingRedisKeys.processed(message.getRequestId());
-        Boolean first = stringRedisTemplate.opsForValue().setIfAbsent(processedKey, "1", 24, TimeUnit.HOURS);
-        if (Boolean.FALSE.equals(first)) {
-            log.info("预约消息已处理过，跳过 requestId={}", message.getRequestId());
-            return;
-        }
-
-        try {
-            InterviewBookingDTO booking = persistenceService.persist(message);
-            if (booking == null) {
-                stringRedisTemplate.delete(processedKey);
-                seckillService.markRequestFailed(
-                        message.getRequestId(),
-                        "名额已满或落库失败",
-                        message.getSlotId(),
-                        message.getUserId(),
-                        message.getCycleId());
-                return;
-            }
-
-            seckillService.markRequestSuccess(message.getRequestId(), booking);
-            luaInventoryService.clearUserCycleLock(message.getUserId(), message.getCycleId());
-            interviewNotificationService.enqueueBookingSuccess(booking.getScheduleId(), message.getRequestId());
-        } catch (Exception e) {
-            log.error("预约落库异常 requestId={}", message.getRequestId(), e);
-            stringRedisTemplate.delete(processedKey);
-            seckillService.markRequestFailed(
-                    message.getRequestId(),
-                    "系统繁忙，请稍后重试",
-                    message.getSlotId(),
-                    message.getUserId(),
-                    message.getCycleId());
-        }
+        var evidence = json.createObjectNode();
+        evidence.set("booking", json.valueToTree(booking));
+        evidence.put("messageId", brokerMessage.getMessageProperties().getMessageId());
+        evidence.put("wireBody", java.util.Base64.getEncoder().encodeToString(brokerMessage.getBody()));
+        jdbc.update("CALL delivery_archive_booking(?,?)", key, json.writeValueAsString(evidence));
     }
 }

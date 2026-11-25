@@ -436,7 +436,7 @@ class SessionAssignmentServiceImplTest {
         assertEquals(LocalDateTime.of(2026, 3, 1, 9, 0), s.getInterviewTime());
         assertEquals(0, s.getTimeOverridden(), "取消前的「手调」标记不能带进新安排");
         // 旧安排的场次通知要摘下，否则新安排的面试安排通知会被当成已发而跳过
-        verify(notificationLogMapper).update(nullable(InterviewNotificationLog.class), any(Wrapper.class));
+        org.mockito.Mockito.verifyNoInteractions(notificationLogMapper);
     }
 
     /** 有效安排仍按原语义跳过：重跑一键分配不动已排好的人 */
@@ -479,7 +479,7 @@ class SessionAssignmentServiceImplTest {
         verify(interviewScheduleService).updateById(updated.capture());
         assertEquals(555, updated.getValue().getScheduleId());
         assertEquals(1, updated.getValue().getStatus());
-        verify(notificationLogMapper).update(nullable(InterviewNotificationLog.class), any(Wrapper.class));
+        org.mockito.Mockito.verifyNoInteractions(notificationLogMapper);
     }
 
     /**
@@ -508,7 +508,7 @@ class SessionAssignmentServiceImplTest {
         service.manualAssign(101, 1000);
 
         verify(interviewSessionMapper).releaseOne(999);
-        verify(notificationLogMapper).update(nullable(InterviewNotificationLog.class), any(Wrapper.class));
+        org.mockito.Mockito.verifyNoInteractions(notificationLogMapper);
 
         ArgumentCaptor<InterviewSchedule> saved = ArgumentCaptor.forClass(InterviewSchedule.class);
         verify(interviewScheduleService).updateById(saved.capture());
@@ -677,7 +677,7 @@ class SessionAssignmentServiceImplTest {
 
         service.updateInterviewTime(1, LocalDateTime.of(2026, 3, 1, 9, 30));
 
-        verify(notificationLogMapper).update(isNull(), any());
+        org.mockito.Mockito.verifyNoInteractions(notificationLogMapper);
     }
 
     // ── 调整时同时换场次（改地点）────────────────────────────
