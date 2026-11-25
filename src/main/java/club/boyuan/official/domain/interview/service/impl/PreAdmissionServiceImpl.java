@@ -59,6 +59,7 @@ public class PreAdmissionServiceImpl implements PreAdmissionService {
         }
 
         List<Integer> requested = distinct(request.getResultIds());
+        resultMapper.lockDraftScope(request.getCycleId(), requested);
         List<Integer> valid = resultMapper.selectPendingResultIdsInCycle(request.getCycleId(), requested);
         List<Integer> skipped = difference(requested, valid);
         if (!valid.isEmpty()) {
@@ -73,6 +74,7 @@ public class PreAdmissionServiceImpl implements PreAdmissionService {
     @Transactional(rollbackFor = Exception.class)
     public PreAdmissionMutationResponseDTO remove(PreAdmissionRemoveRequestDTO request) {
         List<Integer> requested = distinct(request.getResultIds());
+        resultMapper.lockDraftScope(request.getCycleId(), requested);
         int deleted = draftMapper.deleteBatch(request.getCycleId(), requested);
         return new PreAdmissionMutationResponseDTO(deleted, List.of());
     }
@@ -87,16 +89,18 @@ public class PreAdmissionServiceImpl implements PreAdmissionService {
         if (cycleId == null) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "招募周期不能为空");
         }
+        resultMapper.lockDraftScope(cycleId, null);
         List<PreAdmissionDraft> drafts = draftMapper.selectForFinalize(cycleId);
         if (drafts.isEmpty()) {
             return 0;
         }
-        int published = draftMapper.publishToResults(cycleId, currentUserId());
+        List<Integer> ids = drafts.stream().map(PreAdmissionDraft::getResultId).toList();
+        int published = draftMapper.publishToResults(cycleId, currentUserId(), ids);
         if (published != drafts.size()) {
             throw new BusinessException(BusinessExceptionEnum.RESOURCE_CONFLICT,
                     "预录取名单中有候选人已被定稿，请刷新名单后重试");
         }
-        draftMapper.deleteBatch(cycleId, drafts.stream().map(PreAdmissionDraft::getResultId).toList());
+        draftMapper.deleteBatch(cycleId, ids);
         log.info("预录取名单转正完成，cycleId={}，发布 {} 人", cycleId, published);
         return published;
     }

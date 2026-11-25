@@ -4,7 +4,7 @@
 
     <select id="selectDraftPage" resultType="club.boyuan.official.persistence.entity.PreAdmissionDraft">
         SELECT pad.*, ir.user_id, u.name AS user_name, d.dept_name AS department_name
-        FROM pre_admission_draft pad
+        FROM admission_active_draft pad
         JOIN interview_result ir ON ir.result_id = pad.result_id
         JOIN user u ON u.user_id = ir.user_id
         JOIN department d ON d.dept_id = pad.assigned_dept_id
@@ -24,7 +24,7 @@
 
     <select id="selectDepartmentStats" resultType="java.util.LinkedHashMap">
         SELECT d.dept_id AS deptId, d.dept_name AS departmentName, COUNT(*) AS candidateCount
-        FROM pre_admission_draft pad
+        FROM admission_active_draft pad
         JOIN interview_result ir ON ir.result_id = pad.result_id
         JOIN department d ON d.dept_id = pad.assigned_dept_id
         WHERE pad.cycle_id = #{cycleId}
@@ -60,7 +60,7 @@
         这里与 publishToResults 必须是同一个口径，否则发布条数对不上会整批回滚。
     -->
     <select id="selectForFinalize" resultType="club.boyuan.official.persistence.entity.PreAdmissionDraft">
-        SELECT pad.* FROM pre_admission_draft pad
+        SELECT pad.* FROM admission_active_draft pad
         JOIN interview_result ir ON ir.result_id = pad.result_id
         WHERE pad.cycle_id = #{cycleId}
           AND NOT <include refid="club.boyuan.official.persistence.mapper.InterviewResultMapper.screenRejectedPending"/>
@@ -68,17 +68,15 @@
         FOR UPDATE
     </select>
 
+    <select id="activeCount" resultType="long">SELECT COUNT(*) FROM admission_active_draft WHERE cycle_id=#{cycleId}</select>
+
     <update id="publishToResults">
         UPDATE interview_result ir
-        JOIN pre_admission_draft pad ON pad.result_id = ir.result_id
-        SET ir.decision = 1,
-            ir.assigned_dept_id = pad.assigned_dept_id,
-            ir.decision_by = #{operatorId},
-            ir.decision_at = NOW()
-        WHERE pad.cycle_id = #{cycleId}
-          AND ir.decision = 0
-          AND NOT <include refid="club.boyuan.official.persistence.mapper.InterviewResultMapper.screenRejectedPending"/>
-          AND COALESCE(ir.cycle_id,
-              (SELECT isc.cycle_id FROM interview_schedule isc WHERE isc.schedule_id = ir.schedule_id)) = #{cycleId}
+        JOIN resume sr ON sr.resume_id=ir.resume_id AND sr.cycle_id=ir.cycle_id AND sr.user_id=ir.user_id
+        SET ir.assigned_dept_id=ir.draft_dept_id,ir.decision=1,ir.decision_by=#{operatorId},ir.decision_at=NOW()
+        WHERE ir.cycle_id=#{cycleId} AND ir.decision=0 AND sr.status&lt;&gt;5
+          AND ir.screened_draft IS NULL AND ir.draft_dept_id IS NOT NULL
+          AND ir.result_id IN
+          <foreach collection="resultIds" item="id" open="(" separator="," close=")">#{id}</foreach>
     </update>
 </mapper>

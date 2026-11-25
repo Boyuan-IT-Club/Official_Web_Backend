@@ -1,5 +1,6 @@
 package club.boyuan.official.persistence.mapper;
 
+import club.boyuan.official.domain.interview.dto.InterviewResultListItem;
 import club.boyuan.official.persistence.entity.InterviewResult;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -17,7 +18,18 @@ import java.util.List;
  */
 public interface InterviewResultMapper extends BaseMapper<InterviewResult> {
 
-    Page<InterviewResult> selectResultPage(Page<InterviewResult> pageInfo, Integer cycleId, String name, String decision, String department);
+    Page<InterviewResultListItem> selectResultPage(Page<InterviewResultListItem> pageInfo, Integer cycleId, String name, String decision, String department);
+
+    void clearLegacyDrafts(@Param("resultIds") List<Integer> resultIds);
+    List<Integer> lockDraftResumes(@Param("cycleId") Integer cycle, @Param("resultIds") List<Integer> ids);
+    List<Integer> lockDraftResults(@Param("cycleId") Integer cycle, @Param("resultIds") List<Integer> ids);
+
+    default void lockDraftScope(Integer cycle, List<Integer> ids) {
+        if (cycle == null && (ids == null || ids.isEmpty())) throw new IllegalArgumentException("缺少录取范围");
+        if (ids != null && ids.isEmpty()) return;
+        lockDraftResumes(cycle, ids);
+        lockDraftResults(cycle, ids);
+    }
 
     /**
      * 过滤出确实属于该周期的 result_id，用于批量操作前的归属校验。

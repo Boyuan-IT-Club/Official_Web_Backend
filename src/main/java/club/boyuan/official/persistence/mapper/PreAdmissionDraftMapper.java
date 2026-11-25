@@ -26,5 +26,8 @@ public interface PreAdmissionDraftMapper extends BaseMapper<PreAdmissionDraft> {
 
     List<PreAdmissionDraft> selectForFinalize(@Param("cycleId") Integer cycleId);
 
-    int publishToResults(@Param("cycleId") Integer cycleId, @Param("operatorId") Integer operatorId);
+    long activeCount(@Param("cycleId") Integer cycleId);
+
+    int publishToResults(@Param("cycleId") Integer cycleId, @Param("operatorId") Integer operatorId,
+                         @Param("resultIds") List<Integer> resultIds);
 }
