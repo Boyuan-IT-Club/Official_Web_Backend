@@ -46,7 +46,7 @@ public class RecruitmentQrCodeController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('cycle:manage', 'resume:audit')")
-    public ResponseEntity<ResponseMessage<String>> delete(@PathVariable Integer id) {
+    public ResponseEntity<ResponseMessage<String>> delete(@PathVariable String id) {
         qrCodeService.delete(id);
         return ResponseEntity.ok(ResponseMessage.success("已删除"));
     }

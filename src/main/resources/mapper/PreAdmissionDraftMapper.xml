@@ -34,7 +34,23 @@
         ORDER BY d.dept_name
     </select>
 
-    <insert id="upsertBatch">
+    <update id="saveOnResult">
+        UPDATE interview_result ir JOIN resume sr ON sr.resume_id=ir.resume_id AND sr.cycle_id=ir.cycle_id AND sr.user_id=ir.user_id
+        SET ir.draft_created_by=IF(ir.draft_created_at IS NULL,#{operatorId},ir.draft_created_by),
+            ir.draft_created_at=COALESCE(ir.draft_created_at,NOW()),ir.draft_updated_by=#{operatorId},
+            ir.draft_updated_at=NOW(),ir.draft_dept_id=#{assignedDeptId},ir.screened_draft=NULL,ir.updated_at=ir.updated_at
+        WHERE ir.cycle_id=#{cycleId} AND ir.decision=0 AND sr.status&lt;&gt;5 AND ir.result_id IN
+        <foreach collection="resultIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </update>
+
+    <update id="removeFromResult">
+        UPDATE interview_result SET draft_dept_id=NULL,draft_created_by=NULL,draft_updated_by=NULL,
+            draft_created_at=NULL,draft_updated_at=NULL,screened_draft=NULL,updated_at=updated_at
+        WHERE cycle_id=#{cycleId} AND (draft_dept_id IS NOT NULL OR screened_draft IS NOT NULL) AND result_id IN
+        <foreach collection="resultIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </update>
+
+    <insert id="saveLegacy">
         INSERT INTO pre_admission_draft
             (cycle_id, result_id, assigned_dept_id, created_by, updated_by, created_at, updated_at)
         VALUES
@@ -47,7 +63,7 @@
             updated_at = NOW()
     </insert>
 
-    <delete id="deleteBatch">
+    <delete id="removeLegacy">
         DELETE FROM pre_admission_draft
         WHERE cycle_id = #{cycleId}
           AND result_id IN

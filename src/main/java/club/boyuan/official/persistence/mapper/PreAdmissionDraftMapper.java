@@ -8,7 +8,7 @@ import org.apache.ibatis.annotations.Param;
 import java.util.List;
 import java.util.Map;
 
-public interface PreAdmissionDraftMapper extends BaseMapper<PreAdmissionDraft> {
+public interface PreAdmissionDraftMapper extends BaseMapper<PreAdmissionDraft>, ParentRecordMode {
 
     Page<PreAdmissionDraft> selectDraftPage(Page<PreAdmissionDraft> page,
                                              @Param("cycleId") Integer cycleId,
@@ -17,12 +17,25 @@ public interface PreAdmissionDraftMapper extends BaseMapper<PreAdmissionDraft> {
 
     List<Map<String, Object>> selectDepartmentStats(@Param("cycleId") Integer cycleId);
 
-    int upsertBatch(@Param("cycleId") Integer cycleId,
+    default int upsertBatch(Integer cycleId, List<Integer> ids, Integer dept, Integer actor) {
+        return parentOnly() ? saveOnResult(cycleId, ids, dept, actor) : saveLegacy(cycleId, ids, dept, actor);
+    }
+
+    default int deleteBatch(Integer cycleId, List<Integer> ids) {
+        return parentOnly() ? removeFromResult(cycleId, ids) : removeLegacy(cycleId, ids);
+    }
+
+    int saveOnResult(@Param("cycleId") Integer cycleId, @Param("resultIds") List<Integer> ids,
+                     @Param("assignedDeptId") Integer dept, @Param("operatorId") Integer actor);
+
+    int removeFromResult(@Param("cycleId") Integer cycleId, @Param("resultIds") List<Integer> ids);
+
+    int saveLegacy(@Param("cycleId") Integer cycleId,
                     @Param("resultIds") List<Integer> resultIds,
                     @Param("assignedDeptId") Integer assignedDeptId,
                     @Param("operatorId") Integer operatorId);
 
-    int deleteBatch(@Param("cycleId") Integer cycleId, @Param("resultIds") List<Integer> resultIds);
+    int removeLegacy(@Param("cycleId") Integer cycleId, @Param("resultIds") List<Integer> resultIds);
 
     List<PreAdmissionDraft> selectForFinalize(@Param("cycleId") Integer cycleId);
 

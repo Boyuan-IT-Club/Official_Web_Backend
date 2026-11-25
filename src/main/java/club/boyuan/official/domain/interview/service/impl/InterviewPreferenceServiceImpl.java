@@ -116,12 +116,14 @@ public class InterviewPreferenceServiceImpl extends ServiceImpl<InterviewPrefere
                 .setSubmittedAt(now);
         saveOrUpdate(preference);
 
-        preferenceTimeMapper.delete(new LambdaQueryWrapper<InterviewPreferenceTime>()
-                .eq(InterviewPreferenceTime::getResumeId, resume.getResumeId()));
-        for (Integer timeSlotId : timeSlotIds) {
-            preferenceTimeMapper.insert(new InterviewPreferenceTime()
-                    .setResumeId(resume.getResumeId())
-                    .setTimeSlotId(timeSlotId));
+        if (!baseMapper.parentOnly()) {
+            preferenceTimeMapper.delete(new LambdaQueryWrapper<InterviewPreferenceTime>()
+                    .eq(InterviewPreferenceTime::getResumeId, resume.getResumeId()));
+            for (Integer timeSlotId : timeSlotIds) {
+                preferenceTimeMapper.insert(new InterviewPreferenceTime()
+                        .setResumeId(resume.getResumeId())
+                        .setTimeSlotId(timeSlotId));
+            }
         }
 
         log.info("学生提交面试志愿成功，userId={}, resumeId={}, first={}, second={}, timeSlots={}",

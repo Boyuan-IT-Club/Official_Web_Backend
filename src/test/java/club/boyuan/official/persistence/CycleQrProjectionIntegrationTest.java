@@ -136,6 +136,33 @@ class CycleQrProjectionIntegrationTest {
     }
 
     @Test
+    @WithMockUser(authorities = "cycle:manage")
+    void parentOnlyKeepsLegacyIdsAndDoesNotReuseDeletedKeys() throws Exception {
+        var legacy = upload("QA_GROUP", 0, "old");
+        jdbc.execute("CREATE OR REPLACE SQL SECURITY INVOKER VIEW parent_record_cutover AS SELECT 1 AS enabled");
+        try {
+            var changed = upload("QA_GROUP", 0, "updated");
+            assertEquals(legacy.getId(), changed.publicId());
+            var created = upload("DEPT", 1, "fresh");
+            String identifier = (String) created.publicId();
+            assertNotNull(java.util.UUID.fromString(identifier));
+            assertEquals(identifier, upload("DEPT", 1, "replacement").publicId());
+            mvc.perform(get("/api/recruitment/qrcodes").param("cycleId", String.valueOf(cycleId)))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.data[0].id").value(identifier))
+                    .andExpect(jsonPath("$.data[1].id").value(legacy.getId()));
+            codes.delete(identifier);
+            var recreated = upload("DEPT", 1, "new");
+            codes.delete(identifier);
+            assertEquals(recreated.publicId(), codes.listByCycle(cycleId).get(0).publicId());
+            codes.delete(legacy.getId());
+            assertNull(codes.qaGroup(cycleId));
+            assertEquals("old", qrMapper.selectById(legacy.getId()).getImageUrl());
+        } finally {
+            jdbc.execute("CREATE OR REPLACE SQL SECURITY INVOKER VIEW parent_record_cutover AS SELECT 0 AS enabled");
+        }
+    }
+
+    @Test
     void concurrentDepartmentUpdatesKeepBothEntries() throws Exception {
         var pool = Executors.newFixedThreadPool(2);
         var start = new CountDownLatch(1);
