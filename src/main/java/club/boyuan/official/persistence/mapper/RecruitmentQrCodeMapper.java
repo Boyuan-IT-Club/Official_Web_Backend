@@ -10,7 +10,7 @@ import org.apache.ibatis.annotations.Update;
 import java.util.List;
 
 @Mapper
-public interface RecruitmentQrCodeMapper extends BaseMapper<RecruitmentQrCode> {
+public interface RecruitmentQrCodeMapper extends BaseMapper<RecruitmentQrCode>, ParentRecordMode {
 
     @Select("SELECT cycle_id FROM recruitment_cycle WHERE cycle_id=#{cycleId} FOR UPDATE")
     Integer lockCycle(@Param("cycleId") int cycleId);
@@ -24,6 +24,27 @@ public interface RecruitmentQrCodeMapper extends BaseMapper<RecruitmentQrCode> {
         WHERE c.cycle_id=#{cycleId}
         """)
     void refreshCycleCodes(@Param("cycleId") int cycleId);
+
+    @Select("SELECT * FROM cycle_qr_entries WHERE CAST(id AS CHAR)=#{identifier} OR token=#{identifier}")
+    RecruitmentQrCode findIdentifier(@Param("identifier") String identifier);
+
+    @Update("""
+        UPDATE recruitment_cycle SET qr_codes=JSON_SET(
+            CASE WHEN #{dept} AND JSON_EXTRACT(qr_codes,'$.DEPT') IS NULL
+                 THEN JSON_SET(COALESCE(qr_codes,JSON_OBJECT()),'$.DEPT',JSON_OBJECT())
+                 ELSE COALESCE(qr_codes,JSON_OBJECT()) END, #{path},
+            JSON_MERGE_PATCH(
+                COALESCE(JSON_EXTRACT(qr_codes,#{path}),JSON_OBJECT('token',#{token},'createdAt',UNIX_TIMESTAMP())),
+                JSON_OBJECT('image',#{image},'updatedAt',UNIX_TIMESTAMP(),'remark',#{remark}))),
+            updated_at=updated_at WHERE cycle_id=#{cycleId}
+        """)
+    void putCode(@Param("cycleId") int cycleId, @Param("path") String path, @Param("dept") boolean department,
+                 @Param("token") String token, @Param("image") String image, @Param("remark") String remark);
+
+    @Update("""
+        UPDATE recruitment_cycle SET qr_codes=JSON_REMOVE(qr_codes,#{path}),updated_at=updated_at WHERE cycle_id=#{cycleId}
+        """)
+    void removeCode(@Param("cycleId") int cycleId,@Param("path") String path);
 
     List<RecruitmentQrCode> readCycleCodes(@Param("cycleId") int cycleId);
 }

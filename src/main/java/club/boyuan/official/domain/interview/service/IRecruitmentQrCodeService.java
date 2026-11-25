@@ -19,7 +19,11 @@ public interface IRecruitmentQrCodeService {
     List<RecruitmentQrCode> listByCycle(Integer cycleId);
 
     /** 删除某一张 */
-    void delete(Integer id);
+    void delete(String id);
+
+    default void delete(Integer id) {
+        delete(id == null ? null : id.toString());
+    }
 
     void deleteByKey(Integer cycleId, String qrType, Integer deptId);
 

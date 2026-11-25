@@ -272,6 +272,7 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
      * 而增量比对要处理「新增/删除/顺序」三种情况，多写的分支反而更容易错。
      */
     private void replaceSessionDepts(Integer sessionId, List<Integer> deptIds) {
+        if (baseMapper.parentOnly()) return;
         interviewSessionDeptMapper.delete(
                 new LambdaQueryWrapper<club.boyuan.official.persistence.entity.InterviewSessionDept>()
                         .eq(club.boyuan.official.persistence.entity.InterviewSessionDept::getSessionId, sessionId));

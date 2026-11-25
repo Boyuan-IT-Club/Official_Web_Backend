@@ -48,6 +48,15 @@ public class RecruitmentQrCode implements Serializable {
     @TableId(value = "id", type = IdType.AUTO)
     private Integer id;
 
+    @TableField(exist = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private String token;
+
+    @com.fasterxml.jackson.annotation.JsonGetter("id")
+    public Object publicId() {
+        return id == null ? token : id;
+    }
+
     @TableField("cycle_id")
     private Integer cycleId;
 

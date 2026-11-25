@@ -11,7 +11,7 @@ import org.apache.ibatis.annotations.Update;
  *
  * @author dhy
  */
-public interface InterviewSessionMapper extends BaseMapper<InterviewSession> {
+public interface InterviewSessionMapper extends BaseMapper<InterviewSession>, ParentRecordMode {
 
     @Select("SELECT cycle_id FROM recruitment_cycle WHERE cycle_id=#{cycleId} FOR UPDATE")
     Integer lockAllocationCycle(int cycleId);

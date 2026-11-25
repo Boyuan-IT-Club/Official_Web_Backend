@@ -8,5 +8,5 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
  *
  * @author dhy
  */
-public interface InterviewPreferenceMapper extends BaseMapper<InterviewPreference> {
+public interface InterviewPreferenceMapper extends BaseMapper<InterviewPreference>, ParentRecordMode {
 }
