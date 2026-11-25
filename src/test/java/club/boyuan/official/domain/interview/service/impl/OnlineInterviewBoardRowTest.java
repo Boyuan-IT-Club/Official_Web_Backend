@@ -22,11 +22,8 @@ class OnlineInterviewBoardRowTest {
 
     private static final String ROOM = "文科楼 205";
     private static final int SESSION = 29;
-    private static final List<Integer> SESSION_INTERVIEWERS = List.of(7, 8);
-    private static final List<Integer> CYCLE_INTERVIEWERS = List.of(7, 8, 9);
 
     private static final Map<Integer, String> LOCATIONS = Map.of(SESSION, ROOM);
-    private static final Map<Integer, List<Integer>> BY_SESSION = Map.of(SESSION, SESSION_INTERVIEWERS);
 
     private static InterviewSchedule schedule(Integer sessionId, Integer mode) {
         InterviewSchedule s = new InterviewSchedule();
@@ -62,29 +59,4 @@ class OnlineInterviewBoardRowTest {
         assertNull(EvaluationBoardServiceImpl.locationOf(schedule(null, 0), LOCATIONS));
     }
 
-    // ---------- 面试官名单 ----------
-
-    @Test
-    @DisplayName("线下只有排在这一场的面试官能填")
-    void offlineKeepsSessionInterviewers() {
-        assertEquals(SESSION_INTERVIEWERS,
-                EvaluationBoardServiceImpl.interviewersOf(schedule(SESSION, 0), BY_SESSION, CYCLE_INTERVIEWERS));
-    }
-
-    @Test
-    @DisplayName("线上退到本周期的面试官都能填 —— 否则这一行谁都填不了")
-    void onlineFallsBackToCycleInterviewers() {
-        assertEquals(CYCLE_INTERVIEWERS,
-                EvaluationBoardServiceImpl.interviewersOf(schedule(null, 1), BY_SESSION, CYCLE_INTERVIEWERS));
-        // 残留场次同样不该把名单收窄回那一场
-        assertEquals(CYCLE_INTERVIEWERS,
-                EvaluationBoardServiceImpl.interviewersOf(schedule(SESSION, 1), BY_SESSION, CYCLE_INTERVIEWERS));
-    }
-
-    @Test
-    @DisplayName("未排期的行名单为空，不借线上那条路放行")
-    void unassignedStaysEmpty() {
-        assertTrue(EvaluationBoardServiceImpl
-                .interviewersOf(schedule(null, 0), BY_SESSION, CYCLE_INTERVIEWERS).isEmpty());
-    }
 }

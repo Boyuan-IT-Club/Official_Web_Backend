@@ -27,7 +27,7 @@ class AgentEvaluationProxyControllerTest {
     private final AgentAdminClient client = mock(AgentAdminClient.class);
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final AgentEvaluationProxyController controller =
-            new AgentEvaluationProxyController(client, objectMapper);
+            new AgentEvaluationProxyController(client, objectMapper, org.mockito.Mockito.mock(EvaluationQuestionScope.class));
 
     private static ResponseEntity<String> upstream(HttpStatus status, String body) {
         return ResponseEntity.status(status).body(body);

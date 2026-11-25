@@ -76,3 +76,17 @@ export function materialize(payload) {
     body: JSON.stringify(payload),
   });
 }
+
+/** The Java authentication filter checks expiry and logout. The board endpoint reloads current grants. */
+export async function fetchAccess(cycleId, token) {
+  const response = await fetch(`${config.backendBaseUrl}/api/interview/evaluation/cycles/${cycleId}/access`, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!response.ok) throw new Error('评价板权限校验失败');
+  const envelope = await response.json();
+  if (envelope.code !== 200 || !Array.isArray(envelope.data?.scheduleIds) || !Array.isArray(envelope.data?.dimensionIds)) {
+    throw new Error('评价板权限响应无效');
+  }
+  return envelope.data;
+}

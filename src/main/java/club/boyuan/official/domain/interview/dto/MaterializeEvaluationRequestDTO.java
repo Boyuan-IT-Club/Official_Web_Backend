@@ -24,6 +24,8 @@ public class MaterializeEvaluationRequestDTO {
     @NotNull(message = "周期ID不能为空")
     private Integer cycleId;
 
+    private Long snapshotRevision;
+
     @NotEmpty(message = "物化数据不能为空")
     @Valid
     private List<EvaluationItem> items;
@@ -45,6 +47,8 @@ public class MaterializeEvaluationRequestDTO {
 
         /** 把状态改为「已定稿」的那个人 */
         private Integer submittedBy;
+
+        private String submittedAt;
 
         /** 各维度得分 {dimensionId: score} */
         private Map<Integer, BigDecimal> scores;

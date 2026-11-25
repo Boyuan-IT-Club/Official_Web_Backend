@@ -153,7 +153,7 @@ test('标灰的行不再物化', () => {
   assert.equal(items.length, 0);
 });
 
-test('对账新增行、标灰移除行，且不动已填评价', () => {
+test('对账新增行、移出失效行，且不动已填评价', () => {
   const doc = newSeededDoc([row(100, [7]), row(101, [7])]);
   doc.getMap('rows').get('100').set(dimensionColId(1), 9);
 
@@ -162,7 +162,7 @@ test('对账新增行、标灰移除行，且不动已填评价', () => {
 
   assert.equal(result.added, 1);
   assert.equal(result.removed, 1);
-  assert.equal(doc.getMap('rows').get('101').get('_info').get('removed'), true);
+  assert.equal(doc.getMap('rows').has('101'), false);
   assert.equal(doc.getMap('rows').get('102').get('_info').get('candidateName'), '候选人102');
   // 已填的评分必须原样保留
   assert.equal(doc.getMap('rows').get('100').get(dimensionColId(1)), 9);

@@ -63,6 +63,24 @@ public class InterviewEvaluationController {
     private final IEvaluationDimensionService evaluationDimensionService;
     private final IInterviewEvaluationService interviewEvaluationService;
     private final IUserService userService;
+    private final club.boyuan.official.persistence.mapper.EvaluationScopeMapper scope;
+
+    public record BoardAccess(Integer viewerId, boolean admin, boolean locked, java.util.List<Integer> scheduleIds,
+                              java.util.List<Integer> dimensionIds) {}
+
+    @GetMapping("/cycles/{cycleId}/access")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ResponseMessage<BoardAccess>> access(@PathVariable Integer cycleId) {
+        var grants = scope.boardGrants(SecurityUtil.getCurrentUsername());
+        boolean admin = grants.contains("interview:board:manage") || grants.contains("resume:audit");
+        if (!admin && !grants.contains("interview:evaluate"))
+            throw new org.springframework.security.access.AccessDeniedException("无评价权限");
+        Integer locked = scope.boardLock(cycleId);
+        if (locked == null) throw new org.springframework.security.access.AccessDeniedException("评价板未开启");
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore())
+                .body(ResponseMessage.success(new BoardAccess(scope.viewerId(SecurityUtil.getCurrentUsername()), admin, locked == 1, scope.roster(cycleId), scope.dimensions(cycleId))));
+    }
+
 
     /**
      * 开启该周期的协同评价表。已开启时原样返回，重复点击不报错。
@@ -70,6 +88,7 @@ public class InterviewEvaluationController {
     @PostMapping("/cycles/{cycleId}/board")
     @PreAuthorize("hasAnyAuthority('interview:board:manage', 'resume:audit')")
     public ResponseEntity<ResponseMessage<EvaluationBoardDTO>> openBoard(@PathVariable Integer cycleId) {
+        requireAdmin();
         return ResponseEntity.ok(ResponseMessage.success(evaluationBoardService.openBoard(cycleId)));
     }
 
@@ -79,6 +98,7 @@ public class InterviewEvaluationController {
     @GetMapping("/cycles/{cycleId}/board")
     @PreAuthorize("hasAnyAuthority('interview:board:manage', 'interview:evaluate', 'resume:audit')")
     public ResponseEntity<ResponseMessage<EvaluationBoardDTO>> getBoard(@PathVariable Integer cycleId) {
+        requireView(cycleId);
         return ResponseEntity.ok(ResponseMessage.success(evaluationBoardService.getBoard(cycleId)));
     }
 
@@ -89,6 +109,7 @@ public class InterviewEvaluationController {
     @PreAuthorize("hasAnyAuthority('interview:board:manage', 'resume:audit')")
     public ResponseEntity<ResponseMessage<EvaluationBoardDTO>> setLocked(@PathVariable Integer cycleId,
                                                                         @RequestParam boolean locked) {
+        requireAdmin();
         return ResponseEntity.ok(ResponseMessage.success(evaluationBoardService.setLocked(cycleId, locked)));
     }
 
@@ -99,6 +120,7 @@ public class InterviewEvaluationController {
     @PreAuthorize("hasAnyAuthority('interview:board:manage', 'interview:evaluate', 'resume:audit')")
     public ResponseEntity<ResponseMessage<List<EvaluationDimensionDTO>>> listDimensions(
             @PathVariable Integer cycleId) {
+        requireView(cycleId);
         return ResponseEntity.ok(ResponseMessage.success(evaluationDimensionService.listByCycle(cycleId)));
     }
 
@@ -110,6 +132,7 @@ public class InterviewEvaluationController {
     public ResponseEntity<ResponseMessage<List<EvaluationDimensionDTO>>> saveDimensions(
             @PathVariable Integer cycleId,
             @Valid @RequestBody SaveEvaluationDimensionsRequestDTO request) {
+        requireAdmin();
         return ResponseEntity.ok(ResponseMessage.success(
                 evaluationDimensionService.replaceDimensions(cycleId, request)));
     }
@@ -120,6 +143,7 @@ public class InterviewEvaluationController {
     @GetMapping("/cycles/{cycleId}/summary")
     @PreAuthorize("hasAnyAuthority('interview:board:manage', 'resume:audit')")
     public ResponseEntity<ResponseMessage<EvaluationSummaryDTO>> summary(@PathVariable Integer cycleId) {
+        requireAdmin();
         return ResponseEntity.ok(ResponseMessage.success(interviewEvaluationService.summary(cycleId)));
     }
 
@@ -134,13 +158,23 @@ public class InterviewEvaluationController {
     public ResponseEntity<ResponseMessage<ResumeDTO>> candidateResume(@PathVariable Integer cycleId,
                                                                      @PathVariable Integer scheduleId) {
         User viewer = userService.getUserByUsername(SecurityUtil.getCurrentUsername());
-        return ResponseEntity.ok(ResponseMessage.success(evaluationBoardService.getCandidateResume(
+        requireView(cycleId);
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore()).body(ResponseMessage.success(evaluationBoardService.getCandidateResume(
                 cycleId, scheduleId, viewer.getUserId(), hasBoardAdminAuthority())));
     }
 
-    private static boolean hasBoardAdminAuthority() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        return authentication != null && authentication.getAuthorities().stream()
-                .anyMatch(granted -> BOARD_ADMIN_AUTHORITIES.contains(granted.getAuthority()));
+    private void requireAdmin() {
+        if (!hasBoardAdminAuthority()) throw new org.springframework.security.access.AccessDeniedException("无评价管理权限");
+    }
+
+    private boolean hasBoardAdminAuthority() {
+        return scope.boardGrants(SecurityUtil.getCurrentUsername()).stream().anyMatch(BOARD_ADMIN_AUTHORITIES::contains);
+    }
+
+    private void requireView(int cycleId) {
+        if (hasBoardAdminAuthority()) return;
+        Integer viewer = scope.viewerId(SecurityUtil.getCurrentUsername());
+        if (viewer == null || !scope.boardAccess(viewer, cycleId))
+            throw new org.springframework.security.access.AccessDeniedException("无权读取该周期的评价板");
     }
 }

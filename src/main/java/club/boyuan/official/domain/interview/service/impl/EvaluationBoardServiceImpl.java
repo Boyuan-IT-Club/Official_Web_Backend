@@ -13,7 +13,6 @@ import club.boyuan.official.persistence.entity.EvaluationDimension;
 import club.boyuan.official.persistence.entity.InterviewSchedule;
 import club.boyuan.official.persistence.entity.RecruitmentCycle;
 import club.boyuan.official.persistence.entity.Resume;
-import club.boyuan.official.persistence.entity.SessionInterviewer;
 import club.boyuan.official.persistence.entity.InterviewSession;
 import club.boyuan.official.persistence.entity.User;
 import club.boyuan.official.persistence.mapper.CollabDocMapper;
@@ -22,7 +21,6 @@ import club.boyuan.official.persistence.mapper.EvaluationDimensionMapper;
 import club.boyuan.official.persistence.mapper.InterviewScheduleMapper;
 import club.boyuan.official.persistence.mapper.RecruitmentCycleMapper;
 import club.boyuan.official.persistence.mapper.ResumeMapper;
-import club.boyuan.official.persistence.mapper.SessionInterviewerMapper;
 import club.boyuan.official.persistence.mapper.InterviewSessionMapper;
 import club.boyuan.official.persistence.mapper.UserMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -74,7 +72,7 @@ public class EvaluationBoardServiceImpl implements IEvaluationBoardService {
     private final EvaluationDimensionMapper evaluationDimensionMapper;
     private final InterviewScheduleMapper interviewScheduleMapper;
     private final RecruitmentCycleMapper recruitmentCycleMapper;
-    private final SessionInterviewerMapper sessionInterviewerMapper;
+    private final club.boyuan.official.persistence.mapper.EvaluationScopeMapper scope;
     private final InterviewSessionMapper interviewSessionMapper;
     private final ResumeMapper resumeMapper;
     private final UserMapper userMapper;
@@ -126,7 +124,8 @@ public class EvaluationBoardServiceImpl implements IEvaluationBoardService {
     public EvaluationBoardDTO setLocked(Integer cycleId, boolean locked) {
         CollabDoc doc = requireDoc(cycleId);
         doc.setLocked(locked ? 1 : 0);
-        collabDocMapper.updateById(doc);
+        collabDocMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<CollabDoc>()
+                .set(CollabDoc::getLocked, doc.getLocked()).eq(CollabDoc::getDocName, doc.getDocName()));
         log.info("周期 {} 评价表{}", cycleId, locked ? "已锁定" : "已解锁");
         return toBoardDTO(doc, listRoster(cycleId).size(), listDimensions(cycleId).size());
     }
@@ -168,8 +167,7 @@ public class EvaluationBoardServiceImpl implements IEvaluationBoardService {
             throw new BusinessException(BusinessExceptionEnum.INTERVIEW_SCHEDULE_NOT_FOUND);
         }
 
-        if (!admin && !canEvaluate(schedule, viewerUserId)) {
-            log.warn("用户 {} 试图查看非本人负责场次的候选人简历，安排 {}", viewerUserId, scheduleId);
+        if (!admin && !scope.candidate(viewerUserId, schedule.getResumeId(), cycleId, scheduleId, null, false)) {
             throw new BusinessException(BusinessExceptionEnum.USER_ROLE_NOT_AUTHORIZED);
         }
 
@@ -178,51 +176,14 @@ public class EvaluationBoardServiceImpl implements IEvaluationBoardService {
 
     @Override
     public boolean isInterviewerOfCycle(Integer cycleId, Integer userId) {
-        if (cycleId == null || userId == null) {
-            return false;
-        }
-        // 该用户绑定的全部场次 -> 取出其中属于本周期的
-        List<SessionInterviewer> bindings = sessionInterviewerMapper.selectList(
-                new LambdaQueryWrapper<SessionInterviewer>().eq(SessionInterviewer::getUserId, userId));
-        if (bindings.isEmpty()) {
-            return false;
-        }
-        List<Integer> sessionIds = bindings.stream()
-                .map(SessionInterviewer::getSessionId)
-                .filter(Objects::nonNull)
-                .toList();
-        if (sessionIds.isEmpty()) {
-            return false;
-        }
-        return interviewSessionMapper.exists(new LambdaQueryWrapper<InterviewSession>()
-                .in(InterviewSession::getSessionId, sessionIds)
-                .eq(InterviewSession::getCycleId, cycleId));
-    }
-
-    /**
-     * 该面试官是否有权看这一行的候选人。
-     * <p>
-     * 线下按场次绑定；线上面试不占场次，绑定关系无从谈起，退到「本周期的面试官都算」——
-     * 与评价表里线上面试那一组的可编辑范围保持同一条规则。
-     */
-    private boolean canEvaluate(InterviewSchedule schedule, Integer userId) {
-        if (isOnline(schedule)) {
-            return isInterviewerOfCycle(schedule.getCycleId(), userId);
-        }
-        return isInterviewerOf(schedule.getSessionId(), userId);
-    }
-
-    private boolean isInterviewerOf(Integer sessionId, Integer userId) {
-        if (sessionId == null || userId == null) {
-            return false;
-        }
-        return sessionInterviewerMapper.exists(new LambdaQueryWrapper<SessionInterviewer>()
-                .eq(SessionInterviewer::getSessionId, sessionId)
-                .eq(SessionInterviewer::getUserId, userId));
+        return userId != null && cycleId != null && scope.boardAccess(userId, cycleId);
     }
 
     private List<EvaluationBoardSeedDTO.RowSeed> buildRows(Integer cycleId) {
-        List<InterviewSchedule> roster = listRoster(cycleId);
+        List<Integer> candidates = scope.roster(cycleId);
+        if (candidates.isEmpty()) return List.of();
+        List<InterviewSchedule> roster = listRoster(cycleId).stream()
+                .filter(s -> candidates.contains(s.getScheduleId())).toList();
         if (roster.isEmpty()) {
             return Collections.emptyList();
         }
@@ -260,15 +221,8 @@ public class EvaluationBoardServiceImpl implements IEvaluationBoardService {
                 : departmentMapper.selectBatchIds(deptIds).stream()
                 .collect(Collectors.toMap(Department::getDeptId, Function.identity(), (a, b) -> a));
 
-        Map<Integer, List<Integer>> interviewersBySession = loadInterviewersBySession(roster);
         Map<Integer, String> locationBySession = loadLocationsBySession(roster);
-        // 只有名单里真有线上面试时才去查，免得给每个周期都多一次全量查询
-        List<Integer> cycleInterviewers = roster.stream().anyMatch(EvaluationBoardServiceImpl::isOnline)
-                ? interviewersBySession.values().stream()
-                        .flatMap(List::stream)
-                        .distinct()
-                        .toList()
-                : Collections.emptyList();
+        List<Integer> cycleInterviewers = scope.evaluatorIds();
 
         List<EvaluationBoardSeedDTO.RowSeed> rows = new ArrayList<>(roster.size());
         for (InterviewSchedule schedule : roster) {
@@ -295,7 +249,7 @@ public class EvaluationBoardServiceImpl implements IEvaluationBoardService {
                 row.setResumeScoredByName(scorer == null ? null : scorer.getName());
             }
             row.setInterviewTime(schedule.getInterviewTime());
-            row.setInterviewerUserIds(interviewersOf(schedule, interviewersBySession, cycleInterviewers));
+            row.setInterviewerUserIds(cycleInterviewers);
             rows.add(row);
         }
         return rows;
@@ -316,25 +270,6 @@ public class EvaluationBoardServiceImpl implements IEvaluationBoardService {
             return ONLINE_LOCATION;
         }
         return schedule.getSessionId() == null ? null : locationBySession.get(schedule.getSessionId());
-    }
-
-    /**
-     * 谁能填这一行的评价。
-     * <p>
-     * 线上面试没有场次可绑，名单就无从取 —— 而前端 canEdit 要求本人在名单里，
-     * 空名单等于这一行谁都填不了。退一步：本周期的面试官都能填。线上面试本就是
-     * 私下约时间、谁有空谁面，没有「排在这一场」可言。
-     */
-    static List<Integer> interviewersOf(InterviewSchedule schedule,
-                                        Map<Integer, List<Integer>> interviewersBySession,
-                                        List<Integer> cycleInterviewers) {
-        if (isOnline(schedule)) {
-            return cycleInterviewers;
-        }
-        if (schedule.getSessionId() == null) {
-            return Collections.emptyList();
-        }
-        return interviewersBySession.getOrDefault(schedule.getSessionId(), Collections.emptyList());
     }
 
     private Map<Integer, Integer> resolveMissingUserIds(List<InterviewSchedule> roster) {
@@ -368,24 +303,6 @@ public class EvaluationBoardServiceImpl implements IEvaluationBoardService {
         return bySession;
     }
 
-    private Map<Integer, List<Integer>> loadInterviewersBySession(List<InterviewSchedule> roster) {
-        Set<Integer> sessionIds = roster.stream()
-                .map(InterviewSchedule::getSessionId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-        if (sessionIds.isEmpty()) {
-            return Collections.emptyMap();
-        }
-        List<SessionInterviewer> bindings = sessionInterviewerMapper.selectList(
-                new LambdaQueryWrapper<SessionInterviewer>()
-                        .in(SessionInterviewer::getSessionId, sessionIds)
-                        .orderByAsc(SessionInterviewer::getId));
-        Map<Integer, List<Integer>> bySession = new HashMap<>();
-        for (SessionInterviewer binding : bindings) {
-            bySession.computeIfAbsent(binding.getSessionId(), k -> new ArrayList<>()).add(binding.getUserId());
-        }
-        return bySession;
-    }
 
     /**
      * 按 ID 批量取用户，必须走 {@link UserMapper#selectUsersByIds} 这个自定义查询。

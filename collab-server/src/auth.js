@@ -4,10 +4,7 @@ import { ADMIN_PERMISSIONS, REQUIRED_PERMISSIONS, config } from './config.js';
 /**
  * 校验前端带来的 JWT，与 Java 后端同一把 HS256 密钥。
  *
- * 已知边界：Java 侧的登出是把令牌写进 Redis 吊销名单，本服务不查该名单，
- * 因此在令牌自然过期前，已登出用户持有的旧令牌仍能建立协同连接。
- * 面试官是可信小群体、且连接只能操作评价表，这个残留风险可接受；
- * 若要收紧，在此接入 Redis 查询吊销名单即可。
+ * Java 的实时授权端点同时检查注销、账户状态、板权限与名单。
  */
 export function authenticateToken(token) {
   if (!token) {

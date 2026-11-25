@@ -51,6 +51,13 @@ public class CollabDoc implements Serializable {
     @TableField("locked")
     private Integer locked;
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @TableField(value="author_state", select=false, updateStrategy=com.baomidou.mybatisplus.annotation.FieldStrategy.NEVER)
+    private String authorState;
+
+    @TableField(value="snapshot_revision", updateStrategy=com.baomidou.mybatisplus.annotation.FieldStrategy.NEVER)
+    private Long snapshotRevision;
+
     @TableField("created_at")
     private LocalDateTime createdAt;
 

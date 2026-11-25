@@ -64,7 +64,7 @@ class AttachmentAccessTest {
         userService = mock(IUserService.class);
         resumeService = mock(IResumeService.class);
         candidateMaterialScope = mock(CandidateMaterialScope.class);
-        when(candidateMaterialScope.canSeeCandidateMaterials(INTERVIEWER_OF_OWNER, OWNER)).thenReturn(true);
+        when(candidateMaterialScope.canReadResume(INTERVIEWER_OF_OWNER, 158)).thenReturn(true);
         controller = new ResumeAttachmentController(
                 attachmentService, userService, resumeService, candidateMaterialScope);
 
@@ -92,6 +92,7 @@ class AttachmentAccessTest {
     private void loginAs(int userId, String... authorities) {
         User u = new User();
         u.setUserId(userId);
+        when(candidateMaterialScope.currentGrants(userId)).thenReturn(List.of(authorities));
         u.setUsername("u" + userId);
         when(userService.getUserByUsername("u" + userId)).thenReturn(u);
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
@@ -147,7 +148,7 @@ class AttachmentAccessTest {
     @DisplayName("取直链：别的学生 403，且根本不去签名")
     void urlDeniedForOtherStudent() {
         loginAs(OTHER_STUDENT);
-        BusinessException e = assertThrows(BusinessException.class, () -> controller.url(121, true));
+        BusinessException e = assertThrows(BusinessException.class, () -> controller.url(121, true, true));
         assertEquals(BusinessExceptionEnum.PERMISSION_DENIED.getCode(), e.getCode());
         verify(attachmentService, never()).presignedUrl(any(), anyBoolean());
     }
@@ -156,7 +157,7 @@ class AttachmentAccessTest {
     @DisplayName("取直链：本人拿得到")
     void urlAllowedForOwner() {
         loginAs(OWNER);
-        var res = controller.url(121, true);
+        var res = controller.url(121, true, true);
         assertEquals("https://cos.example/signed", res.getBody().getData().get("url"));
     }
 
@@ -164,7 +165,7 @@ class AttachmentAccessTest {
     @DisplayName("取直链：审核人拿得到")
     void urlAllowedForReviewer() {
         loginAs(REVIEWER, "resume:view");
-        assertEquals("https://cos.example/signed", controller.url(121, true).getBody().getData().get("url"));
+        assertEquals("https://cos.example/signed", controller.url(121, true, true).getBody().getData().get("url"));
     }
 
     @Test
@@ -172,14 +173,14 @@ class AttachmentAccessTest {
     void urlNullWhenCosDisabled() {
         loginAs(OWNER);
         when(attachmentService.presignedUrl(any(), anyBoolean())).thenReturn(null);
-        assertNull(controller.url(121, true).getBody().getData().get("url"));
+        assertNull(controller.url(121, true, true).getBody().getData().get("url"));
     }
 
     @Test
     @DisplayName("流式下载 /content：别的学生同样 403，且不去开 COS 对象")
     void contentDeniedForOtherStudent() {
         loginAs(OTHER_STUDENT);
-        assertThrows(BusinessException.class, () -> controller.content(121, false, new MockHttpServletResponse()));
+        assertThrows(BusinessException.class, () -> controller.content(121, false, null, new MockHttpServletResponse()));
         verify(attachmentService, never()).open(any());
     }
 
@@ -214,7 +215,7 @@ class AttachmentAccessTest {
     void interviewerOfCandidateCanView() {
         loginAs(INTERVIEWER_OF_OWNER, "interview:evaluate");
         controller.list(158);
-        assertEquals("https://cos.example/signed", controller.url(121, true).getBody().getData().get("url"));
+        assertEquals("/api/resumes/attachments/121/content?inline=true", controller.url(121, true, true).getBody().getData().get("url"));
     }
 
     @Test
@@ -222,7 +223,7 @@ class AttachmentAccessTest {
     void interviewerElsewhereStillDenied() {
         loginAs(INTERVIEWER_ELSEWHERE, "interview:evaluate");
         assertThrows(BusinessException.class, () -> controller.list(158));
-        BusinessException e = assertThrows(BusinessException.class, () -> controller.url(121, true));
+        BusinessException e = assertThrows(BusinessException.class, () -> controller.url(121, true, true));
         assertEquals(BusinessExceptionEnum.PERMISSION_DENIED.getCode(), e.getCode());
         verify(attachmentService, never()).presignedUrl(any(), anyBoolean());
     }
@@ -232,6 +233,22 @@ class AttachmentAccessTest {
     void nonInterviewerSkipsScopeLookup() {
         loginAs(OTHER_STUDENT);
         assertThrows(BusinessException.class, () -> controller.list(158));
-        verify(candidateMaterialScope, never()).canSeeCandidateMaterials(any(), any());
+        verify(candidateMaterialScope, never()).canReadResume(any(), any());
+    }
+    @Test
+    void rangeRequestsCheckCurrentGrantsBeforeReadingBytes() throws Exception {
+        loginAs(INTERVIEWER_OF_OWNER, "interview:evaluate");
+        byte[] bytes = "abcdef".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        when(attachmentService.open(any())).thenReturn(new club.boyuan.official.infra.storage.CosFile(
+                new java.io.ByteArrayInputStream(bytes), "application/pdf", bytes.length));
+        var response = new MockHttpServletResponse();
+        controller.content(121, true, "bytes=2-4", response);
+        assertEquals(206, response.getStatus());
+        assertEquals("bytes 2-4/6", response.getHeader("Content-Range"));
+        assertEquals("cde", response.getContentAsString());
+        assertTrue(response.getHeader("Cache-Control").contains("no-store"));
+        when(candidateMaterialScope.currentGrants(INTERVIEWER_OF_OWNER)).thenReturn(List.of());
+        assertThrows(BusinessException.class, () -> controller.content(121, true, "bytes=0-1", new MockHttpServletResponse()));
+        verify(attachmentService).open(any());
     }
 }
