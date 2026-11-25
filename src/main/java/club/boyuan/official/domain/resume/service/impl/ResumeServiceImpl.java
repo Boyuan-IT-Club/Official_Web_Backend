@@ -870,8 +870,8 @@ public class ResumeServiceImpl implements IResumeService {
                 && !Integer.valueOf(1).equals(cycle.getIsDeleted())
                 && Integer.valueOf(1).equals(cycle.getIsActive())
                 && cycle.getStartDate() != null && cycle.getEndDate() != null
-                && !java.time.LocalDate.now().isBefore(cycle.getStartDate())
-                && !java.time.LocalDate.now().isAfter(cycle.getEndDate());
+                && !java.time.LocalDate.now(java.time.ZoneId.of("Asia/Shanghai")).isBefore(cycle.getStartDate())
+                && !java.time.LocalDate.now(java.time.ZoneId.of("Asia/Shanghai")).isAfter(cycle.getEndDate());
         if (!open) {
             throw new BusinessException(BusinessExceptionEnum.RESUME_CYCLE_CLOSED);
         }

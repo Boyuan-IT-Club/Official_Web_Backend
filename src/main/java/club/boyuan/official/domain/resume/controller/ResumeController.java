@@ -59,7 +59,7 @@ public class ResumeController {
         if (status == null || status != 1 || cycleId == null) return status;
         club.boyuan.official.persistence.entity.RecruitmentCycle cycle = recruitmentCycleMapper.selectById(cycleId);
         if (cycle != null && cycle.getEndDate() != null
-                && cycle.getEndDate().isBefore(java.time.LocalDate.now())) {
+                && cycle.getEndDate().isBefore(java.time.LocalDate.now(java.time.ZoneId.of("Asia/Shanghai")))) {
             return 3;
         }
         return status;
@@ -329,7 +329,7 @@ public class ResumeController {
         // 周期已截止：不再接受提交
         club.boyuan.official.persistence.entity.RecruitmentCycle cycle = recruitmentCycleMapper.selectById(cycleId);
         if (cycle != null && cycle.getEndDate() != null
-                && cycle.getEndDate().isBefore(java.time.LocalDate.now())) {
+                && cycle.getEndDate().isBefore(java.time.LocalDate.now(java.time.ZoneId.of("Asia/Shanghai")))) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD,
                     "本周期简历提交已于 " + cycle.getEndDate() + " 截止");
         }

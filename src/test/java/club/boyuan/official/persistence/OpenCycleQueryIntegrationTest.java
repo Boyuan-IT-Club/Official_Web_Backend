@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -31,7 +32,7 @@ class OpenCycleQueryIntegrationTest {
     @Test
     @DisplayName("同时开放的多个周期都要返回,按 start_date 倒序;已过期的不返回,停止投递但在时间内的仍返回")
     void openCyclesAreResolvedByDateWindow() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Shanghai"));
         List<Integer> created = new ArrayList<>();
         try {
             // 两个窗口都覆盖今天,start_date 一早一晚
@@ -69,7 +70,7 @@ class OpenCycleQueryIntegrationTest {
         // 和旁边那句「已提交（可修改）」自相矛盾。
         // 未开始的周期得能单独查出来做预告，但可见与可投必须分开：
         // 前端拿开放列表的 id 当「能不能投」的闸门，混进去就能投一个还没开始的周期。
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Shanghai"));
         List<Integer> created = new ArrayList<>();
         try {
             Integer notStarted = insert("测试-还没开始", today.plusDays(7), today.plusDays(30), 1, created);
@@ -103,7 +104,7 @@ class OpenCycleQueryIntegrationTest {
     @Test
     @DisplayName("即将开放按 start_date 升序，最快开始的排最前")
     void upcomingIsSortedByStartDateAscending() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Shanghai"));
         List<Integer> created = new ArrayList<>();
         try {
             Integer later = insert("测试-一个月后", today.plusDays(30), today.plusDays(60), 1, created);
@@ -115,6 +116,30 @@ class OpenCycleQueryIntegrationTest {
             // 预告卡片按「还有几天开始」自然排列；与开放列表的倒序相反是有意的
             assertTrue(ids.indexOf(sooner) < ids.indexOf(later),
                     "即将开放应按 start_date 升序: " + ids);
+        } finally {
+            created.forEach(cycleMapper::deleteById);
+        }
+    }
+
+    @Test
+    void pausedFilterAndStalePhaseRemainIndependent() {
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Shanghai"));
+        List<Integer> created = new ArrayList<>();
+        try {
+            int paused = insert("测试-旧客户端停投", today, today, 0, created);
+            int open = insert("测试-启投", today, today, 1, created);
+            var filtered = cycleMapper.findByStatus(4).stream().map(RecruitmentCycle::getCycleId).toList();
+            assertTrue(filtered.contains(paused));
+            assertFalse(filtered.contains(open));
+            assertEquals(2, cycleMapper.findById(paused).getStatus());
+            RecruitmentCycle stale = new RecruitmentCycle();
+            stale.setCycleId(paused);
+            stale.setStatus(3);
+            stale.setIsActive(1);
+            cycleMapper.updateById(stale);
+            assertEquals(1, cycleMapper.findById(paused).getIsActive());
+            assertEquals(2, cycleMapper.findById(paused).getStatus());
+            assertFalse(cycleMapper.findByStatus(4).stream().anyMatch(c -> c.getCycleId() == paused));
         } finally {
             created.forEach(cycleMapper::deleteById);
         }

@@ -26,7 +26,7 @@ class CycleSortInjectionTest {
         mapper = mock(RecruitmentCycleMapper.class);
         when(mapper.findAllWithPaginationAndSorting(anyInt(), anyInt(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(List.of());
-        service = new RecruitmentCycleServiceImpl(mapper, null, null, null, null);
+        service = new RecruitmentCycleServiceImpl(mapper, null, null, null);
     }
 
     private String[] sent(String sortBy, String sortOrder) {

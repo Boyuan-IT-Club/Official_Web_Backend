@@ -2,7 +2,6 @@ package club.boyuan.official.persistence.mapper;
 
 import club.boyuan.official.persistence.entity.RecruitmentCycle;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Update;
 
@@ -24,14 +23,6 @@ public interface RecruitmentCycleMapper extends BaseMapper<RecruitmentCycle> {
     @Update("UPDATE recruitment_cycle SET qr_codes=JSON_OBJECT(), updated_at=updated_at WHERE cycle_id=#{cycleId} AND qr_codes IS NULL")
     void initializeEmptyQrCodes(@Param("cycleId") Integer cycleId);
 
-    /**
-     * 清空周期的招新提示语。仅供「无投递周期的物理删除」前置清理：
-     * recruitment_tips 对 cycle 的外键没有 ON DELETE 动作（RESTRICT 语义），
-     * 该表在 Java 侧没有独立 Mapper，就近挂在这里。
-     */
-    @Delete("DELETE FROM recruitment_tips WHERE cycle_id = #{cycleId}")
-    int deleteTipsByCycleId(@Param("cycleId") Integer cycleId);
-    
     /**
      * 查询所有招募周期
      * @return 招募周期列表
@@ -66,13 +57,6 @@ public interface RecruitmentCycleMapper extends BaseMapper<RecruitmentCycle> {
      * @return 实际置位的行数（已删除的行不重复计数）
      */
     int softDeleteByIds(@Param("cycleIds") List<Integer> cycleIds);
-    
-    /**
-     * 批量更新招募周期
-     * @param recruitmentCycles 招募周期列表
-     * @return 影响行数
-     */
-    int batchUpdate(@Param("recruitmentCycles") List<RecruitmentCycle> recruitmentCycles);
     
     /**
      * 查询所有招募周期（支持分页和排序）
@@ -121,13 +105,6 @@ public interface RecruitmentCycleMapper extends BaseMapper<RecruitmentCycle> {
                            @Param("status") Integer status,
                            @Param("isActive") Integer isActive);
     
-    /**
-     * 根据当前日期更新招募周期状态
-     * @param currentDate 当前日期
-     * @return 影响行数
-     */
-    int updateStatusBasedOnDate(@Param("currentDate") LocalDate currentDate);
-
     /**
      * 当前开放投递的周期:启用中,且今天落在起止日期内。
      *
