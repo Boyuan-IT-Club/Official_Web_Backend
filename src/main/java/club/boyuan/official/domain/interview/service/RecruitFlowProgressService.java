@@ -46,8 +46,7 @@ public class RecruitFlowProgressService {
                 .finalizedEvaluations(evaluationMapper.selectCount(new LambdaQueryWrapper<InterviewEvaluation>()
                         .eq(InterviewEvaluation::getCycleId, cycleId)
                         .eq(InterviewEvaluation::getStatus, InterviewEvaluation.STATUS_SUBMITTED)))
-                .preAdmitted(preAdmissionDraftMapper.selectCount(new LambdaQueryWrapper<PreAdmissionDraft>()
-                        .eq(PreAdmissionDraft::getCycleId, cycleId)))
+                .preAdmitted(preAdmissionDraftMapper.activeCount(cycleId))
                 // decision=0 是「待定」，生成名单时的初始值，不算已决定
                 .decided(resultMapper.selectCount(new LambdaQueryWrapper<InterviewResult>()
                         .eq(InterviewResult::getCycleId, cycleId)

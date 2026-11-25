@@ -61,7 +61,7 @@ class PreAdmissionServiceImplTest {
                 new PreAdmissionDraft().setResultId(10),
                 new PreAdmissionDraft().setResultId(12));
         when(draftMapper.selectForFinalize(7)).thenReturn(drafts);
-        when(draftMapper.publishToResults(eq(7), nullable(Integer.class))).thenReturn(2);
+        when(draftMapper.publishToResults(eq(7), nullable(Integer.class), any())).thenReturn(2);
 
         assertEquals(2, service.finalizeCycle(7));
 
@@ -73,7 +73,7 @@ class PreAdmissionServiceImplTest {
         when(draftMapper.selectForFinalize(7)).thenReturn(List.of(
                 new PreAdmissionDraft().setResultId(10),
                 new PreAdmissionDraft().setResultId(12)));
-        when(draftMapper.publishToResults(eq(7), nullable(Integer.class))).thenReturn(1);
+        when(draftMapper.publishToResults(eq(7), nullable(Integer.class), any())).thenReturn(1);
 
         assertThrows(BusinessException.class, () -> service.finalizeCycle(7));
         verify(draftMapper, never()).deleteBatch(any(), any());

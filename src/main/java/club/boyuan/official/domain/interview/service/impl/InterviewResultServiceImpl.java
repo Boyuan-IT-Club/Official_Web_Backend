@@ -1,5 +1,6 @@
 package club.boyuan.official.domain.interview.service.impl;
 
+import club.boyuan.official.domain.interview.dto.InterviewResultListItem;
 import java.util.Map;
 import java.util.stream.Collectors;
 import club.boyuan.official.persistence.mapper.ResumeMapper;
@@ -128,8 +129,8 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
     public InterviewResultResponseDTO list(Integer cycleId, String name, String decision, String department, Integer page, Integer size) {
 
         //构建查询对象
-        Page<InterviewResult> pageInfo = new Page<>(page, size);
-        Page<InterviewResult> resultPage = baseMapper.selectResultPage(pageInfo, cycleId, name, decision, department);
+        Page<InterviewResultListItem> pageInfo = new Page<>(page, size);
+        Page<InterviewResultListItem> resultPage = baseMapper.selectResultPage(pageInfo, cycleId, name, decision, department);
         InterviewResultResponseDTO responseDTO = new InterviewResultResponseDTO();
         responseDTO.setTotal(resultPage.getTotal());
         responseDTO.setInterviewResults(resultPage.getRecords());
@@ -138,7 +139,9 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public InterviewResult update(Integer resultId, InterviewResultSaveDTO interviewResult) {
+        baseMapper.lockDraftScope(null, List.of(resultId));
         Integer userId = currentUserId();
         if (userId != null) {
             interviewResult.setDecisionBy(userId);
@@ -154,6 +157,7 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
                 // decision_at 没有数据库层的自动更新，此前一直没人写它，导致管理端「决定时间」永远是空
                 .set(interviewResult.getDecision()!=null, InterviewResult::getDecisionAt, LocalDateTime.now());
         this.update(updateWrapper);
+        if (interviewResult.getDecision() != null && interviewResult.getDecision() != 0) baseMapper.clearLegacyDrafts(List.of(resultId));
         return this.getById(resultId);
 
     }
@@ -179,6 +183,8 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
         // 防止按一份旧列表把别人刚录取的人改掉，也不动部门已打算录取（草稿里）的人
         boolean onlyPending = Boolean.TRUE.equals(request.getOnlyPending());
         List<Integer> requested = request.getResultIds();
+        if (requested.isEmpty()) return new BatchDecisionResponseDTO(0, List.of());
+        baseMapper.lockDraftScope(null, requested);
         List<Integer> valid = onlyPending
                 ? baseMapper.selectRejectablePendingResultIdsInCycle(request.getCycleId(), requested)
                 : baseMapper.selectResultIdsInCycle(request.getCycleId(), requested);
@@ -204,9 +210,10 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
         if (onlyPending) {
             // 上面筛完到这里写入之间若有人抢先改了某一行、或把人加进了预录取名单，这一行也不动
             wrapper.eq(InterviewResult::getDecision, 0)
-                    .notExists("SELECT 1 FROM pre_admission_draft pad WHERE pad.result_id = interview_result.result_id");
+                    .apply("draft_dept_id IS NULL AND screened_draft IS NULL");
         }
         int updated = baseMapper.update(null, wrapper);
+        if (decision != 0) baseMapper.clearLegacyDrafts(valid);
 
         log.info("批量录取完成，cycleId={}，decision={}，deptId={}，onlyPending={}，更新 {} 条，跳过 {} 条",
                 request.getCycleId(), decision, request.getAssignedDeptId(), onlyPending, updated, skipped.size());

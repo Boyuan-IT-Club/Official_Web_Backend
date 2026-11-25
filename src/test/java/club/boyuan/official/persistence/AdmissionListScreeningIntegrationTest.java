@@ -1,5 +1,6 @@
 package club.boyuan.official.persistence;
 
+import club.boyuan.official.domain.interview.dto.InterviewResultListItem;
 import club.boyuan.official.domain.interview.dto.BatchDecisionRequestDTO;
 import club.boyuan.official.domain.interview.dto.BatchDecisionResponseDTO;
 import club.boyuan.official.domain.interview.dto.InterviewResultResponseDTO;
@@ -102,9 +103,9 @@ class AdmissionListScreeningIntegrationTest {
 
         // ── 结果列表 ──
         InterviewResultResponseDTO page = resultService.list(cycleId, null, null, null, 1, 50);
-        List<InterviewResult> rows = page.getInterviewResults();
-        Map<Integer, InterviewResult> byResume = rows.stream()
-                .collect(Collectors.toMap(InterviewResult::getResumeId, r -> r));
+        List<InterviewResultListItem> rows = page.getInterviewResults();
+        Map<Integer, InterviewResultListItem> byResume = rows.stream()
+                .collect(Collectors.toMap(InterviewResultListItem::getResumeId, r -> r));
 
         assertFalse(byResume.containsKey(e), "初筛未通过且仍待定的 E 不该出现在结果列表里");
         assertTrue(byResume.containsKey(f), "初筛未通过但已有决定的 F 必须照常显示，不能藏起一个真实结果");
@@ -145,6 +146,19 @@ class AdmissionListScreeningIntegrationTest {
         assertEquals(1L, drafts.getTotal());
         assertEquals(1, ((Number) drafts.getDepartmentStats().get(0).get("candidateCount")).intValue(),
                 "部门人数要和名单里看得到的人对得上");
+
+        jdbc.update("UPDATE resume SET status=5 WHERE resume_id=?", a);
+        assertEquals(1, count("SELECT COUNT(*) FROM interview_result WHERE result_id=? AND draft_dept_id IS NULL AND screened_draft IS NOT NULL", resultA));
+        assertEquals(0L, preAdmissionService.list(cycleId,null,null,1,50).getTotal());
+        assertEquals(0, preAdmissionService.finalizeCycle(cycleId));
+        jdbc.update("UPDATE resume SET status=4 WHERE resume_id=?", a);
+        assertEquals(1, count("SELECT COUNT(*) FROM interview_result WHERE result_id=? AND draft_dept_id IS NOT NULL AND screened_draft IS NULL AND draft_created_at IS NOT NULL",resultA));
+        var remove = new club.boyuan.official.domain.interview.dto.PreAdmissionRemoveRequestDTO();
+        remove.setCycleId(cycleId);
+        remove.setResultIds(List.of(resultE));
+        assertEquals(1, preAdmissionService.remove(remove).getAffected());
+        jdbc.update("UPDATE resume SET status=4 WHERE resume_id=?", e);
+        assertEquals(0, count("SELECT COUNT(*) FROM interview_result WHERE result_id=? AND (draft_dept_id IS NOT NULL OR screened_draft IS NOT NULL)",resultE));
 
         int published = preAdmissionService.finalizeCycle(cycleId);
         assertEquals(1, published, "转正只发布看得到的 A，不能因为 E 而整批回滚");
@@ -270,7 +284,7 @@ class AdmissionListScreeningIntegrationTest {
         return keys.getKey().intValue();
     }
 
-    private static int indexOfFirst(List<InterviewResult> rows, boolean online) {
+    private static int indexOfFirst(List<InterviewResultListItem> rows, boolean online) {
         for (int i = 0; i < rows.size(); i++) {
             if (Boolean.valueOf(online).equals(rows.get(i).getOnlineInterview())) {
                 return i;
@@ -279,7 +293,7 @@ class AdmissionListScreeningIntegrationTest {
         return rows.size();
     }
 
-    private static int indexOfLast(List<InterviewResult> rows, boolean online) {
+    private static int indexOfLast(List<InterviewResultListItem> rows, boolean online) {
         for (int i = rows.size() - 1; i >= 0; i--) {
             if (Boolean.valueOf(online).equals(rows.get(i).getOnlineInterview())) {
                 return i;
