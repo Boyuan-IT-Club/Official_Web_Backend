@@ -85,4 +85,9 @@ public class InterviewSession implements Serializable {
 
     @TableField("updated_at")
     private LocalDateTime updatedAt;
+
+    public java.util.List<Integer> coveredDepartments() {
+        if (deptIds != null && !deptIds.isEmpty()) return deptIds;
+        return deptId == null ? java.util.List.of() : java.util.List.of(deptId);
+    }
 }

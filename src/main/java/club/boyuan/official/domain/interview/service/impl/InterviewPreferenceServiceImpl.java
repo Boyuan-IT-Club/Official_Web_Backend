@@ -139,10 +139,7 @@ public class InterviewPreferenceServiceImpl extends ServiceImpl<InterviewPrefere
         if (preference == null) {
             return null;
         }
-        List<Integer> timeSlotIds = preferenceTimeMapper.selectList(
-                        new LambdaQueryWrapper<InterviewPreferenceTime>()
-                                .eq(InterviewPreferenceTime::getResumeId, resume.getResumeId()))
-                .stream().map(InterviewPreferenceTime::getTimeSlotId).collect(Collectors.toList());
+        List<Integer> timeSlotIds = preference.acceptedTimes();
         List<InterviewTimeSlot> timeSlots = timeSlotIds.isEmpty()
                 ? new ArrayList<>() : interviewTimeSlotService.listByIds(timeSlotIds);
         return buildDTO(preference, timeSlots);

@@ -15,9 +15,7 @@ import club.boyuan.official.domain.resume.service.ResumeDataService;
 import club.boyuan.official.infra.notification.InterviewNotificationType;
 import club.boyuan.official.persistence.entity.Department;
 import club.boyuan.official.persistence.entity.InterviewNotificationLog;
-import club.boyuan.official.persistence.entity.InterviewSessionDept;
 import club.boyuan.official.persistence.entity.InterviewPreference;
-import club.boyuan.official.persistence.entity.InterviewPreferenceTime;
 import club.boyuan.official.persistence.entity.InterviewSchedule;
 import club.boyuan.official.persistence.entity.InterviewSession;
 import club.boyuan.official.persistence.entity.InterviewTimeSlot;
@@ -25,7 +23,6 @@ import club.boyuan.official.persistence.entity.RecruitmentCycle;
 import club.boyuan.official.persistence.entity.Resume;
 import club.boyuan.official.persistence.mapper.DepartmentMapper;
 import club.boyuan.official.persistence.mapper.InterviewNotificationLogMapper;
-import club.boyuan.official.persistence.mapper.InterviewPreferenceTimeMapper;
 import club.boyuan.official.persistence.mapper.InterviewSessionMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -70,10 +67,8 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
 
     private final IRecruitmentCycleService recruitmentCycleService;
     private final IInterviewPreferenceService interviewPreferenceService;
-    private final InterviewPreferenceTimeMapper preferenceTimeMapper;
     private final IInterviewSessionService interviewSessionService;
     private final InterviewSessionMapper interviewSessionMapper;
-    private final club.boyuan.official.persistence.mapper.InterviewSessionDeptMapper interviewSessionDeptMapper;
     private final IInterviewScheduleService interviewScheduleService;
     private final IInterviewTimeSlotService interviewTimeSlotService;
     private final IResumeService resumeService;
@@ -100,8 +95,6 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
 
         List<InterviewPreference> preferences = interviewPreferenceService.list(
                 new LambdaQueryWrapper<InterviewPreference>().eq(InterviewPreference::getCycleId, cycleId));
-        Map<Integer, List<Integer>> acceptedTimeSlotIds = loadAcceptedTimeSlotIds(
-                preferences.stream().map(InterviewPreference::getResumeId).collect(Collectors.toList()));
 
         Map<Integer, List<SessionState>> statesByDept = loadSessionStates(cycleId);
         Map<Integer, String> deptNames = loadAllDeptNames();
@@ -112,7 +105,7 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
                 .filter(p -> !alreadyScheduled.contains(p.getResumeId()))
                 .sorted(Comparator
                         .comparingInt((InterviewPreference p) ->
-                                acceptedTimeSlotIds.getOrDefault(p.getResumeId(), List.of()).size())
+                                p.acceptedTimes().size())
                         .thenComparing(InterviewPreference::getResumeId))
                 .collect(Collectors.toList());
 
@@ -123,7 +116,7 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
 
         for (InterviewPreference pref : candidates) {
             Resume resume = resumeById.get(pref.getResumeId());
-            List<Integer> acceptable = acceptedTimeSlotIds.getOrDefault(pref.getResumeId(), List.of());
+            List<Integer> acceptable = pref.acceptedTimes();
 
             if (acceptable.isEmpty()) {
                 result.getUnassigned().add(buildUnassigned(pref, resume, deptNames, REASON_NO_TIME_SLOT));
@@ -183,13 +176,11 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
 
         // 原因按当前数据即时推断（与 assign 用同一套判定），而不是写死一句「待人工调剂」：
         // 管理员看名单时要知道是学生没勾时间、还是场次不够、还是只差点一下分配。
-        Map<Integer, List<Integer>> acceptedTimeSlotIds = loadAcceptedTimeSlotIds(
-                pending.stream().map(InterviewPreference::getResumeId).collect(Collectors.toList()));
         Map<Integer, List<SessionState>> statesByDept = loadSessionStates(cycleId);
 
         return pending.stream()
                 .map(p -> buildUnassigned(p, resumeById.get(p.getResumeId()), deptNames,
-                        explainUnassigned(p, acceptedTimeSlotIds.getOrDefault(p.getResumeId(), List.of()), statesByDept)))
+                        explainUnassigned(p, p.acceptedTimes(), statesByDept)))
                 .collect(Collectors.toList());
     }
 
@@ -704,18 +695,6 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
                 .collect(Collectors.toSet());
     }
 
-    private Map<Integer, List<Integer>> loadAcceptedTimeSlotIds(List<Integer> resumeIds) {
-        if (resumeIds == null || resumeIds.isEmpty()) {
-            return new HashMap<>();
-        }
-        List<InterviewPreferenceTime> rows = preferenceTimeMapper.selectList(
-                new LambdaQueryWrapper<InterviewPreferenceTime>()
-                        .in(InterviewPreferenceTime::getResumeId, resumeIds));
-        return rows.stream().collect(Collectors.groupingBy(
-                InterviewPreferenceTime::getResumeId,
-                Collectors.mapping(InterviewPreferenceTime::getTimeSlotId, Collectors.toList())));
-    }
-
     private Map<Integer, List<SessionState>> loadSessionStates(Integer cycleId) {
         List<InterviewSession> sessions = interviewSessionService.list(
                 new LambdaQueryWrapper<InterviewSession>()
@@ -732,40 +711,14 @@ public class SessionAssignmentServiceImpl implements ISessionAssignmentService {
         // 一个场次可以同时面多个部门（V36），所以它要挂到它服务的**每个**部门下。
         // 注意 SessionState 只建一个、被多个部门共享 —— 容量是场次的，不是部门的：
         // 每个部门各建一份 state 会让同一场次的容量被重复计算好几遍，超额分配。
-        Map<Integer, List<Integer>> deptsBySession = loadDeptsBySession(
-                sessions.stream().map(InterviewSession::getSessionId).filter(Objects::nonNull).toList());
-
         Map<Integer, List<SessionState>> byDept = new HashMap<>();
         for (InterviewSession session : sessions) {
             SessionState state = new SessionState(session, timeSlotMap.get(session.getTimeSlotId()));
-            List<Integer> depts = deptsBySession.get(session.getSessionId());
-            if (depts == null || depts.isEmpty()) {
-                // 关联表没有记录时回落到场次自己的 dept_id。
-                // 正常不该发生（V36 已回填），但缺了它，老数据会直接分不出去
-                depts = session.getDeptId() == null ? List.of() : List.of(session.getDeptId());
-            }
-            for (Integer deptId : depts) {
+            for (Integer deptId : session.coveredDepartments()) {
                 byDept.computeIfAbsent(deptId, k -> new ArrayList<>()).add(state);
             }
         }
         return byDept;
-    }
-
-    /**
-     * 一次把这批场次覆盖的部门全查出来，避免在循环里逐场次查（N+1）。
-     */
-    private Map<Integer, List<Integer>> loadDeptsBySession(List<Integer> sessionIds) {
-        if (sessionIds == null || sessionIds.isEmpty()) {
-            return new HashMap<>();
-        }
-        List<InterviewSessionDept> rows = interviewSessionDeptMapper.selectList(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<InterviewSessionDept>()
-                        .in(InterviewSessionDept::getSessionId, sessionIds));
-        Map<Integer, List<Integer>> out = new HashMap<>();
-        for (InterviewSessionDept r : rows) {
-            out.computeIfAbsent(r.getSessionId(), k -> new ArrayList<>()).add(r.getDeptId());
-        }
-        return out;
     }
 
     private Map<Integer, String> loadAllDeptNames() {

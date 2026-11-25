@@ -19,14 +19,12 @@ import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeEach;
 import club.boyuan.official.persistence.entity.InterviewPreference;
-import club.boyuan.official.persistence.entity.InterviewPreferenceTime;
 import club.boyuan.official.persistence.entity.InterviewSchedule;
 import club.boyuan.official.persistence.entity.InterviewSession;
 import club.boyuan.official.persistence.entity.InterviewTimeSlot;
 import club.boyuan.official.persistence.entity.RecruitmentCycle;
 import club.boyuan.official.persistence.entity.Resume;
 import club.boyuan.official.persistence.mapper.DepartmentMapper;
-import club.boyuan.official.persistence.mapper.InterviewPreferenceTimeMapper;
 import club.boyuan.official.persistence.mapper.InterviewSessionMapper;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import org.junit.jupiter.api.Test;
@@ -62,7 +60,6 @@ class SessionAssignmentServiceImplTest {
 
     @Mock private IRecruitmentCycleService recruitmentCycleService;
     @Mock private IInterviewPreferenceService interviewPreferenceService;
-    @Mock private InterviewPreferenceTimeMapper preferenceTimeMapper;
     @Mock private IInterviewSessionService interviewSessionService;
     @Mock private InterviewSessionMapper interviewSessionMapper;
     @Mock private IInterviewScheduleService interviewScheduleService;
@@ -70,7 +67,6 @@ class SessionAssignmentServiceImplTest {
     @Mock private IResumeService resumeService;
     @Mock private ResumeDataService resumeDataService;
     @Mock private DepartmentMapper departmentMapper;
-    @Mock private club.boyuan.official.persistence.mapper.InterviewSessionDeptMapper interviewSessionDeptMapper;
     @Mock private InterviewNotificationLogMapper notificationLogMapper;
 
     @InjectMocks
@@ -100,10 +96,8 @@ class SessionAssignmentServiceImplTest {
 
         when(interviewScheduleService.list(any(Wrapper.class))).thenReturn(List.of());
         when(interviewPreferenceService.list(any(Wrapper.class))).thenReturn(List.of(
-                pref(101, cycleId, 1, 2), pref(102, cycleId, 1, 2), pref(103, cycleId, 1, 2)));
+                pref(101, cycleId, 1, 2, 10), pref(102, cycleId, 1, 2, 10), pref(103, cycleId, 1, 2, 10)));
 
-        when(preferenceTimeMapper.selectList(any())).thenReturn(List.of(
-                prefTime(101, 10), prefTime(102, 10), prefTime(103, 10)));
 
         InterviewTimeSlot ts = new InterviewTimeSlot()
                 .setTimeSlotId(10).setCycleId(cycleId).setSlotName("周六上午")
@@ -152,9 +146,8 @@ class SessionAssignmentServiceImplTest {
         when(resumeService.getAllResumesByCycleId(cycleId)).thenReturn(List.of(resume(201, 9)));
         when(resumeDataService.getResumeName(any(Resume.class))).thenReturn("学生");
         when(interviewScheduleService.list(any(Wrapper.class))).thenReturn(List.of());
-        when(interviewPreferenceService.list(any(Wrapper.class))).thenReturn(List.of(pref(201, cycleId, 1, null)));
+        when(interviewPreferenceService.list(any(Wrapper.class))).thenReturn(List.of(pref(201, cycleId, 1, null, 10)));
         // 候选人勾选时间窗 10，但技术部场次挂在时间窗 20 上 → 无匹配
-        when(preferenceTimeMapper.selectList(any())).thenReturn(List.of(prefTime(201, 10)));
         InterviewTimeSlot ts20 = new InterviewTimeSlot().setTimeSlotId(20).setCycleId(cycleId)
                 .setInterviewDate(LocalDate.of(2026, 3, 1)).setStartTime(LocalTime.of(9, 0))
                 .setEndTime(LocalTime.of(12, 0)).setStatus(1);
@@ -198,14 +191,11 @@ class SessionAssignmentServiceImplTest {
         return r;
     }
 
-    private static InterviewPreference pref(int resumeId, int cycleId, Integer first, Integer second) {
+    private static InterviewPreference pref(int resumeId, int cycleId, Integer first, Integer second, Integer... times) {
         return new InterviewPreference().setResumeId(resumeId).setCycleId(cycleId)
-                .setFirstDeptId(first).setSecondDeptId(second);
+                .setFirstDeptId(first).setSecondDeptId(second).setAcceptedTimeSlotIds(List.of(times));
     }
 
-    private static InterviewPreferenceTime prefTime(int resumeId, int timeSlotId) {
-        return new InterviewPreferenceTime().setResumeId(resumeId).setTimeSlotId(timeSlotId);
-    }
 
 
     // ── 多部门场次（V36）─────────────────────────────────────────
@@ -223,9 +213,8 @@ class SessionAssignmentServiceImplTest {
         when(resumeDataService.getResumeName(any(Resume.class))).thenReturn("学生");
         when(interviewScheduleService.list(any(Wrapper.class))).thenReturn(List.of());
         when(interviewPreferenceService.list(any(Wrapper.class))).thenReturn(List.of(
-                pref(301, cycleId, 1, null),    // 只报技术部
-                pref(302, cycleId, 4, null)));  // 只报媒体部
-        when(preferenceTimeMapper.selectList(any())).thenReturn(List.of(prefTime(301, 10), prefTime(302, 10)));
+                pref(301, cycleId, 1, null, 10),    // 只报技术部
+                pref(302, cycleId, 4, null, 10)));  // 只报媒体部
 
         InterviewTimeSlot ts = new InterviewTimeSlot()
                 .setTimeSlotId(10).setCycleId(cycleId).setSlotName("周六上午")
@@ -234,10 +223,8 @@ class SessionAssignmentServiceImplTest {
         when(interviewTimeSlotService.listByIds(any())).thenReturn(List.of(ts));
 
         // 主部门是技术部，但它同时服务媒体部
-        InterviewSession shared = session(2000, cycleId, 10, 1, "301", 5);
+        InterviewSession shared = session(2000, cycleId, 10, 1, "301", 5).setDeptIds(List.of(1, 4));
         when(interviewSessionService.list(any(Wrapper.class))).thenReturn(List.of(shared));
-        when(interviewSessionDeptMapper.selectList(any())).thenReturn(List.of(
-                sessionDept(2000, 1), sessionDept(2000, 4)));
         when(departmentMapper.selectList(nullable(Wrapper.class)))
                 .thenReturn(List.of(dept(1, "技术部"), dept(4, "媒体部")));
 
@@ -271,8 +258,7 @@ class SessionAssignmentServiceImplTest {
         when(resumeDataService.getResumeName(any(Resume.class))).thenReturn("学生");
         when(interviewScheduleService.list(any(Wrapper.class))).thenReturn(List.of());
         when(interviewPreferenceService.list(any(Wrapper.class))).thenReturn(List.of(
-                pref(401, cycleId, 1, null), pref(402, cycleId, 4, null)));
-        when(preferenceTimeMapper.selectList(any())).thenReturn(List.of(prefTime(401, 10), prefTime(402, 10)));
+                pref(401, cycleId, 1, null, 10), pref(402, cycleId, 4, null, 10)));
 
         InterviewTimeSlot ts = new InterviewTimeSlot()
                 .setTimeSlotId(10).setCycleId(cycleId).setSlotName("周六上午")
@@ -280,10 +266,8 @@ class SessionAssignmentServiceImplTest {
                 .setStartTime(LocalTime.of(9, 0)).setEndTime(LocalTime.of(12, 0)).setStatus(1);
         when(interviewTimeSlotService.listByIds(any())).thenReturn(List.of(ts));
 
-        InterviewSession shared = session(2100, cycleId, 10, 1, "301", 1);   // 容量只有 1
+        InterviewSession shared = session(2100, cycleId, 10, 1, "301", 1).setDeptIds(List.of(1, 4));   // 容量只有 1
         when(interviewSessionService.list(any(Wrapper.class))).thenReturn(List.of(shared));
-        when(interviewSessionDeptMapper.selectList(any())).thenReturn(List.of(
-                sessionDept(2100, 1), sessionDept(2100, 4)));
         when(departmentMapper.selectList(nullable(Wrapper.class)))
                 .thenReturn(List.of(dept(1, "技术部"), dept(4, "媒体部")));
         when(interviewScheduleService.save(any(InterviewSchedule.class))).thenReturn(true);
@@ -307,8 +291,7 @@ class SessionAssignmentServiceImplTest {
         when(resumeDataService.getResumeName(any(Resume.class))).thenReturn("学生");
         when(interviewScheduleService.list(any(Wrapper.class))).thenReturn(List.of());
         when(interviewPreferenceService.list(any(Wrapper.class)))
-                .thenReturn(List.of(pref(501, cycleId, 1, null)));
-        when(preferenceTimeMapper.selectList(any())).thenReturn(List.of(prefTime(501, 10)));
+                .thenReturn(List.of(pref(501, cycleId, 1, null, 10)));
 
         InterviewTimeSlot ts = new InterviewTimeSlot()
                 .setTimeSlotId(10).setCycleId(cycleId).setSlotName("周六上午")
@@ -317,7 +300,6 @@ class SessionAssignmentServiceImplTest {
         when(interviewTimeSlotService.listByIds(any())).thenReturn(List.of(ts));
         when(interviewSessionService.list(any(Wrapper.class)))
                 .thenReturn(List.of(session(2200, cycleId, 10, 1, "301", 3)));
-        when(interviewSessionDeptMapper.selectList(any())).thenReturn(List.of());   // 关联表为空
         when(departmentMapper.selectList(nullable(Wrapper.class))).thenReturn(List.of(dept(1, "技术部")));
         when(interviewScheduleService.save(any(InterviewSchedule.class))).thenReturn(true);
 
@@ -342,8 +324,7 @@ class SessionAssignmentServiceImplTest {
         when(resumeDataService.getResumeName(any(Resume.class))).thenReturn("学生");
         when(interviewScheduleService.list(any(Wrapper.class))).thenReturn(List.of());
         when(interviewPreferenceService.list(any(Wrapper.class))).thenReturn(List.of(
-                pref(601, cycleId, 1, null), pref(602, cycleId, 1, null), pref(603, cycleId, 1, null)));
-        when(preferenceTimeMapper.selectList(any())).thenReturn(List.of(prefTime(602, 10), prefTime(603, 20)));
+                pref(601, cycleId, 1, null), pref(602, cycleId, 1, null, 10), pref(603, cycleId, 1, null, 20)));
 
         InterviewTimeSlot ts20 = new InterviewTimeSlot().setTimeSlotId(20).setCycleId(cycleId)
                 .setInterviewDate(LocalDate.of(2026, 3, 1)).setStartTime(LocalTime.of(9, 0))
@@ -351,7 +332,6 @@ class SessionAssignmentServiceImplTest {
         when(interviewTimeSlotService.listByIds(any())).thenReturn(List.of(ts20));
         when(interviewSessionService.list(any(Wrapper.class)))
                 .thenReturn(List.of(session(3100, cycleId, 20, 1, "301", 5)));
-        when(interviewSessionDeptMapper.selectList(any())).thenReturn(List.of(sessionDept(3100, 1)));
         when(departmentMapper.selectList(nullable(Wrapper.class))).thenReturn(List.of(dept(1, "技术部")));
 
         List<SessionAssignmentResultDTO.UnassignedItem> list = service.listUnassigned(cycleId);
@@ -373,15 +353,13 @@ class SessionAssignmentServiceImplTest {
         when(resumeService.getAllResumesByCycleId(cycleId)).thenReturn(List.of(resume(701, 1)));
         when(resumeDataService.getResumeName(any(Resume.class))).thenReturn("学生");
         when(interviewScheduleService.list(any(Wrapper.class))).thenReturn(List.of());
-        when(interviewPreferenceService.list(any(Wrapper.class))).thenReturn(List.of(pref(701, cycleId, 1, null)));
-        when(preferenceTimeMapper.selectList(any())).thenReturn(List.of(prefTime(701, 10)));
+        when(interviewPreferenceService.list(any(Wrapper.class))).thenReturn(List.of(pref(701, cycleId, 1, null, 10)));
         InterviewTimeSlot ts = new InterviewTimeSlot().setTimeSlotId(10).setCycleId(cycleId)
                 .setInterviewDate(LocalDate.of(2026, 3, 1)).setStartTime(LocalTime.of(9, 0))
                 .setEndTime(LocalTime.of(12, 0)).setStatus(1);
         when(interviewTimeSlotService.listByIds(any())).thenReturn(List.of(ts));
         InterviewSession full = session(3200, cycleId, 10, 1, "301", 2).setCurrentOccupied(2);
         when(interviewSessionService.list(any(Wrapper.class))).thenReturn(List.of(full));
-        when(interviewSessionDeptMapper.selectList(any())).thenReturn(List.of(sessionDept(3200, 1)));
         when(departmentMapper.selectList(nullable(Wrapper.class))).thenReturn(List.of(dept(1, "技术部")));
 
         List<SessionAssignmentResultDTO.UnassignedItem> list = service.listUnassigned(cycleId);
@@ -395,10 +373,6 @@ class SessionAssignmentServiceImplTest {
                 .orElseThrow(() -> new AssertionError("缺少 resumeId=" + resumeId)).getReason();
     }
 
-    private static club.boyuan.official.persistence.entity.InterviewSessionDept sessionDept(int sessionId, int deptId) {
-        return new club.boyuan.official.persistence.entity.InterviewSessionDept()
-                .setSessionId(sessionId).setDeptId(deptId);
-    }
 
     private static InterviewSession session(int id, int cycleId, int timeSlotId, int deptId, String loc, int capacity) {
         return new InterviewSession().setSessionId(id).setCycleId(cycleId).setTimeSlotId(timeSlotId)
@@ -421,8 +395,7 @@ class SessionAssignmentServiceImplTest {
         when(resumeService.getAllResumesByCycleId(cycleId)).thenReturn(List.of(resume(101, 1)));
         when(resumeDataService.getResumeName(any(Resume.class))).thenReturn("学生");
         when(interviewScheduleService.list(any(Wrapper.class))).thenReturn(existingRows);
-        when(interviewPreferenceService.list(any(Wrapper.class))).thenReturn(List.of(pref(101, cycleId, 1, null)));
-        when(preferenceTimeMapper.selectList(any())).thenReturn(List.of(prefTime(101, 10)));
+        when(interviewPreferenceService.list(any(Wrapper.class))).thenReturn(List.of(pref(101, cycleId, 1, null, 10)));
         when(interviewTimeSlotService.listByIds(any())).thenReturn(List.of(new InterviewTimeSlot()
                 .setTimeSlotId(10).setCycleId(cycleId).setSlotName("周六上午")
                 .setInterviewDate(LocalDate.of(2026, 3, 1))
