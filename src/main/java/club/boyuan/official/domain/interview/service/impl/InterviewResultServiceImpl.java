@@ -157,7 +157,6 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
                 // decision_at 没有数据库层的自动更新，此前一直没人写它，导致管理端「决定时间」永远是空
                 .set(interviewResult.getDecision()!=null, InterviewResult::getDecisionAt, LocalDateTime.now());
         this.update(updateWrapper);
-        if (interviewResult.getDecision() != null && interviewResult.getDecision() != 0) baseMapper.clearLegacyDrafts(List.of(resultId));
         return this.getById(resultId);
 
     }
@@ -213,7 +212,6 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
                     .apply("draft_dept_id IS NULL AND screened_draft IS NULL");
         }
         int updated = baseMapper.update(null, wrapper);
-        if (decision != 0) baseMapper.clearLegacyDrafts(valid);
 
         log.info("批量录取完成，cycleId={}，decision={}，deptId={}，onlyPending={}，更新 {} 条，跳过 {} 条",
                 request.getCycleId(), decision, request.getAssignedDeptId(), onlyPending, updated, skipped.size());

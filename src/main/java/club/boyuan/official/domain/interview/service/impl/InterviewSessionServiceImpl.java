@@ -45,7 +45,6 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
     private final IInterviewTimeSlotService interviewTimeSlotService;
     private final DepartmentMapper departmentMapper;
     private final InterviewScheduleMapper interviewScheduleMapper;
-    private final club.boyuan.official.persistence.mapper.InterviewSessionDeptMapper interviewSessionDeptMapper;
 
     @Override
     @Transactional
@@ -85,7 +84,6 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
                                 ? DEFAULT_DURATION_MINUTES : request.getInterviewDurationMinutes())
                 .setStatus(STATUS_AVAILABLE);
         save(session);
-        replaceSessionDepts(session.getSessionId(), deptIds);
         log.info("创建面试场次成功，sessionId={}, cycleId={}, timeSlotId={}, deptId={}, capacity={}",
                 session.getSessionId(), session.getCycleId(), session.getTimeSlotId(),
                 session.getDeptId(), session.getCapacity());
@@ -124,7 +122,6 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
                 }
             }
             session.setDeptId(deptIds.get(0)).setDeptIds(deptIds);
-            replaceSessionDepts(sessionId, deptIds);
         }
         updateById(session);
         log.info("更新面试场次成功，sessionId={}", sessionId);
@@ -142,7 +139,6 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
         if (scheduleCount != null && scheduleCount > 0) {
             throw new BusinessException(BusinessExceptionEnum.INTERVIEW_SESSION_HAS_SCHEDULE);
         }
-        replaceSessionDepts(sessionId, List.of());
         removeById(sessionId);
         log.info("删除面试场次成功，sessionId={}", sessionId);
     }
@@ -264,23 +260,4 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
         }
         return out;
     }
-
-    /**
-     * 覆盖式写入场次覆盖的部门。
-     *
-     * 先删后插而不是增量比对：部门就那么几个，删插的代价可以忽略，
-     * 而增量比对要处理「新增/删除/顺序」三种情况，多写的分支反而更容易错。
-     */
-    private void replaceSessionDepts(Integer sessionId, List<Integer> deptIds) {
-        if (baseMapper.parentOnly()) return;
-        interviewSessionDeptMapper.delete(
-                new LambdaQueryWrapper<club.boyuan.official.persistence.entity.InterviewSessionDept>()
-                        .eq(club.boyuan.official.persistence.entity.InterviewSessionDept::getSessionId, sessionId));
-        for (Integer deptId : deptIds) {
-            interviewSessionDeptMapper.insert(
-                    new club.boyuan.official.persistence.entity.InterviewSessionDept()
-                            .setSessionId(sessionId).setDeptId(deptId));
-        }
-    }
-
 }

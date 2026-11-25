@@ -20,7 +20,6 @@ public interface InterviewResultMapper extends BaseMapper<InterviewResult> {
 
     Page<InterviewResultListItem> selectResultPage(Page<InterviewResultListItem> pageInfo, Integer cycleId, String name, String decision, String department);
 
-    void clearLegacyDrafts(@Param("resultIds") List<Integer> resultIds);
     List<Integer> lockDraftResumes(@Param("cycleId") Integer cycle, @Param("resultIds") List<Integer> ids);
     List<Integer> lockDraftResults(@Param("cycleId") Integer cycle, @Param("resultIds") List<Integer> ids);
 
