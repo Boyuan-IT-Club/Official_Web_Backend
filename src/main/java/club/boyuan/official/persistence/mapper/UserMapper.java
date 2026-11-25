@@ -60,7 +60,11 @@ public interface UserMapper extends BaseMapper<User> {
      * @param dept 部门名称
      * @return 更新的记录数
      */
-    int batchUpdateDeptByIds(@Param("userIds") List<Integer> userIds, @Param("dept") String dept);
+    int batchUpdateDeptByIds(@Param("userIds") List<Integer> userIds, @Param("deptId") Integer deptId);
+
+    List<Integer> departmentIdsByName(@Param("name") String name);
+
+    String departmentById(@Param("id") Integer id);
     
     /**
      * 批量更新用户会员状态

@@ -42,7 +42,7 @@ public class User {
     @TableField("phone")
     private String phone;
 
-    @TableField("role")
+    @TableField(exist = false)
     private String role;
 
     @TableField("major")
@@ -61,7 +61,7 @@ public class User {
      * 是后来手工加到生产库的，管理端的批量分配部门、列表查询与筛选全走 dept。
      * 两者未做同步，改动这块前先确认调用方读的是哪一个。
      */
-    @TableField("dept")
+    @TableField(exist = false)
     private String dept;
 
     /**

@@ -76,7 +76,6 @@ class ResumeMultiScoreTest {
 
     /** 聚合列的最新写回值 */
     private Integer writtenAverage;
-    private Integer writtenScoredBy;
 
     @BeforeEach
     void setUp() {
@@ -91,7 +90,7 @@ class ResumeMultiScoreTest {
         resume.setUserId(100);
         resume.setCycleId(6);
         resume.setStatus(2);
-        when(resumeMapper.selectById(RESUME_ID)).thenReturn(resume);
+        when(resumeMapper.lockForScoring(RESUME_ID)).thenReturn(resume);
 
         when(resumeScoreEntryMapper.selectOne(any())).thenAnswer(inv -> {
             LambdaQueryWrapper<?> w = inv.getArgument(0);
@@ -120,7 +119,6 @@ class ResumeMultiScoreTest {
             String set = w.getSqlSet();
             w.getSqlSegment();
             writtenAverage = (Integer) paramOf(set, w.getParamNameValuePairs(), "resume_score");
-            writtenScoredBy = (Integer) paramOf(set, w.getParamNameValuePairs(), "scored_by");
             return 1;
         });
 
@@ -158,7 +156,7 @@ class ResumeMultiScoreTest {
 
         assertEquals(2, rows.size());
         assertEquals(75, dto.getResumeScore());   // (60+90)/2
-        assertEquals(1, writtenScoredBy);          // 最近打分人
+        assertEquals(1, dto.getScoredBy());          // 最近打分人
     }
 
     @Test

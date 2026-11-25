@@ -286,7 +286,14 @@ public class AdminController {
     @PreAuthorize("hasAnyAuthority('user:manage', 'admin:manage')")
     public ResponseEntity<ResponseMessage<?>> batchUpdateUserDept(
             @RequestBody Map<String, Object> deptRequest) {
-        String dept = (String) deptRequest.get("dept");
+        Object rawDept = deptRequest.get("dept");
+        Object rawId = deptRequest.get("deptId");
+        if ((rawDept != null && !(rawDept instanceof String))
+                || (rawId != null && (!(rawId instanceof Integer id) || id <= 0))) {
+            return ResponseEntity.badRequest().body(ResponseMessage.error(400, "部门参数无效"));
+        }
+        String dept = (String) rawDept;
+        boolean hasId = deptRequest.containsKey("deptId");
         @SuppressWarnings("unchecked")
         List<Integer> userIds = (List<Integer>) deptRequest.get("userIds");
 
@@ -294,19 +301,20 @@ public class AdminController {
         //   请求体里没有 dept 键        -> 调用方漏传，拒绝
         //   dept 键存在但为 null / 空串 -> 显式取消分配，把部门清空
         // 此前一律按「不能为空」拒绝，导致部门分配出去就撤不回来。
-        if (!deptRequest.containsKey("dept")) {
+        if (!hasId && !deptRequest.containsKey("dept")) {
             logger.warn("缺少 dept 字段");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(ResponseMessage.error(400, "缺少 dept 字段；取消分配请显式传 dept: null"));
         }
-        boolean clearing = dept == null || dept.trim().isEmpty();
+        boolean clearing = hasId ? rawId == null : dept == null || dept.trim().isEmpty();
         if (userIds == null || userIds.isEmpty()) {
             logger.warn("用户ID列表不能为空");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(ResponseMessage.error(400, "用户ID列表不能为空"));
         }
 
-        int updatedCount = userService.batchUpdateUserDept(userIds, clearing ? null : dept);
+        int updatedCount = hasId ? userService.batchUpdateUserDeptById(userIds, (Integer) rawId)
+                : userService.batchUpdateUserDept(userIds, clearing ? null : dept);
         logger.info("管理员成功{}{}个用户的部门{}", clearing ? "取消分配" : "更新",
                 updatedCount, clearing ? "" : "为" + dept);
 

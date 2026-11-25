@@ -163,8 +163,8 @@ public class PermissionServiceImpl extends ServiceImpl<PermissionMapper, Permiss
         LambdaQueryWrapper<Permission> queryWrapper = new LambdaQueryWrapper<>();
         
         // 资源标识符条件
-        if (StringUtils.isNotBlank(resourceIdentifier)) {
-            queryWrapper.eq(Permission::getResourceIdentifier, resourceIdentifier);
+        if (resourceIdentifier != null) {
+            throw new BusinessException(BusinessExceptionEnum.PARAMETER_VALIDATION_FAILED, "资源标识筛选已退役，请按权限码或名称查询");
         }
         
         // 关键字条件（模糊匹配权限名称或编码）

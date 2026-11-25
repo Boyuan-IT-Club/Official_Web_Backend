@@ -94,7 +94,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
         // 使用BCrypt加密密码
         String encodedPassword = passwordEncoder.encode(user.getPassword());
         user.setPassword(encodedPassword);
-        user.setRole("APPLICANT");
         userMapper.insert(user);
         
         // 注：不再自动分配 RBAC 默认角色，新用户为「暂无角色」，由管理员按需分配
@@ -393,6 +392,21 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
     @Override
     @Transactional
     public int batchUpdateUserDept(List<Integer> userIds, String dept) {
+        if (dept == null) return batchUpdateUserDeptById(userIds, null);
+        List<Integer> matches = userMapper.departmentIdsByName(dept.trim());
+        if (matches.isEmpty()) return 0;
+        if (matches.size() != 1) {
+            throw new BusinessException(BusinessExceptionEnum.PARAMETER_VALIDATION_FAILED, "存在同名部门，请按部门 ID 分配");
+        }
+        return batchUpdateUserDeptById(userIds, matches.get(0));
+    }
+
+    @Override
+    @Transactional
+    public int batchUpdateUserDeptById(List<Integer> userIds, Integer deptId) {
+        if (deptId != null && userMapper.departmentById(deptId) == null) {
+            throw new BusinessException(BusinessExceptionEnum.DEPARTMENT_NOT_FOUND);
+        }
         if (userIds == null || userIds.isEmpty()) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
         }
@@ -413,13 +427,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
             }
         }
         
-        int updatedCount = userMapper.batchUpdateDeptByIds(userIds, dept);
-        logger.info("批量更新用户部门成功，更新数量: {}，部门: {}", updatedCount, dept);
+        int updatedCount = userMapper.batchUpdateDeptByIds(userIds, deptId);
+        logger.info("批量更新用户部门成功，更新数量: {}，部门: {}", updatedCount, deptId);
 
         // 不变式：社员 ⟺ 分配了部门（V32 起统一口径）。
         // 分配部门即录取为社员，取消分配即回到非社员——两个开关合成一个，
         // 不再出现「有部门却非社员」「社员却无部门」的中间态。
-        boolean member = dept != null;
+        boolean member = deptId != null;
         userMapper.batchUpdateMembershipByIds(userIds, member);
         syncMemberRole(userIds, member);
         return updatedCount;
@@ -452,7 +466,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
         // 否则会出现「社员却不属于任何部门」的中间态
         if (isMember) {
             List<String> missingDept = users.stream()
-                    .filter(u -> u.getDept() == null || u.getDept().trim().isEmpty())
+                    .filter(u -> u.getDeptId() == null)
                     .map(u -> u.getName() != null ? u.getName() : u.getUsername())
                     .collect(Collectors.toList());
             if (!missingDept.isEmpty()) {
@@ -570,7 +584,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
         // 使用BCrypt加密密码
         String encodedPassword = passwordEncoder.encode(user.getPassword());
         user.setPassword(encodedPassword);
-        user.setRole("APPLICANT");
         userMapper.insert(user);
         
         // 注：不再自动分配 RBAC 默认角色，新用户为「暂无角色」，由管理员按需分配

@@ -36,6 +36,15 @@ class ResumeDisplayScoreTest {
     }
 
     @Test
+    void confirmedHistoricalScoreCanHaveAnUnknownAuthorAndTime() {
+        Resume resume = new Resume();
+        resume.setResumeScore(100);
+        assertEquals(100, ResumeServiceImpl.displayScore(resume));
+        assertNull(resume.getScoredBy());
+        assertNull(resume.getScoredAt());
+    }
+
+    @Test
     @DisplayName("正常打分原样展示")
     void scoredResumeShowsScore() {
         Resume r = new Resume();

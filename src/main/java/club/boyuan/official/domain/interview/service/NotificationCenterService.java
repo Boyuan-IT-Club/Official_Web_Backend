@@ -360,7 +360,7 @@ public class NotificationCenterService {
                     .studentId(blankToNull(studentFieldId == null ? null : vals.get(studentFieldId)))
                     .email(email != null ? email : (u != null ? u.getEmail() : null))
                     // 没署名就是没打过分：0 分和「没打分」必须区分，前者才是初筛未通过的依据
-                    .resumeScore(r.getScoredBy() == null && r.getScoredAt() == null ? null : r.getResumeScore())
+                    .resumeScore(Integer.valueOf(0).equals(r.getResumeScore()) && r.getScoredAt() == null ? null : r.getResumeScore())
                     .notifiedAt(notified.get(r.getResumeId()))
                     .build());
         }

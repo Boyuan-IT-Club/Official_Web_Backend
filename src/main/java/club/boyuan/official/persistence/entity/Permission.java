@@ -21,8 +21,6 @@ public class Permission {
     @TableField("permission_code")
     private String permissionCode;
 
-    @TableField("resource_identifier")
-    private String resourceIdentifier;
 
     @TableField("description")
     private String description;
@@ -72,13 +70,7 @@ public class Permission {
         this.permissionCode = permissionCode;
     }
 
-    public String getResourceIdentifier() {
-        return resourceIdentifier;
-    }
 
-    public void setResourceIdentifier(String resourceIdentifier) {
-        this.resourceIdentifier = resourceIdentifier;
-    }
 
     public String getDescription() {
         return description;
@@ -113,6 +105,6 @@ public class Permission {
     }
 
     public String toString() {
-        return "Permission{permissionId = " + permissionId + ", permissionName = " + permissionName + ", permissionCode = " + permissionCode + ", resourceIdentifier = " + resourceIdentifier + ", description = " + description + ", createTime = " + createTime + ", updateTime = " + updateTime + "}";
+        return "Permission{permissionId = " + permissionId + ", permissionName = " + permissionName + ", permissionCode = " + permissionCode + ", description = " + description + ", createTime = " + createTime + ", updateTime = " + updateTime + "}";
     }
 }

@@ -84,7 +84,7 @@ class ResumeScoreWithdrawTest {
         resume.setUserId(100);
         resume.setCycleId(14);
         resume.setStatus(ResumeServiceImpl.STATUS_SUBMITTED);
-        when(resumeMapper.selectById(RESUME_ID)).thenReturn(resume);
+        when(resumeMapper.lockForScoring(RESUME_ID)).thenReturn(resume);
 
         when(resumeScoreEntryMapper.selectOne(any())).thenAnswer(inv -> {
             LambdaQueryWrapper<?> w = inv.getArgument(0);
@@ -150,9 +150,9 @@ class ResumeScoreWithdrawTest {
         vote(2, 90, 5);     // 剩下的人里最近的
         vote(3, 70, 1);     // 撤销的是最近那位
 
-        service.withdrawResumeScore(RESUME_ID, 3);
+        ResumeDTO dto = service.withdrawResumeScore(RESUME_ID, 3);
 
-        assertEquals(2, written.get("scored_by"));
+        assertEquals(2, dto.getScoredBy());
     }
 
     @Test
@@ -164,11 +164,11 @@ class ResumeScoreWithdrawTest {
 
         assertNull(dto.getResumeScore(), "对外展示为未打分");
         assertTrue(dto.getScoreEntries().isEmpty());
-        assertTrue(written.containsKey("scored_by"));
+        assertFalse(written.containsKey("scored_by"));
         assertNull(written.get("scored_by"));
         assertTrue(written.containsKey("scored_at"));
         assertNull(written.get("scored_at"));
-        assertEquals(0, written.get("resume_score"));    // 列 NOT NULL，只能归 0
+        assertNull(written.get("resume_score"));    // 列 NOT NULL，只能归 0
     }
 
     @Test

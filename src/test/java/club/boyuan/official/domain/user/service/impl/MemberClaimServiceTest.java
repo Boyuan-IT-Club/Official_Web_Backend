@@ -107,7 +107,7 @@ class MemberClaimServiceTest {
     void approveMarksMemberAndDept() {
         MemberClaim pending = new MemberClaim().setClaimId(1).setUserId(USER_ID)
                 .setStatus(MemberClaim.STATUS_PENDING).setDeptId(1);
-        when(claimMapper.selectById(1)).thenReturn(pending);
+        when(claimMapper.lockForReview(1)).thenReturn(pending);
 
         List<String> sets = new ArrayList<>();
         when(userMapper.update(any(), any())).thenAnswer(inv -> {
@@ -133,7 +133,7 @@ class MemberClaimServiceTest {
     void doubleReviewIsRejected() {
         MemberClaim approved = new MemberClaim().setClaimId(1).setUserId(USER_ID)
                 .setStatus(MemberClaim.STATUS_APPROVED);
-        when(claimMapper.selectById(1)).thenReturn(approved);
+        when(claimMapper.lockForReview(1)).thenReturn(approved);
 
         assertThrows(BusinessException.class, () -> service.reject(1, 100, "我觉得不行"));
         verify(userMapper, never()).update(any(), any());
@@ -144,7 +144,7 @@ class MemberClaimServiceTest {
     void rejectKeepsNonMember() {
         MemberClaim pending = new MemberClaim().setClaimId(2).setUserId(USER_ID)
                 .setStatus(MemberClaim.STATUS_PENDING);
-        when(claimMapper.selectById(2)).thenReturn(pending);
+        when(claimMapper.lockForReview(2)).thenReturn(pending);
 
         MemberClaim done = service.reject(2, 99, "名册里查无此人，请补充材料");
         assertEquals(MemberClaim.STATUS_REJECTED, done.getStatus());

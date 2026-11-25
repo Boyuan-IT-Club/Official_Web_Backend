@@ -48,13 +48,7 @@ public interface DepartmentService extends IService<Department> {
      */
     DepartmentDTO getDepartmentById(int deptId) throws BusinessException;
     
-    /**
-     * 根据部门编码获取部门
-     * @param deptCode 部门编码
-     * @return 部门DTO
-     * @throws BusinessException 业务异常
-     */
-    DepartmentDTO getDepartmentByCode(String deptCode) throws BusinessException;
+
     
     /**
      * 分页获取部门列表

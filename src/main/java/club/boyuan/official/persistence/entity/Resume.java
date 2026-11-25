@@ -34,7 +34,7 @@ public class Resume {
     private Integer resumeScore;
 
     /** 打分人 userId（署名，V30 起记录），历史分数为 null */
-    @TableField("scored_by")
+    @TableField(exist = false)
     private Integer scoredBy;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")

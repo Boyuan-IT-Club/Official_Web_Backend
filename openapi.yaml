@@ -4487,7 +4487,7 @@ paths:
     put:
       summary: 批量修改用户部门
       deprecated: false
-      description: 批量调整多个用户所属的部门。
+      description: 按部门 ID 分配，兼容唯一的部门名称。显式传 null 可取消分配。
       tags:
       - 管理员特殊功能
       requestBody:
@@ -4498,15 +4498,22 @@ paths:
               properties:
                 dept:
                   type: string
-                  description: 部门信息
+                  nullable: true
+                  description: 兼容旧客户端的部门名称
+                deptId:
+                  type: integer
+                  nullable: true
+                  description: 部门 ID，优先于名称
                 userIds:
                   type: array
                   items:
                     type: integer
                   description: 用户 ID 列表
               required:
-              - dept
               - userIds
+              anyOf:
+              - required: [deptId]
+              - required: [dept]
             example:
               dept: 技术部
               userIds:
@@ -7123,47 +7130,38 @@ paths:
                 - permissionId: 1
                   permissionName: 管理管理员账号
                   permissionCode: admin:manage
-                  resourceIdentifier: null
                   description: 创建、编辑、删除管理员账号
                 - permissionId: 2
                   permissionName: 管理社员账号
                   permissionCode: member:manage
-                  resourceIdentifier: null
                   description: 创建、编辑、删除社员账号
                 - permissionId: 3
                   permissionName: 查看简历
                   permissionCode: resume:view
-                  resourceIdentifier: null
                   description: 查看所有简历信息
                 - permissionId: 4
                   permissionName: 审核简历
                   permissionCode: resume:audit
-                  resourceIdentifier: null
                   description: 审核简历，决定通过或拒绝
                 - permissionId: 5
                   permissionName: 管理招聘周期
                   permissionCode: cycle:manage
-                  resourceIdentifier: null
                   description: 创建、编辑、删除招聘周期
                 - permissionId: 6
                   permissionName: 管理部门信息
                   permissionCode: dept:manage
-                  resourceIdentifier: null
                   description: 创建、编辑、删除部门信息
                 - permissionId: 7
                   permissionName: 管理奖项信息
                   permissionCode: award:manage
-                  resourceIdentifier: null
                   description: 创建、编辑、删除奖项信息
                 - permissionId: 8
                   permissionName: 分配角色
                   permissionCode: role:assign
-                  resourceIdentifier: null
                   description: 为用户分配或移除角色
                 - permissionId: 9
                   permissionName: 管理权限
                   permissionCode: permission:manage
-                  resourceIdentifier: null
                   description: 管理角色权限分配
           headers: {}
   /api/departments:
@@ -7182,7 +7180,6 @@ paths:
             example:
               deptId: 6
               deptName: 测试部门
-              deptCode: test-dept1
               description: 测试部门
               status: 1
       responses:
@@ -7199,7 +7196,6 @@ paths:
                 data:
                   deptId: 6
                   deptName: 测试部门
-                  deptCode: test-dept1
                   description: 测试部门
                   status: 1
           headers: {}
@@ -7261,37 +7257,30 @@ paths:
                 data:
                 - deptId: 1
                   deptName: 技术部
-                  deptCode: TECH
                   description: 负责社团的技术开发与维护工作
                   status: 1
                 - deptId: 2
                   deptName: 综合部
-                  deptCode: GENERAL
                   description: 负责社团的日常运营与管理工作
                   status: 1
                 - deptId: 3
                   deptName: 宣传部
-                  deptCode: PUBLICITY
                   description: 负责社团的宣传推广工作
                   status: 1
                 - deptId: 4
                   deptName: 外联部
-                  deptCode: EXTERNAL
                   description: 负责社团对外交流与合作
                   status: 1
                 - deptId: 5
                   deptName: 测试部门1
-                  deptCode: testdept
                   description: 测试部门 更新
                   status: 0
                 - deptId: 6
                   deptName: 测试部门
-                  deptCode: test-dept1
                   description: 测试部门
                   status: 1
                 - deptId: 7
                   deptName: '%KA2Alg2'
-                  deptCode: 7(^
                   description: G9YPlARWcJuMNv1Lj)Tz&lXP7fwd^%fBBt07ERw1[^s*YzdAaV&FInW6Z1U*MuW5WAFpu7
                   status: 97
           headers: {}
@@ -7319,7 +7308,6 @@ paths:
             example:
               deptId: 6
               deptName: 测试部门
-              deptCode: test-dept2
               description: 测试部门
               status: 0
       responses:
@@ -7336,7 +7324,6 @@ paths:
                 data:
                   deptId: 6
                   deptName: 测试部门
-                  deptCode: test-dept2
                   description: 测试部门
                   status: 0
           headers: {}
@@ -7395,7 +7382,6 @@ paths:
                   value:
                     deptId: 0
                     deptName: ''
-                    deptCode: ''
                     description: ''
                     status: 0
                 '2':
@@ -7406,7 +7392,6 @@ paths:
                     data:
                       deptId: 1
                       deptName: 技术部
-                      deptCode: TECH
                       description: 负责社团的技术开发与维护工作
                       status: 1
           headers: {}
@@ -7430,7 +7415,6 @@ paths:
               example:
                 deptId: 0
                 deptName: ''
-                deptCode: ''
                 description: ''
                 status: 0
           headers: {}
@@ -7462,7 +7446,6 @@ paths:
                     permissionId: 0
                     permissionName: ''
                     permissionCode: ''
-                    resourceIdentifier: ''
                     description: ''
                 '2':
                   summary: 成功示例
@@ -7473,7 +7456,6 @@ paths:
                       permissionId: 11
                       permissionName: test-permission
                       permissionCode: test-permission2*
-                      resourceIdentifier: 'null'
                       description: test 权限
           headers: {}
     get:
@@ -7484,6 +7466,7 @@ paths:
       - 权限模块
       parameters:
       - name: resourceIdentifier
+        deprecated: true
         in: query
         description: 资源标识符
         required: false
@@ -7535,7 +7518,6 @@ paths:
                     permissionId: 0
                     permissionName: ''
                     permissionCode: ''
-                    resourceIdentifier: ''
                     description: ''
                 '2':
                   summary: 成功示例
@@ -7546,52 +7528,42 @@ paths:
                     - permissionId: 1
                       permissionName: 管理管理员账号
                       permissionCode: admin:manage
-                      resourceIdentifier: null
                       description: 创建、编辑、删除管理员账号
                     - permissionId: 2
                       permissionName: 管理社员账号
                       permissionCode: member:manage
-                      resourceIdentifier: null
                       description: 创建、编辑、删除社员账号
                     - permissionId: 3
                       permissionName: 查看简历
                       permissionCode: resume:view
-                      resourceIdentifier: null
                       description: 查看所有简历信息
                     - permissionId: 4
                       permissionName: 审核简历
                       permissionCode: resume:audit
-                      resourceIdentifier: null
                       description: 审核简历，决定通过或拒绝
                     - permissionId: 5
                       permissionName: 管理招聘周期
                       permissionCode: cycle:manage
-                      resourceIdentifier: null
                       description: 创建、编辑、删除招聘周期
                     - permissionId: 6
                       permissionName: 管理部门信息
                       permissionCode: dept:manage
-                      resourceIdentifier: null
                       description: 创建、编辑、删除部门信息
                     - permissionId: 7
                       permissionName: 管理奖项信息
                       permissionCode: award:manage
-                      resourceIdentifier: null
                       description: 创建、编辑、删除奖项信息
                     - permissionId: 8
                       permissionName: 分配角色
                       permissionCode: role:assign
-                      resourceIdentifier: null
                       description: 为用户分配或移除角色
                     - permissionId: 9
                       permissionName: 管理权限
                       permissionCode: permission:manage
-                      resourceIdentifier: null
                       description: 管理角色权限分配
                     - permissionId: 11
                       permissionName: test-permission
                       permissionCode: test-permission2*
-                      resourceIdentifier: 'null'
                       description: test 权限
           headers: {}
   /api/permissions/{permissionId}:
@@ -7619,7 +7591,6 @@ paths:
               permissionId: 11
               permissionName: test-permission
               permissionCode: test-permission2*
-              resourceIdentifier: 'null'
               description: test 权限更新2
       responses:
         '200':
@@ -7636,7 +7607,6 @@ paths:
                     permissionId: 0
                     permissionName: ''
                     permissionCode: ''
-                    resourceIdentifier: ''
                     description: ''
                 '2':
                   summary: 成功示例
@@ -7647,7 +7617,6 @@ paths:
                       permissionId: 11
                       permissionName: test-permission
                       permissionCode: test-permission2*
-                      resourceIdentifier: 'null'
                       description: test 权限更新2
           headers: {}
     delete:
@@ -7706,7 +7675,6 @@ paths:
                     permissionId: 0
                     permissionName: ''
                     permissionCode: ''
-                    resourceIdentifier: ''
                     description: ''
                 '2':
                   summary: 成功示例
@@ -7717,7 +7685,6 @@ paths:
                       permissionId: 1
                       permissionName: 管理管理员账号
                       permissionCode: admin:manage
-                      resourceIdentifier: null
                       description: 创建、编辑、删除管理员账号
           headers: {}
   /api/permissions/all:
@@ -7744,7 +7711,6 @@ paths:
                     permissionId: 0
                     permissionName: ''
                     permissionCode: ''
-                    resourceIdentifier: ''
                     description: ''
                 '2':
                   summary: 成功示例
@@ -7755,47 +7721,38 @@ paths:
                     - permissionId: 8
                       permissionName: 分配角色
                       permissionCode: role:assign
-                      resourceIdentifier: null
                       description: 为用户分配或移除角色
                     - permissionId: 4
                       permissionName: 审核简历
                       permissionCode: resume:audit
-                      resourceIdentifier: null
                       description: 审核简历，决定通过或拒绝
                     - permissionId: 3
                       permissionName: 查看简历
                       permissionCode: resume:view
-                      resourceIdentifier: null
                       description: 查看所有简历信息
                     - permissionId: 7
                       permissionName: 管理奖项信息
                       permissionCode: award:manage
-                      resourceIdentifier: null
                       description: 创建、编辑、删除奖项信息
                     - permissionId: 5
                       permissionName: 管理招聘周期
                       permissionCode: cycle:manage
-                      resourceIdentifier: null
                       description: 创建、编辑、删除招聘周期
                     - permissionId: 9
                       permissionName: 管理权限
                       permissionCode: permission:manage
-                      resourceIdentifier: null
                       description: 管理角色权限分配
                     - permissionId: 2
                       permissionName: 管理社员账号
                       permissionCode: member:manage
-                      resourceIdentifier: null
                       description: 创建、编辑、删除社员账号
                     - permissionId: 1
                       permissionName: 管理管理员账号
                       permissionCode: admin:manage
-                      resourceIdentifier: null
                       description: 创建、编辑、删除管理员账号
                     - permissionId: 6
                       permissionName: 管理部门信息
                       permissionCode: dept:manage
-                      resourceIdentifier: null
                       description: 创建、编辑、删除部门信息
           headers: {}
   /api/role-permissions:
@@ -8309,7 +8266,6 @@ paths:
                       department:
                         deptId: 0
                         deptName: ''
-                        deptCode: ''
                         description: ''
                         status: 0
                         createTime: ''
@@ -8332,7 +8288,6 @@ paths:
                           department:
                             deptId: 0
                             deptName: ''
-                            deptCode: ''
                             description: ''
                             status: 0
                             createTime: ''
@@ -8351,7 +8306,6 @@ paths:
                             - permissionId: 0
                               permissionName: ''
                               permissionCode: ''
-                              resourceIdentifier: ''
                               description: ''
                               createTime: ''
                               updateTime: ''
@@ -8382,7 +8336,6 @@ paths:
                           department:
                             deptId: 0
                             deptName: ''
-                            deptCode: ''
                             description: ''
                             status: 0
                             createTime: ''
@@ -8405,7 +8358,6 @@ paths:
                               department:
                                 deptId: 0
                                 deptName: ''
-                                deptCode: ''
                                 description: ''
                                 status: 0
                                 createTime: ''
@@ -8424,7 +8376,6 @@ paths:
                                 - permissionId: 0
                                   permissionName: ''
                                   permissionCode: ''
-                                  resourceIdentifier: ''
                                   description: ''
                                   createTime: ''
                                   updateTime: ''
@@ -8442,7 +8393,6 @@ paths:
                             - permissionId: 0
                               permissionName: ''
                               permissionCode: ''
-                              resourceIdentifier: ''
                               description: ''
                               createTime: ''
                               updateTime: ''
@@ -8451,7 +8401,6 @@ paths:
                         - permissionId: 0
                           permissionName: ''
                           permissionCode: ''
-                          resourceIdentifier: ''
                           description: ''
                           createTime: ''
                           updateTime: ''
@@ -8481,7 +8430,6 @@ paths:
                               department:
                                 deptId: 0
                                 deptName: ''
-                                deptCode: ''
                                 description: ''
                                 status: 0
                                 createTime: ''
@@ -8504,7 +8452,6 @@ paths:
                                   department:
                                     deptId: 0
                                     deptName: ''
-                                    deptCode: ''
                                     description: ''
                                     status: 0
                                     createTime: ''
@@ -8523,7 +8470,6 @@ paths:
                                     - permissionId: 0
                                       permissionName: ''
                                       permissionCode: ''
-                                      resourceIdentifier: ''
                                       description: ''
                                       createTime: ''
                                       updateTime: ''
@@ -8533,7 +8479,6 @@ paths:
                             - permissionId: 0
                               permissionName: ''
                               permissionCode: ''
-                              resourceIdentifier: ''
                               description: ''
                               createTime: ''
                               updateTime: ''
@@ -8542,7 +8487,6 @@ paths:
                     - permissionId: 0
                       permissionName: ''
                       permissionCode: ''
-                      resourceIdentifier: ''
                       description: ''
                       createTime: ''
                       updateTime: ''
@@ -8572,7 +8516,6 @@ paths:
                           department:
                             deptId: 0
                             deptName: ''
-                            deptCode: ''
                             description: ''
                             status: 0
                             createTime: ''
@@ -8595,7 +8538,6 @@ paths:
                               department:
                                 deptId: 0
                                 deptName: ''
-                                deptCode: ''
                                 description: ''
                                 status: 0
                                 createTime: ''
@@ -8614,7 +8556,6 @@ paths:
                                 - permissionId: 0
                                   permissionName: ''
                                   permissionCode: ''
-                                  resourceIdentifier: ''
                                   description: ''
                                   createTime: ''
                                   updateTime: ''
@@ -8624,7 +8565,6 @@ paths:
                         - permissionId: 0
                           permissionName: ''
                           permissionCode: ''
-                          resourceIdentifier: ''
                           description: ''
                           createTime: ''
                           updateTime: ''
@@ -12687,10 +12627,6 @@ components:
           type: string
           description: 权限编码
           maxLength: 50
-        resourceIdentifier:
-          type: string
-          description: 资源标识
-          maxLength: 100
         description:
           type: string
           description: 描述
@@ -12708,10 +12644,6 @@ components:
           type: string
           description: 部门名称
           maxLength: 50
-        deptCode:
-          type: string
-          description: 部门编码
-          maxLength: 20
         description:
           type: string
           description: 描述
@@ -12721,7 +12653,6 @@ components:
           description: 状态
       required:
       - deptName
-      - deptCode
     DepartmentDTO: *id002
     ListDepartmentDTO: *id002
     ResponseEntityPermissionDTO: *id003
@@ -12789,9 +12720,6 @@ components:
         deptName:
           type: string
           description: 部门名称
-        deptCode:
-          type: string
-          description: 部门编码
         description:
           type: string
           description: 描述
@@ -12822,9 +12750,6 @@ components:
         permissionCode:
           type: string
           description: 权限编码
-        resourceIdentifier:
-          type: string
-          description: 资源标识
         description:
           type: string
           description: 描述

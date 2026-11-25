@@ -21,6 +21,10 @@ public interface ResumeMapper extends BaseMapper<Resume> {
      * @return 简历
      */
     Resume findById(Integer resumeId);
+
+    Resume lockForScoring(@Param("resumeId") Integer resumeId);
+
+    List<Resume> findWithScorerByIds(@Param("ids") java.util.Collection<Integer> ids);
     
     /**
      * 根据用户ID查询简历列表
