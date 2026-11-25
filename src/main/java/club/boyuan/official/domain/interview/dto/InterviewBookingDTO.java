@@ -53,7 +53,7 @@ public class InterviewBookingDTO {
         dto.setScheduleId(schedule.getScheduleId());
         dto.setResumeId(schedule.getResumeId());
         dto.setCycleId(schedule.getCycleId());
-        dto.setSlotId(schedule.getSlotId());
+        dto.setSlotId(slot == null ? schedule.getSlotId() : slot.getSlotId());
         dto.setInterviewTime(schedule.getInterviewTime());
         dto.setStatus(schedule.getStatus());
         dto.setNotes(schedule.getNotes());

@@ -26,6 +26,27 @@ public class InterviewSchedule implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
+    private static final com.fasterxml.jackson.databind.ObjectMapper SLOT_JSON =
+            new com.fasterxml.jackson.databind.ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @TableField(value = "legacy_slot_snapshot", insertStrategy = com.baomidou.mybatisplus.annotation.FieldStrategy.NEVER,
+            updateStrategy = com.baomidou.mybatisplus.annotation.FieldStrategy.NEVER)
+    private String legacySlotSnapshot;
+
+    public InterviewSlot historicalSlot() {
+        if (legacySlotSnapshot == null) return null;
+        try {
+            var fields = (com.fasterxml.jackson.databind.node.ObjectNode) SLOT_JSON.readTree(legacySlotSnapshot);
+            for (String key : java.util.List.of("createdAt", "updatedAt")) {
+                if (fields.hasNonNull(key)) fields.put(key, fields.get(key).asText().replace(' ', 'T'));
+            }
+            return SLOT_JSON.treeToValue(fields, InterviewSlot.class);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException("Invalid historical slot for schedule " + scheduleId, e);
+        }
+    }
+
     /**
      * 面试安排ID
      */

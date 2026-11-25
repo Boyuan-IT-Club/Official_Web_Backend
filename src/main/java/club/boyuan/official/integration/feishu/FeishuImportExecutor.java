@@ -163,7 +163,8 @@ public class FeishuImportExecutor {
             wrapper.eq(InterviewSchedule::getSyncStatus, 0);
         }
         if (request.getSlotId() != null) {
-            wrapper.eq(InterviewSchedule::getSlotId, request.getSlotId());
+            wrapper.and(w -> w.eq(InterviewSchedule::getSlotId, request.getSlotId())
+                    .or().apply("JSON_VALUE(legacy_slot_snapshot, '$.slotId' RETURNING SIGNED)={0}", request.getSlotId()));
         }
         return interviewScheduleService.list(wrapper);
     }
@@ -176,6 +177,7 @@ public class FeishuImportExecutor {
                 .distinct()
                 .toList();
         List<Integer> slotIds = schedules.stream()
+                .filter(s -> s.getLegacySlotSnapshot() == null)
                 .map(InterviewSchedule::getSlotId)
                 .filter(Objects::nonNull)
                 .distinct()
@@ -218,9 +220,8 @@ public class FeishuImportExecutor {
             InterviewSession session = schedule.getSessionId() == null
                     ? null
                     : preload.sessionById.get(schedule.getSessionId());
-            InterviewSlot slot = schedule.getSlotId() == null
-                    ? null
-                    : preload.slotById.get(schedule.getSlotId());
+            InterviewSlot slot = schedule.historicalSlot();
+            if (slot == null && schedule.getSlotId() != null) slot = preload.slotById.get(schedule.getSlotId());
             if (session == null && slot == null) {
                 log.warn("跳过 scheduleId={}：既没有场次也没有旧时段，无法判断地点", schedule.getScheduleId());
                 skipped++;

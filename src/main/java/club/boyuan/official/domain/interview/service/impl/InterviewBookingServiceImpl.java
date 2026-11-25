@@ -272,7 +272,8 @@ public class InterviewBookingServiceImpl implements IInterviewBookingService {
     }
 
     private InterviewBookingDTO toBookingDto(InterviewSchedule schedule) {
-        InterviewSlot slot = interviewSlotService.getById(schedule.getSlotId());
+        InterviewSlot slot = schedule.historicalSlot();
+        if (slot == null && schedule.getSlotId() != null) slot = interviewSlotService.getById(schedule.getSlotId());
         return InterviewBookingDTO.from(schedule, slot);
     }
 
