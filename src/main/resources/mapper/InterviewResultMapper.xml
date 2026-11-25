@@ -166,8 +166,4 @@
     <select id="lockDraftResults" resultType="int">
         SELECT ir.result_id FROM interview_result ir <include refid="lockTarget"/> ORDER BY ir.result_id FOR UPDATE
     </select>
-    <delete id="clearLegacyDrafts">
-        DELETE FROM pre_admission_draft WHERE (SELECT enabled FROM parent_record_cutover)=0 AND result_id IN
-          <foreach collection="resultIds" item="id" open="(" separator="," close=")">#{id}</foreach>
-    </delete>
 </mapper>

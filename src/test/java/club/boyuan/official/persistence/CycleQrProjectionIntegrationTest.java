@@ -76,7 +76,7 @@ class CycleQrProjectionIntegrationTest {
         assertEquals(List.of("private-one", "main"), codes.forAdmitted(cycleId, 1).stream()
                 .map(RecruitmentQrCode::getImageUrl).toList());
         assertEquals("qa", codes.qaGroup(cycleId).getImageUrl());
-        assertEquals(first.getId(), upload("DEPT", 1, "replacement").getId());
+        assertEquals(first.publicId(), upload("DEPT", 1, "replacement").publicId());
 
         mvc.perform(get("/api/cycles/{id}", cycleId)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.qrCodes").doesNotExist())
@@ -85,14 +85,13 @@ class CycleQrProjectionIntegrationTest {
                 .content("{\"cycleId\":" + cycleId + ",\"cycleName\":\"edited\",\"qrCodes\":{}}"))
                 .andExpect(status().isOk());
         assertEquals("replacement", codes.forAdmitted(cycleId, 1).get(0).getImageUrl());
-        codes.delete(first.getId());
-        assertNull(qrMapper.selectById(first.getId()));
+        codes.delete(first.publicId().toString());
+        assertNull(qrMapper.findIdentifier(first.publicId().toString()));
         assertEquals(List.of("main"), codes.forAdmitted(cycleId, 1).stream().map(RecruitmentQrCode::getImageUrl).toList());
         mvc.perform(delete("/api/recruitment/qrcodes").param("cycleId", String.valueOf(cycleId))
                 .param("qrType", "DEPT").param("deptId", "2")).andExpect(status().isOk());
         assertEquals(List.of("main", "qa"), codes.listByCycle(cycleId).stream().map(RecruitmentQrCode::getImageUrl).toList());
-        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM recruitment_cycle c JOIN cycle_qr_source v "
-                + "ON c.cycle_id=v.cycle_id WHERE c.cycle_id=? AND NOT(c.qr_codes <=> v.qr_codes)", Integer.class, cycleId));
+
     }
 
     @Test
@@ -138,28 +137,23 @@ class CycleQrProjectionIntegrationTest {
     @Test
     @WithMockUser(authorities = "cycle:manage")
     void parentOnlyKeepsLegacyIdsAndDoesNotReuseDeletedKeys() throws Exception {
-        var legacy = upload("QA_GROUP", 0, "old");
-        jdbc.execute("CREATE OR REPLACE SQL SECURITY INVOKER VIEW parent_record_cutover AS SELECT 1 AS enabled");
-        try {
-            var changed = upload("QA_GROUP", 0, "updated");
-            assertEquals(legacy.getId(), changed.publicId());
-            var created = upload("DEPT", 1, "fresh");
-            String identifier = (String) created.publicId();
-            assertNotNull(java.util.UUID.fromString(identifier));
-            assertEquals(identifier, upload("DEPT", 1, "replacement").publicId());
-            mvc.perform(get("/api/recruitment/qrcodes").param("cycleId", String.valueOf(cycleId)))
-                    .andExpect(status().isOk()).andExpect(jsonPath("$.data[0].id").value(identifier))
-                    .andExpect(jsonPath("$.data[1].id").value(legacy.getId()));
-            codes.delete(identifier);
-            var recreated = upload("DEPT", 1, "new");
-            codes.delete(identifier);
-            assertEquals(recreated.publicId(), codes.listByCycle(cycleId).get(0).publicId());
-            codes.delete(legacy.getId());
-            assertNull(codes.qaGroup(cycleId));
-            assertEquals("old", qrMapper.selectById(legacy.getId()).getImageUrl());
-        } finally {
-            jdbc.execute("CREATE OR REPLACE SQL SECURITY INVOKER VIEW parent_record_cutover AS SELECT 0 AS enabled");
-        }
+        jdbc.update("UPDATE recruitment_cycle SET qr_codes=JSON_OBJECT('QA_GROUP',JSON_OBJECT('id',177003,'image','old','createdAt',1,'updatedAt',1)) WHERE cycle_id=?",cycleId);
+        var legacy = codes.qaGroup(cycleId);
+        var changed = upload("QA_GROUP", 0, "updated");
+        assertEquals(legacy.getId(), changed.publicId());
+        var created = upload("DEPT", 1, "fresh");
+        String identifier = (String) created.publicId();
+        assertNotNull(java.util.UUID.fromString(identifier));
+        assertEquals(identifier, upload("DEPT", 1, "replacement").publicId());
+        mvc.perform(get("/api/recruitment/qrcodes").param("cycleId", String.valueOf(cycleId)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data[0].id").value(identifier))
+                .andExpect(jsonPath("$.data[1].id").value(legacy.getId()));
+        codes.delete(identifier);
+        var recreated = upload("DEPT", 1, "new");
+        codes.delete(identifier);
+        assertEquals(recreated.publicId(), codes.listByCycle(cycleId).get(0).publicId());
+        codes.delete(legacy.getId());
+        assertNull(codes.qaGroup(cycleId));
     }
 
     @Test

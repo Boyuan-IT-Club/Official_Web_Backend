@@ -44,7 +44,6 @@ class InterviewAttendanceUpdateTest {
 
     @Mock private IResumeService resumeService;
     @Mock private club.boyuan.official.domain.interview.service.IInterviewTimeSlotService interviewTimeSlotService;
-    @Mock private club.boyuan.official.persistence.mapper.InterviewPreferenceTimeMapper preferenceTimeMapper;
     @Mock private club.boyuan.official.persistence.mapper.DepartmentMapper departmentMapper;
     @Mock private InterviewScheduleMapper interviewScheduleMapper;
     @Mock private ResumeFieldDefinitionMapper resumeFieldDefinitionMapper;

@@ -13,12 +13,10 @@ import club.boyuan.official.domain.interview.service.IInterviewTimeSlotService;
 import club.boyuan.official.domain.resume.service.IResumeService;
 import club.boyuan.official.persistence.entity.Department;
 import club.boyuan.official.persistence.entity.InterviewPreference;
-import club.boyuan.official.persistence.entity.InterviewPreferenceTime;
 import club.boyuan.official.persistence.entity.InterviewTimeSlot;
 import club.boyuan.official.persistence.entity.Resume;
 import club.boyuan.official.persistence.mapper.DepartmentMapper;
 import club.boyuan.official.persistence.mapper.InterviewPreferenceMapper;
-import club.boyuan.official.persistence.mapper.InterviewPreferenceTimeMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
@@ -47,7 +45,6 @@ public class InterviewPreferenceServiceImpl extends ServiceImpl<InterviewPrefere
 
     private final IResumeService resumeService;
     private final IInterviewTimeSlotService interviewTimeSlotService;
-    private final InterviewPreferenceTimeMapper preferenceTimeMapper;
     private final DepartmentMapper departmentMapper;
     private final InterviewScheduleMapper interviewScheduleMapper;
     private final club.boyuan.official.persistence.mapper.ResumeFieldDefinitionMapper resumeFieldDefinitionMapper;
@@ -115,16 +112,6 @@ public class InterviewPreferenceServiceImpl extends ServiceImpl<InterviewPrefere
                 .setAcceptedTimeSlotIds(timeSlotIds)
                 .setSubmittedAt(now);
         saveOrUpdate(preference);
-
-        if (!baseMapper.parentOnly()) {
-            preferenceTimeMapper.delete(new LambdaQueryWrapper<InterviewPreferenceTime>()
-                    .eq(InterviewPreferenceTime::getResumeId, resume.getResumeId()));
-            for (Integer timeSlotId : timeSlotIds) {
-                preferenceTimeMapper.insert(new InterviewPreferenceTime()
-                        .setResumeId(resume.getResumeId())
-                        .setTimeSlotId(timeSlotId));
-            }
-        }
 
         log.info("学生提交面试志愿成功，userId={}, resumeId={}, first={}, second={}, timeSlots={}",
                 userId, resume.getResumeId(), firstDeptId, secondDeptId, timeSlotIds);
