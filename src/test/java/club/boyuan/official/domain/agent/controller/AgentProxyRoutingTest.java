@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultMatcher;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -55,6 +56,7 @@ class AgentProxyRoutingTest {
                     new AgentOrgMemoryProxyController(client, objectMapper),
                     new AgentKbAdminController(client, objectMapper),
                     new AgentEvaluationProxyController(client, objectMapper, org.mockito.Mockito.mock(EvaluationQuestionScope.class)))
+            .setMessageConverters(new MappingJackson2HttpMessageConverter(objectMapper))
             .setControllerAdvice(new GlobalExceptionHandler())
             .build();
 
@@ -322,7 +324,7 @@ class AgentProxyRoutingTest {
                 .thenReturn(upstream(HttpStatus.CONFLICT, "{\"detail\":\"忠实度抽样没有在配置里打开\"}"));
         when(client.postOrgMemoryApprove(eq(AUTH), any()))
                 .thenReturn(upstream(HttpStatus.CREATED, "{\"memory_id\":\"org_9\",\"status\":\"approved\"}"))
-                .thenReturn(upstream(HttpStatus.UNPROCESSABLE_ENTITY, "{\"detail\":\"内容疑似含个人信息\"}"));
+                .thenReturn(upstream(HttpStatus.UNPROCESSABLE_CONTENT, "{\"detail\":\"内容疑似含个人信息\"}"));
         when(client.postOrgMemoryRetire(eq(AUTH), any()))
                 .thenReturn(upstream(HttpStatus.CONFLICT, "{\"detail\":\"这条组织记忆已经退役\"}"));
 

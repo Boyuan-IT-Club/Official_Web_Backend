@@ -3,7 +3,7 @@ package club.boyuan.official.domain.user.service;
 import club.boyuan.official.domain.user.dto.PermissionDTO;
 import club.boyuan.official.persistence.entity.Permission;
 import club.boyuan.official.common.exception.BusinessException;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 
 import java.util.List;
 

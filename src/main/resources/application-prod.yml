@@ -49,6 +49,13 @@ spring:
 server:
   port: 8080
 
+# 生产契约沿用仓库 openapi.yaml 和 Apifox。运行时扫描仅用于开发验证。
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
 # 只暴露巡检需要的两个端点：health 供 nginx 与负载均衡探活，
 # prometheus 供节点巡检脚本采集 JVM 堆、GC 与 HikariCP 连接池指标。
 # 8080 未对公网开放（由云安全组拦截），指标仅在内网可达；

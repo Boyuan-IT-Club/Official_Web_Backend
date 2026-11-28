@@ -4,7 +4,7 @@ import club.boyuan.official.persistence.entity.Role;
 import club.boyuan.official.persistence.entity.User;
 import club.boyuan.official.persistence.entity.UserRole;
 import club.boyuan.official.common.exception.BusinessException;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 
 import java.util.List;
 

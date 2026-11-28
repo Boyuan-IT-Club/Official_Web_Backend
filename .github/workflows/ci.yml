@@ -59,10 +59,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
           cache: maven
 
@@ -129,14 +129,25 @@ jobs:
   docker-build:
     name: Docker build smoke test
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: official
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s --health-timeout=5s --health-retries=15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
           cache: maven
 
@@ -154,5 +165,19 @@ jobs:
           context: .
           platforms: linux/amd64
           push: false
+          load: true
+          tags: boyuan-official:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Run the packaged production migration command twice
+        env:
+          MIGRATION_URL: jdbc:mysql://127.0.0.1:3306/official?allowPublicKeyRetrieval=true&useSSL=false
+          MIGRATION_USER: root
+          MIGRATION_PASSWORD: root
+        run: |
+          MYSQL_PWD="$MIGRATION_PASSWORD" mysql -h 127.0.0.1 -uroot -e 'ALTER DATABASE official CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
+          for attempt in 1 2; do
+            docker run --rm --network host -e MIGRATION_URL -e MIGRATION_USER -e MIGRATION_PASSWORD \
+              --entrypoint java boyuan-official:ci -cp app.jar club.boyuan.official.infra.db.MigrateSchema
+          done

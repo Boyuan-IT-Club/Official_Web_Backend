@@ -7,7 +7,7 @@ import club.boyuan.official.domain.interview.dto.InterviewResultSaveDTO;
 import club.boyuan.official.domain.interview.dto.SendNotificationsRequestDTO;
 import club.boyuan.official.domain.interview.dto.SendNotificationsResponseDTO;
 import club.boyuan.official.persistence.entity.InterviewResult;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 import jakarta.validation.Valid;
 
 import java.util.List;

@@ -19,7 +19,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.SpyBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -37,7 +37,7 @@ class RescheduleDecisionIntegrationTest {
     @Autowired RescheduleDecisionService decisions;
     @Autowired InterviewRescheduleRequestMapper requests;
     @Autowired InterviewScheduleMapper schedules;
-    @SpyBean InterviewSessionMapper sessions;
+    @MockitoSpyBean InterviewSessionMapper sessions;
     @Autowired InterviewTimeSlotMapper slots;
     @Autowired RecruitmentCycleMapper cycles;
     @Autowired ResumeMapper resumes;

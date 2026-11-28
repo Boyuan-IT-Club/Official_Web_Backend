@@ -412,7 +412,7 @@ class AgentAdminClientTest {
         assertEquals("{\"detail\":\"忠实度抽样没有在配置里打开\"}", disabled.getBody());
 
         reply(422, "{\"detail\":\"内容疑似含个人信息\"}");
-        assertEquals(HttpStatus.UNPROCESSABLE_ENTITY,
+        assertEquals(HttpStatus.UNPROCESSABLE_CONTENT,
                 client.postOrgMemoryApprove(AUTH, Map.of("cycle_id", 2026)).getStatusCode());
 
         reply(409, "{\"detail\":\"这条组织记忆已经退役\"}");

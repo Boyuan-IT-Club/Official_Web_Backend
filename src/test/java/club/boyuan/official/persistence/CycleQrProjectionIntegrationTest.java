@@ -11,9 +11,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -42,7 +42,7 @@ class CycleQrProjectionIntegrationTest {
     @Autowired private IRecruitmentCycleService cycleService;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private MockMvc mvc;
-    @MockBean private CosStorageService cos;
+    @MockitoBean private CosStorageService cos;
     private int cycleId;
 
     @BeforeEach

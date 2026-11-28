@@ -4,7 +4,7 @@ import club.boyuan.official.domain.interview.dto.CreateInterviewSessionRequestDT
 import club.boyuan.official.domain.interview.dto.InterviewSessionDTO;
 import club.boyuan.official.domain.interview.dto.UpdateInterviewSessionRequestDTO;
 import club.boyuan.official.persistence.entity.InterviewSession;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 
 import java.util.List;
 

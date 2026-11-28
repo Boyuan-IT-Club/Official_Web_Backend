@@ -2,7 +2,7 @@ package club.boyuan.official.infra.config;
 
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.QueueBuilder;
-import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
+import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -61,7 +61,7 @@ public class RabbitMQConfig {
      * 将消息对象序列化为 JSON，消费者才能反序列化为 {@link club.boyuan.official.messaging.EmailVerificationMessage}。
      */
     @Bean
-    public MessageConverter jackson2JsonMessageConverter() {
-        return new Jackson2JsonMessageConverter();
+    public MessageConverter jsonMessageConverter() {
+        return new JacksonJsonMessageConverter("club.boyuan.official.messaging");
     }
 }

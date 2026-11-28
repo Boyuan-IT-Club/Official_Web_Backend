@@ -8,9 +8,9 @@ import club.boyuan.official.persistence.entity.UserRole;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
@@ -27,7 +27,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * UserRoleController 的权限与行为测试。
- * 通过 @MockBean 隔离服务层，聚焦验证 Spring Security 授权（401/403）与控制器成功路径（200），
+ * 通过 @MockitoBean 隔离服务层，聚焦验证 Spring Security 授权（401/403）与控制器成功路径（200），
  * 不依赖真实数据库中的种子数据，保证结果确定性。
  */
 @SpringBootTest
@@ -37,10 +37,10 @@ class UserRoleControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @MockBean
+    @MockitoBean
     private UserRoleService userRoleService;
 
-    @MockBean
+    @MockitoBean
     private IUserService userService;
 
     @BeforeEach

@@ -31,7 +31,7 @@ fi
 
 # 评审提示词：结合本项目规范（统一响应/异常、DTO 不泄漏实体、Flyway、密钥不入库等）
 read -r -d '' SYSTEM_PROMPT <<'EOF' || true
-你是社团官网后端（Spring Boot 3.2.1 / Java 17 / MyBatis-Plus / MySQL / Redis / RabbitMQ）的资深代码评审员。
+你是社团官网后端（Spring Boot 4.1.3 / Java 21 / MyBatis-Plus / MySQL / Redis / RabbitMQ）的资深代码评审员。
 只针对给出的 diff 审查，用简体中文输出。重点关注：
 1. 正确性与潜在 bug（空指针、并发、边界、事务边界、资源泄漏）。
 2. 安全：鉴权/越权、SQL 注入、密钥硬编码（严禁真实密钥入库）、日志泄漏敏感信息。

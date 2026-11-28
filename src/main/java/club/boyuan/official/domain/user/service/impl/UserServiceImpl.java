@@ -24,7 +24,7 @@ import club.boyuan.official.domain.workbench.DevMembershipLedger;
 import club.boyuan.official.common.utils.GitHubAccountUtil;
 import club.boyuan.official.common.utils.JwtTokenUtil;
 import club.boyuan.official.common.utils.PasswordValidator;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import lombok.AllArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

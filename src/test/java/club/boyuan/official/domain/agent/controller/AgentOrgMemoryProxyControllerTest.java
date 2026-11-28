@@ -90,7 +90,7 @@ class AgentOrgMemoryProxyControllerTest {
         when(client.postOrgMemoryApprove(AUTH, duplicate))
                 .thenReturn(upstream(HttpStatus.CONFLICT, "{\"detail\":\"这条教训已经勾选过\"}"));
         when(client.postOrgMemoryApprove(AUTH, rejected))
-                .thenReturn(upstream(HttpStatus.UNPROCESSABLE_ENTITY, "{\"detail\":\"内容疑似含个人信息\"}"));
+                .thenReturn(upstream(HttpStatus.UNPROCESSABLE_CONTENT, "{\"detail\":\"内容疑似含个人信息\"}"));
         when(client.postOrgMemoryApprove(AUTH, auditDown))
                 .thenReturn(upstream(HttpStatus.SERVICE_UNAVAILABLE,
                         "{\"detail\":\"审计服务不可用,操作未执行,请稍后重试\"}"));
@@ -106,7 +106,7 @@ class AgentOrgMemoryProxyControllerTest {
         assertEquals("这条教训已经勾选过", conflict.getBody().getMessage());
 
         ResponseEntity<ResponseMessage<?>> gate = controller.approve(AUTH, rejected);
-        assertEquals(HttpStatus.UNPROCESSABLE_ENTITY, gate.getStatusCode());
+        assertEquals(HttpStatus.UNPROCESSABLE_CONTENT, gate.getStatusCode());
         assertEquals(422, gate.getBody().getCode());
         assertEquals("内容疑似含个人信息", gate.getBody().getMessage());
 

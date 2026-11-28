@@ -4,7 +4,7 @@ import club.boyuan.official.common.dto.PageResultDTO;
 import club.boyuan.official.domain.user.dto.UserDTO;
 import club.boyuan.official.persistence.entity.User;
 import club.boyuan.official.common.exception.BusinessException;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
