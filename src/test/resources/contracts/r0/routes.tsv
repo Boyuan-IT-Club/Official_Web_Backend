@@ -289,3 +289,10 @@ O286	POST	/api/admin/agent/retrospective/run	mapped
 O287	GET	/api/admin/agent/retrospective/report	mapped
 O288	GET	/api/admin/agent/retrospective/reports	mapped
 O289	POST	/api/admin/agent/retrospective/publish	mapped
+O290	GET	/api/workbench/access-context	mapped
+O291	GET	/api/workbench/member-candidates	mapped
+O292	PUT	/api/workbench/dev-members/{userId}	mapped
+O293	DELETE	/api/workbench/dev-members/{userId}	mapped
+O294	POST	/api/internal/workbench/member-names	mapped
+O295	GET	/api/internal/workbench/dev-members	mapped
+O296	GET	/api/internal/workbench/dev-members/{userId}	mapped

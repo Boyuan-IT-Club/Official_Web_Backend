@@ -20,6 +20,7 @@ import club.boyuan.official.persistence.mapper.UserMapper;
 import club.boyuan.official.persistence.mapper.UserRoleMapper;
 import club.boyuan.official.persistence.mapper.RoleMapper;
 import club.boyuan.official.domain.user.service.IUserService;
+import club.boyuan.official.domain.workbench.DevMembershipLedger;
 import club.boyuan.official.common.utils.GitHubAccountUtil;
 import club.boyuan.official.common.utils.JwtTokenUtil;
 import club.boyuan.official.common.utils.PasswordValidator;
@@ -31,6 +32,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -56,6 +58,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
     private final BCryptPasswordEncoder passwordEncoder;
     private final JwtTokenUtil jwtTokenUtil;
     private final UserConverter userConverter;
+    private final DevMembershipLedger membershipVersions;
 
     @Override
     @Transactional
@@ -240,7 +243,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public void deleteUserById(Integer userId) {
         logger.info("开始删除用户，用户ID: {}", userId);
         
@@ -277,7 +280,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
             // 删除用户的所有获奖经历
             awardExperienceMapper.deleteAwardsByUserId(userId);
 
-            // 删除用户的角色关联
+            // 永久注销先记一次研发组退出，再清掉全部角色。用户行随后删除，点查会返回注销。
+            membershipVersions.exitIfBound(userId);
             userRoleMapper.delete(new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<UserRole>()
                     .eq("user_id", userId));
 
@@ -295,6 +299,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
     }
 
     @Override
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public void softDeleteUser(Integer userId) {
         if (userId == null) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD);
@@ -308,10 +313,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>implements IUs
         if (PermissionUtils.hasAdminRole(user)) {
             throw new BusinessException(BusinessExceptionEnum.PERMISSION_DENIED);
         }
-        user.setIsDeleted(1);
+        membershipVersions.exitIfBound(userId);
         // 同时冻结：软删只是列表不再展示，若不冻结该账号仍能登录
         user.setStatus(0);
         userMapper.updateById(user);
+        // MyBatis-Plus writes the @TableLogic flag only through its delete operation.
+        userMapper.deleteById(userId);
         logger.info("软删除用户成功，用户ID: {}", userId);
     }
 

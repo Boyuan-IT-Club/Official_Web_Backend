@@ -5,6 +5,8 @@ import club.boyuan.official.persistence.entity.User;
 import club.boyuan.official.persistence.entity.UserRole;
 import club.boyuan.official.common.exception.BusinessException;
 import club.boyuan.official.common.exception.BusinessExceptionEnum;
+import club.boyuan.official.domain.workbench.DevMembershipLedger;
+import club.boyuan.official.domain.workbench.DevRole;
 import club.boyuan.official.persistence.mapper.RoleMapper;
 import club.boyuan.official.persistence.mapper.UserMapper;
 import club.boyuan.official.persistence.mapper.UserRoleMapper;
@@ -17,6 +19,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
@@ -39,9 +42,10 @@ public class UserRoleServiceImpl extends ServiceImpl<UserRoleMapper, UserRole> i
     private final UserRoleMapper userRoleMapper;
     private final UserMapper userMapper;
     private final RoleMapper roleMapper;
+    private final DevMembershipLedger membershipVersions;
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     public List<Role> assignRoles(int userId, List<Integer> roleIds) throws BusinessException {
         if (userId <= 0 || roleIds == null || roleIds.isEmpty()) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "用户ID和角色ID列表不能为空");
@@ -58,6 +62,10 @@ public class UserRoleServiceImpl extends ServiceImpl<UserRoleMapper, UserRole> i
         if (roles.size() != roleIds.size()) {
             throw new BusinessException(BusinessExceptionEnum.USER_NOT_FOUND, "部分角色不存在");
         }
+
+        // 整组替换按事务前后是否仍有研发组角色判断，只改其他角色时不推进版本。
+        membershipVersions.lock(userId);
+        boolean hadDevRole = membershipVersions.bound(userId);
         
         // 先删除用户原有的所有角色
         userRoleMapper.delete(new LambdaQueryWrapper<UserRole>()
@@ -74,13 +82,14 @@ public class UserRoleServiceImpl extends ServiceImpl<UserRoleMapper, UserRole> i
         
         // 批量插入，使用saveBatch方法
         saveBatch(userRoles);
+        membershipVersions.record(userId, hadDevRole, membershipVersions.bound(userId));
         logger.info("成功为用户分配角色，用户ID: {}, 分配角色数量: {}", userId, roleIds.size());
         
         return roles;
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     public UserRole addRoleToUser(int userId, int roleId) throws BusinessException {
         if (userId <= 0 || roleId <= 0) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "用户ID和角色ID不能为空");
@@ -98,6 +107,7 @@ public class UserRoleServiceImpl extends ServiceImpl<UserRoleMapper, UserRole> i
             throw new BusinessException(BusinessExceptionEnum.ROLE_NOT_FOUND, "角色不存在");
         }
         
+        membershipVersions.lock(userId);
         // 检查用户是否已经拥有该角色
         UserRole existingUserRole = userRoleMapper.selectOne(new LambdaQueryWrapper<UserRole>()
                 .eq(UserRole::getUserId, userId)
@@ -111,13 +121,14 @@ public class UserRoleServiceImpl extends ServiceImpl<UserRoleMapper, UserRole> i
         userRole.setUserId(userId);
         userRole.setRoleId(roleId);
         userRoleMapper.insert(userRole);
+        if (DevRole.CODE.equals(role.getRoleCode())) membershipVersions.record(userId, false, true);
         
         logger.info("成功为用户添加角色，用户ID: {}, 角色ID: {}", userId, roleId);
         return userRole;
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     public boolean removeRoleFromUser(int userId, int roleId) throws BusinessException {
         if (userId <= 0 || roleId <= 0) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "用户ID和角色ID不能为空");
@@ -135,10 +146,12 @@ public class UserRoleServiceImpl extends ServiceImpl<UserRoleMapper, UserRole> i
             throw new BusinessException(BusinessExceptionEnum.ROLE_NOT_FOUND, "角色不存在");
         }
         
+        membershipVersions.lock(userId);
         // 删除角色关联
         int result = userRoleMapper.delete(new LambdaQueryWrapper<UserRole>()
                 .eq(UserRole::getUserId, userId)
                 .eq(UserRole::getRoleId, roleId));
+        if (result > 0 && DevRole.CODE.equals(role.getRoleCode())) membershipVersions.record(userId, true, false);
         
         boolean success = result > 0;
         if (success) {
@@ -213,7 +226,7 @@ public class UserRoleServiceImpl extends ServiceImpl<UserRoleMapper, UserRole> i
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     public int batchAssignRoles(List<Integer> userIds, List<Integer> roleIds) throws BusinessException {
         if (userIds == null || userIds.isEmpty() || roleIds == null || roleIds.isEmpty()) {
             throw new BusinessException(BusinessExceptionEnum.MISSING_REQUIRED_FIELD, "用户ID列表和角色ID列表不能为空");
@@ -231,9 +244,13 @@ public class UserRoleServiceImpl extends ServiceImpl<UserRoleMapper, UserRole> i
             throw new BusinessException(BusinessExceptionEnum.ROLE_NOT_FOUND, "部分角色不存在");
         }
         
-        // 批量创建用户角色关系
+        Integer devRoleId = membershipVersions.devRoleId();
+        // 批量创建用户角色关系。只给原先没有研发组角色、这次新加上的人推进版本。
         List<UserRole> userRoles = new ArrayList<>();
-        for (Integer userId : userIds) {
+        List<Integer> gainedDevRole = new ArrayList<>();
+        for (Integer userId : userIds.stream().sorted().toList()) {
+            membershipVersions.lock(userId);
+            boolean hadDevRole = devRoleId != null && membershipVersions.bound(userId);
             for (Integer roleId : roleIds) {
                 // 检查是否已存在该关系
                 if (userRoleMapper.selectOne(new LambdaQueryWrapper<UserRole>()
@@ -243,6 +260,7 @@ public class UserRoleServiceImpl extends ServiceImpl<UserRoleMapper, UserRole> i
                     userRole.setUserId(userId);
                     userRole.setRoleId(roleId);
                     userRoles.add(userRole);
+                    if (devRoleId != null && devRoleId.equals(roleId) && !hadDevRole) gainedDevRole.add(userId);
                 }
             }
         }
@@ -251,6 +269,7 @@ public class UserRoleServiceImpl extends ServiceImpl<UserRoleMapper, UserRole> i
             // 批量插入，使用saveBatch方法
             saveBatch(userRoles);
         }
+        for (Integer userId : gainedDevRole) membershipVersions.record(userId, false, true);
         
         logger.info("批量分配角色成功，用户数量: {}, 角色数量: {}, 新增关系数量: {}", 
                 userIds.size(), roleIds.size(), userRoles.size());

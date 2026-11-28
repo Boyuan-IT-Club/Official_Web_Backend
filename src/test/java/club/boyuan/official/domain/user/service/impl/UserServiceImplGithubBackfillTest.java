@@ -1,6 +1,7 @@
 package club.boyuan.official.domain.user.service.impl;
 
 import club.boyuan.official.common.converter.UserConverter;
+import club.boyuan.official.domain.workbench.DevMembershipLedger;
 import club.boyuan.official.common.utils.JwtTokenUtil;
 import club.boyuan.official.domain.user.dto.UserDTO;
 import club.boyuan.official.persistence.entity.EvaluationSubmission;
@@ -37,12 +38,13 @@ class UserServiceImplGithubBackfillTest {
     @Mock private BCryptPasswordEncoder passwordEncoder;
     @Mock private JwtTokenUtil jwtTokenUtil;
     @Mock private UserConverter userConverter;
+    @Mock private DevMembershipLedger membershipVersions;
 
     @Test
     void githubBindBackfillsUnclaimedSubmissions() {
         UserServiceImpl service = new UserServiceImpl(userMapper, awardExperienceMapper, resumeMapper,
                 resumeFieldValueMapper, userRoleMapper, roleMapper, evaluationSubmissionMapper,
-                passwordEncoder, jwtTokenUtil, userConverter);
+                passwordEncoder, jwtTokenUtil, userConverter, membershipVersions);
 
         User user = new User();
         user.setUserId(7);
@@ -63,7 +65,7 @@ class UserServiceImplGithubBackfillTest {
     void githubUnbindWritesExplicitNullInsteadOfIgnoring() {
         UserServiceImpl service = new UserServiceImpl(userMapper, awardExperienceMapper, resumeMapper,
                 resumeFieldValueMapper, userRoleMapper, roleMapper, evaluationSubmissionMapper,
-                passwordEncoder, jwtTokenUtil, userConverter);
+                passwordEncoder, jwtTokenUtil, userConverter, membershipVersions);
 
         User user = new User();
         user.setUserId(7);

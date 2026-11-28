@@ -152,6 +152,8 @@ public class SecurityConfig {
         configuration.addAllowedOriginPattern("http://official.boyuan.club");
         configuration.addAllowedOriginPattern("https://official.boyuan.club");
         configuration.addAllowedOriginPattern("https://admin.boyuan.club");
+        configuration.addAllowedOriginPattern("https://work.boyuan.club");
+        configuration.addAllowedOrigin("https://workbench.boyuan.club");
         // 本地开发 / 直连:任意端口(dev server 3000/3001 或自定义 PORT 都覆盖)
         configuration.addAllowedOriginPattern("http://localhost:*");
         configuration.addAllowedOriginPattern("https://localhost:*");

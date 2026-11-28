@@ -74,6 +74,7 @@ services:
       - SERVER_PORT=8080
       # 协同服务调用 /api/internal/** 的服务令牌；未配置时后端一律拒绝这些内部接口
       - COLLAB_SERVICE_TOKEN=${COLLAB_SERVICE_TOKEN}
+      - WORKBENCH_DIRECTORY_TOKEN=${WORKBENCH_DIRECTORY_TOKEN:-}
       # 添加中文环境支持
       - LANG=zh_CN.UTF-8
       - LANGUAGE=zh_CN:zh

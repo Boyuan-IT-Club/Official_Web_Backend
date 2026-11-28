@@ -3,6 +3,7 @@ package club.boyuan.official.domain.user.service.impl;
 
 import club.boyuan.official.common.converter.PermissionConverter;
 import club.boyuan.official.common.converter.RoleConverter;
+import club.boyuan.official.domain.workbench.DevRole;
 import club.boyuan.official.domain.user.dto.PermissionDTO;
 import club.boyuan.official.domain.user.dto.RoleDTO;
 import club.boyuan.official.persistence.entity.Permission;
@@ -83,6 +84,12 @@ public class RoleServiceImpl extends ServiceImpl<RoleMapper, Role> implements Ro
             throw new BusinessException(BusinessExceptionEnum.ROLE_NOT_FOUND, "角色不存在");
         }
         
+        // Workbench membership is keyed by this role code. Its display name and status remain editable.
+        if (DevRole.CODE.equalsIgnoreCase(existingRole.getRoleCode())
+                && roleDTO.getRoleCode() != null && !DevRole.CODE.equals(roleDTO.getRoleCode())) {
+            throw new BusinessException(BusinessExceptionEnum.RESOURCE_CONFLICT, "研发组角色编码不可修改");
+        }
+
         // 转换DTO为实体
         Role role = roleConverter.toEntity(roleDTO);
         
