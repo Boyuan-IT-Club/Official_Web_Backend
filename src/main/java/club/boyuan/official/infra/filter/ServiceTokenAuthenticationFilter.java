@@ -44,6 +44,10 @@ public class ServiceTokenAuthenticationFilter extends OncePerRequestFilter {
     @Value("${collab.service-token:}")
     private String serviceToken;
 
+    /** 工作台目录与成员对账。只对 /api/internal/workbench/ 有效，不能打开面试协同接口。 */
+    @Value("${workbench.directory-token:${WORKBENCH_DIRECTORY_TOKEN:}}")
+    private String directoryToken;
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
@@ -53,11 +57,15 @@ public class ServiceTokenAuthenticationFilter extends OncePerRequestFilter {
         }
 
         String presented = request.getHeader(SERVICE_TOKEN_HEADER);
-        if (serviceToken == null || serviceToken.isBlank()) {
-            logger.warn("收到内部接口请求 {} 但未配置 COLLAB_SERVICE_TOKEN，已拒绝", request.getRequestURI());
-        } else if (presented != null && constantTimeEquals(serviceToken, presented)) {
+        boolean directory = request.getRequestURI().startsWith("/api/internal/workbench/");
+        String expected = directory ? directoryToken : serviceToken;
+        String authority = directory ? "WORKBENCH_DIRECTORY" : INTERNAL_SERVICE_ROLE;
+        String principal = directory ? "workbench-directory" : "collab-service";
+        if (expected == null || expected.isBlank()) {
+            logger.warn("收到内部接口请求 {} 但未配置对应的服务凭据，已拒绝", request.getRequestURI());
+        } else if (presented != null && constantTimeEquals(expected, presented)) {
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                    "collab-service", null, List.of(new SimpleGrantedAuthority(INTERNAL_SERVICE_ROLE)));
+                    principal, null, List.of(new SimpleGrantedAuthority(authority)));
             SecurityContextHolder.getContext().setAuthentication(authentication);
         } else {
             logger.warn("内部接口 {} 的服务令牌校验失败，来源 {}", request.getRequestURI(), request.getRemoteAddr());

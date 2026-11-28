@@ -186,6 +186,10 @@ jwt:
 collab:
   service-token: ${COLLAB_SERVICE_TOKEN:}
 
+# 工作台成员目录与对账只读凭据。只接受 /api/internal/workbench/**，不能调用面试协同内部接口。
+workbench:
+  directory-token: ${WORKBENCH_DIRECTORY_TOKEN:}
+
 # 飞书开放平台（多维表格导入）
 feishu:
   app-id: ${FEISHU_APP_ID:}
