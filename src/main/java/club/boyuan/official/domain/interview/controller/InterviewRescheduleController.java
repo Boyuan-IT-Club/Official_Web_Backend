@@ -10,9 +10,8 @@ import club.boyuan.official.persistence.entity.Resume;
 import club.boyuan.official.persistence.entity.User;
 import club.boyuan.official.persistence.mapper.InterviewRescheduleRequestMapper;
 import club.boyuan.official.domain.interview.dto.RescheduleRequestAdminDTO;
+import club.boyuan.official.domain.interview.service.RescheduleDecisionService;
 import club.boyuan.official.persistence.entity.InterviewSession;
-import club.boyuan.official.infra.notification.InterviewNotificationType;
-import club.boyuan.official.persistence.entity.InterviewNotificationLog;
 import club.boyuan.official.persistence.entity.RecruitmentCycle;
 import club.boyuan.official.persistence.entity.InterviewTimeSlot;
 import club.boyuan.official.persistence.mapper.InterviewScheduleMapper;
@@ -22,7 +21,6 @@ import club.boyuan.official.persistence.mapper.UserMapper;
 
 import club.boyuan.official.persistence.mapper.InterviewTimeSlotMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -30,7 +28,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -50,6 +47,8 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/interview/reschedule")
 @AllArgsConstructor
 public class InterviewRescheduleController {
+
+    private final RescheduleDecisionService decisions;
 
     private final IUserService userService;
 
@@ -194,40 +193,6 @@ public class InterviewRescheduleController {
         return ResponseEntity.ok(ResponseMessage.success(toAdminView(rescheduleMapper.selectList(qw))));
     }
 
-    /**
-     * 同意「改为线上」：时间不变，只把参加方式翻过去。
-     * <p>
-     * 和同意改时间刻意走两条路——改时间要取消安排、等管理员重排；改线上则
-     * 保留这条安排（时间、面试官都不动），只做三件事：
-     * <ol>
-     *   <li>interview_mode 置 1，学生端和邮件据此改为显示会议链接而不是教室；</li>
-     *   <li>释放原场次名额并解绑 session——人不到场了，这个座位要让给别人，
-     *       否则线下场次白占一格；</li>
-     *   <li>notif_status 置 0 并摘掉旧通知，让它进「待补发」——学生手上那封
-     *       还写着教书院某某室，必须重发一封。</li>
-     * </ol>
-     */
-    private void approveToOnline(Integer requestId, InterviewSchedule schedule) {
-        Integer oldSessionId = schedule.getSessionId();
-        boolean wasActive = Integer.valueOf(1).equals(schedule.getStatus());
-        schedule.setInterviewMode(1)
-                .setStatus(1);       // 已取消的行在这里重新生效：转线上不需要再排进任何场次
-        interviewScheduleMapper.update(null, new LambdaUpdateWrapper<InterviewSchedule>()
-                .set(InterviewSchedule::getInterviewMode, 1)
-                .set(InterviewSchedule::getStatus, 1)
-                .set(InterviewSchedule::getSessionId, null)
-                .set(InterviewSchedule::getNotifStatus, 0)
-                .eq(InterviewSchedule::getScheduleId, schedule.getScheduleId()));
-        schedule.setSessionId(null);
-        // 只有原本还占着座位的才归还；已取消的那行在取消时已经还过了
-        if (wasActive && oldSessionId != null) {
-            interviewSessionMapper.releaseOne(oldSessionId);
-        }
-        // 旧通知写的是线下教室，不摘掉会让补发被 alreadySent 静默跳过
-        log.info("改期申请{}已同意为线上面试，安排{}已转线上并释放场次{}",
-                requestId, schedule.getScheduleId(), oldSessionId);
-    }
-
     private static final DateTimeFormatter SLOT_DATE = DateTimeFormatter.ofPattern("MM-dd");
     private static final DateTimeFormatter SLOT_TIME = DateTimeFormatter.ofPattern("HH:mm");
 
@@ -355,7 +320,6 @@ public class InterviewRescheduleController {
      * 管理员处理改期申请：status=1 同意（自动取消原场次安排，进入「分配与调剂」
      * 待调剂池，由管理员人工重排到新场次）；status=2 拒绝（原安排不动）。
      */
-    @org.springframework.transaction.annotation.Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     @PutMapping("/admin/{requestId}/handle")
     @PreAuthorize("hasAnyAuthority('interview:schedule', 'resume:audit')")
     public ResponseEntity<ResponseMessage<InterviewRescheduleRequest>> handle(
@@ -363,52 +327,11 @@ public class InterviewRescheduleController {
             @RequestBody Map<String, Object> body) {
         Integer status = body.get("status") == null ? null : Integer.valueOf(String.valueOf(body.get("status")));
         String adminNote = body.get("adminNote") == null ? null : String.valueOf(body.get("adminNote"));
-        if (status == null || (status != InterviewRescheduleRequest.STATUS_APPROVED
-                && status != InterviewRescheduleRequest.STATUS_REJECTED)) {
-            return ResponseEntity.badRequest().body(ResponseMessage.error(400, "status 仅支持 1(同意)/2(拒绝)"));
+        try {
+            InterviewRescheduleRequest result = decisions.handle(requestId, status, adminNote, SecurityUtil.getCurrentUsername());
+            return ResponseEntity.ok(ResponseMessage.success(result));
+        } catch (RescheduleDecisionService.InvalidDecision ex) {
+            return ResponseEntity.badRequest().body(ResponseMessage.error(400, ex.getMessage()));
         }
-        InterviewRescheduleRequest req = rescheduleMapper.selectOne(new LambdaQueryWrapper<InterviewRescheduleRequest>()
-                .eq(InterviewRescheduleRequest::getRequestId, requestId).last("FOR UPDATE"));
-        if (req == null) {
-            return ResponseEntity.badRequest().body(ResponseMessage.error(400, "申请不存在"));
-        }
-        if (req.getStatus() != null && req.getStatus() != InterviewRescheduleRequest.STATUS_PENDING) {
-            return ResponseEntity.badRequest().body(ResponseMessage.error(400, "该申请已处理"));
-        }
-        User handler = userService.getUserByUsername(SecurityUtil.getCurrentUsername());
-        req.setStatus(status)
-                .setAdminNote(adminNote)
-                .setHandledBy(handler.getUserId())
-                .setHandledAt(LocalDateTime.now());
-        rescheduleMapper.updateById(req);
-
-        if (status == InterviewRescheduleRequest.STATUS_APPROVED && req.getScheduleId() != null) {
-            interviewSessionMapper.lockCycleForSchedule(req.getScheduleId());
-            InterviewSchedule schedule = interviewScheduleMapper.selectById(req.getScheduleId());
-            boolean toOnline = Integer.valueOf(InterviewRescheduleRequest.TYPE_TO_ONLINE)
-                    .equals(req.getRequestType());
-            /*
-             * 转线上对「已取消」的安排也要生效。
-             *
-             * 这类人多半已经被同意过一次普通改期（安排因此置为已取消、进了待调剂池），
-             * 之后才发现他要的是线上。如果这里仍然只认 status=1，同意按钮按下去
-             * 什么都不会发生，管理员也看不出为什么——王乐昆就卡在这个状态里。
-             */
-            if (schedule != null && toOnline) {
-                approveToOnline(requestId, schedule);
-            } else if (schedule != null && Integer.valueOf(1).equals(schedule.getStatus())) {
-                    // 同意改期 = 取消原场次安排（status=2），候选人进入「分配与调剂」的待调剂池。
-                    // 原先只改申请状态、旧安排照常生效：学生端仍显示原时间、面试官仍按旧安排等人，
-                    // 看起来像"系统直接定了"——同意后必须由管理员在新场次上人工重排。
-                    // 取消同时也解开意向锁（已取消的安排不再锁志愿，见 IntentLock 集成测试）。
-                    schedule.setStatus(2); // 已取消，等待人工重排
-                    interviewScheduleMapper.updateById(schedule);
-                    if (schedule.getSessionId() != null) interviewSessionMapper.releaseOne(schedule.getSessionId());
-                    log.info("改期申请{}已同意，原面试安排{}已取消待重排", requestId, schedule.getScheduleId());
-            }
-        }
-
-        log.info("管理员{}处理改期申请{}，status={}", handler.getUsername(), requestId, status);
-        return ResponseEntity.ok(ResponseMessage.success(req));
     }
 }
