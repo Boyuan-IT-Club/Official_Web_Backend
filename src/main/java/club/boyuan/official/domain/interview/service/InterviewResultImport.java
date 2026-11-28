@@ -1,4 +1,8 @@
-package club.boyuan.official.integration.feishu;
+package club.boyuan.official.domain.interview.service;
+
+import club.boyuan.official.integration.feishu.FeishuBitableClient;
+import club.boyuan.official.integration.feishu.FeishuBitableRecord;
+import club.boyuan.official.integration.feishu.FeishuSyncProgressCallback;
 
 import club.boyuan.official.integration.feishu.dto.ImportFromFeishuRowResultDTO;
 import club.boyuan.official.integration.feishu.dto.ImportFromFeishuTableRequestDTO;
@@ -11,15 +15,13 @@ import club.boyuan.official.persistence.entity.User;
 import club.boyuan.official.common.exception.BusinessException;
 import club.boyuan.official.common.exception.BusinessExceptionEnum;
 import club.boyuan.official.domain.user.service.DepartmentService;
-import club.boyuan.official.domain.interview.service.IInterviewResultService;
-import club.boyuan.official.domain.interview.service.IInterviewScheduleService;
 import club.boyuan.official.persistence.mapper.ResumeMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import club.boyuan.official.domain.user.service.IUserService;
 import club.boyuan.official.domain.resume.service.IRecruitmentCycleService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
@@ -34,10 +36,10 @@ import java.util.stream.Collectors;
 /**
  * 从飞书多维表格拉回面试结果并写入平台（批量预加载，避免 N+1）。
  */
-@Component
+@Service
 @RequiredArgsConstructor
 @Slf4j
-public class FeishuTablePullImportExecutor {
+public class InterviewResultImport {
 
     private static final int SCHEDULE_ACTIVE = 1;
 

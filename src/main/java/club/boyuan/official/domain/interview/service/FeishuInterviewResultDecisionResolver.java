@@ -1,4 +1,4 @@
-package club.boyuan.official.integration.feishu;
+package club.boyuan.official.domain.interview.service;
 
 /**
  * 根据飞书复选框列解析 interview_result.decision。

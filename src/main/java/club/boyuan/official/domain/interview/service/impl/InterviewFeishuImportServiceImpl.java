@@ -10,7 +10,7 @@ import club.boyuan.official.common.exception.BusinessException;
 import club.boyuan.official.integration.feishu.FeishuImportExecutor;
 import club.boyuan.official.integration.feishu.FeishuSyncProgressCallback;
 import club.boyuan.official.integration.feishu.FeishuSyncTaskType;
-import club.boyuan.official.integration.feishu.FeishuTablePullImportExecutor;
+import club.boyuan.official.domain.interview.service.InterviewResultImport;
 import club.boyuan.official.integration.feishu.FeishuSyncTaskRecord;
 import club.boyuan.official.integration.feishu.FeishuSyncTaskRedisStore;
 import club.boyuan.official.integration.feishu.FeishuSyncTaskStatus;
@@ -43,7 +43,7 @@ public class InterviewFeishuImportServiceImpl implements InterviewFeishuImportSe
 
     private final FeishuSyncTaskRedisStore taskRedisStore;
     private final FeishuImportExecutor feishuImportExecutor;
-    private final FeishuTablePullImportExecutor feishuTablePullImportExecutor;
+    private final InterviewResultImport interviewResultImport;
     private final MessageOutboxService messageOutboxService;
     private final AsyncTaskSseHub asyncTaskSseHub;
 
@@ -134,7 +134,7 @@ public class InterviewFeishuImportServiceImpl implements InterviewFeishuImportSe
     }
 
     private void runPullTask(Long taskId, FeishuSyncTaskRecord task) {
-        ImportFromFeishuTableResponseDTO result = feishuTablePullImportExecutor.execute(
+        ImportFromFeishuTableResponseDTO result = interviewResultImport.execute(
                 task.toPullRequest(), task.getOperatorUserId(), progressReporter(taskId));
         taskRedisStore.completePull(taskId, result, resolvePullFinalStatus(result));
     }
