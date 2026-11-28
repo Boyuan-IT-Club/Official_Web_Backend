@@ -127,6 +127,14 @@ class AdmissionListScreeningIntegrationTest {
                         .map(r -> r.getResumeId() + (Boolean.TRUE.equals(r.getOnlineInterview()) ? "(线上)" : ""))
                         .collect(Collectors.joining(", ")));
 
+        var secondPage = resultService.list(cycleId, null, null, null, 2, 2);
+        assertEquals(page.getTotal(), secondPage.getTotal());
+        assertEquals(rows.subList(2, 4), secondPage.getInterviewResults());
+        assertNull(byResume.get(c).getInterviewTime(), "未排期的面试时间仍返回空值");
+        var rejected = resultService.list(cycleId, null, "2", null, 1, 10);
+        assertEquals(1L, rejected.getTotal());
+        assertEquals(f, rejected.getInterviewResults().get(0).getResumeId());
+
         // ── 预录取 ──
         int resultA = byResume.get(a).getResultId();
         PreAdmissionBatchRequestDTO req = new PreAdmissionBatchRequestDTO();
