@@ -1,4 +1,7 @@
 spring:
+  http:
+    converters:
+      preferred-json-mapper: jackson2
   # 本地运行时自动读取项目根目录 .env；无需手动 source，避免邮件/JWT 等变量遗漏。
   config:
     import: optional:file:.env[.properties]
@@ -37,7 +40,7 @@ spring:
       port: 6379
       timeout: 3000ms
       # 项目仅使用 RedisTemplate 做缓存/限流，未使用 Spring Data Redis 仓库；
-      # 关闭仓库自动装配，避免 redisKeyValueAdapter 依赖 RedisTemplate#getConnectionFactory（测试中被 @MockBean 后为 null）
+      # 关闭仓库自动装配，避免 redisKeyValueAdapter 依赖 RedisTemplate#getConnectionFactory（测试中被 @MockitoBean 后为 null）
       repositories:
         enabled: false
       lettuce:
@@ -66,7 +69,8 @@ spring:
         acknowledge-mode: auto
         retry:
           enabled: true
-          max-attempts: 3
+          # 首次投递加两次重试，共三次。
+          max-retries: 2
           initial-interval: 2000ms
           multiplier: 2
 

@@ -46,7 +46,7 @@ REF_CONTENT=""
 [ -n "${REF_TEST}" ] && REF_CONTENT="$(head -c 6000 "${REF_TEST}")"
 
 read -r -d '' SYSTEM_PROMPT <<'EOF' || true
-你是 Spring Boot 3.2.1 / Java 17 项目的资深测试工程师。请为给定的被测类生成**可编译、可独立运行**的 JUnit 5 单元测试。
+你是 Spring Boot 4.1.3 / Java 21 项目的资深测试工程师。请为给定的被测类生成**可编译、可独立运行**的 JUnit 5 单元测试。
 硬性要求：
 1. 使用 JUnit 5（org.junit.jupiter）+ Mockito（@ExtendWith(MockitoExtension.class) / @Mock / @InjectMocks），外部依赖（DB/Redis/MQ/飞书/Mapper）一律 Mock，禁止启动 Spring 容器（除非必须，尽量纯单测）。
 2. 只输出**一个完整的 Java 测试类源码**，包含正确的 package 与 import；不要输出任何解释文字、不要 Markdown 以外的内容。

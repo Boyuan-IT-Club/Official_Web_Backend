@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概况
 
-华东师范大学博远信息技术社的社团官网后端。Spring Boot 3.2.1 / Java 17 / MyBatis-Plus 3.5.9 / MySQL 8 / Redis / RabbitMQ / Flyway / Spring Security + JWT (jjwt 0.11.5)。核心业务是招新面试流程（学生投简历 → 填部门志愿与时间窗 → 管理员维护场次 → 算法自动分配面试），并深度集成飞书开放平台（多维表格同步、SMTP 通知）。
+华东师范大学博远信息技术社的社团官网后端。Spring Boot 4.1.3 / Java 21 / MyBatis-Plus 3.5.18.1 / MySQL 8 / Redis / RabbitMQ / Flyway / Spring Security + JWT (jjwt 0.11.5)。核心业务是招新面试流程（学生投简历 → 填部门志愿与时间窗 → 管理员维护场次 → 算法自动分配面试），并深度集成飞书开放平台（多维表格同步、SMTP 通知）。
 
 ## 构建与测试
 
@@ -58,7 +58,7 @@ DDD 顶层语义分区，包根 `club.boyuan.official`：
 - `ci.yml`：PR 与非 main 推送 → 挂 MySQL/Redis/RabbitMQ 服务容器跑全量测试 + JaCoCo 覆盖率 + Docker 构建冒烟测试（只构建不推送）
 - `docker-push.yml`：main 推送（纯文档改动除外）→ 测试门禁 → 构建推送 `boyuanclub/official-core-api`（自动递增 SemVer tag）→ 双机**并行**预拉镜像 → 先 B 后 A 滚动重启 + 健康检查
 - `ai-review.yml`：PR 时调 DeepSeek 做代码审查回帖，失败不阻断
-- Dockerfile 是 Spring Boot layertools **分层镜像**（依赖层与应用层分离），入口是 `org.springframework.boot.loader.launch.JarLauncher`——改 Dockerfile 时保持分层结构，否则部署拉取会退化为全量
+- Dockerfile 是 Spring Boot tools **分层镜像**（依赖层与应用层分离），入口是 `java -jar app.jar`——改 Dockerfile 时保持分层结构，否则部署拉取会退化为全量
 
 生产是双机集群（2026-08 已从阿里云迁至腾讯云）：Node A（公网 124.221.222.206 / 内网 10.0.0.12，nginx 入口 + 主数据层 + outbox/定时任务 leader）、Node B（公网 124.221.230.58 / 内网 10.0.0.13，应用 + 数据热备，`OUTBOX_ENABLED=false`）。部署目录 `~/boyuan-official/`，两台从 Docker Hub 拉镜像。服务器登录凭据只放 gitignore 的配置清单，严禁写进任何入库文件。运维 Runbook 在团队飞书 wiki。
 

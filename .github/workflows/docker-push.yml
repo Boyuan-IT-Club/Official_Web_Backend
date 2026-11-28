@@ -74,10 +74,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
           cache: maven
       - name: Use the website schema collation on the empty CI database
@@ -98,10 +98,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
           cache: maven
 
@@ -207,7 +207,7 @@ jobs:
             cd ~/boyuan-official
             image=$(docker compose config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["services"]["official"]["image"])')
             docker run --rm --network container:official-mysql --env-file .schema-migrate.env \
-              --entrypoint java "$image" -cp 'BOOT-INF/classes:BOOT-INF/lib/*' club.boyuan.official.infra.db.MigrateSchema
+              --entrypoint java "$image" -cp app.jar club.boyuan.official.infra.db.MigrateSchema
 
       - name: Restart Node B (8.159.150.156)
         uses: appleboy/ssh-action@v1

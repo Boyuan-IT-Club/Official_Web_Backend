@@ -4,7 +4,7 @@ import club.boyuan.official.domain.interview.dto.CreateInterviewSlotRequestDTO;
 import club.boyuan.official.domain.interview.dto.GetInterviewSlotListResponseDTO;
 import club.boyuan.official.domain.interview.dto.UpdateInterviewSlotDTO;
 import club.boyuan.official.persistence.entity.InterviewSlot;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 import jakarta.validation.Valid;
 
 import java.util.List;

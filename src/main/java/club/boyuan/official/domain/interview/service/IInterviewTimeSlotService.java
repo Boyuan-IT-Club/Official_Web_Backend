@@ -3,7 +3,7 @@ package club.boyuan.official.domain.interview.service;
 import club.boyuan.official.domain.interview.dto.CreateInterviewTimeSlotRequestDTO;
 import club.boyuan.official.domain.interview.dto.UpdateInterviewTimeSlotRequestDTO;
 import club.boyuan.official.persistence.entity.InterviewTimeSlot;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 
 import java.util.List;
 

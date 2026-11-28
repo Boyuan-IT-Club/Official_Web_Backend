@@ -17,14 +17,14 @@ Official 是一个社团管理系统，旨在为社团提供完整的成员管�
 ## 技术架构
 
 ### 后端技术栈
-- Spring Boot 3.2.1
-- MyBatis-Plus 3.5.9 + MySQL 8.0+（数据访问统一走 MyBatis-Plus，未使用 JPA/Hibernate 持久化）
+- Spring Boot 4.1.3
+- MyBatis-Plus 3.5.18.1 + MySQL 8.0+（数据访问统一走 MyBatis-Plus，未使用 JPA/Hibernate 持久化）
 - Spring Security + JWT (jjwt 0.11.5)
 - Redis（缓存与限流）
 - RabbitMQ（Spring AMQP，配合事务发件箱 Outbox 异步投递）
 - Flyway（数据库版本化迁移，作为唯一 schema 来源；`ddl-auto=none`）
 - MapStruct 1.5.5（编译期 DTO/实体映射，替换反射式 BeanUtils）
-- Java 17
+- Java 21
 
 ### 代码结构
 采用顶层语义分区（方案 C）：
@@ -69,7 +69,7 @@ DTO 按所属功能就近归入 `domain.<feature>.dto` 与 `integration.feishu.d
 3. **首次构建**：如果仓库中没有任何语义化版本标签，系统会从 `0.0.1` 开始
 
 ### 开发工具
-- JDK 17
+- JDK 21
 - Maven 3.x
 - IDE（如 IntelliJ IDEA）
 

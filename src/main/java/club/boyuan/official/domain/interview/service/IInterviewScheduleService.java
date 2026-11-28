@@ -2,7 +2,7 @@ package club.boyuan.official.domain.interview.service;
 
 import club.boyuan.official.domain.interview.dto.AutoAssignInterviewResponseDTO;
 import club.boyuan.official.persistence.entity.InterviewSchedule;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 
 /**
  * <p>

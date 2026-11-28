@@ -3,7 +3,7 @@ package club.boyuan.official.domain.interview.service;
 import club.boyuan.official.domain.interview.dto.InterviewPreferenceDTO;
 import club.boyuan.official.domain.interview.dto.SubmitInterviewPreferenceRequestDTO;
 import club.boyuan.official.persistence.entity.InterviewPreference;
-import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.spring.service.IService;
 
 /**
  * 学生面试志愿服务
