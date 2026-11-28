@@ -296,3 +296,7 @@ O293	DELETE	/api/workbench/dev-members/{userId}	mapped
 O294	POST	/api/internal/workbench/member-names	mapped
 O295	GET	/api/internal/workbench/dev-members	mapped
 O296	GET	/api/internal/workbench/dev-members/{userId}	mapped
+O297	GET	/api/internal/evaluation/boards/{cycleId}/snapshot	mapped
+O298	POST	/api/internal/evaluation/boards/{cycleId}/commits	mapped
+O299	GET	/api/internal/evaluation/boards/{cycleId}/commits/{operationId}	mapped
+O300	GET	/api/internal/evaluation/materialization/pending	mapped

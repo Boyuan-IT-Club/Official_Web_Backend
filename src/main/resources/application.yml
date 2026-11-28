@@ -183,6 +183,10 @@ jwt:
 # 协同评价服务（Hocuspocus）：与本服务共享 JWT 密钥做连接鉴权，
 # 回写评价与拉取播种数据则走 /api/internal/**，用下面这把独立的服务令牌。
 # 未配置时内部接口一律拒绝，不会退化为匿名可访问。
+evaluation:
+  snapshot-service-token: ${EVALUATION_SNAPSHOT_SERVICE_TOKEN:}
+  http-writes-enabled: ${EVALUATION_HTTP_WRITES_ENABLED:false}
+
 collab:
   service-token: ${COLLAB_SERVICE_TOKEN:}
 

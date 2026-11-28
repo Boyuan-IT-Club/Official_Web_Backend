@@ -46,7 +46,7 @@ class R0RouteBaselineTest {
         try (var in = Objects.requireNonNull(getClass().getResourceAsStream("/contracts/r0/routes.tsv"))) {
             var rows = new String(in.readAllBytes(), StandardCharsets.UTF_8).lines()
                 .filter(line -> !line.isBlank() && !line.startsWith("#")).toList();
-            assertEquals(296, rows.size());
+            assertEquals(300, rows.size());
             for (String row : rows) {
                 var field = row.split("\\t");
                 Method handler = handlers.get(field[1] + " " + field[2]);

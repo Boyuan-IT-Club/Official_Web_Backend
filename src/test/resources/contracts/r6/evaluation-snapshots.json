@@ -1,0 +1,165 @@
+{
+  "old": {
+    "rows": {
+      "19931007": {
+        "contributors": [
+          19931009
+        ],
+        "lastEditedBy": 19931009,
+        "submittedBy": null,
+        "submittedAt": null,
+        "dimensionWriters": {},
+        "cells": {},
+        "materialized": {
+          "scheduleId": 19931007,
+          "contributors": [
+            19931009
+          ],
+          "lastEditedBy": 19931009,
+          "submittedBy": null,
+          "submittedAt": null,
+          "scores": {},
+          "dimensionNotes": {},
+          "dimensionWriters": {},
+          "comment": null,
+          "recommendation": null,
+          "status": 1,
+          "version": 7
+        }
+      }
+    }
+  },
+  "one": {
+    "state": "AgKSAwAnAJEDAAdjb21tZW50AgQAkgMAB0EgZmlyc3QCkQMAJwEEcm93cwgxOTkzMTAwNwEoAQRtZXRhB2N5Y2xlSWQBfb79gBMA",
+    "authors": {
+      "rows": {
+        "19931007": {
+          "contributors": [
+            19931008,
+            19931009
+          ],
+          "lastEditedBy": 19931008,
+          "submittedBy": null,
+          "submittedAt": null,
+          "dimensionWriters": {},
+          "cells": {
+            "comment": 19931008
+          },
+          "materialized": {
+            "scheduleId": 19931007,
+            "contributors": [
+              19931008,
+              19931009
+            ],
+            "lastEditedBy": 19931008,
+            "submittedBy": null,
+            "submittedAt": null,
+            "scores": {},
+            "dimensionNotes": {},
+            "dimensionWriters": {},
+            "comment": "A first",
+            "recommendation": null,
+            "status": 1,
+            "version": 8
+          },
+          "editedRevision": 8
+        }
+      }
+    },
+    "changedCells": [
+      [
+        "19931007",
+        "comment"
+      ]
+    ],
+    "nextRevision": 8
+  },
+  "race": {
+    "state": "AgKTAwAnAJEDAAdjb21tZW50AgQAkwMACkIgY29uZmxpY3QCkQMAJwEEcm93cwgxOTkzMTAwNwEoAQRtZXRhB2N5Y2xlSWQBfb79gBMA",
+    "authors": {
+      "rows": {
+        "19931007": {
+          "contributors": [
+            19931009
+          ],
+          "lastEditedBy": 19931009,
+          "submittedBy": null,
+          "submittedAt": null,
+          "dimensionWriters": {},
+          "cells": {
+            "comment": 19931009
+          },
+          "materialized": {
+            "scheduleId": 19931007,
+            "contributors": [
+              19931009
+            ],
+            "lastEditedBy": 19931009,
+            "submittedBy": null,
+            "submittedAt": null,
+            "scores": {},
+            "dimensionNotes": {},
+            "dimensionWriters": {},
+            "comment": "B conflict",
+            "recommendation": null,
+            "status": 1,
+            "version": 8
+          },
+          "editedRevision": 8
+        }
+      }
+    },
+    "changedCells": [
+      [
+        "19931007",
+        "comment"
+      ]
+    ],
+    "nextRevision": 8
+  },
+  "two": {
+    "state": "AgSSAwAhAJEDAAdjb21tZW50AQAHp5IDAAIEAJIDCAdCIGxhdGVyApEDACcBBHJvd3MIMTk5MzEwMDcBKAEEbWV0YQdjeWNsZUlkAX2+/YATAZIDAQAI",
+    "authors": {
+      "rows": {
+        "19931007": {
+          "contributors": [
+            19931008,
+            19931009
+          ],
+          "lastEditedBy": 19931009,
+          "submittedBy": null,
+          "submittedAt": null,
+          "dimensionWriters": {},
+          "cells": {
+            "comment": 19931009
+          },
+          "materialized": {
+            "scheduleId": 19931007,
+            "contributors": [
+              19931008,
+              19931009
+            ],
+            "lastEditedBy": 19931009,
+            "submittedBy": null,
+            "submittedAt": null,
+            "scores": {},
+            "dimensionNotes": {},
+            "dimensionWriters": {},
+            "comment": "B later",
+            "recommendation": null,
+            "status": 1,
+            "version": 9
+          },
+          "editedRevision": 9
+        }
+      }
+    },
+    "changedCells": [
+      [
+        "19931007",
+        "comment"
+      ]
+    ],
+    "nextRevision": 9
+  }
+}
