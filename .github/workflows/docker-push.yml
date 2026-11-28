@@ -26,7 +26,6 @@ concurrency:
 env:
   DOCKER_USERNAME: boyuanclub
   IMAGE_NAME: official-core-api
-  COLLAB_IMAGE_NAME: official-collab-server
   DOCKERHUB_EMAIL: notify@boyuan.club
 
 jobs:
@@ -159,39 +158,6 @@ jobs:
             ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest
             ${{ env.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
 
-  # ── 2b) 构建并推送协同服务镜像 ───────────────────────────────
-  # 协同服务（Yjs/Hocuspocus）源码在本仓库 collab-server/ 下，与后端同批发布。
-  # 它不依赖 Maven 产物，故不必等 build，与之并行即可。
-  build-collab:
-    name: Build & Push collab server
-    runs-on: ubuntu-latest
-    needs: test
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to Docker Hub
-        if: github.event_name == 'push'
-        uses: docker/login-action@v3
-        with:
-          username: ${{ env.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build and push collab image
-        if: github.event_name == 'push'
-        uses: docker/build-push-action@v5
-        with:
-          context: ./collab-server
-          platforms: linux/amd64
-          push: true
-          provenance: false
-          cache-from: type=gha,scope=collab
-          cache-to: type=gha,mode=max,scope=collab
-          tags: ${{ env.DOCKER_USERNAME }}/${{ env.COLLAB_IMAGE_NAME }}:latest
-
   # ── 3) 双机并行预拉镜像 ─────────────────────────────────────
   # 拉镜像是部署耗时大头（跨境访问 Docker Hub 慢且不稳定），A/B 并行拉、
   # 单次限时 10 分钟：卡死即杀掉重试（已完成的层保留，重试只补缺失层）。
@@ -199,7 +165,7 @@ jobs:
   pull:
     name: Pull image
     runs-on: ubuntu-latest
-    needs: [ build, build-collab ]
+    needs: build
     if: github.event_name == 'push'
     strategy:
       matrix:
@@ -215,20 +181,12 @@ jobs:
           script: |
             set -e
             cd ~/boyuan-official
-            # 协同服务只部署在 Node A（必须单实例），故仅 A 的 compose 里有 official-collab
-            services="official"
-            if docker compose config --services | grep -qx official-collab; then
-              services="official official-collab"
-            fi
-            for svc in $services; do
-              n=0
-              until timeout 600 docker compose pull "$svc"; do
-                n=$((n+1))
-                if [ "$n" -ge 3 ]; then echo "Node ${{ matrix.node }} 拉取 $svc 重试 3 次仍失败" >&2; exit 1; fi
-                echo "拉取 $svc 失败/超时，第 $n 次重试..."; sleep 10
-              done
+            n=0
+            until timeout 600 docker compose pull official; do
+              n=$((n+1))
+              if [ "$n" -ge 3 ]; then echo "Node ${{ matrix.node }} 拉取官网镜像重试 3 次仍失败" >&2; exit 1; fi
+              sleep 10
             done
-            echo "Node ${{ matrix.node }} 镜像就绪：$services"
 
   # ── 4) 滚动重启（先 B 后 A，镜像已就绪，仅换容器+健康检查）──
   deploy:
@@ -261,7 +219,7 @@ jobs:
           script: |
             set -e
             cd ~/boyuan-official
-            docker compose up -d official
+            docker compose up -d --no-deps official
             echo "等待 B 健康检查..."
             for i in $(seq 1 20); do
               if curl -fsS http://localhost:8080/actuator/health | grep -q '"status":"UP"'; then
@@ -283,7 +241,7 @@ jobs:
           script: |
             set -e
             cd ~/boyuan-official
-            docker compose up -d official
+            docker compose up -d --no-deps official
             echo "等待 A 健康检查..."
             for i in $(seq 1 20); do
               if curl -fsS http://localhost:8080/actuator/health | grep -q '"status":"UP"'; then
@@ -292,16 +250,6 @@ jobs:
               sleep 5
               if [ "$i" = "20" ]; then echo "Node A 健康检查超时" >&2; exit 1; fi
             done
-            # 协同服务随后端一起换代；它只在 A 上跑，重启会断开在线的评价表连接，
-            # 前端 provider 会自动重连并从快照恢复，未落库的编辑由 onDisconnect 兜底物化
-            if docker compose config --services | grep -qx official-collab; then
-              docker compose up -d official-collab
-              for i in $(seq 1 12); do
-                if curl -fsS -o /dev/null http://127.0.0.1:3100/; then echo "协同服务 UP"; break; fi
-                sleep 5
-                if [ "$i" = "12" ]; then echo "协同服务健康检查超时" >&2; exit 1; fi
-              done
-            fi
             docker image prune -f >/dev/null 2>&1 || true
 
       - name: Verify via load balancer
@@ -341,10 +289,6 @@ jobs:
 
             case "${{ matrix.node }}" in A) db_user=official_web_a;; B) db_user=official_web_b;; *) exit 1;; esac
             docker exec "$app" sh -ec 'test "$DB_USERNAME" = "$1" && test -z "${MIGRATION_PASSWORD:-}${MYSQL_ROOT_PASSWORD:-}"' sh "$db_user"
-            if docker ps --format '{{.Names}}' | grep -qx official-collab; then
-              docker exec official-collab sh -ec 'test "$DB_USER" = official_collab && test -z "${MIGRATION_PASSWORD:-}"'
-            fi
-
             # 缺了会让功能静默失效的变量：必须存在，否则判失败
             missing=""
             for k in JWT_SECRET COLLAB_SERVICE_TOKEN; do
