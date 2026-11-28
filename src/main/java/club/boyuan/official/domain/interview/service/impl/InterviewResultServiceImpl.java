@@ -1,6 +1,7 @@
 package club.boyuan.official.domain.interview.service.impl;
 
-import club.boyuan.official.domain.interview.dto.InterviewResultListItem;
+import club.boyuan.official.domain.interview.service.InterviewResultListConverter;
+import club.boyuan.official.persistence.projection.InterviewResultListRow;
 import java.util.Map;
 import java.util.stream.Collectors;
 import club.boyuan.official.persistence.mapper.ResumeMapper;
@@ -55,6 +56,8 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
     private static final int RESUME_STATUS_SCREEN_REJECTED = 5;
 
     @Autowired
+    private InterviewResultListConverter resultListConverter;
+    @Autowired
     private IUserService userService;
     @Autowired
     private InterviewScheduleMapper interviewScheduleMapper;
@@ -92,11 +95,11 @@ public class InterviewResultServiceImpl extends ServiceImpl<InterviewResultMappe
     public InterviewResultResponseDTO list(Integer cycleId, String name, String decision, String department, Integer page, Integer size) {
 
         //构建查询对象
-        Page<InterviewResultListItem> pageInfo = new Page<>(page, size);
-        Page<InterviewResultListItem> resultPage = baseMapper.selectResultPage(pageInfo, cycleId, name, decision, department);
+        Page<InterviewResultListRow> pageInfo = new Page<>(page, size);
+        Page<InterviewResultListRow> resultPage = baseMapper.selectResultPage(pageInfo, cycleId, name, decision, department);
         InterviewResultResponseDTO responseDTO = new InterviewResultResponseDTO();
         responseDTO.setTotal(resultPage.getTotal());
-        responseDTO.setInterviewResults(resultPage.getRecords());
+        responseDTO.setInterviewResults(resultPage.getRecords().stream().map(resultListConverter::toItem).toList());
         return responseDTO;
 
     }

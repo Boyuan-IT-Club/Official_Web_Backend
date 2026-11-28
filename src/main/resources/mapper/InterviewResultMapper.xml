@@ -22,7 +22,7 @@
                        AND sr.status = 5))
     </sql>
 
-    <select id="selectResultPage" resultType="club.boyuan.official.domain.interview.dto.InterviewResultListItem">
+    <select id="selectResultPage" resultType="club.boyuan.official.persistence.projection.InterviewResultListRow">
         SELECT
         ir.result_id,
         /*

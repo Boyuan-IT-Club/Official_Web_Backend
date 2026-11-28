@@ -1,6 +1,6 @@
 package club.boyuan.official.persistence.mapper;
 
-import club.boyuan.official.domain.interview.dto.InterviewResultListItem;
+import club.boyuan.official.persistence.projection.InterviewResultListRow;
 import club.boyuan.official.persistence.entity.InterviewResult;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -18,7 +18,7 @@ import java.util.List;
  */
 public interface InterviewResultMapper extends BaseMapper<InterviewResult> {
 
-    Page<InterviewResultListItem> selectResultPage(Page<InterviewResultListItem> pageInfo, Integer cycleId, String name, String decision, String department);
+    Page<InterviewResultListRow> selectResultPage(Page<InterviewResultListRow> pageInfo, Integer cycleId, String name, String decision, String department);
 
     List<Integer> lockDraftResumes(@Param("cycleId") Integer cycle, @Param("resultIds") List<Integer> ids);
     List<Integer> lockDraftResults(@Param("cycleId") Integer cycle, @Param("resultIds") List<Integer> ids);
