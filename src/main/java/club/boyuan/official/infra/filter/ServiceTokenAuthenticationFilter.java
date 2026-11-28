@@ -48,6 +48,11 @@ public class ServiceTokenAuthenticationFilter extends OncePerRequestFilter {
     @Value("${workbench.directory-token:${WORKBENCH_DIRECTORY_TOKEN:}}")
     private String directoryToken;
 
+    public enum StoragePrincipal { EVALUATION }
+
+    @Value("${evaluation.snapshot-service-token:}")
+    private String snapshotToken;
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
@@ -57,6 +62,18 @@ public class ServiceTokenAuthenticationFilter extends OncePerRequestFilter {
         }
 
         String presented = request.getHeader(SERVICE_TOKEN_HEADER);
+        String path = request.getRequestURI();
+        if (path.startsWith("/api/internal/evaluation/boards/") || path.equals("/api/internal/evaluation/materialization/pending")) {
+            if (snapshotToken == null || snapshotToken.isBlank() || presented == null
+                    || !constantTimeEquals(snapshotToken, presented) || request.getHeader("Authorization") != null) {
+                response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
+                return;
+            }
+            SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                    StoragePrincipal.EVALUATION, null, List.of(new SimpleGrantedAuthority("EVALUATION_SNAPSHOTS"))));
+            chain.doFilter(request, response);
+            return;
+        }
         boolean directory = request.getRequestURI().startsWith("/api/internal/workbench/");
         String expected = directory ? directoryToken : serviceToken;
         String authority = directory ? "WORKBENCH_DIRECTORY" : INTERNAL_SERVICE_ROLE;
